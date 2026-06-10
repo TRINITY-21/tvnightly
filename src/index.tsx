@@ -1980,6 +1980,24 @@ app.get("/movie/:slug", async (c) => {
 // range scan keeps D1 rows-read low even on a full 80K-show mirror).
 const PICKER_MIN_WEIGHT = 75;
 
+// "Who's watching?" — situational facts, not feelings. Genre lists carry both
+// TVmaze ("Science-Fiction", "Children") and TMDB ("Science Fiction") names.
+const COMPANY: Record<
+  string,
+  { label: string; include: string[]; exclude?: string[]; min?: number }
+> = {
+  date: { label: "Date night", include: ["Romance", "Comedy", "Music"], min: 7 },
+  family: {
+    label: "Family night",
+    include: ["Family", "Children", "Animation", "Adventure", "Fantasy"],
+    exclude: ["Horror", "Crime", "Thriller", "War"],
+  },
+  friends: {
+    label: "With friends",
+    include: ["Action", "Comedy", "Horror", "Adventure", "Science-Fiction", "Science Fiction", "Thriller"],
+  },
+};
+
 app.get("/what-to-watch", async (c) => {
   const db = c.env.DB;
   const type = c.req.query("type") === "movie" ? "movie" : "tv";
@@ -2023,6 +2041,8 @@ app.get("/what-to-watch", async (c) => {
     service = serviceRows.some((r) => r.p === reqService) ? reqService : "";
   }
 
+  const who = COMPANY[c.req.query("who") ?? ""] ? (c.req.query("who") as string) : "";
+
   // Anti-repeat: spins exclude everything already seen this session (URL trail).
   const skip = (c.req.query("skip") ?? "")
     .split(",")
@@ -2045,6 +2065,19 @@ app.get("/what-to-watch", async (c) => {
   if (service) {
     conds.push("providers LIKE ?");
     binds.push(`%"${service}"%`);
+  }
+  if (who) {
+    const cfg = COMPANY[who];
+    conds.push(`(${cfg.include.map(() => "genres LIKE ?").join(" OR ")})`);
+    binds.push(...cfg.include.map((g) => `%"${g}"%`));
+    for (const g of cfg.exclude ?? []) {
+      conds.push("genres NOT LIKE ?");
+      binds.push(`%"${g}"%`);
+    }
+    if (cfg.min && !minRating) {
+      conds.push("rating >= ?");
+      binds.push(cfg.min);
+    }
   }
   if (type === "tv" && status === "ended") conds.push("status = 'Ended'");
   if (type === "tv" && status === "running") conds.push("status = 'Running'");
@@ -2139,6 +2172,19 @@ app.get("/what-to-watch", async (c) => {
             <option value="movie" selected={type === "movie"}>
               Movie
             </option>
+          </select>
+        </label>
+        <label>
+          Who's watching?{" "}
+          <select name="who">
+            <option value="" selected={!who}>
+              Anyone
+            </option>
+            {Object.entries(COMPANY).map(([key, cfg]) => (
+              <option value={key} selected={who === key}>
+                {cfg.label}
+              </option>
+            ))}
           </select>
         </label>
         <label>

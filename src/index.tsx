@@ -2202,7 +2202,7 @@ app.get("/what-to-watch", async (c) => {
         </label>
         {type === "movie" && serviceRows.length ? (
           <label>
-            Streaming on{" "}
+            Streaming on (US){" "}
             <select name="service">
               <option value="">Any service</option>
               {serviceRows.map((r) => (

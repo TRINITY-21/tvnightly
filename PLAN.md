@@ -25,8 +25,12 @@ live countdowns, rankings, schedules, notify-me alerts — utility over prose.
 
 - **Phase 1 (MVP, building now):** episode rankings + release/renewal tracker +
   schedule. No accounts. Email capture only.
-- **Phase 2 (only if traffic demands):** lightweight accounts syncing the localStorage
-  watch-state. Likely never needed — Television Stats proves traffic without auth.
+- **Phase 2 — FOUNDER DECISION (2026-06-10): no client-side user data, ever, on web.**
+  A lost laptop must not mean lost data, so no localStorage watch-state (a tracker is
+  a mobile-app or post-auth idea). No accounts until user feedback demands them. The
+  only user data we keep: anonymous aggregate verdicts in D1. In its place: /recommend
+  — rate the last thing you watched (one-tap 😍/🙂/😴) → saved server-side → instant
+  recommendations + community stats.
 - **Phase 3:** "what should I watch tonight" interactive picker (link magnet). ✅ DONE — /what-to-watch with genre/status/rating/runtime filters over the TVmaze mirror (genres+runtime mirrored since migration 0003).
 - **Phase 4 (movies):** ✅ DONE — TMDB-powered (user's key, accepted risk stance per §7;
   $149/mo commercial license is the legalization path once revenue exists). Top-500 movie

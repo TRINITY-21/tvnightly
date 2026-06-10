@@ -214,6 +214,8 @@ li.is-watched { opacity: 0.55; }
   font-size: 0.9rem;
 }
 .chip:hover { border-color: var(--accent); text-decoration: none; }
+.rate-inline { display: flex; gap: 0.4rem; align-items: center; margin: 0.6rem 0; flex-wrap: wrap; }
+.rate-inline .vote-btn { font-size: 1rem; }
 
 .picker-form {
   display: flex;

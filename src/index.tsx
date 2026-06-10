@@ -58,6 +58,7 @@ interface MovieRow {
   votes: number | null;
   popularity: number | null;
   poster_url: string | null;
+  providers: string | null; // JSON string array of US streaming services
 }
 
 const stripHtml = (s: string | null) => (s ?? "").replace(/<[^>]*>/g, "").trim();
@@ -196,7 +197,11 @@ const Layout: FC<
             />
           </a>{" "}
           This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise
-          approved by TMDB.
+          approved by TMDB. Streaming availability data from{" "}
+          <a href="https://www.justwatch.com" rel="noopener">
+            JustWatch
+          </a>{" "}
+          via TMDB.
         </p>
         <p>
           <a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a> · © 2026 TV
@@ -313,6 +318,17 @@ app.get("/", async (c) => {
       description="Track the best episodes of every TV show, season release dates, renewal status, and what's airing tonight."
       canonical={canonical(c)}
     >
+      <section class="hero">
+        <h2>Can't decide what to watch tonight?</h2>
+        <p>
+          <a class="verdict-btn" href="/what-to-watch">
+            Spin the picker 🎲
+          </a>{" "}
+          <a class="verdict-btn" href="/recommend">
+            Rate one thing → get your pick
+          </a>
+        </p>
+      </section>
       {tonight.length ? (
         <section>
           <h2>
@@ -1946,6 +1962,14 @@ app.get("/movie/:slug", async (c) => {
               {movie.runtime ? <span class="muted"> · {movie.runtime} min</span> : null}
               {genres.length ? <span class="muted"> · {genres.join(", ")}</span> : null}
             </p>
+            {movie.providers && JSON.parse(movie.providers).length ? (
+              <p class="provs">
+                <span class="muted">Streaming on</span>{" "}
+                {(JSON.parse(movie.providers) as string[]).map((p) => (
+                  <span class="prov">{p}</span>
+                ))}
+              </p>
+            ) : null}
             {movie.overview ? <div class="summary">{movie.overview}</div> : null}
             <RateInline kind="movie" refId={movie.imdb_id} stat={stat} />
             <p>
@@ -1994,6 +2018,29 @@ app.get("/what-to-watch", async (c) => {
   // Only genres that actually exist pass through to the LIKE pattern.
   const genre = genreRows.some((r) => r.g === rawGenre) ? rawGenre : "";
 
+  // Service filter (movies): dropdown derived from real provider data.
+  let service = "";
+  let serviceRows: { p: string }[] = [];
+  if (type === "movie") {
+    serviceRows = (
+      await db
+        .prepare(
+          `SELECT value AS p, COUNT(*) AS n FROM movies, json_each(movies.providers)
+           GROUP BY value ORDER BY n DESC LIMIT 12`,
+        )
+        .all<{ p: string }>()
+    ).results;
+    const reqService = (c.req.query("service") ?? "").trim();
+    service = serviceRows.some((r) => r.p === reqService) ? reqService : "";
+  }
+
+  // Anti-repeat: spins exclude everything already seen this session (URL trail).
+  const skip = (c.req.query("skip") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => (type === "movie" ? /^tt\d+$/.test(s) : /^\d+$/.test(s)))
+    .slice(-20);
+
   const conds: string[] = ["rating IS NOT NULL"];
   const binds: (string | number)[] = [];
   if (type === "tv") {
@@ -2006,6 +2053,10 @@ app.get("/what-to-watch", async (c) => {
     conds.push("genres LIKE ?");
     binds.push(`%"${genre}"%`);
   }
+  if (service) {
+    conds.push("providers LIKE ?");
+    binds.push(`%"${service}"%`);
+  }
   if (type === "tv" && status === "ended") conds.push("status = 'Ended'");
   if (type === "tv" && status === "running") conds.push("status = 'Running'");
   if (minRating) {
@@ -2016,6 +2067,11 @@ app.get("/what-to-watch", async (c) => {
     conds.push("runtime <= ?");
     binds.push(maxRuntime);
   }
+  if (skip.length) {
+    const ph = skip.map(() => "?").join(",");
+    conds.push(type === "movie" ? `imdb_id NOT IN (${ph})` : `id NOT IN (${ph})`);
+    binds.push(...skip);
+  }
   const where = conds.join(" AND ");
 
   // Typed per-medium branches: a movie row never has show fields and vice
@@ -2025,11 +2081,13 @@ app.get("/what-to-watch", async (c) => {
     href: string;
     image: string | null;
     genres: string[];
+    providers: string[];
     rating: number | null;
     runtime: number | null;
     desc: string;
     status: string | null; // TV only
     slug: string;
+    refId: string; // shows.id / movies.imdb_id — for skip trail + rating
   }
   let pick: PickView | null = null;
   if (type === "movie") {
@@ -2043,11 +2101,13 @@ app.get("/what-to-watch", async (c) => {
         href: `/movie/${m.slug}`,
         image: m.poster_url,
         genres: m.genres ? JSON.parse(m.genres) : [],
+        providers: m.providers ? JSON.parse(m.providers) : [],
         rating: m.rating,
         runtime: m.runtime,
         desc: (m.overview ?? "").slice(0, 220),
         status: null,
         slug: m.slug,
+        refId: m.imdb_id,
       };
     }
   } else {
@@ -2061,14 +2121,17 @@ app.get("/what-to-watch", async (c) => {
         href: `/show/${s.slug}`,
         image: s.image_url,
         genres: s.genres ? JSON.parse(s.genres) : [],
+        providers: [],
         rating: s.rating,
         runtime: s.runtime,
         desc: s.blurb ?? stripHtml(s.summary).slice(0, 220),
         status: s.status,
         slug: s.slug,
+        refId: String(s.id),
       };
     }
   }
+  const skipNext = pick ? [...skip, pick.refId].slice(-20).join(",") : skip.join(",");
   c.header("Cache-Control", "no-store");
   return c.html(
     <Layout
@@ -2100,6 +2163,19 @@ app.get("/what-to-watch", async (c) => {
             ))}
           </select>
         </label>
+        {type === "movie" && serviceRows.length ? (
+          <label>
+            Streaming on{" "}
+            <select name="service">
+              <option value="">Any service</option>
+              {serviceRows.map((r) => (
+                <option value={r.p} selected={r.p === service}>
+                  {r.p}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {type === "tv" ? (
           <label>
             Status{" "}
@@ -2144,6 +2220,7 @@ app.get("/what-to-watch", async (c) => {
             </option>
           </select>
         </label>
+        {skipNext ? <input type="hidden" name="skip" value={skipNext} /> : null}
         <button type="submit">Spin 🎲</button>
       </form>
 
@@ -2169,7 +2246,16 @@ app.get("/what-to-watch", async (c) => {
               ) : null}
               {pick.genres.length ? <span class="muted"> · {pick.genres.join(", ")}</span> : null}
             </p>
+            {pick.providers.length ? (
+              <p class="provs">
+                <span class="muted">Streaming on</span>{" "}
+                {pick.providers.map((p) => (
+                  <span class="prov">{p}</span>
+                ))}
+              </p>
+            ) : null}
             <p>{pick.desc}</p>
+            <RateInline kind={type} refId={pick.refId} stat={null} />
             <p>
               {type === "movie" ? (
                 <a href="/movies/best">Best movies, ranked</a>

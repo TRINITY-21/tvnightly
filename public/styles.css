@@ -217,6 +217,25 @@ li.is-watched { opacity: 0.55; }
 .rate-inline { display: flex; gap: 0.4rem; align-items: center; margin: 0.6rem 0; flex-wrap: wrap; }
 .rate-inline .vote-btn { font-size: 1rem; }
 
+.provs { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.prov {
+  background: rgba(108, 123, 255, 0.12);
+  border: 1px solid rgba(108, 123, 255, 0.4);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+}
+.hero {
+  background: linear-gradient(135deg, #1c2140, #151726);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-top: 1rem;
+}
+.hero h2 { margin: 0 0 0.75rem; }
+.hero .verdict-btn { display: inline-block; margin: 0.2rem 0.4rem 0 0; text-decoration: none; }
+
 .picker-form {
   display: flex;
   gap: 1rem;

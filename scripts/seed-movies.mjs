@@ -70,7 +70,7 @@ const used = new Set();
 const lines = ["DELETE FROM movies;"];
 let kept = 0;
 for (const [i, id] of ids.entries()) {
-  const m = await get(`/movie/${id}`);
+  const m = await get(`/movie/${id}`, "&append_to_response=watch%2Fproviders");
   if (!m.imdb_id) continue;
   const year = m.release_date ? Number(m.release_date.slice(0, 4)) : null;
   let slug = year ? `${slugify(m.title)}-${year}` : slugify(m.title);
@@ -78,12 +78,14 @@ for (const [i, id] of ids.entries()) {
   used.add(slug);
   const genres = m.genres?.length ? JSON.stringify(m.genres.map((g) => g.name)) : null;
   const poster = m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : null;
+  const flatrate = m["watch/providers"]?.results?.US?.flatrate ?? [];
+  const providers = flatrate.length ? JSON.stringify(flatrate.map((p) => p.provider_name)) : null;
   lines.push(
-    `INSERT INTO movies (imdb_id, slug, title, year, release_date, overview, genres, runtime, rating, votes, popularity, poster_url, tmdb_id, wikidata_id, updated_at) VALUES (` +
+    `INSERT INTO movies (imdb_id, slug, title, year, release_date, overview, genres, runtime, rating, votes, popularity, poster_url, tmdb_id, wikidata_id, updated_at, providers) VALUES (` +
       `${esc(m.imdb_id)}, ${esc(slug)}, ${esc(m.title)}, ${esc(year)}, ${esc(m.release_date || null)}, ${esc(m.overview || null)}, ` +
       `${esc(genres)}, ${esc(m.runtime || null)}, ${esc(m.vote_average ?? null)}, ${esc(m.vote_count ?? null)}, ${esc(m.popularity ?? null)}, ` +
-      `${esc(poster)}, ${m.id}, NULL, ${Math.floor(Date.now() / 1000)})` +
-      ` ON CONFLICT(imdb_id) DO UPDATE SET slug=excluded.slug, title=excluded.title, year=excluded.year, release_date=excluded.release_date, overview=excluded.overview, genres=excluded.genres, runtime=excluded.runtime, rating=excluded.rating, votes=excluded.votes, popularity=excluded.popularity, poster_url=excluded.poster_url, tmdb_id=excluded.tmdb_id, updated_at=excluded.updated_at;`,
+      `${esc(poster)}, ${m.id}, NULL, ${Math.floor(Date.now() / 1000)}, ${esc(providers)})` +
+      ` ON CONFLICT(imdb_id) DO UPDATE SET slug=excluded.slug, title=excluded.title, year=excluded.year, release_date=excluded.release_date, overview=excluded.overview, genres=excluded.genres, runtime=excluded.runtime, rating=excluded.rating, votes=excluded.votes, popularity=excluded.popularity, poster_url=excluded.poster_url, tmdb_id=excluded.tmdb_id, updated_at=excluded.updated_at, providers=excluded.providers;`,
   );
   kept++;
   if ((i + 1) % 50 === 0) console.log(`details ${i + 1}/${ids.length}`);

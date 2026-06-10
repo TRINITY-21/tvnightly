@@ -279,6 +279,15 @@ const Layout: FC<
           via TMDB.
         </p>
         <p>
+          Hubs:{" "}
+          {VERTICALS.map((v, i) => (
+            <>
+              {i > 0 ? " · " : ""}
+              <a href={`/${v.slug}`}>{v.name}</a>
+            </>
+          ))}
+        </p>
+        <p>
           <a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a> · © 2026 TV
           Nightly. All rights reserved.
         </p>
@@ -431,6 +440,19 @@ app.get("/", async (c) => {
           </ul>
         </section>
       ) : null}
+      <p class="quick-picks">
+        {VERTICALS.map((v) => (
+          <a class="chip" href={`/${v.slug}`}>
+            {v.name} hub
+          </a>
+        ))}
+        <a class="chip" href="/watch-orders">
+          Watch orders
+        </a>
+        <a class="chip" href="/whats-new">
+          Streaming news
+        </a>
+      </p>
       <section>
         <h2>
           Popular shows{" "}
@@ -1790,6 +1812,236 @@ app.post("/recommend", async (c) => {
   );
 });
 
+// ------------------------------------------------- niche vertical hubs
+
+interface Vertical {
+  slug: string;
+  name: string;
+  pageTitle: string;
+  description: string;
+  intro: string;
+  tvGenre?: string;
+  movieGenre?: string;
+  movieYearMax?: number;
+  movieSectionTitle: string;
+  watchOrders?: string[];
+  pickerQS: string;
+}
+
+const VERTICALS: Vertical[] = [
+  {
+    slug: "anime",
+    name: "Anime",
+    pageTitle: "Anime — where to watch, the best series & what's new",
+    description:
+      "The anime hub: top-rated series with streaming availability, upcoming premieres, what just hit your services, and a picker when you can't decide.",
+    intro:
+      "Everything anime in one place — bookmark this page. Rankings from real ratings, availability checked around the clock, localized to your country.",
+    tvGenre: "Anime",
+    movieGenre: "Animation",
+    movieSectionTitle: "Top animation & anime films",
+    pickerQS: "?genre=Anime",
+  },
+  {
+    slug: "horror",
+    name: "Horror",
+    pageTitle: "Horror — where to watch, the best series & films, what's new",
+    description:
+      "The horror hub: the best horror shows and films with streaming availability, upcoming premieres, and what just arrived on your services.",
+    intro:
+      "For the people who watch through their fingers — bookmark this page. The best of the genre, where it's streaming, and what's new, updated daily.",
+    tvGenre: "Horror",
+    movieGenre: "Horror",
+    movieSectionTitle: "Top horror films",
+    watchOrders: ["conjuring-universe"],
+    pickerQS: "?genre=Horror",
+  },
+  {
+    slug: "classics",
+    name: "Classic film",
+    pageTitle: "Classic films — the greatest movies before 1980 & where to stream them",
+    description:
+      "The classic-film hub: the greatest pre-1980 movies ranked by rating, with current streaming availability in your country.",
+    intro:
+      "The canon, minus the dust — bookmark this page. Every classic ranked by rating, with live streaming availability so you can actually watch them tonight.",
+    movieYearMax: 1979,
+    movieSectionTitle: "The greatest films before 1980",
+    pickerQS: "?type=movie&min=8",
+  },
+];
+
+const hubHandler = (v: Vertical) => async (c: AppContext) => {
+  const db = c.env.DB;
+  const region = visitorRegion(c);
+
+  const shows = v.tvGenre
+    ? (
+        await db
+          .prepare(
+            `SELECT * FROM shows WHERE genres LIKE ? AND rating IS NOT NULL AND weight >= 60
+             ORDER BY rating DESC, weight DESC LIMIT 12`,
+          )
+          .bind(`%"${v.tvGenre}"%`)
+          .all<ShowRow>()
+      ).results
+    : [];
+
+  const movieConds = ["rating IS NOT NULL", "votes >= 1000"];
+  const movieBinds: (string | number)[] = [];
+  if (v.movieGenre) {
+    movieConds.push("genres LIKE ?");
+    movieBinds.push(`%"${v.movieGenre}"%`);
+  }
+  if (v.movieYearMax) {
+    movieConds.push("year <= ?");
+    movieBinds.push(v.movieYearMax);
+  }
+  const movies = (
+    await db
+      .prepare(
+        `SELECT * FROM movies WHERE ${movieConds.join(" AND ")}
+         ORDER BY rating DESC, votes DESC LIMIT 12`,
+      )
+      .bind(...movieBinds)
+      .all<MovieRow>()
+  ).results;
+
+  const premieres = v.tvGenre
+    ? (
+        await db
+          .prepare(
+            `SELECT e.airdate, e.season, s.name AS show_name, s.slug AS show_slug
+             FROM episodes e JOIN shows s ON s.id = e.show_id
+             WHERE e.number = 1 AND e.airstamp > datetime('now')
+               AND e.airstamp < datetime('now', '+90 days') AND s.genres LIKE ?
+             ORDER BY e.airstamp LIMIT 6`,
+          )
+          .bind(`%"${v.tvGenre}"%`)
+          .all<{ airdate: string | null; season: number | null; show_name: string; show_slug: string }>()
+      ).results
+    : [];
+
+  // What just arrived on streaming, for this genre, in the visitor's region.
+  const newOnTv = v.tvGenre
+    ? (
+        await db
+          .prepare(
+            `SELECT pe.title, pe.slug, pe.service, pe.detected_at FROM provider_events pe
+             JOIN shows s ON pe.kind = 'tv' AND s.id = CAST(pe.ref AS INTEGER)
+             WHERE pe.region = ? AND pe.change = 'added' AND s.genres LIKE ?
+             ORDER BY pe.detected_at DESC LIMIT 8`,
+          )
+          .bind(region, `%"${v.tvGenre}"%`)
+          .all<{ title: string; slug: string; service: string; detected_at: number }>()
+      ).results
+    : [];
+  const newOnMovies = (
+    await db
+      .prepare(
+        `SELECT pe.title, pe.slug, pe.service, pe.detected_at FROM provider_events pe
+         JOIN movies m ON pe.kind = 'movie' AND m.imdb_id = pe.ref
+         WHERE pe.region = ? AND pe.change = 'added'
+           ${v.movieGenre ? "AND m.genres LIKE ?" : ""}${v.movieYearMax ? " AND m.year <= ?" : ""}
+         ORDER BY pe.detected_at DESC LIMIT 8`,
+      )
+      .bind(
+        region,
+        ...(v.movieGenre ? [`%"${v.movieGenre}"%`] : []),
+        ...(v.movieYearMax ? [v.movieYearMax] : []),
+      )
+      .all<{ title: string; slug: string; service: string; detected_at: number }>()
+  ).results;
+
+  c.header("Cache-Control", "private, max-age=600");
+  return c.html(
+    <Layout
+      title={`${v.pageTitle} | TV Nightly`}
+      description={v.description}
+      canonical={`${origin(c)}/${v.slug}`}
+    >
+      <h1>{v.name}</h1>
+      <p>{v.intro}</p>
+      <p>
+        <a class="verdict-btn" href={`/what-to-watch${v.pickerQS}`}>
+          Pick me something {v.name.toLowerCase()} 🎲
+        </a>
+        {(v.watchOrders ?? []).map((slug) => {
+          const fr = FRANCHISE_BY_SLUG.get(slug);
+          return fr ? (
+            <>
+              {" "}
+              <a class="verdict-btn" href={`/watch-order/${slug}`}>
+                {fr.name} watch order
+              </a>
+            </>
+          ) : null;
+        })}
+      </p>
+      {newOnTv.length || newOnMovies.length ? (
+        <section>
+          <h2>Just added to streaming ({region})</h2>
+          <ul class="ep-list">
+            {[...newOnTv.map((r) => ({ ...r, kind: "tv" })), ...newOnMovies.map((r) => ({ ...r, kind: "movie" }))]
+              .sort((a, b) => b.detected_at - a.detected_at)
+              .slice(0, 10)
+              .map((r) => (
+                <li>
+                  <a href={r.kind === "tv" ? `/show/${r.slug}` : `/movie/${r.slug}`}>{r.title}</a>{" "}
+                  <span class="muted">→ {r.service}</span>
+                </li>
+              ))}
+          </ul>
+        </section>
+      ) : null}
+      {premieres.length ? (
+        <section>
+          <h2>Premiering soon</h2>
+          <ul class="ep-list">
+            {premieres.map((p) => (
+              <li>
+                <span class="muted">{p.airdate}</span>{" "}
+                <a href={`/show/${p.show_slug}/release-date`}>{p.show_name}</a> Season {p.season}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {shows.length ? (
+        <section>
+          <h2>The best {v.name.toLowerCase()} series</h2>
+          <div class="grid">
+            {shows.map((s) => (
+              <ShowCard show={s} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {movies.length ? (
+        <section>
+          <h2>{v.movieSectionTitle}</h2>
+          <div class="grid">
+            {movies.map((m) => (
+              <MovieCard movie={m} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      <div class="sub-form inline">
+        <form method="post" action="/subscribe" class="sub-form">
+          <input type="hidden" name="kind" value="daily" />
+          <label>New {v.name.toLowerCase()} worth watching, in your inbox:</label>
+          <input type="email" name="email" placeholder="you@example.com" required />
+          <button type="submit">Sign me up</button>
+        </form>
+      </div>
+    </Layout>,
+  );
+};
+
+for (const v of VERTICALS) {
+  app.get(`/${v.slug}`, hubHandler(v));
+}
+
 // ------------------------------------------------- franchise watch orders
 
 const fmtMarathon = (mins: number) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
@@ -3058,6 +3310,7 @@ app.get("/sitemaps/:file", async (c) => {
       "/renewals",
       "/watch-orders",
       ...FRANCHISES.map((f) => `/watch-order/${f.slug}`),
+      ...VERTICALS.map((v) => `/${v.slug}`),
     ]
       .map((p) => `<url><loc>${site}${p}</loc></url>`)
       .join("");

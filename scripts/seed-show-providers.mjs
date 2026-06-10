@@ -68,9 +68,12 @@ for (const [i, s] of shows.entries()) {
       const names = prov.results?.[cc]?.flatrate?.map((p) => p.provider_name) ?? [];
       if (names.length) intl[cc] = names;
     }
-    if (!Object.keys(intl).length) continue;
+    if (!Object.keys(intl).length) {
+      lines.push(`UPDATE shows SET tmdb_id = ${tmdbTv} WHERE id = ${s.id};`);
+      continue;
+    }
     lines.push(
-      `UPDATE shows SET providers_intl = '${JSON.stringify(intl).replaceAll("'", "''")}' WHERE id = ${s.id};`,
+      `UPDATE shows SET providers_intl = '${JSON.stringify(intl).replaceAll("'", "''")}', tmdb_id = ${tmdbTv} WHERE id = ${s.id};`,
     );
     found++;
   } catch (e) {

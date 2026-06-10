@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { FC, PropsWithChildren } from "hono/jsx";
 import { raw } from "hono/html";
-import { runSync, type SyncEnv } from "./sync";
+import { runSync, providerPatrol, type SyncEnv } from "./sync";
 import { sendEmails } from "./email";
 import { signToken, verifyToken } from "./tokens";
 import franchisesData from "../data/franchises.json";
@@ -234,6 +234,7 @@ const Layout: FC<
           <a href="/what-to-watch">What to watch</a>
           <a href="/movies">Movies</a>
           <a href="/watch-orders">Watch orders</a>
+          <a href="/whats-new">Streaming news</a>
           <a href="/tonight">Tonight</a>
           <a href="/calendar">Calendar</a>
           <a href="/renewals">Renewals</a>
@@ -2621,6 +2622,102 @@ app.get("/renewals", async (c) => {
   );
 });
 
+// -------------------------------------------------- what's new on streaming
+
+app.get("/whats-new", async (c) => {
+  const region = visitorRegion(c);
+  const { results } = await c.env.DB.prepare(
+    `SELECT kind, slug, title, service, change, detected_at FROM provider_events
+     WHERE region = ? ORDER BY detected_at DESC LIMIT 150`,
+  )
+    .bind(region)
+    .all<{ kind: string; slug: string; title: string; service: string; change: string; detected_at: number }>();
+
+  const href = (r: { kind: string; slug: string }) =>
+    r.kind === "movie" ? `/movie/${r.slug}` : `/show/${r.slug}`;
+  const added = results.filter((r) => r.change === "added");
+  const removed = results.filter((r) => r.change === "removed");
+  const byService = (rows: typeof results) => {
+    const m = new Map<string, typeof results>();
+    for (const r of rows) {
+      if (!m.has(r.service)) m.set(r.service, [] as typeof results);
+      m.get(r.service)!.push(r);
+    }
+    return [...m.entries()].sort((a, b) => b[1].length - a[1].length);
+  };
+
+  c.header("Cache-Control", "private, max-age=300");
+  return c.html(
+    <Layout
+      title={`What's new on streaming (${region}) — and what just left | TV Nightly`}
+      description="Titles that just arrived on or left Netflix, Prime Video, Disney+ and more — tracked by our availability patrol, localized to your country."
+      canonical={`${origin(c)}/whats-new`}
+    >
+      <h1>What's new on streaming ({region})</h1>
+      <p class="muted">
+        Our patrol re-checks availability around the clock and logs every change. Yesterday's
+        catalog shuffle, today's news.
+      </p>
+      {results.length === 0 ? (
+        <p class="muted">
+          No changes logged for {region} yet — the patrol cycles the whole catalog every couple of
+          days. Check back soon.
+        </p>
+      ) : null}
+      {added.length ? (
+        <section>
+          <h2>Just added</h2>
+          {byService(added).map(([service, rows]) => (
+            <section>
+              <h3>New on {service}</h3>
+              <ul class="ep-list">
+                {rows.map((r) => (
+                  <li>
+                    <a href={href(r)}>{r.title}</a>{" "}
+                    <span class="muted">
+                      · {r.kind === "movie" ? "Movie" : "TV"} ·{" "}
+                      {new Date(r.detected_at * 1000).toISOString().slice(0, 10)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </section>
+      ) : null}
+      {removed.length ? (
+        <section>
+          <h2>Just left</h2>
+          {byService(removed).map(([service, rows]) => (
+            <section>
+              <h3>Left {service}</h3>
+              <ul class="ep-list">
+                {rows.map((r) => (
+                  <li>
+                    <a href={href(r)}>{r.title}</a>{" "}
+                    <span class="muted">
+                      · {r.kind === "movie" ? "Movie" : "TV"} ·{" "}
+                      {new Date(r.detected_at * 1000).toISOString().slice(0, 10)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </section>
+      ) : null}
+      <div class="sub-form inline">
+        <form method="post" action="/subscribe" class="sub-form">
+          <input type="hidden" name="kind" value="daily" />
+          <label>Get the streaming shuffle in your inbox:</label>
+          <input type="email" name="email" placeholder="you@example.com" required />
+          <button type="submit">Sign me up</button>
+        </form>
+      </div>
+    </Layout>,
+  );
+});
+
 // ------------------------------------------------------------- premieres
 
 app.get("/premieres", async (c) => {
@@ -2955,6 +3052,7 @@ app.get("/sitemaps/:file", async (c) => {
       "/movies/best",
       "/best-episodes",
       "/premieres",
+      "/whats-new",
       "/tonight",
       "/calendar",
       "/renewals",
@@ -3086,7 +3184,8 @@ app.notFound((c) =>
 
 export default {
   fetch: app.fetch,
-  scheduled(_event: ScheduledController, env: Bindings, ctx: ExecutionContext) {
-    ctx.waitUntil(runSync(env));
+  scheduled(event: ScheduledController, env: Bindings, ctx: ExecutionContext) {
+    // :30 cron = provider patrol; :00 (and manual triggers) = main sync.
+    ctx.waitUntil(event.cron === "30 * * * *" ? providerPatrol(env) : runSync(env));
   },
 };

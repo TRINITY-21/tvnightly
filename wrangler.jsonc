@@ -6,9 +6,10 @@
   // nodejs_compat enables TCP sockets for SMTP (worker-mailer / Gmail sending)
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "directory": "./public" },
-  // Hourly sync: free Workers allow 50 subrequests/invocation, so each run
-  // drains a budgeted batch of shows + alert emails; hourly runs keep up.
-  "triggers": { "crons": ["0 * * * *"] },
+  // Two hourly crons, each with its own 50-subrequest budget:
+  //   :00 — TVmaze sync (shows/episodes/events/alerts + outbox drain)
+  //   :30 — provider patrol (streaming availability diffing -> /whats-new)
+  "triggers": { "crons": ["0 * * * *", "30 * * * *"] },
   "vars": {
     "SITE_ORIGIN": "https://tvnightly.com",
     // 'console' | 'gmail' | 'resend' — see src/email.ts
@@ -20,6 +21,7 @@
   //   GMAIL_USER         — your Gmail address          (EMAIL_PROVIDER=gmail)
   //   GMAIL_APP_PASSWORD — 16-char Google app password (EMAIL_PROVIDER=gmail)
   //   RESEND_API_KEY     — Resend key                  (EMAIL_PROVIDER=resend)
+  //   TMDB_API_KEY       — provider patrol (streaming availability diffing)
   "d1_databases": [
     {
       "binding": "DB",

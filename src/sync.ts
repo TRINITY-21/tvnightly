@@ -6,6 +6,7 @@ export interface SyncEnv extends EmailEnv {
   DB: D1Database;
   SITE_ORIGIN?: string;
   SECRET?: string;
+  TMDB_API_KEY?: string; // provider patrol (set via wrangler secret / .dev.vars)
 }
 
 // Free Workers allow 50 subrequests per invocation, and D1 calls count as
@@ -76,10 +77,12 @@ export async function upsertShow(
         `INSERT OR REPLACE INTO shows
          (id, slug, name, status, premiered, ended, network, web_channel,
           rating, weight, image_url, summary, imdb_id, tvdb_id, updated_at,
-          genres, runtime, blurb, providers_intl)
+          genres, runtime, blurb, providers_intl, tmdb_id, providers_checked_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
                  (SELECT blurb FROM shows WHERE id = ?),
-                 (SELECT providers_intl FROM shows WHERE id = ?))`,
+                 (SELECT providers_intl FROM shows WHERE id = ?),
+                 (SELECT tmdb_id FROM shows WHERE id = ?),
+                 (SELECT providers_checked_at FROM shows WHERE id = ?))`,
       )
       .bind(
         show.id,
@@ -99,6 +102,8 @@ export async function upsertShow(
         show.updated,
         show.genres?.length ? JSON.stringify(show.genres) : null,
         show.averageRuntime ?? null,
+        show.id,
+        show.id,
         show.id,
         show.id,
       ),
@@ -338,6 +343,163 @@ export async function drainOutbox(env: SyncEnv): Promise<number> {
       .run();
   }
   return sentIds.length;
+}
+
+// ---------------------------------------------------------- provider patrol
+
+const PATROL_REGIONS = ["US", "GB", "CA", "AU", "IN", "DE", "FR", "ES", "IT", "BR", "MX", "NG", "NL", "SE", "JP", "KR"];
+// Per run: 9 movies + 9 shows = 18 TMDB fetches + ~6 D1 calls, well under the
+// 50-subrequest budget of its own cron invocation. 18 x 24 runs/day cycles a
+// ~1,000-title catalog every ~2.3 days.
+const PATROL_PER_RUN = 9;
+
+interface ProviderEvent {
+  kind: "movie" | "tv";
+  ref: string;
+  title: string;
+  slug: string;
+  region: string;
+  service: string;
+  change: "added" | "removed";
+}
+
+function diffIntl(
+  oldJson: string | null,
+  fresh: Record<string, string[]>,
+): { region: string; service: string; change: "added" | "removed" }[] {
+  const old: Record<string, string[]> = oldJson ? JSON.parse(oldJson) : {};
+  const out: { region: string; service: string; change: "added" | "removed" }[] = [];
+  for (const region of PATROL_REGIONS) {
+    const before = new Set(old[region] ?? []);
+    const after = new Set(fresh[region] ?? []);
+    for (const s of after) if (!before.has(s)) out.push({ region, service: s, change: "added" });
+    for (const s of before) if (!after.has(s)) out.push({ region, service: s, change: "removed" });
+  }
+  return out;
+}
+
+async function fetchIntl(key: string, path: string): Promise<Record<string, string[]> | null> {
+  const res = await fetch(`https://api.themoviedb.org/3${path}?api_key=${key}`);
+  if (!res.ok) return null;
+  const data = (await res.json()) as { results?: Record<string, { flatrate?: { provider_name: string }[] }> };
+  const intl: Record<string, string[]> = {};
+  for (const cc of PATROL_REGIONS) {
+    const names = data.results?.[cc]?.flatrate?.map((p) => p.provider_name) ?? [];
+    if (names.length) intl[cc] = names;
+  }
+  return intl;
+}
+
+/**
+ * Second cron: re-check streaming providers on a stalest-first rotation, log
+ * every add/removal to provider_events (feeds /whats-new), refresh the stored
+ * snapshot, and alert show subscribers about US changes. Never drains the
+ * outbox — only the main sync does, so the two crons can't double-send.
+ */
+export async function providerPatrol(env: SyncEnv): Promise<{ checked: number; events: number }> {
+  const db = env.DB;
+  if (!env.TMDB_API_KEY) return { checked: 0, events: 0 };
+
+  const [{ results: movies }, { results: shows }] = await Promise.all([
+    db
+      .prepare(
+        `SELECT imdb_id, title, slug, tmdb_id, providers_intl FROM movies
+         WHERE tmdb_id IS NOT NULL
+         ORDER BY providers_checked_at ASC NULLS FIRST LIMIT ?`,
+      )
+      .bind(PATROL_PER_RUN)
+      .all<{ imdb_id: string; title: string; slug: string; tmdb_id: number; providers_intl: string | null }>(),
+    db
+      .prepare(
+        `SELECT id, name, slug, tmdb_id, providers_intl FROM shows
+         WHERE tmdb_id IS NOT NULL
+         ORDER BY providers_checked_at ASC NULLS FIRST LIMIT ?`,
+      )
+      .bind(PATROL_PER_RUN)
+      .all<{ id: number; name: string; slug: string; tmdb_id: number; providers_intl: string | null }>(),
+  ]);
+
+  const events: ProviderEvent[] = [];
+  const updates: D1PreparedStatement[] = [];
+  for (const m of movies) {
+    const fresh = await fetchIntl(env.TMDB_API_KEY, `/movie/${m.tmdb_id}/watch/providers`);
+    if (!fresh) continue;
+    for (const d of diffIntl(m.providers_intl, fresh)) {
+      events.push({ kind: "movie", ref: m.imdb_id, title: m.title, slug: m.slug, ...d });
+    }
+    updates.push(
+      db
+        .prepare("UPDATE movies SET providers_intl = ?, providers_checked_at = unixepoch() WHERE imdb_id = ?")
+        .bind(Object.keys(fresh).length ? JSON.stringify(fresh) : null, m.imdb_id),
+    );
+  }
+  for (const s of shows) {
+    const fresh = await fetchIntl(env.TMDB_API_KEY, `/tv/${s.tmdb_id}/watch/providers`);
+    if (!fresh) continue;
+    for (const d of diffIntl(s.providers_intl, fresh)) {
+      events.push({ kind: "tv", ref: String(s.id), title: s.name, slug: s.slug, ...d });
+    }
+    updates.push(
+      db
+        .prepare("UPDATE shows SET providers_intl = ?, providers_checked_at = unixepoch() WHERE id = ?")
+        .bind(Object.keys(fresh).length ? JSON.stringify(fresh) : null, s.id),
+    );
+  }
+
+  if (updates.length) await db.batch(updates);
+  if (events.length) {
+    await db.batch(
+      events.map((ev) =>
+        db
+          .prepare(
+            `INSERT INTO provider_events (kind, ref, title, slug, region, service, change, detected_at)
+             VALUES (?,?,?,?,?,?,?,unixepoch())`,
+          )
+          .bind(ev.kind, ev.ref, ev.title, ev.slug, ev.region, ev.service, ev.change),
+      ),
+    );
+  }
+
+  // Show subscribers get US availability changes (one email per change).
+  const usTvEvents = events.filter((ev) => ev.kind === "tv" && ev.region === "US");
+  if (usTvEvents.length && env.SECRET) {
+    const origin = env.SITE_ORIGIN ?? "https://tvnightly.com";
+    const showIds = [...new Set(usTvEvents.map((ev) => Number(ev.ref)))];
+    const placeholders = showIds.map(() => "?").join(",");
+    const { results: subs } = await db
+      .prepare(
+        `SELECT email, show_id FROM subscriptions
+         WHERE confirmed = 1 AND kind = 'renewal' AND show_id IN (${placeholders})`,
+      )
+      .bind(...showIds)
+      .all<{ email: string; show_id: number }>();
+    const stmts: D1PreparedStatement[] = [];
+    for (const sub of subs) {
+      const unsubToken = await signToken(
+        { email: sub.email, showId: sub.show_id, kind: "renewal", action: "unsub" },
+        env.SECRET,
+      );
+      for (const ev of usTvEvents.filter((e) => Number(e.ref) === sub.show_id)) {
+        const subject =
+          ev.change === "added"
+            ? `${ev.title} is now streaming on ${ev.service}`
+            : `${ev.title} just left ${ev.service}`;
+        const html =
+          `<p><strong>${ev.title}</strong> ${ev.change === "added" ? "is now streaming on" : "just left"} <strong>${ev.service}</strong> (US).</p>` +
+          `<p><a href="${origin}/show/${ev.slug}">Where to watch it now</a></p>` +
+          `<p style="color:#888;font-size:12px">You asked TV Nightly to notify you about this show. ` +
+          `<a href="${origin}/unsubscribe?token=${unsubToken}">Unsubscribe</a></p>`;
+        stmts.push(
+          db
+            .prepare("INSERT INTO outbox (to_email, subject, html, created_at) VALUES (?,?,?,unixepoch())")
+            .bind(sub.email, subject, html),
+        );
+      }
+    }
+    if (stmts.length) await db.batch(stmts);
+  }
+
+  return { checked: movies.length + shows.length, events: events.length };
 }
 
 /**

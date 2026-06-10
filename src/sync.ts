@@ -502,6 +502,152 @@ export async function providerPatrol(env: SyncEnv): Promise<{ checked: number; e
   return { checked: movies.length + shows.length, events: events.length };
 }
 
+// ------------------------------------------------------------ daily digest
+
+/**
+ * The product's namesake: one email every day — tonight's episodes, fresh
+ * renewal/streaming news, upcoming premieres, and a pick of the day — to
+ * every confirmed 'daily' subscriber. Queued through the outbox (the hourly
+ * sync drains it), one own-budget cron invocation per day.
+ */
+export async function sendDailyDigest(env: SyncEnv): Promise<{ queued: number }> {
+  const db = env.DB;
+  if (!env.SECRET) return { queued: 0 };
+  const origin = env.SITE_ORIGIN ?? "https://tvnightly.com";
+
+  const { results: subs } = await db
+    .prepare(
+      "SELECT email FROM subscriptions WHERE kind = 'daily' AND show_id IS NULL AND confirmed = 1 LIMIT 300",
+    )
+    .all<{ email: string }>();
+  if (subs.length === 0) return { queued: 0 };
+
+  const [tonight, premieres, events, arrivals, pick] = await Promise.all([
+    db
+      .prepare(
+        `SELECT e.name AS ep, e.season, e.number, s.name, s.slug, s.network, s.web_channel
+         FROM episodes e JOIN shows s ON s.id = e.show_id
+         WHERE date(e.airstamp) = date('now') ORDER BY s.weight DESC LIMIT 8`,
+      )
+      .all<{ ep: string | null; season: number | null; number: number | null; name: string; slug: string; network: string | null; web_channel: string | null }>()
+      .then((r) => r.results),
+    db
+      .prepare(
+        `SELECT e.airdate, e.season, s.name, s.slug FROM episodes e
+         JOIN shows s ON s.id = e.show_id
+         WHERE e.number = 1 AND e.airstamp > datetime('now')
+           AND e.airstamp < datetime('now', '+7 days')
+         ORDER BY e.airstamp LIMIT 5`,
+      )
+      .all<{ airdate: string | null; season: number | null; name: string; slug: string }>()
+      .then((r) => r.results),
+    db
+      .prepare(
+        `SELECT ev.type, ev.season, ev.old_value, ev.new_value, s.name, s.slug
+         FROM show_events ev JOIN shows s ON s.id = ev.show_id
+         WHERE ev.detected_at > unixepoch() - 86400 ORDER BY ev.detected_at DESC LIMIT 6`,
+      )
+      .all<{ type: string; season: number | null; old_value: string | null; new_value: string | null; name: string; slug: string }>()
+      .then((r) => r.results),
+    db
+      .prepare(
+        `SELECT title, slug, kind, service FROM provider_events
+         WHERE region = 'US' AND change = 'added' AND detected_at > unixepoch() - 86400
+         ORDER BY detected_at DESC LIMIT 5`,
+      )
+      .all<{ title: string; slug: string; kind: string; service: string }>()
+      .then((r) => r.results),
+    db
+      .prepare(
+        `SELECT name, slug, rating FROM shows
+         WHERE rating >= 8 AND weight >= 75 ORDER BY RANDOM() LIMIT 1`,
+      )
+      .first<{ name: string; slug: string; rating: number }>(),
+  ]);
+
+  if (!tonight.length && !premieres.length && !events.length && !arrivals.length) {
+    return { queued: 0 }; // nothing worth sending today
+  }
+
+  const code = (s: number | null, n: number | null) =>
+    `S${String(s ?? 0).padStart(2, "0")}E${String(n ?? 0).padStart(2, "0")}`;
+  const li = (s: string) => `<li style="margin:4px 0">${s}</li>`;
+  const section = (title: string, items: string[]) =>
+    items.length
+      ? `<h3 style="margin:18px 0 6px">${title}</h3><ul style="padding-left:18px;margin:0">${items.join("")}</ul>`
+      : "";
+
+  const eventLine = (ev: (typeof events)[number]) => {
+    const link = `<a href="${origin}/show/${ev.slug}/release-date">${ev.name}</a>`;
+    switch (ev.type) {
+      case "season_announced":
+        return `${link} renewed — Season ${ev.season} confirmed 🎉`;
+      case "premiere_set":
+        return `${link} Season ${ev.season} premieres ${ev.new_value}`;
+      case "premiere_moved":
+        return `${link} premiere moved to ${ev.new_value}`;
+      default:
+        return `${link}: ${ev.old_value ?? "?"} → ${ev.new_value ?? "?"}`;
+    }
+  };
+
+  const bodyCore =
+    section(
+      "📺 On tonight",
+      tonight.map((t) =>
+        li(
+          `<a href="${origin}/show/${t.slug}">${t.name}</a> ${code(t.season, t.number)}${t.ep ? ` — ${t.ep}` : ""}${
+            t.network ?? t.web_channel ? ` · ${t.network ?? t.web_channel}` : ""
+          }`,
+        ),
+      ),
+    ) +
+    section(
+      "📰 Renewal & schedule news",
+      events.map((ev) => li(eventLine(ev))),
+    ) +
+    section(
+      "🆕 Just hit streaming (US)",
+      arrivals.map((a) =>
+        li(`<a href="${origin}/${a.kind === "movie" ? "movie" : "show"}/${a.slug}">${a.title}</a> → ${a.service}`),
+      ),
+    ) +
+    section(
+      "🗓 Premiering this week",
+      premieres.map((p) =>
+        li(`${p.airdate} — <a href="${origin}/show/${p.slug}/release-date">${p.name}</a> Season ${p.season}`),
+      ),
+    ) +
+    (pick
+      ? `<h3 style="margin:18px 0 6px">🎲 Tonight's pick</h3><p style="margin:0"><a href="${origin}/show/${pick.slug}">${pick.name}</a> (★${pick.rating.toFixed(1)}) — <a href="${origin}/show/${pick.slug}/essential">start with the essentials</a>.</p>`
+      : "");
+
+  const today = new Date().toISOString().slice(0, 10);
+  const topName = tonight[0]?.name ?? premieres[0]?.name ?? pick?.name ?? "your shows";
+  const subject = `Tonight: ${topName}${tonight.length > 1 ? ` + ${tonight.length - 1} more` : ""} — TV Nightly`;
+
+  const stmts: D1PreparedStatement[] = [];
+  for (const sub of subs) {
+    const unsubToken = await signToken(
+      { email: sub.email, showId: null, kind: "daily", action: "unsub" },
+      env.SECRET,
+    );
+    const html =
+      `<div style="font-family:sans-serif;max-width:560px">` +
+      `<p style="margin:0 0 4px;color:#888;font-size:12px">TV Nightly · ${today}</p>` +
+      bodyCore +
+      `<p style="color:#888;font-size:12px;margin-top:22px">You asked for the TV Nightly daily email. ` +
+      `<a href="${origin}/unsubscribe?token=${unsubToken}">Unsubscribe</a></p></div>`;
+    stmts.push(
+      db
+        .prepare("INSERT INTO outbox (to_email, subject, html, created_at) VALUES (?,?,?,unixepoch())")
+        .bind(sub.email, subject, html),
+    );
+  }
+  await db.batch(stmts);
+  return { queued: stmts.length };
+}
+
 /**
  * Hourly cron entry point: pull TVmaze's daily update feed, refresh the
  * mirrored shows that are stale (highest popularity first), derive renewal/

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { FC, PropsWithChildren } from "hono/jsx";
 import { raw } from "hono/html";
-import { runSync, providerPatrol, type SyncEnv } from "./sync";
+import { runSync, providerPatrol, sendDailyDigest, type SyncEnv } from "./sync";
 import { sendEmails } from "./email";
 import { signToken, verifyToken } from "./tokens";
 import franchisesData from "../data/franchises.json";
@@ -4203,7 +4203,13 @@ app.notFound((c) =>
 export default {
   fetch: app.fetch,
   scheduled(event: ScheduledController, env: Bindings, ctx: ExecutionContext) {
-    // :30 cron = provider patrol; :00 (and manual triggers) = main sync.
-    ctx.waitUntil(event.cron === "30 * * * *" ? providerPatrol(env) : runSync(env));
+    // :30 = provider patrol; 22:00 = daily digest; :00 (and manual) = sync.
+    ctx.waitUntil(
+      event.cron === "30 * * * *"
+        ? providerPatrol(env)
+        : event.cron === "0 22 * * *"
+          ? sendDailyDigest(env)
+          : runSync(env),
+    );
   },
 };

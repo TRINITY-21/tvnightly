@@ -6,10 +6,11 @@
   // nodejs_compat enables TCP sockets for SMTP (worker-mailer / Gmail sending)
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "directory": "./public" },
-  // Two hourly crons, each with its own 50-subrequest budget:
-  //   :00 — TVmaze sync (shows/episodes/events/alerts + outbox drain)
-  //   :30 — provider patrol (streaming availability diffing -> /whats-new)
-  "triggers": { "crons": ["0 * * * *", "30 * * * *"] },
+  // Three crons, each with its own 50-subrequest budget:
+  //   :00 hourly — TVmaze sync (shows/episodes/events/alerts + outbox drain)
+  //   :30 hourly — provider patrol (availability diffing -> /whats-new)
+  //   22:00 UTC daily — the TV Nightly digest (queued via outbox)
+  "triggers": { "crons": ["0 * * * *", "30 * * * *", "0 22 * * *"] },
   "vars": {
     "SITE_ORIGIN": "https://tvnightly.com",
     // 'console' | 'gmail' | 'resend' — see src/email.ts

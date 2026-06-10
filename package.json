@@ -1,0 +1,23 @@
+{
+  "name": "tvnightly",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "db:schema:local": "wrangler d1 execute tvnightly --local --file=migrations/0001_init.sql",
+    "db:schema:remote": "wrangler d1 execute tvnightly --remote --file=migrations/0001_init.sql",
+    "seed:fetch": "node scripts/seed.mjs",
+    "seed:load:local": "wrangler d1 execute tvnightly --local --file=seed/seed.sql",
+    "seed:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/seed.sql"
+  },
+  "dependencies": {
+    "hono": "^4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4",
+    "typescript": "^5",
+    "wrangler": "^4"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tvnightly",
+  "main": "src/index.tsx",
+  "compatibility_date": "2026-04-01",
+  "assets": { "directory": "./public" },
+  // Hourly sync: free Workers allow 50 subrequests/invocation, so each run
+  // drains up to 40 stale shows; hourly runs keep the backlog near zero.
+  "triggers": { "crons": ["0 * * * *"] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tvnightly",
+      // Local dev works with this placeholder. Before first deploy run
+      // `wrangler d1 create tvnightly` and paste the real id here.
+      "database_id": "REPLACE_AFTER_wrangler_d1_create"
+    }
+  ]
+}

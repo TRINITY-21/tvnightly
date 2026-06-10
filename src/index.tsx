@@ -134,6 +134,26 @@ const ProviderLine: FC<{ row: { providers_intl: string | null }; region: string 
   );
 };
 
+// "Standby Glow" mark: a TV on standby — thin 16:9 frame, one glowing LED.
+const LogoMark: FC<{ size?: number }> = ({ size = 26 }) => (
+  <svg
+    class="logo-mark"
+    viewBox="0 0 36 24"
+    width={size}
+    height={Math.round((size * 24) / 36)}
+    aria-hidden="true"
+  >
+    <defs>
+      <filter id="lg" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="1.6" />
+      </filter>
+    </defs>
+    <rect x="1.25" y="1.25" width="33.5" height="21.5" rx="5.5" fill="none" stroke="#F2F5FA" stroke-width="2.5" />
+    <circle cx="27" cy="17" r="4.6" fill="#2DD9FF" opacity="0.35" filter="url(#lg)" />
+    <circle cx="27" cy="17" r="2.4" fill="#2DD9FF" />
+  </svg>
+);
+
 const stripHtml = (s: string | null) => (s ?? "").replace(/<[^>]*>/g, "").trim();
 const epCode = (e: EpisodeRow) =>
   `S${String(e.season ?? 0).padStart(2, "0")}E${String(e.number ?? 0).padStart(2, "0")}`;
@@ -209,6 +229,8 @@ const Layout: FC<
       {props.description ? <meta name="description" content={props.description} /> : null}
       {props.canonical ? <link rel="canonical" href={props.canonical} /> : null}
       {props.noindex ? <meta name="robots" content="noindex" /> : null}
+      <meta name="theme-color" content="#0B0E14" />
+      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <meta property="og:site_name" content="TV Nightly" />
       <meta property="og:type" content="website" />
       <meta property="og:title" content={props.title} />
@@ -223,7 +245,8 @@ const Layout: FC<
     <body>
       <header class="site-header">
         <a class="logo" href="/">
-          TV Nightly
+          <LogoMark />
+          TV NIGHTLY<span class="logo-dot">.</span>
         </a>
         <form action="/search" method="get" class="search">
           <input type="search" name="q" placeholder="Search shows…" required />
@@ -243,6 +266,9 @@ const Layout: FC<
       </header>
       <main>{props.children}</main>
       <footer class="site-footer">
+        <p class="tagline">
+          Tonight, decided<span class="logo-dot">.</span>
+        </p>
         <div class="footer-sub">
           <p>
             <strong>Stay updated</strong> — today's TV, renewals and premieres in your inbox.
@@ -432,7 +458,7 @@ app.get("/", async (c) => {
       {tonight.length ? (
         <section>
           <h2>
-            On tonight{" "}
+            <span class="live-dot"></span>On tonight{" "}
             <a class="more" href="/tonight">
               all of tonight →
             </a>
@@ -948,8 +974,8 @@ function ratingsSvg(eps: EpisodeRow[]): string {
   let bandIdx = 0;
   const flushBand = (endX: number) => {
     parts.push(
-      `<rect x="${bandStart}" y="${PAD}" width="${endX - bandStart}" height="${H - PAD * 2}" fill="${bandIdx % 2 ? "#181b24" : "#11141d"}"/>`,
-      `<text x="${(bandStart + endX) / 2}" y="${H - 10}" fill="#8b91a0" font-size="10" text-anchor="middle">S${season}</text>`,
+      `<rect x="${bandStart}" y="${PAD}" width="${endX - bandStart}" height="${H - PAD * 2}" fill="${bandIdx % 2 ? "#141a26" : "#0e121b"}"/>`,
+      `<text x="${(bandStart + endX) / 2}" y="${H - 10}" fill="#97a1b5" font-size="10" text-anchor="middle">S${season}</text>`,
     );
     bandIdx++;
   };
@@ -965,8 +991,8 @@ function ratingsSvg(eps: EpisodeRow[]): string {
   // gridlines
   for (const r of [5, 6, 7, 8, 9, 10]) {
     parts.push(
-      `<line x1="${PAD}" y1="${yFor(r)}" x2="${x}" y2="${yFor(r)}" stroke="#2a2f3d" stroke-width="0.5"/>`,
-      `<text x="${PAD - 6}" y="${yFor(r) + 3}" fill="#8b91a0" font-size="10" text-anchor="end">${r}</text>`,
+      `<line x1="${PAD}" y1="${yFor(r)}" x2="${x}" y2="${yFor(r)}" stroke="#222b3b" stroke-width="0.5"/>`,
+      `<text x="${PAD - 6}" y="${yFor(r) + 3}" fill="#97a1b5" font-size="10" text-anchor="end">${r}</text>`,
     );
   }
   // points
@@ -1383,7 +1409,9 @@ app.get("/tonight", async (c) => {
       description="Every episode airing on TV and streaming tonight, in air-time order."
       canonical={canonical(c)}
     >
-      <h1>On TV tonight</h1>
+      <h1>
+        <span class="live-dot"></span>On TV tonight
+      </h1>
       {results.length === 0 ? <p class="muted">Nothing in the schedule for today yet.</p> : null}
       <ul class="ep-list">
         {results.map((e) => (
@@ -2163,6 +2191,7 @@ function compareSvg(a: EpisodeRow[], b: EpisodeRow[]): string {
   const W = Math.max(420, n * STEP + PAD * 2);
   const H = 240;
   const yFor = (r: number) => PAD + (10 - Math.max(5, Math.min(10, r))) * ((H - PAD * 2) / 5);
+  // Brand chart duotone: series A in phosphor cyan, series B in marquee pink.
   const line = (eps: EpisodeRow[], color: string) =>
     `<polyline fill="none" stroke="${color}" stroke-width="2" points="${eps
       .map((e, i) => `${PAD + i * STEP + STEP / 2},${yFor(e.rating!)}`)
@@ -2172,11 +2201,11 @@ function compareSvg(a: EpisodeRow[], b: EpisodeRow[]): string {
   ];
   for (const r of [5, 6, 7, 8, 9, 10]) {
     parts.push(
-      `<line x1="${PAD}" y1="${yFor(r)}" x2="${W - PAD}" y2="${yFor(r)}" stroke="#2a2f3d" stroke-width="0.5"/>`,
-      `<text x="${PAD - 6}" y="${yFor(r) + 3}" fill="#8b91a0" font-size="10" text-anchor="end">${r}</text>`,
+      `<line x1="${PAD}" y1="${yFor(r)}" x2="${W - PAD}" y2="${yFor(r)}" stroke="#222b3b" stroke-width="0.5"/>`,
+      `<text x="${PAD - 6}" y="${yFor(r) + 3}" fill="#97a1b5" font-size="10" text-anchor="end">${r}</text>`,
     );
   }
-  parts.push(line(ra, "#6c7bff"), line(rb, "#ff9f43"), "</svg>");
+  parts.push(line(ra, "#2DD9FF"), line(rb, "#FF5C8A"), "</svg>");
   return parts.join("");
 }
 
@@ -2255,8 +2284,8 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
         <button type="submit">Compare</button>
       </form>
       <p>
-        <span class="prov" style="border-color:#6c7bff">{showA.name}</span>{" "}
-        <span class="prov" style="border-color:#ff9f43;background:rgba(255,159,67,0.12)">{showB.name}</span>
+        <span class="prov" style="border-color:#2DD9FF">{showA.name}</span>{" "}
+        <span class="prov" style="border-color:#FF5C8A;background:rgba(255,92,138,0.12)">{showB.name}</span>
       </p>
       {svg ? (
         <div class="graph-wrap">{raw(svg)}</div>
@@ -3480,7 +3509,7 @@ app.get("/what-to-watch", async (c) => {
           </select>
         </label>
         {skipNext ? <input type="hidden" name="skip" value={skipNext} /> : null}
-        <button type="submit">Spin 🎲</button>
+        <button type="submit">Settle it for us 🎲</button>
       </form>
 
       {pick ? (

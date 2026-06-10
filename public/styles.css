@@ -255,6 +255,8 @@ li.is-watched { opacity: 0.55; }
   text-align: center;
 }
 .explore-arrow { margin-left: auto; color: var(--muted); }
+.card-stack { display: flex; flex-direction: column; gap: 0.4rem; }
+.compare-btn { text-align: center; font-weight: 700; letter-spacing: 0.06em; }
 
 .provs { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .prov {

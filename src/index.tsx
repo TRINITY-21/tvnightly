@@ -654,14 +654,17 @@ app.get("/show/:slug", async (c) => {
         ))}
         {similar.length ? (
           <section>
-            <h2>More like {show.name}</h2>
-            <ul class="ep-list">
+            <h2>Shows like {show.name}</h2>
+            <div class="grid">
               {similar.map((s) => (
-                <li>
-                  <a href={`/show/${s.slug}/best-episodes`}>The best episodes of {s.name}</a>
-                </li>
+                <div class="card-stack">
+                  <ShowCard show={s} />
+                  <a class="vote-btn compare-btn" href={comparePathFor(show.slug, s.slug)}>
+                    COMPARE
+                  </a>
+                </div>
               ))}
-            </ul>
+            </div>
           </section>
         ) : null}
         {(() => {
@@ -2177,12 +2180,144 @@ function compareSvg(a: EpisodeRow[], b: EpisodeRow[]): string {
   return parts.join("");
 }
 
+const showBySlug = (db: D1Database, slug: string) =>
+  db.prepare("SELECT * FROM shows WHERE slug = ?").bind(slug).first<ShowRow>();
+
+/** Canonical matchup path: slugs in alphabetical order. */
+const comparePathFor = (a: string, b: string) =>
+  a.localeCompare(b) <= 0 ? `/compare/${a}-vs-${b}` : `/compare/${b}-vs-${a}`;
+
+async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) {
+  const db = c.env.DB;
+  const [epsA, epsB] = await Promise.all([
+    db
+      .prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
+      .bind(showA.id)
+      .all<EpisodeRow>()
+      .then((r) => r.results),
+    db
+      .prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
+      .bind(showB.id)
+      .all<EpisodeRow>()
+      .then((r) => r.results),
+  ]);
+  const svg = compareSvg(epsA, epsB);
+  const best = (eps: EpisodeRow[]) =>
+    eps.filter((e) => e.rating != null).sort((x, y) => y.rating! - x.rating!)[0];
+  const bA = best(epsA);
+  const bB = best(epsB);
+  const stats = [
+    { label: "Show rating", a: showA.rating?.toFixed(1) ?? "—", b: showB.rating?.toFixed(1) ?? "—" },
+    { label: "Episodes", a: String(epsA.length), b: String(epsB.length) },
+    {
+      label: "Best episode",
+      a: bA ? `${bA.name} (★${bA.rating!.toFixed(1)})` : "—",
+      b: bB ? `${bB.name} (★${bB.rating!.toFixed(1)})` : "—",
+    },
+    { label: "Status", a: showA.status ?? "—", b: showB.status ?? "—" },
+  ];
+
+  // More matchups: each show's genre neighbors become suggested comparisons —
+  // this link mesh is also what makes /compare/* pages crawlable.
+  const [simA, simB] = await Promise.all([similarShows(db, showA), similarShows(db, showB)]);
+  const seen = new Set([showA.slug, showB.slug]);
+  const suggestions: { label: string; href: string }[] = [];
+  for (const [base, sims] of [
+    [showA, simA] as const,
+    [showB, simB] as const,
+  ]) {
+    for (const s of sims.slice(0, 4)) {
+      if (seen.has(s.slug)) continue;
+      seen.add(s.slug);
+      suggestions.push({ label: `${base.name} vs ${s.name}`, href: comparePathFor(base.slug, s.slug) });
+    }
+  }
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${showA.name} vs ${showB.name} — episode ratings compared | TV Nightly`}
+      description={`${showA.name} or ${showB.name}? Both shows' full episode-rating histories on one chart, plus head-to-head stats.`}
+      canonical={`${origin(c)}${comparePathFor(showA.slug, showB.slug)}`}
+      ogImage={showA.image_url ?? showB.image_url ?? undefined}
+    >
+      <h1>
+        <a href={`/show/${showA.slug}`}>{showA.name}</a> vs{" "}
+        <a href={`/show/${showB.slug}`}>{showB.name}</a>
+      </h1>
+      <form method="get" action="/compare" class="picker-form">
+        <label>
+          Show A <input type="search" name="a" value={showA.name} required />
+        </label>
+        <label>
+          Show B <input type="search" name="b" value={showB.name} required />
+        </label>
+        <button type="submit">Compare</button>
+      </form>
+      <p>
+        <span class="prov" style="border-color:#6c7bff">{showA.name}</span>{" "}
+        <span class="prov" style="border-color:#ff9f43;background:rgba(255,159,67,0.12)">{showB.name}</span>
+      </p>
+      {svg ? (
+        <div class="graph-wrap">{raw(svg)}</div>
+      ) : (
+        <p class="muted">
+          We don't have rated episodes for one of these yet — episode data fills in as the mirror
+          grows.
+        </p>
+      )}
+      <ul class="ep-list">
+        {stats.map((s) => (
+          <li>
+            <span class="muted">{s.label}:</span> {s.a} <span class="muted">vs</span> {s.b}
+          </li>
+        ))}
+      </ul>
+      {suggestions.length ? (
+        <section>
+          <h2>More comparisons</h2>
+          <p class="quick-picks">
+            {suggestions.map((s) => (
+              <a class="chip" href={s.href}>
+                {s.label}
+              </a>
+            ))}
+          </p>
+        </section>
+      ) : null}
+    </Layout>,
+  );
+}
+
+app.get("/compare/:pair", async (c) => {
+  const db = c.env.DB;
+  const pair = c.req.param("pair");
+  // Slugs may themselves contain "-vs-": try each split until both resolve.
+  const parts = pair.split("-vs-");
+  let showA: ShowRow | null = null;
+  let showB: ShowRow | null = null;
+  for (let i = 1; i < parts.length && !showB; i++) {
+    const [ra, rb] = await Promise.all([
+      showBySlug(db, parts.slice(0, i).join("-vs-")),
+      showBySlug(db, parts.slice(i).join("-vs-")),
+    ]);
+    if (ra && rb) {
+      showA = ra;
+      showB = rb;
+    }
+  }
+  if (!showA || !showB) return c.notFound();
+  const canonicalPath = comparePathFor(showA.slug, showB.slug);
+  if (`/compare/${pair}` !== canonicalPath) return c.redirect(canonicalPath, 301);
+  return renderComparePage(c, showA, showB);
+});
+
 app.get("/compare", async (c) => {
   const db = c.env.DB;
   const resolve = async (q: string): Promise<ShowRow | null> => {
     if (!q) return null;
     return (
-      (await db.prepare("SELECT * FROM shows WHERE slug = ?").bind(q).first<ShowRow>()) ??
+      (await showBySlug(db, q)) ??
       (await db
         .prepare("SELECT * FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 1")
         .bind(q)
@@ -2192,56 +2327,17 @@ app.get("/compare", async (c) => {
   const qa = (c.req.query("a") ?? "").trim();
   const qb = (c.req.query("b") ?? "").trim();
   const [showA, showB] = await Promise.all([resolve(qa), resolve(qb)]);
-
-  let svg = "";
-  let stats: { label: string; a: string; b: string }[] = [];
-  if (showA && showB) {
-    const [epsA, epsB] = await Promise.all([
-      db
-        .prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
-        .bind(showA.id)
-        .all<EpisodeRow>()
-        .then((r) => r.results),
-      db
-        .prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
-        .bind(showB.id)
-        .all<EpisodeRow>()
-        .then((r) => r.results),
-    ]);
-    svg = compareSvg(epsA, epsB);
-    const best = (eps: EpisodeRow[]) =>
-      eps.filter((e) => e.rating != null).sort((x, y) => y.rating! - x.rating!)[0];
-    const bA = best(epsA);
-    const bB = best(epsB);
-    stats = [
-      { label: "Show rating", a: showA.rating?.toFixed(1) ?? "—", b: showB.rating?.toFixed(1) ?? "—" },
-      { label: "Episodes", a: String(epsA.length), b: String(epsB.length) },
-      { label: "Best episode", a: bA ? `${bA.name} (★${bA.rating!.toFixed(1)})` : "—", b: bB ? `${bB.name} (★${bB.rating!.toFixed(1)})` : "—" },
-      { label: "Status", a: showA.status ?? "—", b: showB.status ?? "—" },
-    ];
-  }
+  // The form is the doorway; the matchup lives at its own canonical URL.
+  if (showA && showB) return c.redirect(comparePathFor(showA.slug, showB.slug), 301);
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title={
-        showA && showB
-          ? `${showA.name} vs ${showB.name} — episode ratings compared | TV Nightly`
-          : "Compare two TV shows — episode ratings head-to-head | TV Nightly"
-      }
+      title="Compare two TV shows — episode ratings head-to-head | TV Nightly"
       description="Put two shows' full episode-rating histories on one chart and settle the argument."
       canonical={`${origin(c)}/compare`}
     >
-      <h1>
-        {showA && showB ? (
-          <>
-            <a href={`/show/${showA.slug}`}>{showA.name}</a> vs{" "}
-            <a href={`/show/${showB.slug}`}>{showB.name}</a>
-          </>
-        ) : (
-          "Compare two shows"
-        )}
-      </h1>
+      <h1>Compare two shows</h1>
       <form method="get" action="/compare" class="picker-form">
         <label>
           Show A <input type="search" name="a" value={qa} placeholder="Breaking Bad" required />
@@ -2251,22 +2347,7 @@ app.get("/compare", async (c) => {
         </label>
         <button type="submit">Compare</button>
       </form>
-      {showA && showB ? (
-        <>
-          <p>
-            <span class="prov" style="border-color:#6c7bff">{showA.name}</span>{" "}
-            <span class="prov" style="border-color:#ff9f43;background:rgba(255,159,67,0.12)">{showB.name}</span>
-          </p>
-          {svg ? <div class="graph-wrap">{raw(svg)}</div> : <p class="muted">Not enough rated episodes to chart.</p>}
-          <ul class="ep-list">
-            {stats.map((s) => (
-              <li>
-                <span class="muted">{s.label}:</span> {s.a} <span class="muted">vs</span> {s.b}
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : qa || qb ? (
+      {(qa || qb) && (!showA || !showB) ? (
         <p class="muted">Couldn't find one of those shows — try different names.</p>
       ) : null}
     </Layout>,
@@ -2987,6 +3068,7 @@ app.get("/movie/:slug", async (c) => {
   if (!movie) return c.notFound();
   const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
   const stat = await titleStat(c.env.DB, "movie", movie.imdb_id);
+  const simMovies = await similarMovies(c.env.DB, movie);
 
   // No aggregateRating here: Google's review-snippet guidelines require ratings
   // collected on YOUR site; republishing TMDB votes as structured data risks a
@@ -3037,6 +3119,16 @@ app.get("/movie/:slug", async (c) => {
             </p>
           </div>
         </div>
+        {simMovies.length ? (
+          <section>
+            <h2>Movies like {movie.title}</h2>
+            <div class="grid">
+              {simMovies.map((m) => (
+                <MovieCard movie={m} />
+              ))}
+            </div>
+          </section>
+        ) : null}
         {(() => {
           const fr = franchiseOfMovie(movie);
           const hub = hubForGenres(genres, movie.year);

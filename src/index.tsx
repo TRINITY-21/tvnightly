@@ -110,6 +110,7 @@ const Layout: FC<
     ld?: unknown[];
     ogImage?: string;
     scripts?: string[];
+    noindex?: boolean;
   }>
 > = (props) => (
   <html lang="en">
@@ -119,6 +120,7 @@ const Layout: FC<
       <title>{props.title}</title>
       {props.description ? <meta name="description" content={props.description} /> : null}
       {props.canonical ? <link rel="canonical" href={props.canonical} /> : null}
+      {props.noindex ? <meta name="robots" content="noindex" /> : null}
       <meta property="og:site_name" content="TV Nightly" />
       <meta property="og:type" content="website" />
       <meta property="og:title" content={props.title} />
@@ -139,6 +141,7 @@ const Layout: FC<
           <input type="search" name="q" placeholder="Search shows…" required />
         </form>
         <nav>
+          <a href="/my-shows">My shows</a>
           <a href="/what-to-watch">What to watch</a>
           <a href="/movies">Movies</a>
           <a href="/tonight">Tonight</a>
@@ -1588,6 +1591,103 @@ app.get("/api/search", async (c) => {
     ].slice(0, 8),
   );
 });
+
+// Personal tracker backend: the browser owns the watch-state (localStorage);
+// this endpoint just turns {showId: [watched episode ids]} into per-show
+// progress + "what episode was I on". No accounts, nothing stored server-side.
+app.post("/api/progress", async (c) => {
+  let body: { shows?: Record<string, unknown> };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "bad request" }, 400);
+  }
+  const entries = Object.entries(body.shows ?? {})
+    .map(([id, eps]) => ({
+      showId: Number(id),
+      watched: new Set(Array.isArray(eps) ? eps.filter((e) => Number.isInteger(e)) : []),
+    }))
+    .filter((e) => Number.isInteger(e.showId))
+    .slice(0, 100);
+  if (entries.length === 0) return c.json({ shows: [] });
+  const totalIds = entries.reduce((n, e) => n + e.watched.size, 0);
+  if (totalIds > 20000) return c.json({ error: "too large" }, 413);
+
+  const ids = entries.map((e) => e.showId);
+  const placeholders = ids.map(() => "?").join(",");
+  const [showsRes, epsRes] = await Promise.all([
+    c.env.DB.prepare(`SELECT id, name, slug, status FROM shows WHERE id IN (${placeholders})`)
+      .bind(...ids)
+      .all<{ id: number; name: string; slug: string; status: string | null }>(),
+    c.env.DB.prepare(
+      `SELECT id, show_id, season, number, name, airdate, airstamp FROM episodes
+       WHERE show_id IN (${placeholders}) ORDER BY show_id, season, number`,
+    )
+      .bind(...ids)
+      .all<EpisodeRow>(),
+  ]);
+
+  const byShow = new Map<number, EpisodeRow[]>();
+  for (const e of epsRes.results) {
+    if (!byShow.has(e.show_id)) byShow.set(e.show_id, []);
+    byShow.get(e.show_id)!.push(e);
+  }
+  const now = Date.now();
+  const epView = (e: EpisodeRow) => ({ code: epCode(e), name: e.name, airdate: e.airdate });
+  const shows = showsRes.results.map((s) => {
+    const eps = byShow.get(s.id) ?? [];
+    const watched = entries.find((e) => e.showId === s.id)!.watched;
+    const aired = eps.filter((e) => e.airstamp && Date.parse(e.airstamp) <= now);
+    const nextUnwatched = aired.find((e) => !watched.has(e.id));
+    const nextAiring = eps.find((e) => e.airstamp && Date.parse(e.airstamp) > now);
+    return {
+      id: s.id,
+      name: s.name,
+      slug: s.slug,
+      status: s.status,
+      watched: aired.filter((e) => watched.has(e.id)).length,
+      total: aired.length,
+      next: nextUnwatched ? epView(nextUnwatched) : null,
+      nextAiring: nextAiring ? epView(nextAiring) : null,
+    };
+  });
+  // Active binges first (something aired and unwatched), then caught-up shows.
+  shows.sort((a, b) => Number(!!b.next) - Number(!!a.next) || a.name.localeCompare(b.name));
+  return c.json({ shows });
+});
+
+app.get("/my-shows", (c) =>
+  c.html(
+    <Layout
+      title="My shows — your private episode tracker | TV Nightly"
+      scripts={["/js/myshows.js"]}
+      noindex
+    >
+      <h1>My shows</h1>
+      <p class="muted">
+        No account, no sign-up: your watch history lives in this browser only. Tick episodes on
+        any show page and they appear here.
+      </p>
+      <div id="myshows">
+        <p class="muted">Loading your shows…</p>
+      </div>
+      <noscript>
+        <p class="muted">This page needs JavaScript — your data is in your browser, not on our servers.</p>
+      </noscript>
+      <section>
+        <h2>Move between devices</h2>
+        <p class="muted">
+          Copy this code on one device, paste it on another, hit import. That's the whole sync.
+        </p>
+        <textarea id="export-box" rows={3} spellcheck={false}></textarea>
+        <p>
+          <button id="copy-btn" class="vote-btn">Copy</button>{" "}
+          <button id="import-btn" class="vote-btn">Import what's pasted above</button>
+        </p>
+      </section>
+    </Layout>,
+  ),
+);
 
 async function ipHash(secret: string, ip: string): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${secret}:${ip}`));

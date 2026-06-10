@@ -136,6 +136,24 @@ for (const [i, id] of ids.entries()) {
   if ((i + 1) % 50 === 0) console.log(`details ${i + 1}/${ids.length}`);
 }
 
+// Upcoming movies snapshot (theatrical, next months) for the /movies/upcoming chart.
+lines.push("DELETE FROM upcoming_movies;");
+const seenUpcoming = new Set();
+const today = new Date().toISOString().slice(0, 10);
+for (let p = 1; p <= 2; p++) {
+  const page = await get("/movie/upcoming", `&region=US&page=${p}`);
+  for (const u of page.results ?? []) {
+    if (!u.release_date || u.release_date < today || seenUpcoming.has(u.id)) continue;
+    seenUpcoming.add(u.id);
+    const poster = u.poster_path ? `https://image.tmdb.org/t/p/w342${u.poster_path}` : null;
+    lines.push(
+      `INSERT OR IGNORE INTO upcoming_movies (tmdb_id, title, release_date, poster_url, overview) VALUES (` +
+        `${u.id}, ${esc(u.title)}, ${esc(u.release_date)}, ${esc(poster)}, ${esc((u.overview || "").slice(0, 300))});`,
+    );
+  }
+}
+console.log(`upcoming snapshot: ${seenUpcoming.size} films`);
+
 mkdirSync("seed", { recursive: true });
 writeFileSync("seed/movies.sql", lines.join("\n") + "\n");
 console.log(`Wrote seed/movies.sql — ${kept} movies (${ids.length - kept} skipped, no IMDb id).`);

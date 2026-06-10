@@ -238,6 +238,7 @@ const Layout: FC<
           <a href="/tonight">Tonight</a>
           <a href="/calendar">Calendar</a>
           <a href="/renewals">Renewals</a>
+          <a href="/lists">Directory</a>
         </nav>
       </header>
       <main>{props.children}</main>
@@ -1812,6 +1813,524 @@ app.post("/recommend", async (c) => {
   );
 });
 
+// --------------------------------------------------- directory & charts
+
+const slugifyName = (name: string) =>
+  name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+/** Networks + streamers with enough mirrored shows to deserve a page. */
+async function networkDirectory(db: D1Database): Promise<{ name: string; slug: string; count: number }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT n, COUNT(*) AS c FROM (
+         SELECT COALESCE(network, web_channel) AS n FROM shows WHERE weight >= 60
+       ) WHERE n IS NOT NULL GROUP BY n HAVING c >= 3 ORDER BY c DESC LIMIT 30`,
+    )
+    .all<{ n: string; c: number }>();
+  return results.map((r) => ({ name: r.n, slug: slugifyName(r.n), count: r.c }));
+}
+
+async function genreDirectory(db: D1Database): Promise<{ tv: string[]; movie: string[] }> {
+  const [tv, movie] = await Promise.all([
+    db
+      .prepare(
+        `SELECT DISTINCT value AS g FROM shows, json_each(shows.genres) WHERE shows.weight >= 60 ORDER BY 1`,
+      )
+      .all<{ g: string }>(),
+    db.prepare("SELECT DISTINCT value AS g FROM movies, json_each(movies.genres) ORDER BY 1").all<{ g: string }>(),
+  ]);
+  return { tv: tv.results.map((r) => r.g), movie: movie.results.map((r) => r.g) };
+}
+
+app.get("/lists", async (c) => {
+  const [networks, genres] = await Promise.all([networkDirectory(c.env.DB), genreDirectory(c.env.DB)]);
+  const CHARTS: [string, string][] = [
+    ["Top TV shows", "/top/tv"],
+    ["Top movies", "/movies/best"],
+    ["Top TV seasons", "/top/seasons"],
+    ["Top networks", "/top/networks"],
+    ["All-time top episodes", "/best-episodes"],
+    ["Most loved (community)", "/loved"],
+    ["Compare two shows", "/compare"],
+    ["Upcoming TV premieres", "/premieres"],
+    ["Upcoming movies", "/movies/upcoming"],
+    ["Streaming news", "/whats-new"],
+  ];
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title="Directory — every chart, network & genre | TV Nightly"
+      description="All of TV Nightly in one place: charts, networks, TV and movie genres, fandom hubs, and watch-order guides."
+      canonical={canonical(c)}
+    >
+      <h1>Directory</h1>
+      <section>
+        <h2>Charts</h2>
+        <p class="quick-picks">
+          {CHARTS.map(([label, href]) => (
+            <a class="chip" href={href}>
+              {label}
+            </a>
+          ))}
+        </p>
+      </section>
+      <section>
+        <h2>Networks & streamers</h2>
+        <p class="quick-picks">
+          {networks.map((n) => (
+            <a class="chip" href={`/network/${n.slug}`}>
+              {n.name}
+            </a>
+          ))}
+        </p>
+      </section>
+      <section>
+        <h2>TV genres</h2>
+        <p class="quick-picks">
+          {genres.tv.map((g) => (
+            <a class="chip" href={`/genre/${slugifyName(g)}`}>
+              {g}
+            </a>
+          ))}
+        </p>
+      </section>
+      <section>
+        <h2>Movie genres</h2>
+        <p class="quick-picks">
+          {genres.movie.map((g) => (
+            <a class="chip" href={`/genre/${slugifyName(g)}`}>
+              {g}
+            </a>
+          ))}
+        </p>
+      </section>
+      <section>
+        <h2>Hubs & guides</h2>
+        <p class="quick-picks">
+          {VERTICALS.map((v) => (
+            <a class="chip" href={`/${v.slug}`}>
+              {v.name} hub
+            </a>
+          ))}
+          <a class="chip" href="/watch-orders">
+            Watch-order guides
+          </a>
+        </p>
+      </section>
+    </Layout>,
+  );
+});
+
+app.get("/top/tv", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT * FROM shows WHERE rating IS NOT NULL AND weight >= 75
+     ORDER BY rating DESC, weight DESC LIMIT 100`,
+  ).all<ShowRow>();
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title="The 100 top-rated TV shows | TV Nightly"
+      description={`The best TV shows ranked by viewer rating${results[0] ? `, starting with ${results[0].name}` : ""}.`}
+      canonical={canonical(c)}
+    >
+      <h1>The top-rated TV shows</h1>
+      <ol class="ranked">
+        {results.map((s) => (
+          <li>
+            <strong>
+              <a href={`/show/${s.slug}`}>{s.name}</a>
+            </strong>{" "}
+            {s.premiered ? <span class="muted">({s.premiered.slice(0, 4)})</span> : null}
+            <span class="rating"> ★ {s.rating!.toFixed(1)}</span>{" "}
+            <a class="muted" href={`/show/${s.slug}/best-episodes`}>
+              best episodes →
+            </a>
+          </li>
+        ))}
+      </ol>
+    </Layout>,
+  );
+});
+
+app.get("/top/seasons", async (c) => {
+  // Same shrink as /best-episodes: TVmaze has no episode vote counts, so pull
+  // season averages toward the show's overall rating; max 2 seasons per show.
+  const { results } = await c.env.DB.prepare(
+    `SELECT * FROM (
+       SELECT e.show_id, e.season, COUNT(*) AS eps, AVG(e.rating) AS avg_r,
+              (AVG(e.rating) + 2.0 * s.rating) / 3.0 AS score, s.name, s.slug,
+              ROW_NUMBER() OVER (PARTITION BY e.show_id ORDER BY AVG(e.rating) DESC) AS rn
+       FROM episodes e JOIN shows s ON s.id = e.show_id
+       WHERE e.rating IS NOT NULL AND s.rating IS NOT NULL AND s.weight >= 75
+         AND e.season IS NOT NULL
+       GROUP BY e.show_id, e.season HAVING COUNT(*) >= 6
+     ) WHERE rn <= 2 ORDER BY score DESC LIMIT 50`,
+  ).all<{ show_id: number; season: number; eps: number; avg_r: number; name: string; slug: string }>();
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title="The 50 best TV seasons of all time | TV Nightly"
+      description="Whole seasons ranked by their average episode rating — the greatest single runs in TV history."
+      canonical={canonical(c)}
+    >
+      <h1>The best TV seasons of all time</h1>
+      <p class="muted">
+        Ranked by average episode rating (seasons with at least 6 rated episodes).
+      </p>
+      <ol class="ranked">
+        {results.map((r) => (
+          <li>
+            <strong>
+              <a href={`/show/${r.slug}/season/${r.season}`}>
+                {r.name} — Season {r.season}
+              </a>
+            </strong>
+            <span class="rating"> ★ {r.avg_r.toFixed(2)}</span>{" "}
+            <span class="muted">avg over {r.eps} episodes</span>
+          </li>
+        ))}
+      </ol>
+    </Layout>,
+  );
+});
+
+app.get("/top/networks", async (c) => {
+  // Bayesian prior toward a 7.5 global mean (m=5) so a 3-show boutique can't
+  // outrank a 30-show network on a lucky sample.
+  const { results } = await c.env.DB.prepare(
+    `SELECT n, c, r FROM (
+       SELECT n, COUNT(*) AS c, AVG(rating) AS r,
+              (SUM(rating) + 7.5 * 5) / (COUNT(*) + 5.0) AS score
+       FROM (
+         SELECT COALESCE(network, web_channel) AS n, rating FROM shows
+         WHERE rating IS NOT NULL AND weight >= 60
+       ) WHERE n IS NOT NULL GROUP BY n HAVING c >= 3
+     ) ORDER BY score DESC LIMIT 30`,
+  ).all<{ n: string; c: number; r: number }>();
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title="TV networks & streamers ranked by show quality | TV Nightly"
+      description="Which network actually makes the best TV? Every major network and streamer ranked by the average rating of its shows."
+      canonical={canonical(c)}
+    >
+      <h1>Networks ranked by show quality</h1>
+      <p class="muted">Average rating across each network's shows (minimum 3 rated shows).</p>
+      <ol class="ranked">
+        {results.map((r) => (
+          <li>
+            <strong>
+              <a href={`/network/${slugifyName(r.n)}`}>{r.n}</a>
+            </strong>
+            <span class="rating"> ★ {r.r.toFixed(2)}</span>{" "}
+            <span class="muted">across {r.c} shows</span>
+          </li>
+        ))}
+      </ol>
+    </Layout>,
+  );
+});
+
+app.get("/movies/upcoming", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT * FROM upcoming_movies WHERE release_date >= date('now')
+     ORDER BY release_date LIMIT 40`,
+  ).all<{ tmdb_id: number; title: string; release_date: string; poster_url: string | null; overview: string | null }>();
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title="Upcoming movies — release dates | TV Nightly"
+      description="Every major movie coming to theaters, in release order."
+      canonical={canonical(c)}
+    >
+      <h1>Upcoming movies</h1>
+      {results.length === 0 ? <p class="muted">No upcoming snapshot loaded yet.</p> : null}
+      <ul class="ep-list">
+        {results.map((m) => (
+          <li class="wo-row">
+            {m.poster_url ? <img class="wo-poster" src={m.poster_url} alt={m.title} loading="lazy" /> : null}
+            <span>
+              <strong>{m.title}</strong> <span class="muted">· {m.release_date}</span>
+              {m.overview ? <p class="muted">{m.overview.slice(0, 160)}…</p> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Layout>,
+  );
+});
+
+// ------------------------------------------------------------- compare
+
+function compareSvg(a: EpisodeRow[], b: EpisodeRow[]): string {
+  const ra = a.filter((e) => e.rating != null);
+  const rb = b.filter((e) => e.rating != null);
+  if (!ra.length && !rb.length) return "";
+  const n = Math.max(ra.length, rb.length);
+  const PAD = 34;
+  const STEP = Math.max(4, Math.min(9, Math.floor(800 / Math.max(n, 1))));
+  const W = Math.max(420, n * STEP + PAD * 2);
+  const H = 240;
+  const yFor = (r: number) => PAD + (10 - Math.max(5, Math.min(10, r))) * ((H - PAD * 2) / 5);
+  const line = (eps: EpisodeRow[], color: string) =>
+    `<polyline fill="none" stroke="${color}" stroke-width="2" points="${eps
+      .map((e, i) => `${PAD + i * STEP + STEP / 2},${yFor(e.rating!)}`)
+      .join(" ")}"/>`;
+  const parts = [
+    `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Episode ratings comparison">`,
+  ];
+  for (const r of [5, 6, 7, 8, 9, 10]) {
+    parts.push(
+      `<line x1="${PAD}" y1="${yFor(r)}" x2="${W - PAD}" y2="${yFor(r)}" stroke="#2a2f3d" stroke-width="0.5"/>`,
+      `<text x="${PAD - 6}" y="${yFor(r) + 3}" fill="#8b91a0" font-size="10" text-anchor="end">${r}</text>`,
+    );
+  }
+  parts.push(line(ra, "#6c7bff"), line(rb, "#ff9f43"), "</svg>");
+  return parts.join("");
+}
+
+app.get("/compare", async (c) => {
+  const db = c.env.DB;
+  const resolve = async (q: string): Promise<ShowRow | null> => {
+    if (!q) return null;
+    return (
+      (await db.prepare("SELECT * FROM shows WHERE slug = ?").bind(q).first<ShowRow>()) ??
+      (await db
+        .prepare("SELECT * FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 1")
+        .bind(q)
+        .first<ShowRow>())
+    );
+  };
+  const qa = (c.req.query("a") ?? "").trim();
+  const qb = (c.req.query("b") ?? "").trim();
+  const [showA, showB] = await Promise.all([resolve(qa), resolve(qb)]);
+
+  let svg = "";
+  let stats: { label: string; a: string; b: string }[] = [];
+  if (showA && showB) {
+    const [epsA, epsB] = await Promise.all([
+      db
+        .prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
+        .bind(showA.id)
+        .all<EpisodeRow>()
+        .then((r) => r.results),
+      db
+        .prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
+        .bind(showB.id)
+        .all<EpisodeRow>()
+        .then((r) => r.results),
+    ]);
+    svg = compareSvg(epsA, epsB);
+    const best = (eps: EpisodeRow[]) =>
+      eps.filter((e) => e.rating != null).sort((x, y) => y.rating! - x.rating!)[0];
+    const bA = best(epsA);
+    const bB = best(epsB);
+    stats = [
+      { label: "Show rating", a: showA.rating?.toFixed(1) ?? "—", b: showB.rating?.toFixed(1) ?? "—" },
+      { label: "Episodes", a: String(epsA.length), b: String(epsB.length) },
+      { label: "Best episode", a: bA ? `${bA.name} (★${bA.rating!.toFixed(1)})` : "—", b: bB ? `${bB.name} (★${bB.rating!.toFixed(1)})` : "—" },
+      { label: "Status", a: showA.status ?? "—", b: showB.status ?? "—" },
+    ];
+  }
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={
+        showA && showB
+          ? `${showA.name} vs ${showB.name} — episode ratings compared | TV Nightly`
+          : "Compare two TV shows — episode ratings head-to-head | TV Nightly"
+      }
+      description="Put two shows' full episode-rating histories on one chart and settle the argument."
+      canonical={`${origin(c)}/compare`}
+    >
+      <h1>
+        {showA && showB ? (
+          <>
+            <a href={`/show/${showA.slug}`}>{showA.name}</a> vs{" "}
+            <a href={`/show/${showB.slug}`}>{showB.name}</a>
+          </>
+        ) : (
+          "Compare two shows"
+        )}
+      </h1>
+      <form method="get" action="/compare" class="picker-form">
+        <label>
+          Show A <input type="search" name="a" value={qa} placeholder="Breaking Bad" required />
+        </label>
+        <label>
+          Show B <input type="search" name="b" value={qb} placeholder="The Wire" required />
+        </label>
+        <button type="submit">Compare</button>
+      </form>
+      {showA && showB ? (
+        <>
+          <p>
+            <span class="prov" style="border-color:#6c7bff">{showA.name}</span>{" "}
+            <span class="prov" style="border-color:#ff9f43;background:rgba(255,159,67,0.12)">{showB.name}</span>
+          </p>
+          {svg ? <div class="graph-wrap">{raw(svg)}</div> : <p class="muted">Not enough rated episodes to chart.</p>}
+          <ul class="ep-list">
+            {stats.map((s) => (
+              <li>
+                <span class="muted">{s.label}:</span> {s.a} <span class="muted">vs</span> {s.b}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : qa || qb ? (
+        <p class="muted">Couldn't find one of those shows — try different names.</p>
+      ) : null}
+    </Layout>,
+  );
+});
+
+// ------------------------------------------------- network & genre pages
+
+app.get("/network/:slug", async (c) => {
+  const db = c.env.DB;
+  const dir = await networkDirectory(db);
+  const entry = dir.find((n) => n.slug === c.req.param("slug"));
+  if (!entry) return c.notFound();
+
+  const { results: best } = await db
+    .prepare(
+      `SELECT * FROM shows WHERE (network = ? OR web_channel = ?) AND rating IS NOT NULL
+       ORDER BY rating DESC, weight DESC LIMIT 12`,
+    )
+    .bind(entry.name, entry.name)
+    .all<ShowRow>();
+  const { results: airing } = await db
+    .prepare(
+      `SELECT * FROM shows WHERE (network = ? OR web_channel = ?) AND status = 'Running'
+       ORDER BY weight DESC LIMIT 10`,
+    )
+    .bind(entry.name, entry.name)
+    .all<ShowRow>();
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`The best ${entry.name} shows — ranked | TV Nightly`}
+      description={`Every ${entry.name} show worth watching, ranked by rating, plus what's currently airing.`}
+      canonical={canonical(c)}
+    >
+      <h1>The best of {entry.name}</h1>
+      <section>
+        <h2>Top-rated {entry.name} shows</h2>
+        <div class="grid">
+          {best.map((s) => (
+            <ShowCard show={s} />
+          ))}
+        </div>
+      </section>
+      {airing.length ? (
+        <section>
+          <h2>Currently running</h2>
+          <ul class="ep-list">
+            {airing.map((s) => (
+              <li>
+                <a href={`/show/${s.slug}`}>{s.name}</a>{" "}
+                <a class="muted" href={`/show/${s.slug}/next-episode`}>
+                  next episode →
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      <p>
+        <a href="/top/networks">All networks ranked →</a> · <a href="/lists">Directory</a>
+      </p>
+    </Layout>,
+  );
+});
+
+app.get("/genre/:slug", async (c) => {
+  const db = c.env.DB;
+  const dir = await genreDirectory(db);
+  const slug = c.req.param("slug");
+  const tvGenre = dir.tv.find((g) => slugifyName(g) === slug);
+  const movieGenre = dir.movie.find((g) => slugifyName(g) === slug);
+  if (!tvGenre && !movieGenre) return c.notFound();
+  const label = tvGenre ?? movieGenre!;
+
+  const shows = tvGenre
+    ? (
+        await db
+          .prepare(
+            `SELECT * FROM shows WHERE genres LIKE ? AND rating IS NOT NULL AND weight >= 60
+             ORDER BY rating DESC, weight DESC LIMIT 12`,
+          )
+          .bind(`%"${tvGenre}"%`)
+          .all<ShowRow>()
+      ).results
+    : [];
+  const movies = movieGenre
+    ? (
+        await db
+          .prepare(
+            `SELECT * FROM movies WHERE genres LIKE ? AND rating IS NOT NULL AND votes >= 1000
+             ORDER BY rating DESC, votes DESC LIMIT 12`,
+          )
+          .bind(`%"${movieGenre}"%`)
+          .all<MovieRow>()
+      ).results
+    : [];
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`The best ${label.toLowerCase()} shows & movies | TV Nightly`}
+      description={`Top-rated ${label.toLowerCase()} TV series and films, with streaming availability.`}
+      canonical={canonical(c)}
+    >
+      <h1>The best of {label}</h1>
+      <p>
+        {tvGenre ? (
+          <a class="verdict-btn" href={`/what-to-watch?genre=${encodeURIComponent(tvGenre)}`}>
+            Pick me a {label.toLowerCase()} show 🎲
+          </a>
+        ) : null}{" "}
+        {movieGenre ? (
+          <a class="verdict-btn" href={`/what-to-watch?type=movie&genre=${encodeURIComponent(movieGenre)}`}>
+            Pick me a {label.toLowerCase()} movie 🎲
+          </a>
+        ) : null}
+      </p>
+      {shows.length ? (
+        <section>
+          <h2>Top {label.toLowerCase()} series</h2>
+          <div class="grid">
+            {shows.map((s) => (
+              <ShowCard show={s} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {movies.length ? (
+        <section>
+          <h2>Top {label.toLowerCase()} films</h2>
+          <div class="grid">
+            {movies.map((m) => (
+              <MovieCard movie={m} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      <p>
+        <a href="/lists">All genres →</a>
+      </p>
+    </Layout>,
+  );
+});
+
 // ------------------------------------------------- niche vertical hubs
 
 interface Vertical {
@@ -3295,6 +3814,11 @@ app.get("/sitemaps/:file", async (c) => {
   const file = c.req.param("file");
 
   if (file === "static.xml") {
+    const [networks, genres] = await Promise.all([
+      networkDirectory(c.env.DB),
+      genreDirectory(c.env.DB),
+    ]);
+    const genreSlugs = [...new Set([...genres.tv, ...genres.movie].map((g) => slugifyName(g)))];
     const urls = [
       "/",
       "/recommend",
@@ -3302,6 +3826,7 @@ app.get("/sitemaps/:file", async (c) => {
       "/what-to-watch",
       "/movies",
       "/movies/best",
+      "/movies/upcoming",
       "/best-episodes",
       "/premieres",
       "/whats-new",
@@ -3309,8 +3834,15 @@ app.get("/sitemaps/:file", async (c) => {
       "/calendar",
       "/renewals",
       "/watch-orders",
+      "/lists",
+      "/top/tv",
+      "/top/seasons",
+      "/top/networks",
+      "/compare",
       ...FRANCHISES.map((f) => `/watch-order/${f.slug}`),
       ...VERTICALS.map((v) => `/${v.slug}`),
+      ...networks.map((n) => `/network/${n.slug}`),
+      ...genreSlugs.map((g) => `/genre/${g}`),
     ]
       .map((p) => `<url><loc>${site}${p}</loc></url>`)
       .join("");

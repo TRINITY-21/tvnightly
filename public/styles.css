@@ -462,6 +462,65 @@ button, .verdict-btn {
 }
 .wo-poster { width: 38px; border-radius: 4px; flex: 0 0 auto; }
 
+/* ---- homepage architecture ---- */
+.home-hero {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .home-hero { grid-template-columns: 1fr; }
+}
+.hero-main h1 { margin-top: 0.4rem; }
+.hero-side {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.15rem;
+}
+.hero-side h2 { margin-top: 0.2rem; }
+.hero-tools { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 1rem; }
+.hero-tools .verdict-btn, .hero-tools .btn-ghost { text-align: center; }
+.btn-ghost {
+  display: inline-block;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-weight: 600;
+  padding: 0.5rem 1.1rem;
+}
+.btn-ghost:hover { background: rgba(45, 217, 255, 0.1); text-decoration: none; }
+
+.poster-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 134px;
+  gap: 0.8rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: 0.6rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-2) transparent;
+}
+.poster-row > * { scroll-snap-align: start; }
+
+/* ---- sub-nav tabs ---- */
+.subnav {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0.75rem 0 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+.subnav a {
+  padding: 0.45rem 0.9rem;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  font-size: 0.9rem;
+}
+.subnav a:hover { color: var(--text); text-decoration: none; }
+.subnav a.active { color: var(--text); border-bottom-color: var(--accent); }
+
 /* ---- footer ---- */
 .site-footer {
   margin-top: 3rem;
@@ -471,6 +530,31 @@ button, .verdict-btn {
   color: var(--muted);
   font-size: 0.84rem;
 }
+.footer-cols {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1.4fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+@media (max-width: 860px) {
+  .footer-cols { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 520px) {
+  .footer-cols { grid-template-columns: 1fr; }
+}
+.footer-cols h3 {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin: 0 0 0.6rem;
+}
+.footer-cols a { display: block; color: var(--muted); padding: 0.18rem 0; font-size: 0.88rem; }
+.footer-cols a:hover { color: var(--text); text-decoration: none; }
+.footer-cols p { margin: 0 0 0.6rem; }
 .site-footer .tagline {
   font-family: var(--display);
   font-stretch: 120%;
@@ -479,7 +563,7 @@ button, .verdict-btn {
   letter-spacing: 0.02em;
   font-size: 1rem;
   color: var(--text);
-  margin: 0 0 1rem;
+  margin: 0 0 0.5rem;
 }
 .site-footer .tagline .logo-dot { color: var(--accent); }
 .site-footer .disclaimer { max-width: 90ch; }

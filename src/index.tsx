@@ -252,32 +252,49 @@ const Layout: FC<
           <input type="search" name="q" placeholder="Search shows…" required />
         </form>
         <nav>
-          <a href="/recommend">Recommend me</a>
-          <a href="/loved">Loved</a>
-          <a href="/what-to-watch">What to watch</a>
-          <a href="/movies">Movies</a>
-          <a href="/watch-orders">Watch orders</a>
-          <a href="/whats-new">Streaming news</a>
           <a href="/tonight">Tonight</a>
-          <a href="/calendar">Calendar</a>
-          <a href="/renewals">Renewals</a>
-          <a href="/lists">Directory</a>
+          <a href="/what-to-watch">What to watch</a>
+          <a href="/whats-new">News</a>
+          <a href="/lists">Browse</a>
         </nav>
       </header>
       <main>{props.children}</main>
       <footer class="site-footer">
-        <p class="tagline">
-          Tonight, decided<span class="logo-dot">.</span>
-        </p>
-        <div class="footer-sub">
-          <p>
-            <strong>Stay updated</strong> — today's TV, renewals and premieres in your inbox.
-          </p>
-          <form action="/subscribe" method="post" class="sub-form">
-            <input type="hidden" name="kind" value="daily" />
-            <input type="email" name="email" placeholder="Enter your email" required />
-            <button type="submit">Subscribe</button>
-          </form>
+        <div class="footer-cols">
+          <div>
+            <p class="tagline">
+              Tonight, decided<span class="logo-dot">.</span>
+            </p>
+            <p>
+              Episode rankings, release dates, and where to stream — checked around the clock,
+              localized to your country.
+            </p>
+          </div>
+          <div>
+            <h3>Explore</h3>
+            <a href="/what-to-watch">What to watch</a>
+            <a href="/recommend">Get a recommendation</a>
+            <a href="/tonight">Tonight's schedule</a>
+            <a href="/whats-new">Streaming news</a>
+            <a href="/watch-orders">Watch orders</a>
+            <a href="/lists">Browse everything</a>
+          </div>
+          <div>
+            <h3>Hubs</h3>
+            {VERTICALS.map((v) => (
+              <a href={`/${v.slug}`}>{v.name}</a>
+            ))}
+            <a href="/loved">Community loved</a>
+          </div>
+          <div>
+            <h3>Stay updated</h3>
+            <p>Today's TV, renewals and premieres in your inbox every evening.</p>
+            <form action="/subscribe" method="post" class="sub-form">
+              <input type="hidden" name="kind" value="daily" />
+              <input type="email" name="email" placeholder="Enter your email" required />
+              <button type="submit">Subscribe</button>
+            </form>
+          </div>
         </div>
         <p class="disclaimer">
           <strong>Disclaimer:</strong> TV Nightly is independent and is not affiliated with any TV
@@ -306,15 +323,6 @@ const Layout: FC<
           via TMDB.
         </p>
         <p>
-          Hubs:{" "}
-          {VERTICALS.map((v, i) => (
-            <>
-              {i > 0 ? " · " : ""}
-              <a href={`/${v.slug}`}>{v.name}</a>
-            </>
-          ))}
-        </p>
-        <p>
           <a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a> · © 2026 TV
           Nightly. All rights reserved.
         </p>
@@ -325,6 +333,26 @@ const Layout: FC<
     </body>
   </html>
 );
+
+// Sibling pages get tabs, not nav slots.
+const SubNav: FC<{ items: [string, string][]; current: string }> = ({ items, current }) => (
+  <nav class="subnav">
+    {items.map(([label, href]) => (
+      <a href={href} class={href === current ? "active" : ""}>
+        {label}
+      </a>
+    ))}
+  </nav>
+);
+const SCHEDULE_TABS: [string, string][] = [
+  ["Tonight", "/tonight"],
+  ["This week", "/calendar"],
+  ["Premieres", "/premieres"],
+];
+const NEWS_TABS: [string, string][] = [
+  ["Streaming news", "/whats-new"],
+  ["Renewals & dates", "/renewals"],
+];
 
 const StatusBadge: FC<{ status: string | null }> = ({ status }) => {
   const cls = status === "Running" ? "ok" : status === "Ended" ? "ended" : "tbd";
@@ -431,22 +459,31 @@ const breadcrumbLd = (site: string, show: ShowRow, page: string, path: string) =
 // ---------------------------------------------------------------- home
 
 app.get("/", async (c) => {
-  const { results: top } = await c.env.DB.prepare(
-    "SELECT * FROM shows ORDER BY weight DESC, rating DESC LIMIT 24",
-  ).all<ShowRow>();
-  const { results: tonight } = await c.env.DB.prepare(
-    `SELECT e.*, s.name AS show_name, s.slug AS show_slug, s.network AS network
-     FROM episodes e JOIN shows s ON s.id = e.show_id
-     WHERE date(e.airstamp) = date('now')
-     ORDER BY e.airstamp LIMIT 12`,
-  ).all<TonightRow>();
-  const { results: premieres } = await c.env.DB.prepare(
-    `SELECT e.airdate, e.season, s.name AS show_name, s.slug AS show_slug
-     FROM episodes e JOIN shows s ON s.id = e.show_id
-     WHERE e.number = 1 AND e.airstamp > datetime('now')
-       AND e.airstamp < datetime('now', '+21 days')
-     ORDER BY e.airstamp LIMIT 8`,
-  ).all<{ airdate: string | null; season: number | null; show_name: string; show_slug: string }>();
+  const [top, topMovies, tonight, premieres] = await Promise.all([
+    c.env.DB.prepare("SELECT * FROM shows ORDER BY weight DESC, rating DESC LIMIT 18")
+      .all<ShowRow>()
+      .then((r) => r.results),
+    c.env.DB.prepare("SELECT * FROM movies ORDER BY popularity DESC LIMIT 18")
+      .all<MovieRow>()
+      .then((r) => r.results),
+    c.env.DB.prepare(
+      `SELECT e.*, s.name AS show_name, s.slug AS show_slug, s.network AS network
+       FROM episodes e JOIN shows s ON s.id = e.show_id
+       WHERE date(e.airstamp) = date('now')
+       ORDER BY e.airstamp LIMIT 8`,
+    )
+      .all<TonightRow>()
+      .then((r) => r.results),
+    c.env.DB.prepare(
+      `SELECT e.airdate, e.season, s.name AS show_name, s.slug AS show_slug
+       FROM episodes e JOIN shows s ON s.id = e.show_id
+       WHERE e.number = 1 AND e.airstamp > datetime('now')
+         AND e.airstamp < datetime('now', '+21 days')
+       ORDER BY e.airstamp LIMIT 6`,
+    )
+      .all<{ airdate: string | null; season: number | null; show_name: string; show_slug: string }>()
+      .then((r) => r.results),
+  ]);
 
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
@@ -455,69 +492,108 @@ app.get("/", async (c) => {
       description="Track the best episodes of every TV show, season release dates, renewal status, and what's airing tonight."
       canonical={canonical(c)}
     >
-      {tonight.length ? (
-        <section>
-          <h2>
-            <span class="live-dot"></span>On tonight{" "}
+      {/* The evening opens here: what's on, then the decision tools. */}
+      <section class="home-hero">
+        <div class="hero-main">
+          <h1>
+            <span class="live-dot"></span>Tonight on TV{" "}
             <a class="more" href="/tonight">
-              all of tonight →
+              full schedule →
             </a>
-          </h2>
-          <ul class="ep-list">
-            {tonight.map((e) => (
-              <li>
-                <a href={`/show/${e.show_slug}`}>{e.show_name}</a> {epCode(e)}
-                {e.name ? ` — ${e.name}` : ""}
-                {e.network ? <span class="muted"> · {e.network}</span> : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      {premieres.length ? (
-        <section>
+          </h1>
+          {tonight.length ? (
+            <ul class="ep-list">
+              {tonight.map((e) => (
+                <li>
+                  <a href={`/show/${e.show_slug}`}>{e.show_name}</a> {epCode(e)}
+                  {e.name ? ` — ${e.name}` : ""}
+                  {e.network ? <span class="muted"> · {e.network}</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="muted">Quiet night in the schedule — a good one to start something.</p>
+          )}
+        </div>
+        <aside class="hero-side">
           <h2>
             Premiering soon{" "}
             <a class="more" href="/premieres">
-              all upcoming →
+              all →
             </a>
           </h2>
-          <ul class="ep-list">
-            {premieres.map((p) => (
-              <li>
-                <span class="muted">{p.airdate}</span>{" "}
-                <a href={`/show/${p.show_slug}/release-date`}>{p.show_name}</a> Season {p.season}{" "}
-                premiere
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      <p class="quick-picks">
-        {VERTICALS.map((v) => (
-          <a class="chip" href={`/${v.slug}`}>
-            {v.name} hub
-          </a>
-        ))}
-        <a class="chip" href="/watch-orders">
-          Watch orders
-        </a>
-        <a class="chip" href="/whats-new">
-          Streaming news
-        </a>
-      </p>
+          {premieres.length ? (
+            <ul class="ep-list">
+              {premieres.map((p) => (
+                <li>
+                  <span class="muted">{p.airdate}</span>{" "}
+                  <a href={`/show/${p.show_slug}/release-date`}>{p.show_name}</a> S{p.season}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="muted">No premieres in the next three weeks.</p>
+          )}
+          <div class="hero-tools">
+            <a class="verdict-btn" href="/what-to-watch">
+              Settle it for us 🎲
+            </a>
+            <a class="btn-ghost" href="/recommend">
+              Rate one thing → get a pick
+            </a>
+          </div>
+        </aside>
+      </section>
       <section>
         <h2>
           Popular shows{" "}
-          <a class="more" href="/best-episodes">
-            all-time top episodes →
+          <a class="more" href="/top/tv">
+            top-rated →
           </a>
         </h2>
-        <div class="grid">
+        <div class="poster-row">
           {top.map((s) => (
             <ShowCard show={s} />
           ))}
         </div>
+      </section>
+      <section>
+        <h2>
+          Popular movies{" "}
+          <a class="more" href="/movies/best">
+            best of all time →
+          </a>
+        </h2>
+        <div class="poster-row">
+          {topMovies.map((m) => (
+            <MovieCard movie={m} />
+          ))}
+        </div>
+      </section>
+      <section>
+        <h2>Go deeper</h2>
+        <p class="quick-picks">
+          {VERTICALS.map((v) => (
+            <a class="chip" href={`/${v.slug}`}>
+              {v.name} hub
+            </a>
+          ))}
+          <a class="chip" href="/watch-orders">
+            Watch orders
+          </a>
+          <a class="chip" href="/best-episodes">
+            All-time top episodes
+          </a>
+          <a class="chip" href="/top/seasons">
+            Best TV seasons
+          </a>
+          <a class="chip" href="/loved">
+            Community loved
+          </a>
+          <a class="chip" href="/compare">
+            Compare shows
+          </a>
+        </p>
       </section>
     </Layout>,
   );
@@ -1409,6 +1485,7 @@ app.get("/tonight", async (c) => {
       description="Every episode airing on TV and streaming tonight, in air-time order."
       canonical={canonical(c)}
     >
+      <SubNav items={SCHEDULE_TABS} current="/tonight" />
       <h1>
         <span class="live-dot"></span>On TV tonight
       </h1>
@@ -1452,6 +1529,7 @@ app.get("/calendar", async (c) => {
       description="The 7-day TV calendar: every episode airing this week, by day."
       canonical={canonical(c)}
     >
+      <SubNav items={SCHEDULE_TABS} current="/calendar" />
       <h1>This week's TV calendar</h1>
       {byDay.size === 0 ? <p class="muted">No scheduled episodes in the next 7 days.</p> : null}
       {[...byDay.entries()].map(([day, eps]) => (
@@ -3641,6 +3719,7 @@ app.get("/renewals", async (c) => {
       description="A live feed of TV renewals, cancellations, and premiere-date announcements, detected hourly from schedule data."
       canonical={canonical(c)}
     >
+      <SubNav items={NEWS_TABS} current="/renewals" />
       <h1>Renewals, cancellations & premiere dates</h1>
       <p class="muted">
         Detected hourly from schedule data. <a href="/premieres">See upcoming premieres →</a>
@@ -3686,6 +3765,7 @@ app.get("/whats-new", async (c) => {
       description="Titles that just arrived on or left Netflix, Prime Video, Disney+ and more — tracked by our availability patrol, localized to your country."
       canonical={`${origin(c)}/whats-new`}
     >
+      <SubNav items={NEWS_TABS} current="/whats-new" />
       <h1>What's new on streaming ({region})</h1>
       <p class="muted">
         Our patrol re-checks availability around the clock and logs every change. Yesterday's
@@ -3776,6 +3856,7 @@ app.get("/premieres", async (c) => {
       description="Every season premiere coming in the next three months, with dates and countdowns."
       canonical={canonical(c)}
     >
+      <SubNav items={SCHEDULE_TABS} current="/premieres" />
       <h1>Upcoming TV premieres</h1>
       {results.length === 0 ? (
         <p class="muted">No premieres scheduled in the next 90 days (yet).</p>

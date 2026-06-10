@@ -149,8 +149,8 @@ const LogoMark: FC<{ size?: number }> = ({ size = 26 }) => (
       </filter>
     </defs>
     <rect x="1.25" y="1.25" width="33.5" height="21.5" rx="5.5" fill="none" stroke="#F2F5FA" stroke-width="2.5" />
-    <circle cx="27" cy="17" r="4.6" fill="#2DD9FF" opacity="0.35" filter="url(#lg)" />
-    <circle cx="27" cy="17" r="2.4" fill="#2DD9FF" />
+    <circle cx="27" cy="17" r="4.6" fill="#C084FC" opacity="0.35" filter="url(#lg)" />
+    <circle cx="27" cy="17" r="2.4" fill="#C084FC" />
   </svg>
 );
 
@@ -229,7 +229,7 @@ const Layout: FC<
       {props.description ? <meta name="description" content={props.description} /> : null}
       {props.canonical ? <link rel="canonical" href={props.canonical} /> : null}
       {props.noindex ? <meta name="robots" content="noindex" /> : null}
-      <meta name="theme-color" content="#0B0E14" />
+      <meta name="theme-color" content="#14101B" />
       <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <meta property="og:site_name" content="TV Nightly" />
       <meta property="og:type" content="website" />
@@ -1050,8 +1050,8 @@ function ratingsSvg(eps: EpisodeRow[]): string {
   let bandIdx = 0;
   const flushBand = (endX: number) => {
     parts.push(
-      `<rect x="${bandStart}" y="${PAD}" width="${endX - bandStart}" height="${H - PAD * 2}" fill="${bandIdx % 2 ? "#141a26" : "#0e121b"}"/>`,
-      `<text x="${(bandStart + endX) / 2}" y="${H - 10}" fill="#97a1b5" font-size="10" text-anchor="middle">S${season}</text>`,
+      `<rect x="${bandStart}" y="${PAD}" width="${endX - bandStart}" height="${H - PAD * 2}" fill="${bandIdx % 2 ? "#1a1426" : "#120d1b"}"/>`,
+      `<text x="${(bandStart + endX) / 2}" y="${H - 10}" fill="#a89cbd" font-size="10" text-anchor="middle">S${season}</text>`,
     );
     bandIdx++;
   };
@@ -1067,8 +1067,8 @@ function ratingsSvg(eps: EpisodeRow[]): string {
   // gridlines
   for (const r of [5, 6, 7, 8, 9, 10]) {
     parts.push(
-      `<line x1="${PAD}" y1="${yFor(r)}" x2="${x}" y2="${yFor(r)}" stroke="#222b3b" stroke-width="0.5"/>`,
-      `<text x="${PAD - 6}" y="${yFor(r) + 3}" fill="#97a1b5" font-size="10" text-anchor="end">${r}</text>`,
+      `<line x1="${PAD}" y1="${yFor(r)}" x2="${x}" y2="${yFor(r)}" stroke="#2e2440" stroke-width="0.5"/>`,
+      `<text x="${PAD - 6}" y="${yFor(r) + 3}" fill="#a89cbd" font-size="10" text-anchor="end">${r}</text>`,
     );
   }
   // points
@@ -2279,11 +2279,11 @@ function compareSvg(a: EpisodeRow[], b: EpisodeRow[]): string {
   ];
   for (const r of [5, 6, 7, 8, 9, 10]) {
     parts.push(
-      `<line x1="${PAD}" y1="${yFor(r)}" x2="${W - PAD}" y2="${yFor(r)}" stroke="#222b3b" stroke-width="0.5"/>`,
-      `<text x="${PAD - 6}" y="${yFor(r) + 3}" fill="#97a1b5" font-size="10" text-anchor="end">${r}</text>`,
+      `<line x1="${PAD}" y1="${yFor(r)}" x2="${W - PAD}" y2="${yFor(r)}" stroke="#2e2440" stroke-width="0.5"/>`,
+      `<text x="${PAD - 6}" y="${yFor(r) + 3}" fill="#a89cbd" font-size="10" text-anchor="end">${r}</text>`,
     );
   }
-  parts.push(line(ra, "#2DD9FF"), line(rb, "#FF5C8A"), "</svg>");
+  parts.push(line(ra, "#C084FC"), line(rb, "#FF5C8A"), "</svg>");
   return parts.join("");
 }
 
@@ -2362,7 +2362,7 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
         <button type="submit">Compare</button>
       </form>
       <p>
-        <span class="prov" style="border-color:#2DD9FF">{showA.name}</span>{" "}
+        <span class="prov" style="border-color:#C084FC">{showA.name}</span>{" "}
         <span class="prov" style="border-color:#FF5C8A;background:rgba(255,92,138,0.12)">{showB.name}</span>
       </p>
       {svg ? (

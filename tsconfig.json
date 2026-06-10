@@ -9,7 +9,8 @@
     "jsxImportSource": "hono/jsx",
     "strict": true,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "resolveJsonModule": true
   },
-  "include": ["src"]
+  "include": ["src", "data"]
 }

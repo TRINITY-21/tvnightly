@@ -217,6 +217,16 @@ li.is-watched { opacity: 0.55; }
 .rate-inline { display: flex; gap: 0.4rem; align-items: center; margin: 0.6rem 0; flex-wrap: wrap; }
 .rate-inline .vote-btn { font-size: 1rem; }
 
+.wo-list { list-style: none; }
+.wo-row { display: flex; gap: 0.7rem; align-items: center; padding: 0.45rem 0; }
+.wo-num {
+  flex: 0 0 1.6rem;
+  color: var(--muted);
+  font-weight: 700;
+  text-align: right;
+}
+.wo-poster { width: 38px; border-radius: 4px; flex: 0 0 auto; }
+
 .provs { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .prov {
   background: rgba(108, 123, 255, 0.12);

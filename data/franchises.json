@@ -1,0 +1,766 @@
+[
+  {
+    "slug": "marvel-mcu",
+    "name": "Marvel Cinematic Universe",
+    "aka": "Marvel movies",
+    "intro": "Release order is the right first watch — the MCU was built to be seen as it came out, and the twists land that way. The chronological (in-universe timeline) order below is for rewatches.",
+    "chronoNote": "Follows Marvel's official timeline ordering (Disney+ / the Official Timeline book).",
+    "entries": [
+      {
+        "title": "Iron Man",
+        "year": 2008,
+        "chrono": 3
+      },
+      {
+        "title": "The Incredible Hulk",
+        "year": 2008,
+        "chrono": 5,
+        "note": "Skippable on a first watch"
+      },
+      {
+        "title": "Iron Man 2",
+        "year": 2010,
+        "chrono": 4
+      },
+      {
+        "title": "Thor",
+        "year": 2011,
+        "chrono": 6
+      },
+      {
+        "title": "Captain America: The First Avenger",
+        "year": 2011,
+        "chrono": 1,
+        "note": "Chronologically first — set in WWII"
+      },
+      {
+        "title": "The Avengers",
+        "year": 2012,
+        "chrono": 7
+      },
+      {
+        "title": "Iron Man 3",
+        "year": 2013,
+        "chrono": 9
+      },
+      {
+        "title": "Thor: The Dark World",
+        "year": 2013,
+        "chrono": 8
+      },
+      {
+        "title": "Captain America: The Winter Soldier",
+        "year": 2014,
+        "chrono": 10
+      },
+      {
+        "title": "Guardians of the Galaxy",
+        "year": 2014,
+        "chrono": 11
+      },
+      {
+        "title": "Avengers: Age of Ultron",
+        "year": 2015,
+        "chrono": 13
+      },
+      {
+        "title": "Ant-Man",
+        "year": 2015,
+        "chrono": 14
+      },
+      {
+        "title": "Captain America: Civil War",
+        "year": 2016,
+        "chrono": 15
+      },
+      {
+        "title": "Doctor Strange",
+        "year": 2016,
+        "chrono": 19
+      },
+      {
+        "title": "Guardians of the Galaxy Vol. 2",
+        "year": 2017,
+        "chrono": 12,
+        "note": "Set only months after Vol. 1"
+      },
+      {
+        "title": "Spider-Man: Homecoming",
+        "year": 2017,
+        "chrono": 18
+      },
+      {
+        "title": "Thor: Ragnarok",
+        "year": 2017,
+        "chrono": 20
+      },
+      {
+        "title": "Black Panther",
+        "year": 2018,
+        "chrono": 17
+      },
+      {
+        "title": "Avengers: Infinity War",
+        "year": 2018,
+        "chrono": 22
+      },
+      {
+        "title": "Ant-Man and the Wasp",
+        "year": 2018,
+        "chrono": 21
+      },
+      {
+        "title": "Captain Marvel",
+        "year": 2019,
+        "chrono": 2,
+        "note": "Set in 1995"
+      },
+      {
+        "title": "Avengers: Endgame",
+        "year": 2019,
+        "chrono": 23
+      },
+      {
+        "title": "Spider-Man: Far From Home",
+        "year": 2019,
+        "chrono": 24
+      },
+      {
+        "title": "Black Widow",
+        "year": 2021,
+        "chrono": 16,
+        "note": "Set between Civil War and Infinity War"
+      },
+      {
+        "title": "Shang-Chi and the Legend of the Ten Rings",
+        "year": 2021,
+        "chrono": 25
+      },
+      {
+        "title": "Eternals",
+        "year": 2021,
+        "chrono": 26
+      },
+      {
+        "title": "Spider-Man: No Way Home",
+        "year": 2021,
+        "chrono": 27
+      },
+      {
+        "title": "Doctor Strange in the Multiverse of Madness",
+        "year": 2022,
+        "chrono": 28
+      },
+      {
+        "title": "Thor: Love and Thunder",
+        "year": 2022,
+        "chrono": 29
+      },
+      {
+        "title": "Black Panther: Wakanda Forever",
+        "year": 2022,
+        "chrono": 30
+      },
+      {
+        "title": "Ant-Man and the Wasp: Quantumania",
+        "year": 2023,
+        "chrono": 31
+      },
+      {
+        "title": "Guardians of the Galaxy Vol. 3",
+        "year": 2023,
+        "chrono": 32
+      },
+      {
+        "title": "The Marvels",
+        "year": 2023,
+        "chrono": 33
+      },
+      {
+        "title": "Deadpool & Wolverine",
+        "year": 2024,
+        "chrono": 34
+      },
+      {
+        "title": "Captain America: Brave New World",
+        "year": 2025,
+        "chrono": 35
+      },
+      {
+        "title": "Thunderbolts*",
+        "year": 2025,
+        "chrono": 36
+      },
+      {
+        "title": "The Fantastic 4: First Steps",
+        "year": 2025,
+        "chrono": 37,
+        "note": "Set in a separate universe"
+      }
+    ]
+  },
+  {
+    "slug": "star-wars",
+    "name": "Star Wars",
+    "aka": "the Skywalker Saga",
+    "intro": "Release order preserves the saga's biggest reveal and is the classic first watch. Chronological order tells the story from Episode I — and there's the famous 'machete order' (IV, V, II, III, VI) if you want the reveal AND the backstory.",
+    "chronoNote": "Chronological = in-universe Episode order, with Rogue One and Solo slotted before A New Hope.",
+    "entries": [
+      {
+        "title": "Star Wars",
+        "year": 1977,
+        "chrono": 7,
+        "note": "Episode IV — A New Hope"
+      },
+      {
+        "title": "The Empire Strikes Back",
+        "year": 1980,
+        "chrono": 8
+      },
+      {
+        "title": "Return of the Jedi",
+        "year": 1983,
+        "chrono": 9
+      },
+      {
+        "title": "Star Wars: Episode I - The Phantom Menace",
+        "year": 1999,
+        "chrono": 1
+      },
+      {
+        "title": "Star Wars: Episode II - Attack of the Clones",
+        "year": 2002,
+        "chrono": 2
+      },
+      {
+        "title": "Star Wars: Episode III - Revenge of the Sith",
+        "year": 2005,
+        "chrono": 4
+      },
+      {
+        "title": "Star Wars: The Clone Wars",
+        "year": 2008,
+        "chrono": 3,
+        "note": "Animated theatrical film — skippable"
+      },
+      {
+        "title": "Star Wars: The Force Awakens",
+        "year": 2015,
+        "chrono": 11
+      },
+      {
+        "title": "Rogue One: A Star Wars Story",
+        "year": 2016,
+        "chrono": 6,
+        "note": "Ends minutes before A New Hope"
+      },
+      {
+        "title": "Star Wars: The Last Jedi",
+        "year": 2017,
+        "chrono": 12
+      },
+      {
+        "title": "Solo: A Star Wars Story",
+        "year": 2018,
+        "chrono": 5
+      },
+      {
+        "title": "Star Wars: The Rise of Skywalker",
+        "year": 2019,
+        "chrono": 13
+      },
+      {
+        "title": "The Mandalorian and Grogu",
+        "year": 2026,
+        "chrono": 10,
+        "note": "Set between Return of the Jedi and The Force Awakens"
+      }
+    ]
+  },
+  {
+    "slug": "harry-potter",
+    "name": "Harry Potter & the Wizarding World",
+    "aka": "Harry Potter movies",
+    "intro": "The eight Harry Potter films go in release order. The Fantastic Beasts prequels are set decades earlier — watch them after Potter on a first run, or first if you want strict timeline order.",
+    "entries": [
+      {
+        "title": "Harry Potter and the Philosopher's Stone",
+        "year": 2001,
+        "chrono": 4
+      },
+      {
+        "title": "Harry Potter and the Chamber of Secrets",
+        "year": 2002,
+        "chrono": 5
+      },
+      {
+        "title": "Harry Potter and the Prisoner of Azkaban",
+        "year": 2004,
+        "chrono": 6
+      },
+      {
+        "title": "Harry Potter and the Goblet of Fire",
+        "year": 2005,
+        "chrono": 7
+      },
+      {
+        "title": "Harry Potter and the Order of the Phoenix",
+        "year": 2007,
+        "chrono": 8
+      },
+      {
+        "title": "Harry Potter and the Half-Blood Prince",
+        "year": 2009,
+        "chrono": 9
+      },
+      {
+        "title": "Harry Potter and the Deathly Hallows: Part 1",
+        "year": 2010,
+        "chrono": 10
+      },
+      {
+        "title": "Harry Potter and the Deathly Hallows: Part 2",
+        "year": 2011,
+        "chrono": 11
+      },
+      {
+        "title": "Fantastic Beasts and Where to Find Them",
+        "year": 2016,
+        "chrono": 1,
+        "note": "Set in 1926"
+      },
+      {
+        "title": "Fantastic Beasts: The Crimes of Grindelwald",
+        "year": 2018,
+        "chrono": 2
+      },
+      {
+        "title": "Fantastic Beasts: The Secrets of Dumbledore",
+        "year": 2022,
+        "chrono": 3
+      }
+    ]
+  },
+  {
+    "slug": "middle-earth",
+    "name": "The Lord of the Rings & The Hobbit",
+    "aka": "Middle-earth movies",
+    "intro": "Release order (Rings first) is how the films were meant to be experienced and ends on the saga's peak. Chronological order starts with The Hobbit, sixty years earlier.",
+    "entries": [
+      {
+        "title": "The Lord of the Rings: The Fellowship of the Ring",
+        "year": 2001,
+        "chrono": 5
+      },
+      {
+        "title": "The Lord of the Rings: The Two Towers",
+        "year": 2002,
+        "chrono": 6
+      },
+      {
+        "title": "The Lord of the Rings: The Return of the King",
+        "year": 2003,
+        "chrono": 7
+      },
+      {
+        "title": "The Hobbit: An Unexpected Journey",
+        "year": 2012,
+        "chrono": 2
+      },
+      {
+        "title": "The Hobbit: The Desolation of Smaug",
+        "year": 2013,
+        "chrono": 3
+      },
+      {
+        "title": "The Hobbit: The Battle of the Five Armies",
+        "year": 2014,
+        "chrono": 4
+      },
+      {
+        "title": "The Lord of the Rings: The War of the Rohirrim",
+        "year": 2024,
+        "chrono": 1,
+        "note": "Animated — set ~180 years before The Hobbit"
+      }
+    ]
+  },
+  {
+    "slug": "fast-and-furious",
+    "name": "Fast & Furious",
+    "aka": "the Fast Saga",
+    "intro": "Release order works — with one famous wrinkle: Tokyo Drift (2006) actually takes place after Fast & Furious 6. The chronological order below untangles it.",
+    "entries": [
+      {
+        "title": "The Fast and the Furious",
+        "year": 2001,
+        "chrono": 1
+      },
+      {
+        "title": "2 Fast 2 Furious",
+        "year": 2003,
+        "chrono": 2
+      },
+      {
+        "title": "The Fast and the Furious: Tokyo Drift",
+        "year": 2006,
+        "chrono": 6,
+        "note": "Chronologically after Fast & Furious 6"
+      },
+      {
+        "title": "Fast & Furious",
+        "year": 2009,
+        "chrono": 3
+      },
+      {
+        "title": "Fast Five",
+        "year": 2011,
+        "chrono": 4
+      },
+      {
+        "title": "Fast & Furious 6",
+        "year": 2013,
+        "chrono": 5
+      },
+      {
+        "title": "Furious 7",
+        "year": 2015,
+        "chrono": 7
+      },
+      {
+        "title": "The Fate of the Furious",
+        "year": 2017,
+        "chrono": 8
+      },
+      {
+        "title": "Fast & Furious Presents: Hobbs & Shaw",
+        "year": 2019,
+        "chrono": 9,
+        "note": "Spin-off — skippable for the main saga"
+      },
+      {
+        "title": "F9",
+        "year": 2021,
+        "chrono": 10
+      },
+      {
+        "title": "Fast X",
+        "year": 2023,
+        "chrono": 11
+      }
+    ]
+  },
+  {
+    "slug": "x-men",
+    "name": "X-Men",
+    "intro": "Fair warning: the X-Men timeline is famously broken — Days of Future Past rewrites it on purpose. Release order is the sane first watch; the chronological order below follows each film's primary setting.",
+    "chronoNote": "Ordered by each film's main time period; the series' own contradictions make any timeline approximate.",
+    "entries": [
+      {
+        "title": "X-Men",
+        "year": 2000,
+        "chrono": 3
+      },
+      {
+        "title": "X2",
+        "year": 2003,
+        "chrono": 4
+      },
+      {
+        "title": "X-Men: The Last Stand",
+        "year": 2006,
+        "chrono": 5
+      },
+      {
+        "title": "X-Men Origins: Wolverine",
+        "year": 2009,
+        "chrono": 2,
+        "note": "Mostly set in 1979–80s"
+      },
+      {
+        "title": "X-Men: First Class",
+        "year": 2011,
+        "chrono": 1,
+        "note": "Set in 1962"
+      },
+      {
+        "title": "The Wolverine",
+        "year": 2013,
+        "chrono": 6
+      },
+      {
+        "title": "X-Men: Days of Future Past",
+        "year": 2014,
+        "chrono": 7,
+        "note": "Resets the timeline"
+      },
+      {
+        "title": "Deadpool",
+        "year": 2016,
+        "chrono": 10
+      },
+      {
+        "title": "X-Men: Apocalypse",
+        "year": 2016,
+        "chrono": 8,
+        "note": "Set in 1983"
+      },
+      {
+        "title": "Logan",
+        "year": 2017,
+        "chrono": 13,
+        "note": "Set in 2029"
+      },
+      {
+        "title": "Deadpool 2",
+        "year": 2018,
+        "chrono": 11
+      },
+      {
+        "title": "Dark Phoenix",
+        "year": 2019,
+        "chrono": 9,
+        "note": "Set in 1992"
+      },
+      {
+        "title": "The New Mutants",
+        "year": 2020,
+        "chrono": 12
+      },
+      {
+        "title": "Deadpool & Wolverine",
+        "year": 2024,
+        "chrono": 14,
+        "note": "Multiverse romp — watch last"
+      }
+    ]
+  },
+  {
+    "slug": "jurassic-park",
+    "name": "Jurassic Park & Jurassic World",
+    "intro": "Simple one: chronological order matches release order. Start with the 1993 original — still the best of them.",
+    "entries": [
+      {
+        "title": "Jurassic Park",
+        "year": 1993,
+        "chrono": 1
+      },
+      {
+        "title": "The Lost World: Jurassic Park",
+        "year": 1997,
+        "chrono": 2
+      },
+      {
+        "title": "Jurassic Park III",
+        "year": 2001,
+        "chrono": 3
+      },
+      {
+        "title": "Jurassic World",
+        "year": 2015,
+        "chrono": 4
+      },
+      {
+        "title": "Jurassic World: Fallen Kingdom",
+        "year": 2018,
+        "chrono": 5
+      },
+      {
+        "title": "Jurassic World Dominion",
+        "year": 2022,
+        "chrono": 6
+      },
+      {
+        "title": "Jurassic World Rebirth",
+        "year": 2025,
+        "chrono": 7
+      }
+    ]
+  },
+  {
+    "slug": "mission-impossible",
+    "name": "Mission: Impossible",
+    "intro": "Watch in release order — it's also the chronological order, and the films get better as they go. The last four form one escalating run.",
+    "entries": [
+      {
+        "title": "Mission: Impossible",
+        "year": 1996,
+        "chrono": 1
+      },
+      {
+        "title": "Mission: Impossible II",
+        "year": 2000,
+        "chrono": 2
+      },
+      {
+        "title": "Mission: Impossible III",
+        "year": 2006,
+        "chrono": 3
+      },
+      {
+        "title": "Mission: Impossible - Ghost Protocol",
+        "year": 2011,
+        "chrono": 4
+      },
+      {
+        "title": "Mission: Impossible - Rogue Nation",
+        "year": 2015,
+        "chrono": 5
+      },
+      {
+        "title": "Mission: Impossible - Fallout",
+        "year": 2018,
+        "chrono": 6
+      },
+      {
+        "title": "Mission: Impossible - Dead Reckoning Part One",
+        "year": 2023,
+        "chrono": 7
+      },
+      {
+        "title": "Mission: Impossible - The Final Reckoning",
+        "year": 2025,
+        "chrono": 8
+      }
+    ]
+  },
+  {
+    "slug": "john-wick",
+    "name": "John Wick",
+    "intro": "Release order is chronological — each film picks up close to where the last ended. The Ballerina spin-off slots between Chapter 3 and Chapter 4.",
+    "entries": [
+      {
+        "title": "John Wick",
+        "year": 2014,
+        "chrono": 1
+      },
+      {
+        "title": "John Wick: Chapter 2",
+        "year": 2017,
+        "chrono": 2
+      },
+      {
+        "title": "John Wick: Chapter 3 - Parabellum",
+        "year": 2019,
+        "chrono": 3
+      },
+      {
+        "title": "John Wick: Chapter 4",
+        "year": 2023,
+        "chrono": 5
+      },
+      {
+        "title": "Ballerina",
+        "year": 2025,
+        "chrono": 4,
+        "note": "Spin-off set between Chapters 3 and 4"
+      }
+    ]
+  },
+  {
+    "slug": "conjuring-universe",
+    "name": "The Conjuring Universe",
+    "intro": "This is the franchise where chronological order genuinely changes the experience — the timeline starts with The Nun in 1952, decades before the first Conjuring. Release order is still the safer first watch.",
+    "chronoNote": "Ordered by each film's in-story year.",
+    "entries": [
+      {
+        "title": "The Conjuring",
+        "year": 2013,
+        "chrono": 5,
+        "note": "Set in 1971"
+      },
+      {
+        "title": "Annabelle",
+        "year": 2014,
+        "chrono": 4,
+        "note": "Set in 1967"
+      },
+      {
+        "title": "The Conjuring 2",
+        "year": 2016,
+        "chrono": 8,
+        "note": "Set in 1977"
+      },
+      {
+        "title": "Annabelle: Creation",
+        "year": 2017,
+        "chrono": 2,
+        "note": "Set in 1955"
+      },
+      {
+        "title": "The Nun",
+        "year": 2018,
+        "chrono": 1,
+        "note": "Set in 1952 — chronologically first"
+      },
+      {
+        "title": "The Curse of La Llorona",
+        "year": 2019,
+        "chrono": 7,
+        "note": "Loosely connected — skippable"
+      },
+      {
+        "title": "Annabelle Comes Home",
+        "year": 2019,
+        "chrono": 6,
+        "note": "Set circa 1972"
+      },
+      {
+        "title": "The Conjuring: The Devil Made Me Do It",
+        "year": 2021,
+        "chrono": 9,
+        "note": "Set in 1981"
+      },
+      {
+        "title": "The Nun II",
+        "year": 2023,
+        "chrono": 3,
+        "note": "Set in 1956"
+      },
+      {
+        "title": "The Conjuring: Last Rites",
+        "year": 2025,
+        "chrono": 10
+      }
+    ]
+  },
+  {
+    "slug": "terminator",
+    "name": "Terminator",
+    "intro": "Release order — and don't overthink the timeline, the franchise itself doesn't. The first two are essential; everything after is optional-to-debated.",
+    "entries": [
+      {
+        "title": "The Terminator",
+        "year": 1984,
+        "chrono": 1
+      },
+      {
+        "title": "Terminator 2: Judgment Day",
+        "year": 1991,
+        "chrono": 2
+      },
+      {
+        "title": "Terminator 3: Rise of the Machines",
+        "year": 2003,
+        "chrono": 3
+      },
+      {
+        "title": "Terminator Salvation",
+        "year": 2009,
+        "chrono": 4
+      },
+      {
+        "title": "Terminator Genisys",
+        "year": 2015,
+        "chrono": 5,
+        "note": "Alternate timeline"
+      },
+      {
+        "title": "Terminator: Dark Fate",
+        "year": 2019,
+        "chrono": 6,
+        "note": "Ignores everything after T2"
+      }
+    ]
+  }
+]

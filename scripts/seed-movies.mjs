@@ -62,6 +62,42 @@ for (let p = 1; p <= PAGES; p++) {
   if (p >= (page.total_pages ?? 1)) break;
 }
 
+// Phase 1b: franchise backfill — watch-order guides must have every entry in
+// the mirror regardless of vote rank. Search each curated title and add it.
+// Logs TITLE FIX lines when the curated title differs from TMDB's exact title.
+const franchises = JSON.parse(readFileSync("data/franchises.json", "utf8"));
+const idSet = new Set(ids);
+for (const fr of franchises) {
+  for (const entry of fr.entries) {
+    const pick = (results) =>
+      results?.find((r) => r.title === entry.title && (r.release_date ?? "").slice(0, 4) == entry.year) ??
+      results?.find((r) => r.title === entry.title) ??
+      results?.find((r) => (r.release_date ?? "").slice(0, 4) == entry.year) ??
+      results?.[0];
+    const res = await get(
+      "/search/movie",
+      `&query=${encodeURIComponent(entry.title)}&primary_release_year=${entry.year}`,
+    );
+    let hit = pick(res.results);
+    if (!hit || hit.title !== entry.title) {
+      const loose = await get("/search/movie", `&query=${encodeURIComponent(entry.title)}`);
+      hit = pick(loose.results) ?? hit;
+    }
+    if (!hit) {
+      console.log(`NO MATCH: ${fr.slug} — ${entry.title} (${entry.year})`);
+      continue;
+    }
+    if (hit.title !== entry.title) {
+      console.log(`TITLE FIX: ${fr.slug} — data='${entry.title}' tmdb='${hit.title}'`);
+    }
+    if (!idSet.has(hit.id)) {
+      idSet.add(hit.id);
+      ids.push(hit.id);
+    }
+  }
+}
+console.log(`franchise backfill complete (total ${ids.length})`);
+
 // Phase 2: details per movie.
 const used = new Set();
 // Full top-N snapshot: start from empty so cross-run slug drift (title/year

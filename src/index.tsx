@@ -69,25 +69,39 @@ const getShow = (db: D1Database, slug: string) =>
 
 /**
  * Popular shows ranked by genre overlap (2+ shared genres when possible) —
- * internal links to their money pages.
+ * internal links to their money pages, full rows for card rendering.
  */
-async function similarShows(
-  db: D1Database,
-  show: ShowRow,
-): Promise<{ name: string; slug: string }[]> {
+async function similarShows(db: D1Database, show: ShowRow): Promise<ShowRow[]> {
   const genres: string[] = show.genres ? JSON.parse(show.genres) : [];
   const gs = genres.slice(0, 3);
   if (gs.length === 0) return [];
   const overlapExpr = gs.map(() => "(CASE WHEN genres LIKE ? THEN 1 ELSE 0 END)").join(" + ");
   const { results } = await db
     .prepare(
-      `SELECT name, slug FROM (
-         SELECT name, slug, weight, (${overlapExpr}) AS ov
+      `SELECT * FROM (
+         SELECT *, (${overlapExpr}) AS ov
          FROM shows WHERE id != ? AND weight >= ?
        ) WHERE ov >= ? ORDER BY ov DESC, weight DESC LIMIT 6`,
     )
     .bind(...gs.map((g) => `%"${g}"%`), show.id, PICKER_MIN_WEIGHT, Math.min(2, gs.length))
-    .all<{ name: string; slug: string }>();
+    .all<ShowRow>();
+  return results;
+}
+
+/** Movie counterpart: genre-overlap similarity over the curated movies table. */
+async function similarMovies(db: D1Database, movie: MovieRow): Promise<MovieRow[]> {
+  const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
+  const gs = genres.slice(0, 3);
+  if (gs.length === 0) return [];
+  const overlapExpr = gs.map(() => "(CASE WHEN genres LIKE ? THEN 1 ELSE 0 END)").join(" + ");
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM (
+         SELECT *, (${overlapExpr}) AS ov FROM movies WHERE imdb_id != ?
+       ) WHERE ov >= ? ORDER BY ov DESC, rating DESC, popularity DESC LIMIT 6`,
+    )
+    .bind(...gs.map((g) => `%"${g}"%`), movie.imdb_id, Math.min(2, gs.length))
+    .all<MovieRow>();
   return results;
 }
 
@@ -141,7 +155,7 @@ const Layout: FC<
           <input type="search" name="q" placeholder="Search shows…" required />
         </form>
         <nav>
-          <a href="/my-shows">My shows</a>
+          <a href="/recommend">Recommend me</a>
           <a href="/what-to-watch">What to watch</a>
           <a href="/movies">Movies</a>
           <a href="/tonight">Tonight</a>
@@ -404,9 +418,8 @@ app.get("/show/:slug", async (c) => {
       canonical={canonical(c)}
       ld={ld}
       ogImage={show.image_url ?? undefined}
-      scripts={["/js/watched.js"]}
     >
-      <article class="show-hub" data-show-id={String(show.id)} data-total={String(episodes.length)}>
+      <article class="show-hub">
         <div class="show-head">
           {show.image_url ? (
             <img class="poster" src={show.image_url} alt={show.name} />
@@ -434,7 +447,6 @@ app.get("/show/:slug", async (c) => {
             </nav>
             {show.blurb ? <p class="blurb">{show.blurb}</p> : null}
             {show.summary ? <div class="summary">{raw(show.summary)}</div> : null}
-            <p class="muted" id="watched-progress" hidden></p>
           </div>
         </div>
         {[...seasons.entries()].map(([season, eps]) => (
@@ -445,14 +457,9 @@ app.get("/show/:slug", async (c) => {
             <ol class="ep-list">
               {eps.map((e) => (
                 <li>
-                  <label>
-                    <input type="checkbox" class="watched" data-ep-id={String(e.id)} />{" "}
-                    <span class="muted">{epCode(e)}</span> {e.name}
-                    {e.rating != null ? (
-                      <span class="rating"> ★ {e.rating.toFixed(1)}</span>
-                    ) : null}
-                    {e.airdate ? <span class="muted"> · {e.airdate}</span> : null}
-                  </label>
+                  <span class="muted">{epCode(e)}</span> {e.name}
+                  {e.rating != null ? <span class="rating"> ★ {e.rating.toFixed(1)}</span> : null}
+                  {e.airdate ? <span class="muted"> · {e.airdate}</span> : null}
                 </li>
               ))}
             </ol>
@@ -590,10 +597,9 @@ app.get("/show/:slug/essential", async (c) => {
       description={`Short on time? The essential ${show.name} watch list: pilot, every season's peak, and the all-time greats — skip the rest.`}
       canonical={n === 15 ? `${site}${path}` : `${site}${path}?length=${n}`}
       ogImage={show.image_url ?? undefined}
-      scripts={["/js/watched.js"]}
       ld={[breadcrumbLd(site, show, "Essential episodes", path)]}
     >
-      <article data-show-id={String(show.id)}>
+      <article>
         <h1>
           The essential episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
         </h1>
@@ -611,13 +617,10 @@ app.get("/show/:slug/essential", async (c) => {
             <ol class="ep-list">
               {picks.map(({ ep, why }) => (
                 <li>
-                  <label>
-                    <input type="checkbox" class="watched" data-ep-id={String(ep.id)} />{" "}
-                    <span class="muted">{epCode(ep)}</span> <strong>{ep.name}</strong>{" "}
-                    <span class="why-tag">{why}</span>
-                    {ep.rating != null ? <span class="rating"> ★ {ep.rating.toFixed(1)}</span> : null}
-                    {ep.summary ? <p class="muted">{stripHtml(ep.summary)}</p> : null}
-                  </label>
+                  <span class="muted">{epCode(ep)}</span> <strong>{ep.name}</strong>{" "}
+                  <span class="why-tag">{why}</span>
+                  {ep.rating != null ? <span class="rating"> ★ {ep.rating.toFixed(1)}</span> : null}
+                  {ep.summary ? <p class="muted">{stripHtml(ep.summary)}</p> : null}
                 </li>
               ))}
             </ol>
@@ -798,7 +801,7 @@ const rankedPage =
         } down.`}
         canonical={season != null ? `${site}${base}?season=${season}` : `${site}${base}`}
         ogImage={show.image_url ?? undefined}
-        scripts={["/js/watched.js", "/js/votes.js"]}
+        scripts={["/js/votes.js"]}
         ld={ld}
       >
         <article data-show-id={String(show.id)}>
@@ -828,11 +831,8 @@ const rankedPage =
           <ol class="ranked">
             {eps.map((e) => (
               <li>
-                <label>
-                  <input type="checkbox" class="watched" data-ep-id={String(e.id)} />{" "}
-                  <strong>{e.name}</strong> <span class="muted">{epCode(e)}</span>
-                  <span class="rating"> ★ {e.rating!.toFixed(1)}</span>
-                </label>
+                <strong>{e.name}</strong> <span class="muted">{epCode(e)}</span>
+                <span class="rating"> ★ {e.rating!.toFixed(1)}</span>
                 <span class="vote" data-ep-id={String(e.id)}>
                   <button class="vote-btn" data-dir="up" aria-label="Agree with this ranking">
                     👍 <span class="vote-count">{e.up ?? 0}</span>
@@ -1109,6 +1109,266 @@ app.get("/calendar", async (c) => {
       ))}
     </Layout>,
   );
+});
+
+// -------------------------------------------------- rate -> recommend flow
+// "Tell us the last thing you watched and how it landed; we pick your next
+// one." Only the anonymous verdict is saved (title_ratings/rate_log) — no
+// accounts, no client-side storage of user data.
+
+const VERDICTS: Record<string, "loved" | "liked" | "meh"> = {
+  love: "loved",
+  like: "liked",
+  meh: "meh",
+};
+
+async function getRatedTitle(
+  db: D1Database,
+  kind: string,
+  ref: string,
+): Promise<{ show?: ShowRow; movie?: MovieRow; name: string; image: string | null } | null> {
+  if (kind === "tv" && /^\d+$/.test(ref)) {
+    const show = await db.prepare("SELECT * FROM shows WHERE id = ?").bind(Number(ref)).first<ShowRow>();
+    return show ? { show, name: show.name, image: show.image_url } : null;
+  }
+  if (kind === "movie" && /^tt\d+$/.test(ref)) {
+    const movie = await db.prepare("SELECT * FROM movies WHERE imdb_id = ?").bind(ref).first<MovieRow>();
+    return movie ? { movie, name: movie.year ? `${movie.title} (${movie.year})` : movie.title, image: movie.poster_url } : null;
+  }
+  return null;
+}
+
+app.get("/recommend", async (c) => {
+  const db = c.env.DB;
+  const q = (c.req.query("q") ?? "").trim();
+  const kind = c.req.query("kind") ?? "";
+  const ref = (c.req.query("ref") ?? "").trim();
+  const v = c.req.query("v") ?? "";
+
+  // Step 3: verdict saved (arrived via POST redirect) -> show the picks.
+  if (kind && ref && VERDICTS[v]) {
+    const title = await getRatedTitle(db, kind, ref);
+    if (!title) return c.notFound();
+    const counts = await db
+      .prepare("SELECT loved, liked, meh FROM title_ratings WHERE kind = ? AND ref = ?")
+      .bind(kind, ref)
+      .first<{ loved: number; liked: number; meh: number }>();
+    const total = (counts?.loved ?? 0) + (counts?.liked ?? 0) + (counts?.meh ?? 0);
+    const positive = (counts?.loved ?? 0) + (counts?.liked ?? 0);
+    const stat =
+      total >= 2
+        ? v === "meh"
+          ? `${Math.round(((counts?.meh ?? 0) / total) * 100)}% of raters shrugged at it too.`
+          : `${Math.round((positive / total) * 100)}% of raters loved or liked it too.`
+        : "You're one of its first raters — thanks!";
+
+    let recShows: ShowRow[] = [];
+    let recMovies: MovieRow[] = [];
+    if (v === "meh") {
+      // Different direction: top titles outside the rated title's lead genre.
+      const lead: string | undefined = (
+        title.show?.genres ? JSON.parse(title.show.genres) : title.movie?.genres ? JSON.parse(title.movie.genres) : []
+      )[0];
+      if (kind === "tv") {
+        const { results } = await db
+          .prepare(
+            `SELECT * FROM shows WHERE id != ? AND weight >= ? AND rating >= 7.5
+             ${lead ? "AND (genres IS NULL OR genres NOT LIKE ?)" : ""}
+             ORDER BY weight DESC LIMIT 6`,
+          )
+          .bind(...(lead ? [title.show!.id, PICKER_MIN_WEIGHT, `%"${lead}"%`] : [title.show!.id, PICKER_MIN_WEIGHT]))
+          .all<ShowRow>();
+        recShows = results;
+      } else {
+        const { results } = await db
+          .prepare(
+            `SELECT * FROM movies WHERE imdb_id != ? AND rating >= 7.5
+             ${lead ? "AND (genres IS NULL OR genres NOT LIKE ?)" : ""}
+             ORDER BY popularity DESC LIMIT 6`,
+          )
+          .bind(...(lead ? [title.movie!.imdb_id, `%"${lead}"%`] : [title.movie!.imdb_id]))
+          .all<MovieRow>();
+        recMovies = results;
+      }
+    } else if (kind === "tv") {
+      recShows = await similarShows(db, title.show!);
+    } else {
+      recMovies = await similarMovies(db, title.movie!);
+    }
+
+    c.header("Cache-Control", "no-store");
+    return c.html(
+      <Layout title={`Your next watch, based on ${title.name} | TV Nightly`} canonical={`${origin(c)}/recommend`}>
+        <h1>
+          {v === "meh" ? "Let's go a different direction" : `Because you ${v === "love" ? "loved" : "liked"} ${title.name}`}
+        </h1>
+        <p class="muted">Verdict saved — {stat}</p>
+        {recShows.length || recMovies.length ? (
+          <div class="grid">
+            {recShows.map((s) => (
+              <ShowCard show={s} />
+            ))}
+            {recMovies.map((m) => (
+              <MovieCard movie={m} />
+            ))}
+          </div>
+        ) : (
+          <p class="muted">We need a bit more data for this one — try the <a href="/what-to-watch">picker</a>.</p>
+        )}
+        <p>
+          <a href="/recommend">Rate another →</a>
+        </p>
+      </Layout>,
+    );
+  }
+
+  // Step 2: title chosen -> ask the verdict.
+  if (kind && ref) {
+    const title = await getRatedTitle(db, kind, ref);
+    if (!title) return c.notFound();
+    const Verdict = ({ value, label }: { value: string; label: string }) => (
+      <form method="post" action="/recommend" class="verdict-form">
+        <input type="hidden" name="kind" value={kind} />
+        <input type="hidden" name="ref" value={ref} />
+        <input type="hidden" name="verdict" value={value} />
+        <button type="submit" class="verdict-btn">
+          {label}
+        </button>
+      </form>
+    );
+    c.header("Cache-Control", "public, max-age=3600");
+    return c.html(
+      <Layout title={`How was ${title.name}? | TV Nightly`} canonical={`${origin(c)}/recommend`}>
+        <div class="pick-card">
+          {title.image ? (
+            <img class="poster" src={title.image} alt={title.name} />
+          ) : (
+            <div class="poster card-fallback">{title.name}</div>
+          )}
+          <div>
+            <h1>How was {title.name}?</h1>
+            <div class="verdicts">
+              <Verdict value="love" label="😍 Loved it" />
+              <Verdict value="like" label="🙂 Liked it" />
+              <Verdict value="meh" label="😴 Meh" />
+            </div>
+            <p class="muted">One tap. We save the verdict (nothing else) and pick your next watch.</p>
+          </div>
+        </div>
+      </Layout>,
+    );
+  }
+
+  // Step 1b: searching for the title.
+  if (q) {
+    const [shows, movies] = await Promise.all([
+      db
+        .prepare("SELECT id, name, premiered FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 5")
+        .bind(q)
+        .all<{ id: number; name: string; premiered: string | null }>(),
+      db
+        .prepare("SELECT imdb_id, title, year FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 5")
+        .bind(q)
+        .all<{ imdb_id: string; title: string; year: number | null }>(),
+    ]);
+    c.header("Cache-Control", "public, max-age=300");
+    return c.html(
+      <Layout title={`Which one did you watch? | TV Nightly`} canonical={`${origin(c)}/recommend`}>
+        <h1>Which one did you watch?</h1>
+        {shows.results.length === 0 && movies.results.length === 0 ? (
+          <p class="muted">
+            Nothing matched "{q}" — <a href="/recommend">try another search</a>.
+          </p>
+        ) : null}
+        <ul class="ep-list">
+          {shows.results.map((s) => (
+            <li>
+              <a href={`/recommend?kind=tv&ref=${s.id}`}>
+                {s.name}
+                {s.premiered ? ` (${s.premiered.slice(0, 4)})` : ""}
+              </a>{" "}
+              <span class="muted">· TV show</span>
+            </li>
+          ))}
+          {movies.results.map((m) => (
+            <li>
+              <a href={`/recommend?kind=movie&ref=${m.imdb_id}`}>
+                {m.title}
+                {m.year ? ` (${m.year})` : ""}
+              </a>{" "}
+              <span class="muted">· Movie</span>
+            </li>
+          ))}
+        </ul>
+      </Layout>,
+    );
+  }
+
+  // Step 1: landing — search box + zero-typing quick picks.
+  const [{ results: topShows }, { results: topMovies }] = await Promise.all([
+    db.prepare("SELECT id, name FROM shows ORDER BY weight DESC, rating DESC LIMIT 8").all<{ id: number; name: string }>(),
+    db.prepare("SELECT imdb_id, title FROM movies ORDER BY popularity DESC LIMIT 4").all<{ imdb_id: string; title: string }>(),
+  ]);
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title="What should I watch next? Rate one thing, get your pick | TV Nightly"
+      description="Tell us the last show or movie you watched and how it landed — we'll pick your next watch. No account needed."
+      canonical={canonical(c)}
+    >
+      <h1>What should I watch next?</h1>
+      <p>Tell us the last thing you finished, and how it landed. We'll take it from there.</p>
+      <form method="get" action="/recommend" class="search">
+        <input type="search" name="q" placeholder="The last show or movie you watched…" required />
+        <button type="submit" class="verdict-btn">Find it</button>
+      </form>
+      <h2>Or tap one you've seen</h2>
+      <p class="quick-picks">
+        {topShows.map((s) => (
+          <a class="chip" href={`/recommend?kind=tv&ref=${s.id}`}>
+            {s.name}
+          </a>
+        ))}
+        {topMovies.map((m) => (
+          <a class="chip" href={`/recommend?kind=movie&ref=${m.imdb_id}`}>
+            {m.title}
+          </a>
+        ))}
+      </p>
+    </Layout>,
+  );
+});
+
+app.post("/recommend", async (c) => {
+  const body = await c.req.parseBody();
+  const kind = String(body.kind ?? "");
+  const ref = String(body.ref ?? "").trim();
+  const verdict = String(body.verdict ?? "");
+  const col = VERDICTS[verdict];
+  if (!col || (kind !== "tv" && kind !== "movie")) return c.notFound();
+  const title = await getRatedTitle(c.env.DB, kind, ref);
+  if (!title) return c.notFound();
+
+  const ip = c.req.header("cf-connecting-ip") ?? "0.0.0.0";
+  const hash = await ipHash(c.env.SECRET ?? "anon-salt", ip);
+  const dup = await c.env.DB.prepare(
+    "SELECT 1 AS x FROM rate_log WHERE ip_hash = ? AND kind = ? AND ref = ?",
+  )
+    .bind(hash, kind, ref)
+    .first();
+  if (!dup) {
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        "INSERT OR IGNORE INTO rate_log (ip_hash, kind, ref, created_at) VALUES (?,?,?,unixepoch())",
+      ).bind(hash, kind, ref),
+      c.env.DB.prepare(
+        `INSERT INTO title_ratings (kind, ref, loved, liked, meh) VALUES (?,?,?,?,?)
+         ON CONFLICT(kind, ref) DO UPDATE SET
+           loved = loved + excluded.loved, liked = liked + excluded.liked, meh = meh + excluded.meh`,
+      ).bind(kind, ref, col === "loved" ? 1 : 0, col === "liked" ? 1 : 0, col === "meh" ? 1 : 0),
+    ]);
+  }
+  return c.redirect(`/recommend?kind=${kind}&ref=${encodeURIComponent(ref)}&v=${verdict}`, 303);
 });
 
 // ---------------------------------------------------------------- movies
@@ -1592,103 +1852,6 @@ app.get("/api/search", async (c) => {
   );
 });
 
-// Personal tracker backend: the browser owns the watch-state (localStorage);
-// this endpoint just turns {showId: [watched episode ids]} into per-show
-// progress + "what episode was I on". No accounts, nothing stored server-side.
-app.post("/api/progress", async (c) => {
-  let body: { shows?: Record<string, unknown> };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "bad request" }, 400);
-  }
-  const entries = Object.entries(body.shows ?? {})
-    .map(([id, eps]) => ({
-      showId: Number(id),
-      watched: new Set(Array.isArray(eps) ? eps.filter((e) => Number.isInteger(e)) : []),
-    }))
-    .filter((e) => Number.isInteger(e.showId))
-    .slice(0, 100);
-  if (entries.length === 0) return c.json({ shows: [] });
-  const totalIds = entries.reduce((n, e) => n + e.watched.size, 0);
-  if (totalIds > 20000) return c.json({ error: "too large" }, 413);
-
-  const ids = entries.map((e) => e.showId);
-  const placeholders = ids.map(() => "?").join(",");
-  const [showsRes, epsRes] = await Promise.all([
-    c.env.DB.prepare(`SELECT id, name, slug, status FROM shows WHERE id IN (${placeholders})`)
-      .bind(...ids)
-      .all<{ id: number; name: string; slug: string; status: string | null }>(),
-    c.env.DB.prepare(
-      `SELECT id, show_id, season, number, name, airdate, airstamp FROM episodes
-       WHERE show_id IN (${placeholders}) ORDER BY show_id, season, number`,
-    )
-      .bind(...ids)
-      .all<EpisodeRow>(),
-  ]);
-
-  const byShow = new Map<number, EpisodeRow[]>();
-  for (const e of epsRes.results) {
-    if (!byShow.has(e.show_id)) byShow.set(e.show_id, []);
-    byShow.get(e.show_id)!.push(e);
-  }
-  const now = Date.now();
-  const epView = (e: EpisodeRow) => ({ code: epCode(e), name: e.name, airdate: e.airdate });
-  const shows = showsRes.results.map((s) => {
-    const eps = byShow.get(s.id) ?? [];
-    const watched = entries.find((e) => e.showId === s.id)!.watched;
-    const aired = eps.filter((e) => e.airstamp && Date.parse(e.airstamp) <= now);
-    const nextUnwatched = aired.find((e) => !watched.has(e.id));
-    const nextAiring = eps.find((e) => e.airstamp && Date.parse(e.airstamp) > now);
-    return {
-      id: s.id,
-      name: s.name,
-      slug: s.slug,
-      status: s.status,
-      watched: aired.filter((e) => watched.has(e.id)).length,
-      total: aired.length,
-      next: nextUnwatched ? epView(nextUnwatched) : null,
-      nextAiring: nextAiring ? epView(nextAiring) : null,
-    };
-  });
-  // Active binges first (something aired and unwatched), then caught-up shows.
-  shows.sort((a, b) => Number(!!b.next) - Number(!!a.next) || a.name.localeCompare(b.name));
-  return c.json({ shows });
-});
-
-app.get("/my-shows", (c) =>
-  c.html(
-    <Layout
-      title="My shows — your private episode tracker | TV Nightly"
-      scripts={["/js/myshows.js"]}
-      noindex
-    >
-      <h1>My shows</h1>
-      <p class="muted">
-        No account, no sign-up: your watch history lives in this browser only. Tick episodes on
-        any show page and they appear here.
-      </p>
-      <div id="myshows">
-        <p class="muted">Loading your shows…</p>
-      </div>
-      <noscript>
-        <p class="muted">This page needs JavaScript — your data is in your browser, not on our servers.</p>
-      </noscript>
-      <section>
-        <h2>Move between devices</h2>
-        <p class="muted">
-          Copy this code on one device, paste it on another, hit import. That's the whole sync.
-        </p>
-        <textarea id="export-box" rows={3} spellcheck={false}></textarea>
-        <p>
-          <button id="copy-btn" class="vote-btn">Copy</button>{" "}
-          <button id="import-btn" class="vote-btn">Import what's pasted above</button>
-        </p>
-      </section>
-    </Layout>,
-  ),
-);
-
 async function ipHash(secret: string, ip: string): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${secret}:${ip}`));
   return [...new Uint8Array(d)]
@@ -1925,7 +2088,7 @@ app.get("/sitemaps/:file", async (c) => {
   const file = c.req.param("file");
 
   if (file === "static.xml") {
-    const urls = ["/", "/what-to-watch", "/movies", "/movies/best", "/best-episodes", "/tonight", "/calendar", "/renewals"]
+    const urls = ["/", "/recommend", "/what-to-watch", "/movies", "/movies/best", "/best-episodes", "/tonight", "/calendar", "/renewals"]
       .map((p) => `<url><loc>${site}${p}</loc></url>`)
       .join("");
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);

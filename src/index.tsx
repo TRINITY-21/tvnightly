@@ -2165,7 +2165,9 @@ app.get("/what-to-watch", async (c) => {
       <form method="get" action="/what-to-watch" class="picker-form">
         <label>
           What{" "}
-          <select name="type">
+          {/* Filters are per-medium (movies: service; TV: status) to keep the
+              form lean — auto-submit so switching reveals them immediately. */}
+          <select name="type" onchange="this.form.submit()">
             <option value="tv" selected={type === "tv"}>
               TV show
             </option>

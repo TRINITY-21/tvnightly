@@ -62,7 +62,14 @@ const jsonLd = (data: unknown) =>
 const COUNTDOWN_JS = `<script>(function(){var el=document.getElementById('countdown');if(!el||!el.dataset.ts)return;var t=new Date(el.dataset.ts).getTime();function tick(){var d=t-Date.now();if(d<=0){el.textContent='Airing now';return}var s=Math.floor(d/1000);el.textContent=Math.floor(s/86400)+'d '+Math.floor(s%86400/3600)+'h '+Math.floor(s%3600/60)+'m '+(s%60)+'s';setTimeout(tick,1000)}tick()})();</script>`;
 
 const Layout: FC<
-  PropsWithChildren<{ title: string; description?: string; canonical?: string; ld?: unknown[] }>
+  PropsWithChildren<{
+    title: string;
+    description?: string;
+    canonical?: string;
+    ld?: unknown[];
+    ogImage?: string;
+    scripts?: string[];
+  }>
 > = (props) => (
   <html lang="en">
     <head>
@@ -71,6 +78,13 @@ const Layout: FC<
       <title>{props.title}</title>
       {props.description ? <meta name="description" content={props.description} /> : null}
       {props.canonical ? <link rel="canonical" href={props.canonical} /> : null}
+      <meta property="og:site_name" content="TV Nightly" />
+      <meta property="og:type" content="website" />
+      <meta property="og:title" content={props.title} />
+      {props.description ? <meta property="og:description" content={props.description} /> : null}
+      {props.canonical ? <meta property="og:url" content={props.canonical} /> : null}
+      {props.ogImage ? <meta property="og:image" content={props.ogImage} /> : null}
+      <meta name="twitter:card" content={props.ogImage ? "summary_large_image" : "summary"} />
       <link rel="stylesheet" href="/styles.css" />
       {(props.ld ?? []).map((d) => jsonLd(d))}
     </head>
@@ -117,6 +131,9 @@ const Layout: FC<
           Nightly. All rights reserved.
         </p>
       </footer>
+      {["/js/typeahead.js", ...(props.scripts ?? [])].map((s) => (
+        <script src={s} defer></script>
+      ))}
     </body>
   </html>
 );
@@ -250,8 +267,10 @@ app.get("/show/:slug", async (c) => {
       description={stripHtml(show.summary).slice(0, 155)}
       canonical={canonical(c)}
       ld={ld}
+      ogImage={show.image_url ?? undefined}
+      scripts={["/js/watched.js"]}
     >
-      <article class="show-hub">
+      <article class="show-hub" data-show-id={String(show.id)} data-total={String(episodes.length)}>
         <div class="show-head">
           {show.image_url ? (
             <img class="poster" src={show.image_url} alt={show.name} />
@@ -277,23 +296,72 @@ app.get("/show/:slug", async (c) => {
             </nav>
             {show.blurb ? <p class="blurb">{show.blurb}</p> : null}
             {show.summary ? <div class="summary">{raw(show.summary)}</div> : null}
+            <p class="muted" id="watched-progress" hidden></p>
           </div>
         </div>
         {[...seasons.entries()].map(([season, eps]) => (
           <section>
-            <h2>Season {season}</h2>
+            <h2>
+              <a href={`/show/${show.slug}/season/${season}`}>Season {season}</a>
+            </h2>
             <ol class="ep-list">
               {eps.map((e) => (
                 <li>
-                  <span class="muted">{epCode(e)}</span> {e.name}
-                  {e.rating != null ? <span class="rating"> ★ {e.rating.toFixed(1)}</span> : null}
-                  {e.airdate ? <span class="muted"> · {e.airdate}</span> : null}
+                  <label>
+                    <input type="checkbox" class="watched" data-ep-id={String(e.id)} />{" "}
+                    <span class="muted">{epCode(e)}</span> {e.name}
+                    {e.rating != null ? (
+                      <span class="rating"> ★ {e.rating.toFixed(1)}</span>
+                    ) : null}
+                    {e.airdate ? <span class="muted"> · {e.airdate}</span> : null}
+                  </label>
                 </li>
               ))}
             </ol>
           </section>
         ))}
       </article>
+    </Layout>,
+  );
+});
+
+// ---------------------------------------------------------- season pages
+
+app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
+  const show = await getShow(c.env.DB, c.req.param("slug"));
+  if (!show) return c.notFound();
+  const n = Number(c.req.param("n"));
+  const { results: eps } = await c.env.DB.prepare(
+    "SELECT * FROM episodes WHERE show_id = ? AND season = ? ORDER BY number",
+  )
+    .bind(show.id, n)
+    .all<EpisodeRow>();
+  if (eps.length === 0) return c.notFound();
+
+  const site = origin(c);
+  const path = new URL(c.req.url).pathname;
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${show.name} Season ${n} — episode list, ratings & air dates | TV Nightly`}
+      description={`All ${eps.length} episodes of ${show.name} Season ${n}, with air dates and viewer ratings.`}
+      canonical={canonical(c)}
+      ogImage={show.image_url ?? undefined}
+      ld={[breadcrumbLd(site, show, `Season ${n}`, path)]}
+    >
+      <h1>
+        <a href={`/show/${show.slug}`}>{show.name}</a> — Season {n}
+      </h1>
+      <ol class="ep-list">
+        {eps.map((e) => (
+          <li>
+            <span class="muted">{epCode(e)}</span> <strong>{e.name}</strong>
+            {e.rating != null ? <span class="rating"> ★ {e.rating.toFixed(1)}</span> : null}
+            {e.airdate ? <span class="muted"> · {e.airdate}</span> : null}
+            {e.summary ? <p class="muted">{stripHtml(e.summary)}</p> : null}
+          </li>
+        ))}
+      </ol>
     </Layout>,
   );
 });
@@ -336,6 +404,7 @@ const rankedPage =
           eps[0] ? `"${eps[0].name}"` : "the top"
         } down.`}
         canonical={canonical(c)}
+        ogImage={show.image_url ?? undefined}
         ld={ld}
       >
         <h1>
@@ -387,6 +456,7 @@ app.get("/show/:slug/next-episode", async (c) => {
           : `${show.name} has no scheduled next episode. Status: ${show.status ?? "unknown"}.`
       }
       canonical={canonical(c)}
+      ogImage={show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, "Next episode", path)]}
     >
       <h1>
@@ -477,6 +547,7 @@ app.get("/show/:slug/release-date", async (c) => {
       title={`${show.name} ${next?.season ? `Season ${next.season} ` : ""}release date & renewal status | TV Nightly`}
       description={answer.slice(0, 155)}
       canonical={canonical(c)}
+      ogImage={show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, "Release date", path)]}
     >
       <h1>
@@ -642,6 +713,20 @@ app.get("/renewals", async (c) => {
 });
 
 // --------------------------------------------------------------- search
+
+app.get("/api/search", async (c) => {
+  const q = (c.req.query("q") ?? "").trim();
+  if (q.length < 2) return c.json([]);
+  const { results } = await c.env.DB.prepare(
+    "SELECT name, slug, premiered FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 8",
+  )
+    .bind(q)
+    .all<{ name: string; slug: string; premiered: string | null }>();
+  c.header("Cache-Control", "public, max-age=300");
+  return c.json(
+    results.map((r) => ({ name: r.name, slug: r.slug, year: r.premiered?.slice(0, 4) ?? null })),
+  );
+});
 
 app.get("/search", async (c) => {
   const q = (c.req.query("q") ?? "").trim();

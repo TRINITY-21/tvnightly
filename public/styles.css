@@ -33,6 +33,7 @@ h2 { font-size: 1.15rem; margin-top: 2rem; }
   background: var(--panel);
 }
 .logo { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+.search { position: relative; }
 .search input {
   background: var(--bg);
   border: 1px solid #2a2f3d;
@@ -41,6 +42,25 @@ h2 { font-size: 1.15rem; margin-top: 2rem; }
   padding: 0.4rem 0.7rem;
   min-width: 200px;
 }
+.ta-box {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid #2a2f3d;
+  border-radius: 0 0 8px 8px;
+  z-index: 10;
+}
+.ta-box a { padding: 0.45rem 0.7rem; color: var(--text); }
+.ta-box a:hover { background: #222637; text-decoration: none; }
+
+.ep-list label { cursor: pointer; }
+input.watched { accent-color: var(--accent); }
+li.is-watched { opacity: 0.55; }
+#watched-progress { font-weight: 600; }
 .site-header nav { display: flex; gap: 1rem; margin-left: auto; }
 
 .grid {

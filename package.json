@@ -10,7 +10,9 @@
     "db:schema:remote": "wrangler d1 execute tvnightly --remote --file=migrations/0001_init.sql",
     "seed:fetch": "node scripts/seed.mjs",
     "seed:load:local": "wrangler d1 execute tvnightly --local --file=seed/seed.sql",
-    "seed:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/seed.sql"
+    "seed:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/seed.sql",
+    "blurbs:load:local": "wrangler d1 execute tvnightly --local --file=scripts/blurbs.sql",
+    "blurbs:load:remote": "wrangler d1 execute tvnightly --remote --file=scripts/blurbs.sql"
   },
   "dependencies": {
     "hono": "^4",

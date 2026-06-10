@@ -132,8 +132,11 @@ status_changes, sync_log).
 3. **M3 — Freshness pages:** next-episode countdown, release-date/renewal page, /renewals feed, /calendar. ✅ DONE
 4. **M4 — SEO plumbing:** sitemaps, JSON-LD, canonical URLs. ✅ DONE (GSC verification = post-deploy, see README)
 5. **M5 — Email:** capture forms, double opt-in (HMAC links), outbox-drained alerts in sync job, ToS + Privacy copy. ✅ DONE — provider swappable: console/gmail/resend (user chose Gmail app password to start)
-6. **M6 — Polish:** search typeahead, localStorage watched-marks, OG text-card images, season pages.
-7. **Launch:** register domain, deploy, GSC submit, editorial blurbs on top shows (mechanism done: shows.blurb), then AdSense application.
+6. **M6 — Polish:** search typeahead (/api/search + dropdown), localStorage watched-marks
+   with progress counter, OG/twitter meta (poster as og:image; generated text-card PNGs
+   deferred — poster artwork is the image while the §7 risk stance holds), season pages. ✅ DONE
+7. **Launch:** register domain, deploy, GSC submit, blurbs on top 25 shows ✅ written
+   (scripts/blurbs.sql — review/edit, then expand to top 100), then AdSense application.
 
 ## 9. Monetization sequence (verified thresholds)
 

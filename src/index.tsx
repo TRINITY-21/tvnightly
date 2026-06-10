@@ -318,17 +318,6 @@ app.get("/", async (c) => {
       description="Track the best episodes of every TV show, season release dates, renewal status, and what's airing tonight."
       canonical={canonical(c)}
     >
-      <section class="hero">
-        <h2>Can't decide what to watch tonight?</h2>
-        <p>
-          <a class="verdict-btn" href="/what-to-watch">
-            Spin the picker 🎲
-          </a>{" "}
-          <a class="verdict-btn" href="/recommend">
-            Rate one thing → get your pick
-          </a>
-        </p>
-      </section>
       {tonight.length ? (
         <section>
           <h2>

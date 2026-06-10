@@ -227,14 +227,6 @@ li.is-watched { opacity: 0.55; }
   font-weight: 600;
   padding: 0.1rem 0.5rem;
 }
-.hero {
-  background: linear-gradient(135deg, #1c2140, #151726);
-  border-radius: 12px;
-  padding: 1.25rem 1.5rem;
-  margin-top: 1rem;
-}
-.hero h2 { margin: 0 0 0.75rem; }
-.hero .verdict-btn { display: inline-block; margin: 0.2rem 0.4rem 0 0; text-decoration: none; }
 
 .picker-form {
   display: flex;

@@ -356,6 +356,32 @@ const RateInline: FC<{ kind: string; refId: string; stat: string | null }> = ({ 
   </div>
 );
 
+const ExploreCard: FC<{ icon: string; title: string; desc: string; href: string }> = ({
+  icon,
+  title,
+  desc,
+  href,
+}) => (
+  <a class="explore-card" href={href}>
+    <span class="explore-icon">{icon}</span>
+    <span>
+      <strong>{title}</strong>
+      <p class="muted">{desc}</p>
+    </span>
+    <span class="explore-arrow">→</span>
+  </a>
+);
+
+/** First vertical hub matching a title's genres (or the classics year cutoff). */
+function hubForGenres(genres: string[], movieYear: number | null): { slug: string; name: string } | null {
+  for (const v of VERTICALS) {
+    if (v.movieYearMax && movieYear && movieYear <= v.movieYearMax) return { slug: v.slug, name: v.name };
+    const all = [...(v.tvGenres ?? []), ...(v.movieGenres ?? [])];
+    if (genres.some((g) => all.includes(g))) return { slug: v.slug, name: v.name };
+  }
+  return null;
+}
+
 const SubscribeForm: FC<{ showId: number; label: string }> = ({ showId, label }) => (
   <form action="/subscribe" method="post" class="sub-form inline">
     <input type="hidden" name="kind" value="renewal" />
@@ -549,6 +575,10 @@ app.get("/show/:slug", async (c) => {
   }
   const similar = await similarShows(c.env.DB, show);
   const stat = await titleStat(c.env.DB, "tv", String(show.id));
+  const netName = show.network ?? show.web_channel;
+  const netEntry = netName
+    ? (await networkDirectory(c.env.DB)).find((n) => n.name === netName)
+    : undefined;
 
   const site = origin(c);
   const ld: unknown[] = [
@@ -634,6 +664,58 @@ app.get("/show/:slug", async (c) => {
             </ul>
           </section>
         ) : null}
+        {(() => {
+          const genres: string[] = show.genres ? JSON.parse(show.genres) : [];
+          const hub = hubForGenres(genres, null);
+          return (
+            <section>
+              <h2>
+                Keep exploring{" "}
+                <a class="more" href="/top/tv">
+                  top shows →
+                </a>
+              </h2>
+              <div class="explore-grid">
+                <ExploreCard
+                  icon="VS"
+                  title={`Compare ${show.name}`}
+                  desc="Stack its full episode-rating history against any other show, on one chart."
+                  href={`/compare?a=${show.slug}`}
+                />
+                <ExploreCard
+                  icon="EPS"
+                  title="The essential episodes"
+                  desc="Short on time? The pilot-to-finale shortcut, only the episodes that matter."
+                  href={`/show/${show.slug}/essential`}
+                />
+                {netEntry ? (
+                  <ExploreCard
+                    icon="NET"
+                    title={`Best ${netEntry.name} shows`}
+                    desc="More from the same network, ranked by rating."
+                    href={`/network/${netEntry.slug}`}
+                  />
+                ) : null}
+                {genres.slice(0, 2).map((g) => (
+                  <ExploreCard
+                    icon="GEN"
+                    title={`Best ${g.toLowerCase()} shows & films`}
+                    desc={`The top of the ${g.toLowerCase()} pile, across both mediums.`}
+                    href={`/genre/${slugifyName(g)}`}
+                  />
+                ))}
+                {hub ? (
+                  <ExploreCard
+                    icon="HUB"
+                    title={`The ${hub.name.toLowerCase()} hub`}
+                    desc="The whole fandom on one bookmarkable page — rankings, premieres, what's new."
+                    href={`/${hub.slug}`}
+                  />
+                ) : null}
+              </div>
+            </section>
+          );
+        })()}
       </article>
     </Layout>,
   );
@@ -2946,14 +3028,6 @@ app.get("/movie/:slug", async (c) => {
             </p>
             <ProviderLine row={movie} region={visitorRegion(c)} />
             {movie.overview ? <div class="summary">{movie.overview}</div> : null}
-            {(() => {
-              const fr = franchiseOfMovie(movie);
-              return fr ? (
-                <p>
-                  📋 Part of <a href={`/watch-order/${fr.slug}`}>the {fr.name} watch order</a>
-                </p>
-              ) : null;
-            })()}
             <RateInline kind="movie" refId={movie.imdb_id} stat={stat} />
             <p>
               <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} rel="noopener">
@@ -2963,6 +3037,55 @@ app.get("/movie/:slug", async (c) => {
             </p>
           </div>
         </div>
+        {(() => {
+          const fr = franchiseOfMovie(movie);
+          const hub = hubForGenres(genres, movie.year);
+          const prov0 = providersFor(movie, visitorRegion(c)).names[0];
+          return (
+            <section>
+              <h2>
+                Keep exploring{" "}
+                <a class="more" href="/movies/best">
+                  top movies →
+                </a>
+              </h2>
+              <div class="explore-grid">
+                {fr ? (
+                  <ExploreCard
+                    icon="📋"
+                    title={`${fr.name} watch order`}
+                    desc="Every film in the franchise, release and chronological order."
+                    href={`/watch-order/${fr.slug}`}
+                  />
+                ) : null}
+                {genres.slice(0, 2).map((g) => (
+                  <ExploreCard
+                    icon="GEN"
+                    title={`Best ${g.toLowerCase()} films & shows`}
+                    desc={`The top of the ${g.toLowerCase()} pile, across both mediums.`}
+                    href={`/genre/${slugifyName(g)}`}
+                  />
+                ))}
+                {prov0 ? (
+                  <ExploreCard
+                    icon="🎲"
+                    title={`Spin a ${prov0} movie`}
+                    desc="Random great pick from the same service you already pay for."
+                    href={`/what-to-watch?type=movie&service=${encodeURIComponent(prov0)}`}
+                  />
+                ) : null}
+                {hub ? (
+                  <ExploreCard
+                    icon="HUB"
+                    title={`The ${hub.name.toLowerCase()} hub`}
+                    desc="The whole fandom on one bookmarkable page — rankings, premieres, what's new."
+                    href={`/${hub.slug}`}
+                  />
+                ) : null}
+              </div>
+            </section>
+          );
+        })()}
       </article>
     </Layout>,
   );

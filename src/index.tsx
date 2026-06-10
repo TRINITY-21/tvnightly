@@ -2339,13 +2339,17 @@ interface Vertical {
   pageTitle: string;
   description: string;
   intro: string;
-  tvGenre?: string;
-  movieGenre?: string;
+  tvGenres?: string[];
+  movieGenres?: string[];
   movieYearMax?: number;
   movieSectionTitle: string;
   watchOrders?: string[];
   pickerQS: string;
 }
+
+const genreOr = (col: string, genres: string[]) =>
+  `(${genres.map(() => `${col} LIKE ?`).join(" OR ")})`;
+const genreBinds = (genres: string[]) => genres.map((g) => `%"${g}"%`);
 
 const VERTICALS: Vertical[] = [
   {
@@ -2356,8 +2360,8 @@ const VERTICALS: Vertical[] = [
       "The anime hub: top-rated series with streaming availability, upcoming premieres, what just hit your services, and a picker when you can't decide.",
     intro:
       "Everything anime in one place — bookmark this page. Rankings from real ratings, availability checked around the clock, localized to your country.",
-    tvGenre: "Anime",
-    movieGenre: "Animation",
+    tvGenres: ["Anime"],
+    movieGenres: ["Animation"],
     movieSectionTitle: "Top animation & anime films",
     pickerQS: "?genre=Anime",
   },
@@ -2369,8 +2373,8 @@ const VERTICALS: Vertical[] = [
       "The horror hub: the best horror shows and films with streaming availability, upcoming premieres, and what just arrived on your services.",
     intro:
       "For the people who watch through their fingers — bookmark this page. The best of the genre, where it's streaming, and what's new, updated daily.",
-    tvGenre: "Horror",
-    movieGenre: "Horror",
+    tvGenres: ["Horror"],
+    movieGenres: ["Horror"],
     movieSectionTitle: "Top horror films",
     watchOrders: ["conjuring-universe"],
     pickerQS: "?genre=Horror",
@@ -2387,29 +2391,43 @@ const VERTICALS: Vertical[] = [
     movieSectionTitle: "The greatest films before 1980",
     pickerQS: "?type=movie&min=8",
   },
+  {
+    slug: "sci-fi",
+    name: "Sci-fi & fantasy",
+    pageTitle: "Sci-fi & fantasy — where to watch, the best series & films, what's new",
+    description:
+      "The sci-fi & fantasy hub: the best series and films with streaming availability, upcoming premieres, and what just arrived on your services.",
+    intro:
+      "Other worlds, one page — bookmark it. The best of both genres, where to stream them in your country, and every upcoming premiere.",
+    tvGenres: ["Science-Fiction", "Fantasy"],
+    movieGenres: ["Science Fiction", "Fantasy"],
+    movieSectionTitle: "Top sci-fi & fantasy films",
+    watchOrders: ["star-wars", "middle-earth", "terminator"],
+    pickerQS: "?genre=Science-Fiction",
+  },
 ];
 
 const hubHandler = (v: Vertical) => async (c: AppContext) => {
   const db = c.env.DB;
   const region = visitorRegion(c);
 
-  const shows = v.tvGenre
+  const shows = v.tvGenres?.length
     ? (
         await db
           .prepare(
-            `SELECT * FROM shows WHERE genres LIKE ? AND rating IS NOT NULL AND weight >= 60
+            `SELECT * FROM shows WHERE ${genreOr("genres", v.tvGenres)} AND rating IS NOT NULL AND weight >= 60
              ORDER BY rating DESC, weight DESC LIMIT 12`,
           )
-          .bind(`%"${v.tvGenre}"%`)
+          .bind(...genreBinds(v.tvGenres))
           .all<ShowRow>()
       ).results
     : [];
 
   const movieConds = ["rating IS NOT NULL", "votes >= 1000"];
   const movieBinds: (string | number)[] = [];
-  if (v.movieGenre) {
-    movieConds.push("genres LIKE ?");
-    movieBinds.push(`%"${v.movieGenre}"%`);
+  if (v.movieGenres?.length) {
+    movieConds.push(genreOr("genres", v.movieGenres));
+    movieBinds.push(...genreBinds(v.movieGenres));
   }
   if (v.movieYearMax) {
     movieConds.push("year <= ?");
@@ -2425,32 +2443,32 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
       .all<MovieRow>()
   ).results;
 
-  const premieres = v.tvGenre
+  const premieres = v.tvGenres?.length
     ? (
         await db
           .prepare(
             `SELECT e.airdate, e.season, s.name AS show_name, s.slug AS show_slug
              FROM episodes e JOIN shows s ON s.id = e.show_id
              WHERE e.number = 1 AND e.airstamp > datetime('now')
-               AND e.airstamp < datetime('now', '+90 days') AND s.genres LIKE ?
+               AND e.airstamp < datetime('now', '+90 days') AND ${genreOr("s.genres", v.tvGenres)}
              ORDER BY e.airstamp LIMIT 6`,
           )
-          .bind(`%"${v.tvGenre}"%`)
+          .bind(...genreBinds(v.tvGenres))
           .all<{ airdate: string | null; season: number | null; show_name: string; show_slug: string }>()
       ).results
     : [];
 
   // What just arrived on streaming, for this genre, in the visitor's region.
-  const newOnTv = v.tvGenre
+  const newOnTv = v.tvGenres?.length
     ? (
         await db
           .prepare(
             `SELECT pe.title, pe.slug, pe.service, pe.detected_at FROM provider_events pe
              JOIN shows s ON pe.kind = 'tv' AND s.id = CAST(pe.ref AS INTEGER)
-             WHERE pe.region = ? AND pe.change = 'added' AND s.genres LIKE ?
+             WHERE pe.region = ? AND pe.change = 'added' AND ${genreOr("s.genres", v.tvGenres)}
              ORDER BY pe.detected_at DESC LIMIT 8`,
           )
-          .bind(region, `%"${v.tvGenre}"%`)
+          .bind(region, ...genreBinds(v.tvGenres))
           .all<{ title: string; slug: string; service: string; detected_at: number }>()
       ).results
     : [];
@@ -2460,12 +2478,12 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
         `SELECT pe.title, pe.slug, pe.service, pe.detected_at FROM provider_events pe
          JOIN movies m ON pe.kind = 'movie' AND m.imdb_id = pe.ref
          WHERE pe.region = ? AND pe.change = 'added'
-           ${v.movieGenre ? "AND m.genres LIKE ?" : ""}${v.movieYearMax ? " AND m.year <= ?" : ""}
+           ${v.movieGenres?.length ? `AND ${genreOr("m.genres", v.movieGenres)}` : ""}${v.movieYearMax ? " AND m.year <= ?" : ""}
          ORDER BY pe.detected_at DESC LIMIT 8`,
       )
       .bind(
         region,
-        ...(v.movieGenre ? [`%"${v.movieGenre}"%`] : []),
+        ...(v.movieGenres?.length ? genreBinds(v.movieGenres) : []),
         ...(v.movieYearMax ? [v.movieYearMax] : []),
       )
       .all<{ title: string; slug: string; service: string; detected_at: number }>()

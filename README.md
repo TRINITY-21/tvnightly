@@ -29,14 +29,43 @@ npx wrangler dev --test-scheduled
 curl 'http://localhost:8787/__scheduled?cron=0+*+*+*+*'
 ```
 
+## Email alerts
+
+Backend is selected by `EMAIL_PROVIDER` (`console` | `gmail` | `resend`), see
+`src/email.ts` and `.dev.vars.example`. For Gmail you need an **app password**
+(your normal password will NOT work — Google removed password SMTP in 2024):
+
+1. Google Account → Security → enable **2-Step Verification**
+2. Security → **App passwords** → create one for "Mail"
+3. Set secrets: `npx wrangler secret put GMAIL_USER`,
+   `npx wrangler secret put GMAIL_APP_PASSWORD`, and set
+   `EMAIL_PROVIDER` to `gmail` in `wrangler.jsonc` vars.
+
+Gmail limits: ~500 emails/day; the From address is always your Gmail. To switch
+to Resend later (custom From domain): set `RESEND_API_KEY` + `EMAIL_PROVIDER=resend`.
+Nothing else changes.
+
+Subscriptions are double opt-in (HMAC-signed confirm/unsubscribe links). Set the
+signing key in prod: `npx wrangler secret put SECRET` (long random string).
+
 ## First deploy
 
 1. `npx wrangler login`
 2. `npx wrangler d1 create tvnightly` → paste `database_id` into `wrangler.jsonc`
-3. `npm run db:schema:remote`
+3. `npm run db:schema:remote` and
+   `npx wrangler d1 execute tvnightly --remote --file=migrations/0002_email_blurbs.sql`
 4. `PAGES=350 EPISODES_TOP=5000 npm run seed:fetch` (full mirror, takes ~1h, rate-limited)
 5. `npm run seed:load:remote`
-6. `npm run deploy`
+6. Secrets: `npx wrangler secret put SECRET` (+ Gmail secrets, see above)
+7. `npm run deploy`
+
+## After deploy: Google Search Console
+
+1. https://search.google.com/search-console → Add property → Domain → tvnightly.com
+2. Verify via the DNS TXT record (Cloudflare dashboard → DNS → add record)
+3. Submit the sitemap: `https://tvnightly.com/sitemap.xml`
+4. Watch Performance → Queries to see what's ranking; that data drives which
+   shows get editorial blurbs (`UPDATE shows SET blurb = '...' WHERE slug = '...'`).
 
 ## Attribution
 

@@ -13,7 +13,8 @@
     "seed:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/seed.sql"
   },
   "dependencies": {
-    "hono": "^4"
+    "hono": "^4",
+    "worker-mailer": "^1.2.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4",

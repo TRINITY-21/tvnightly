@@ -108,3 +108,38 @@ h2 { font-size: 1.15rem; margin-top: 2rem; }
   font-size: 0.85rem;
 }
 .site-footer .disclaimer { max-width: 90ch; }
+
+.blurb {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+  font-style: italic;
+  max-width: 65ch;
+}
+
+.sub-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.sub-form.inline {
+  margin: 1.25rem 0;
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+}
+.sub-form label { flex-basis: 100%; font-weight: 600; color: var(--text); }
+.sub-form input[type="email"] {
+  background: var(--bg);
+  border: 1px solid #2a2f3d;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.45rem 0.7rem;
+  min-width: 220px;
+}
+.sub-form button {
+  background: var(--accent);
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+.footer-sub { margin-bottom: 1rem; }
+.footer-sub p { margin: 0 0 0.5rem; color: var(--text); }

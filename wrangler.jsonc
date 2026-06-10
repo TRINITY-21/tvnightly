@@ -3,10 +3,23 @@
   "name": "tvnightly",
   "main": "src/index.tsx",
   "compatibility_date": "2026-04-01",
+  // nodejs_compat enables TCP sockets for SMTP (worker-mailer / Gmail sending)
+  "compatibility_flags": ["nodejs_compat"],
   "assets": { "directory": "./public" },
   // Hourly sync: free Workers allow 50 subrequests/invocation, so each run
-  // drains up to 40 stale shows; hourly runs keep the backlog near zero.
+  // drains a budgeted batch of shows + alert emails; hourly runs keep up.
   "triggers": { "crons": ["0 * * * *"] },
+  "vars": {
+    "SITE_ORIGIN": "https://tvnightly.com",
+    // 'console' | 'gmail' | 'resend' — see src/email.ts
+    "EMAIL_PROVIDER": "console",
+    "EMAIL_FROM": "TV Nightly <alerts@tvnightly.com>"
+  },
+  // Secrets (set with `wrangler secret put NAME`, or .dev.vars locally):
+  //   SECRET             — HMAC key for confirm/unsubscribe links (required in prod)
+  //   GMAIL_USER         — your Gmail address          (EMAIL_PROVIDER=gmail)
+  //   GMAIL_APP_PASSWORD — 16-char Google app password (EMAIL_PROVIDER=gmail)
+  //   RESEND_API_KEY     — Resend key                  (EMAIL_PROVIDER=resend)
   "d1_databases": [
     {
       "binding": "DB",

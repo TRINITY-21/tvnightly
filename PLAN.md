@@ -127,13 +127,13 @@ status_changes, sync_log).
 
 ## 8. Build order (weekend-sized milestones)
 
-1. **M1 — Mirror:** D1 schema + seed script + hourly sync Worker. ← scaffolded
-2. **M2 — Core pages:** show hub, best/worst episodes, season pages. SSR via Hono. ← scaffolded (seasons pending)
-3. **M3 — Freshness pages:** next-episode countdown ←scaffolded, release-date/renewal page, /renewals feed ←scaffolded, /calendar.
-4. **M4 — SEO plumbing:** sitemaps, JSON-LD, meta/OG, GSC verification + submit.
-5. **M5 — Email:** capture forms, double opt-in via Resend, alert sending in sync job, ToS + Privacy real copy.
-6. **M6 — Polish:** /calendar, search typeahead, localStorage watched-marks, OG text-card images.
-7. **Launch:** domain, deploy, GSC submit, then content-quality pass before AdSense application.
+1. **M1 — Mirror:** D1 schema + seed script + hourly sync Worker. ✅ DONE
+2. **M2 — Core pages:** show hub, best/worst episodes (season pages folded into hub). ✅ DONE
+3. **M3 — Freshness pages:** next-episode countdown, release-date/renewal page, /renewals feed, /calendar. ✅ DONE
+4. **M4 — SEO plumbing:** sitemaps, JSON-LD, canonical URLs. ✅ DONE (GSC verification = post-deploy, see README)
+5. **M5 — Email:** capture forms, double opt-in (HMAC links), outbox-drained alerts in sync job, ToS + Privacy copy. ✅ DONE — provider swappable: console/gmail/resend (user chose Gmail app password to start)
+6. **M6 — Polish:** search typeahead, localStorage watched-marks, OG text-card images, season pages.
+7. **Launch:** register domain, deploy, GSC submit, editorial blurbs on top shows (mechanism done: shows.blurb), then AdSense application.
 
 ## 9. Monetization sequence (verified thresholds)
 

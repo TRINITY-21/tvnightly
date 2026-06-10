@@ -1,0 +1,18 @@
+# Copy to .dev.vars (gitignored) for local dev.
+SITE_ORIGIN=http://localhost:8787
+
+# Email backend: console (log only) | gmail | resend
+EMAIL_PROVIDER=console
+
+# HMAC key for confirm/unsubscribe links. Generate a long random string for prod.
+SECRET=dev-secret-not-for-production
+
+# EMAIL_PROVIDER=gmail — requires a Google App Password (NOT your normal password):
+# Google Account -> Security -> 2-Step Verification (enable) -> App passwords.
+# Limits: ~500 emails/day; From is always your Gmail address.
+#GMAIL_USER=you@gmail.com
+#GMAIL_APP_PASSWORD=abcdabcdabcdabcd
+
+# EMAIL_PROVIDER=resend — 100/day, 3K/mo free; custom From after domain verification.
+#RESEND_API_KEY=re_xxxxxxxx
+#EMAIL_FROM=TV Nightly <alerts@tvnightly.com>

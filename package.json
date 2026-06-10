@@ -12,7 +12,10 @@
     "seed:load:local": "wrangler d1 execute tvnightly --local --file=seed/seed.sql",
     "seed:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/seed.sql",
     "blurbs:load:local": "wrangler d1 execute tvnightly --local --file=scripts/blurbs.sql",
-    "blurbs:load:remote": "wrangler d1 execute tvnightly --remote --file=scripts/blurbs.sql"
+    "blurbs:load:remote": "wrangler d1 execute tvnightly --remote --file=scripts/blurbs.sql",
+    "movies:fetch": "node scripts/seed-movies.mjs",
+    "movies:load:local": "wrangler d1 execute tvnightly --local --file=seed/movies.sql",
+    "movies:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/movies.sql"
   },
   "dependencies": {
     "hono": "^4",

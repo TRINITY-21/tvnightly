@@ -1,4 +1,5 @@
-# Copy to .dev.vars (gitignored) for local dev.
+# Copy to .dev.vars (gitignored) for local dev. NEVER put real keys in this file —
+# it is committed to git. Real values go in .dev.vars only.
 SITE_ORIGIN=http://localhost:8787
 
 # Email backend: console (log only) | gmail | resend
@@ -16,3 +17,9 @@ SECRET=dev-secret-not-for-production
 # EMAIL_PROVIDER=resend — 100/day, 3K/mo free; custom From after domain verification.
 #RESEND_API_KEY=re_xxxxxxxx
 #EMAIL_FROM=TV Nightly <alerts@tvnightly.com>
+
+# Movie data (scripts/seed-movies.mjs). Free key: themoviedb.org -> Settings -> API.
+#TMDB_API_KEY=your_tmdb_v3_key
+
+# Optional, unused for now (extra artwork source for later).
+#FANART_API_KEY=your_fanart_key

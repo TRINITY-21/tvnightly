@@ -45,6 +45,21 @@ interface EpisodeRow {
 
 type TonightRow = EpisodeRow & { show_name: string; show_slug: string; network: string | null };
 
+interface MovieRow {
+  imdb_id: string;
+  slug: string;
+  title: string;
+  year: number | null;
+  release_date: string | null;
+  overview: string | null;
+  genres: string | null; // JSON string array
+  runtime: number | null;
+  rating: number | null;
+  votes: number | null;
+  popularity: number | null;
+  poster_url: string | null;
+}
+
 const stripHtml = (s: string | null) => (s ?? "").replace(/<[^>]*>/g, "").trim();
 const epCode = (e: EpisodeRow) =>
   `S${String(e.season ?? 0).padStart(2, "0")}E${String(e.number ?? 0).padStart(2, "0")}`;
@@ -86,7 +101,8 @@ const Layout: FC<
       {props.description ? <meta property="og:description" content={props.description} /> : null}
       {props.canonical ? <meta property="og:url" content={props.canonical} /> : null}
       {props.ogImage ? <meta property="og:image" content={props.ogImage} /> : null}
-      <meta name="twitter:card" content={props.ogImage ? "summary_large_image" : "summary"} />
+      {/* Posters are portrait — the small summary card crops far better than large-image. */}
+      <meta name="twitter:card" content="summary" />
       <link rel="stylesheet" href="/styles.css" />
       {(props.ld ?? []).map((d) => jsonLd(d))}
     </head>
@@ -100,6 +116,7 @@ const Layout: FC<
         </form>
         <nav>
           <a href="/what-to-watch">What to watch</a>
+          <a href="/movies">Movies</a>
           <a href="/tonight">Tonight</a>
           <a href="/calendar">Calendar</a>
           <a href="/renewals">Renewals</a>
@@ -127,7 +144,17 @@ const Layout: FC<
           <a href="https://www.tvmaze.com" rel="noopener">
             TVmaze.com
           </a>{" "}
-          (CC BY-SA).
+          (CC BY-SA).{" "}
+          <a href="https://www.themoviedb.org" rel="noopener">
+            <img
+              class="tmdb-logo"
+              src="https://files.readme.io/29c6fee-blue_short.svg"
+              alt="TMDB"
+              height="11"
+            />
+          </a>{" "}
+          This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise
+          approved by TMDB.
         </p>
         <p>
           <a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a> · © 2026 TV
@@ -156,6 +183,20 @@ const ShowCard: FC<{ show: ShowRow }> = ({ show }) => (
     <div class="card-body">
       <span class="card-title">{show.name}</span>
       {show.rating != null ? <span class="rating">★ {show.rating.toFixed(1)}</span> : null}
+    </div>
+  </a>
+);
+
+const MovieCard: FC<{ movie: MovieRow }> = ({ movie }) => (
+  <a class="card" href={`/movie/${movie.slug}`}>
+    {movie.poster_url ? (
+      <img src={movie.poster_url} alt={movie.title} loading="lazy" />
+    ) : (
+      <div class="card-fallback">{movie.title}</div>
+    )}
+    <div class="card-body">
+      <span class="card-title">{movie.title}</span>
+      {movie.rating != null ? <span class="rating">★ {movie.rating.toFixed(1)}</span> : null}
     </div>
   </a>
 );
@@ -673,6 +714,176 @@ app.get("/calendar", async (c) => {
   );
 });
 
+// ---------------------------------------------------------------- movies
+
+app.get("/movies", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    "SELECT * FROM movies ORDER BY popularity DESC LIMIT 48",
+  ).all<MovieRow>();
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title="Popular movies — ratings, runtimes & picks | TV Nightly"
+      description="The most popular movies with ratings, runtimes and genres — plus ranked best-of lists and a what-to-watch picker."
+      canonical={canonical(c)}
+    >
+      <h1>Popular movies</h1>
+      <p>
+        <a href="/movies/best">Best movies, ranked →</a> ·{" "}
+        <a href="/what-to-watch?type=movie">Pick one for me 🎲</a>
+      </p>
+      {results.length === 0 ? (
+        <p class="muted">No movies loaded yet — the catalog is on its way.</p>
+      ) : null}
+      <div class="grid">
+        {results.map((m) => (
+          <MovieCard movie={m} />
+        ))}
+      </div>
+    </Layout>,
+  );
+});
+
+app.get("/movies/best", async (c) => {
+  // Validate genre against the real list FIRST: kills LIKE-metacharacter junk
+  // pages and reflected-text spam; invalid values redirect to the bare page.
+  const { results: genreRows } = await c.env.DB.prepare(
+    "SELECT DISTINCT value AS g FROM movies, json_each(movies.genres) ORDER BY 1",
+  ).all<{ g: string }>();
+  const requested = (c.req.query("genre") ?? "").trim();
+  if (requested && !genreRows.some((r) => r.g === requested)) {
+    return c.redirect("/movies/best", 301);
+  }
+  const genre = requested;
+
+  const conds = ["rating IS NOT NULL", "votes >= 1000"];
+  const binds: (string | number)[] = [];
+  if (genre) {
+    conds.push("genres LIKE ?");
+    binds.push(`%"${genre}"%`);
+  }
+  const { results } = await c.env.DB.prepare(
+    `SELECT * FROM movies WHERE ${conds.join(" AND ")} ORDER BY rating DESC, votes DESC LIMIT 50`,
+  )
+    .bind(...binds)
+    .all<MovieRow>();
+
+  const heading = genre ? `The best ${genre.toLowerCase()} movies, ranked` : "The best movies of all time, ranked";
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${heading} | TV Nightly`}
+      description={`${heading} by viewer rating${results[0] ? `, from ${results[0].title} down` : ""}.`}
+      canonical={
+        genre
+          ? `${origin(c)}/movies/best?genre=${encodeURIComponent(genre)}`
+          : canonical(c)
+      }
+      ld={[
+        {
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          name: heading,
+          itemListElement: results.slice(0, 25).map((m, i) => ({
+            "@type": "ListItem",
+            position: i + 1,
+            name: `${m.title}${m.year ? ` (${m.year})` : ""}`,
+            url: `${origin(c)}/movie/${m.slug}`,
+          })),
+        },
+      ]}
+    >
+      <h1>{heading}</h1>
+      <form method="get" action="/movies/best" class="picker-form">
+        <label>
+          Genre{" "}
+          <select name="genre">
+            <option value="">All genres</option>
+            {genreRows.map((r) => (
+              <option value={r.g} selected={r.g === genre}>
+                {r.g}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit">Rank</button>
+      </form>
+      {results.length === 0 ? <p class="muted">No rated movies for that filter yet.</p> : null}
+      <ol class="ranked">
+        {results.map((m) => (
+          <li>
+            <strong>
+              <a href={`/movie/${m.slug}`}>{m.title}</a>
+            </strong>{" "}
+            {m.year ? <span class="muted">({m.year})</span> : null}
+            <span class="rating"> ★ {m.rating!.toFixed(1)}</span>
+            {m.overview ? <p class="muted">{m.overview.slice(0, 180)}…</p> : null}
+          </li>
+        ))}
+      </ol>
+    </Layout>,
+  );
+});
+
+app.get("/movie/:slug", async (c) => {
+  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
+    .bind(c.req.param("slug"))
+    .first<MovieRow>();
+  if (!movie) return c.notFound();
+  const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
+
+  // No aggregateRating here: Google's review-snippet guidelines require ratings
+  // collected on YOUR site; republishing TMDB votes as structured data risks a
+  // manual action. The rating stays visible in the page body.
+  const ld: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Movie",
+    name: movie.title,
+    url: `${origin(c)}/movie/${movie.slug}`,
+    ...(movie.poster_url ? { image: movie.poster_url } : {}),
+    ...(movie.release_date ? { datePublished: movie.release_date } : {}),
+  };
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${movie.title}${movie.year ? ` (${movie.year})` : ""} — rating, runtime & info | TV Nightly`}
+      description={(movie.overview ?? "").slice(0, 155)}
+      canonical={canonical(c)}
+      ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+      ld={[ld]}
+    >
+      <article class="show-hub">
+        <div class="show-head">
+          {movie.poster_url ? (
+            <img class="poster" src={movie.poster_url} alt={movie.title} />
+          ) : (
+            <div class="poster card-fallback">{movie.title}</div>
+          )}
+          <div>
+            <h1>
+              {movie.title} {movie.year ? <span class="muted">({movie.year})</span> : null}
+            </h1>
+            <p>
+              {movie.rating != null ? <span class="rating">★ {movie.rating.toFixed(1)}</span> : null}
+              {movie.votes ? <span class="muted"> ({movie.votes.toLocaleString()} votes)</span> : null}
+              {movie.runtime ? <span class="muted"> · {movie.runtime} min</span> : null}
+              {genres.length ? <span class="muted"> · {genres.join(", ")}</span> : null}
+            </p>
+            {movie.overview ? <div class="summary">{movie.overview}</div> : null}
+            <p>
+              <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} rel="noopener">
+                IMDb ↗
+              </a>{" "}
+              · <a href="/what-to-watch?type=movie">Pick me another 🎲</a>
+            </p>
+          </div>
+        </div>
+      </article>
+    </Layout>,
+  );
+});
+
 // ----------------------------------------------------- what-to-watch picker
 
 // Pool floor: TVmaze weight >= 75 keeps picks recognizable (and the indexed
@@ -681,19 +892,45 @@ const PICKER_MIN_WEIGHT = 75;
 
 app.get("/what-to-watch", async (c) => {
   const db = c.env.DB;
-  const genre = (c.req.query("genre") ?? "").trim();
+  const type = c.req.query("type") === "movie" ? "movie" : "tv";
+  const rawGenre = (c.req.query("genre") ?? "").trim();
   const status = c.req.query("status") ?? "";
   const minRating = Number(c.req.query("min") ?? 0) || 0;
-  const maxRuntime = Number(c.req.query("runtime") ?? 0) || 0;
+  const runtimeBand = c.req.query("runtime") ?? ""; // '' | 'short' | 'long'
+  // Same form values, sensible minutes per medium.
+  const RUNTIME_CAPS = { tv: { short: 35, long: 65 }, movie: { short: 100, long: 135 } };
+  const maxRuntime =
+    runtimeBand === "short" || runtimeBand === "long" ? RUNTIME_CAPS[type][runtimeBand] : 0;
 
-  const conds = ["weight >= ?", "rating IS NOT NULL"];
-  const binds: (string | number)[] = [PICKER_MIN_WEIGHT];
+  const { results: genreRows } =
+    type === "movie"
+      ? await db
+          .prepare("SELECT DISTINCT value AS g FROM movies, json_each(movies.genres) ORDER BY 1")
+          .all<{ g: string }>()
+      : await db
+          .prepare(
+            `SELECT DISTINCT value AS g FROM shows, json_each(shows.genres)
+             WHERE shows.weight >= ? ORDER BY 1`,
+          )
+          .bind(PICKER_MIN_WEIGHT)
+          .all<{ g: string }>();
+  // Only genres that actually exist pass through to the LIKE pattern.
+  const genre = genreRows.some((r) => r.g === rawGenre) ? rawGenre : "";
+
+  const conds: string[] = ["rating IS NOT NULL"];
+  const binds: (string | number)[] = [];
+  if (type === "tv") {
+    // Popularity floor keeps TV picks recognizable; the movies table is
+    // curated-by-construction (seeded top-N), so it needs no floor.
+    conds.push("weight >= ?");
+    binds.push(PICKER_MIN_WEIGHT);
+  }
   if (genre) {
     conds.push("genres LIKE ?");
     binds.push(`%"${genre}"%`);
   }
-  if (status === "ended") conds.push("status = 'Ended'");
-  if (status === "running") conds.push("status = 'Running'");
+  if (type === "tv" && status === "ended") conds.push("status = 'Ended'");
+  if (type === "tv" && status === "running") conds.push("status = 'Running'");
   if (minRating) {
     conds.push("rating >= ?");
     binds.push(minRating);
@@ -702,20 +939,59 @@ app.get("/what-to-watch", async (c) => {
     conds.push("runtime <= ?");
     binds.push(maxRuntime);
   }
+  const where = conds.join(" AND ");
 
-  const pick = await db
-    .prepare(`SELECT * FROM shows WHERE ${conds.join(" AND ")} ORDER BY RANDOM() LIMIT 1`)
-    .bind(...binds)
-    .first<ShowRow>();
-  const { results: genreRows } = await db
-    .prepare(
-      `SELECT DISTINCT value AS g FROM shows, json_each(shows.genres)
-       WHERE shows.weight >= ? ORDER BY 1`,
-    )
-    .bind(PICKER_MIN_WEIGHT)
-    .all<{ g: string }>();
-
-  const pickGenres: string[] = pick?.genres ? JSON.parse(pick.genres) : [];
+  // Typed per-medium branches: a movie row never has show fields and vice
+  // versa, so derive everything the card needs inside each branch.
+  interface PickView {
+    name: string;
+    href: string;
+    image: string | null;
+    genres: string[];
+    rating: number | null;
+    runtime: number | null;
+    desc: string;
+    status: string | null; // TV only
+    slug: string;
+  }
+  let pick: PickView | null = null;
+  if (type === "movie") {
+    const m = await db
+      .prepare(`SELECT * FROM movies WHERE ${where} ORDER BY RANDOM() LIMIT 1`)
+      .bind(...binds)
+      .first<MovieRow>();
+    if (m) {
+      pick = {
+        name: m.year ? `${m.title} (${m.year})` : m.title,
+        href: `/movie/${m.slug}`,
+        image: m.poster_url,
+        genres: m.genres ? JSON.parse(m.genres) : [],
+        rating: m.rating,
+        runtime: m.runtime,
+        desc: (m.overview ?? "").slice(0, 220),
+        status: null,
+        slug: m.slug,
+      };
+    }
+  } else {
+    const s = await db
+      .prepare(`SELECT * FROM shows WHERE ${where} ORDER BY RANDOM() LIMIT 1`)
+      .bind(...binds)
+      .first<ShowRow>();
+    if (s) {
+      pick = {
+        name: s.name,
+        href: `/show/${s.slug}`,
+        image: s.image_url,
+        genres: s.genres ? JSON.parse(s.genres) : [],
+        rating: s.rating,
+        runtime: s.runtime,
+        desc: s.blurb ?? stripHtml(s.summary).slice(0, 220),
+        status: s.status,
+        slug: s.slug,
+      };
+    }
+  }
   c.header("Cache-Control", "no-store");
   return c.html(
     <Layout
@@ -725,6 +1001,17 @@ app.get("/what-to-watch", async (c) => {
     >
       <h1>What should I watch tonight?</h1>
       <form method="get" action="/what-to-watch" class="picker-form">
+        <label>
+          What{" "}
+          <select name="type">
+            <option value="tv" selected={type === "tv"}>
+              TV show
+            </option>
+            <option value="movie" selected={type === "movie"}>
+              Movie
+            </option>
+          </select>
+        </label>
         <label>
           Genre{" "}
           <select name="genre">
@@ -736,20 +1023,22 @@ app.get("/what-to-watch", async (c) => {
             ))}
           </select>
         </label>
-        <label>
-          Status{" "}
-          <select name="status">
-            <option value="" selected={status === ""}>
-              Any
-            </option>
-            <option value="ended" selected={status === "ended"}>
-              Finished (bingeable)
-            </option>
-            <option value="running" selected={status === "running"}>
-              Still running
-            </option>
-          </select>
-        </label>
+        {type === "tv" ? (
+          <label>
+            Status{" "}
+            <select name="status">
+              <option value="" selected={status === ""}>
+                Any
+              </option>
+              <option value="ended" selected={status === "ended"}>
+                Finished (bingeable)
+              </option>
+              <option value="running" selected={status === "running"}>
+                Still running
+              </option>
+            </select>
+          </label>
+        ) : null}
         <label>
           Rating{" "}
           <select name="min">
@@ -765,16 +1054,16 @@ app.get("/what-to-watch", async (c) => {
           </select>
         </label>
         <label>
-          Episode length{" "}
+          {type === "movie" ? "Length" : "Episode length"}{" "}
           <select name="runtime">
-            <option value="" selected={!maxRuntime}>
+            <option value="" selected={!runtimeBand}>
               Any
             </option>
-            <option value="35" selected={maxRuntime === 35}>
-              ≤ 35 min
+            <option value="short" selected={runtimeBand === "short"}>
+              ≤ {RUNTIME_CAPS[type].short} min
             </option>
-            <option value="65" selected={maxRuntime === 65}>
-              ≤ 65 min
+            <option value="long" selected={runtimeBand === "long"}>
+              ≤ {RUNTIME_CAPS[type].long} min
             </option>
           </select>
         </label>
@@ -783,25 +1072,36 @@ app.get("/what-to-watch", async (c) => {
 
       {pick ? (
         <div class="pick-card">
-          {pick.image_url ? (
-            <img class="poster" src={pick.image_url} alt={pick.name} />
+          {pick.image ? (
+            <img class="poster" src={pick.image} alt={pick.name} />
           ) : (
             <div class="poster card-fallback">{pick.name}</div>
           )}
           <div>
             <h2>
-              <a href={`/show/${pick.slug}`}>{pick.name}</a>
+              <a href={pick.href}>{pick.name}</a>
             </h2>
             <p>
-              <StatusBadge status={pick.status} />
+              {type === "tv" ? <StatusBadge status={pick.status} /> : null}
               {pick.rating != null ? <span class="rating"> · ★ {pick.rating.toFixed(1)}</span> : null}
-              {pick.runtime ? <span class="muted"> · ~{pick.runtime} min/ep</span> : null}
-              {pickGenres.length ? <span class="muted"> · {pickGenres.join(", ")}</span> : null}
+              {pick.runtime ? (
+                <span class="muted">
+                  {" "}
+                  · {type === "movie" ? `${pick.runtime} min` : `~${pick.runtime} min/ep`}
+                </span>
+              ) : null}
+              {pick.genres.length ? <span class="muted"> · {pick.genres.join(", ")}</span> : null}
             </p>
-            <p>{pick.blurb ?? stripHtml(pick.summary).slice(0, 220)}</p>
+            <p>{pick.desc}</p>
             <p>
-              <a href={`/show/${pick.slug}/best-episodes`}>Best episodes</a> ·{" "}
-              <a href={`/show/${pick.slug}/next-episode`}>Next episode</a>
+              {type === "movie" ? (
+                <a href="/movies/best">Best movies, ranked</a>
+              ) : (
+                <>
+                  <a href={`/show/${pick.slug}/best-episodes`}>Best episodes</a> ·{" "}
+                  <a href={`/show/${pick.slug}/next-episode`}>Next episode</a>
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -859,14 +1159,39 @@ app.get("/renewals", async (c) => {
 app.get("/api/search", async (c) => {
   const q = (c.req.query("q") ?? "").trim();
   if (q.length < 2) return c.json([]);
-  const { results } = await c.env.DB.prepare(
-    "SELECT name, slug, premiered FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 8",
-  )
-    .bind(q)
-    .all<{ name: string; slug: string; premiered: string | null }>();
+  // Leading-wildcard LIKE can't use an index; skip the movies scan for very
+  // short queries to keep per-keystroke rows-read inside the D1 free budget.
+  const includeMovies = q.length >= 3;
+  const [shows, movies] = await Promise.all([
+    c.env.DB.prepare(
+      "SELECT name, slug, premiered FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 6",
+    )
+      .bind(q)
+      .all<{ name: string; slug: string; premiered: string | null }>(),
+    includeMovies
+      ? c.env.DB.prepare(
+          "SELECT title, slug, year FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 4",
+        )
+          .bind(q)
+          .all<{ title: string; slug: string; year: number | null }>()
+      : Promise.resolve({ results: [] as { title: string; slug: string; year: number | null }[] }),
+  ]);
   c.header("Cache-Control", "public, max-age=300");
   return c.json(
-    results.map((r) => ({ name: r.name, slug: r.slug, year: r.premiered?.slice(0, 4) ?? null })),
+    [
+      ...shows.results.map((r) => ({
+        name: r.name,
+        slug: r.slug,
+        year: r.premiered?.slice(0, 4) ?? null,
+        kind: "tv",
+      })),
+      ...movies.results.map((r) => ({
+        name: r.title,
+        slug: r.slug,
+        year: r.year ? String(r.year) : null,
+        kind: "movie",
+      })),
+    ].slice(0, 8),
   );
 });
 
@@ -879,16 +1204,40 @@ app.get("/search", async (c) => {
         .bind(q)
         .all<ShowRow>()
     : { results: [] as ShowRow[] };
+  const { results: movieResults } = q
+    ? await c.env.DB.prepare(
+        `SELECT * FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 12`,
+      )
+        .bind(q)
+        .all<MovieRow>()
+    : { results: [] as MovieRow[] };
 
   return c.html(
     <Layout title={`Search: ${q} | TV Nightly`}>
       <h1>Search{q ? `: ${q}` : ""}</h1>
-      {q && results.length === 0 ? <p class="muted">No shows found.</p> : null}
-      <div class="grid">
-        {results.map((s) => (
-          <ShowCard show={s} />
-        ))}
-      </div>
+      {q && results.length === 0 && movieResults.length === 0 ? (
+        <p class="muted">Nothing found.</p>
+      ) : null}
+      {results.length ? (
+        <section>
+          <h2>TV shows</h2>
+          <div class="grid">
+            {results.map((s) => (
+              <ShowCard show={s} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {movieResults.length ? (
+        <section>
+          <h2>Movies</h2>
+          <div class="grid">
+            {movieResults.map((m) => (
+              <MovieCard movie={m} />
+            ))}
+          </div>
+        </section>
+      ) : null}
     </Layout>,
   );
 });
@@ -1012,9 +1361,15 @@ const xmlRes = (c: AppContext, xml: string) => {
 
 app.get("/sitemap.xml", async (c) => {
   const site = origin(c);
-  const row = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM shows").first<{ n: number }>();
-  const shards = Math.max(1, Math.ceil((row?.n ?? 0) / SHOWS_PER_SITEMAP));
-  const entries = ["static.xml", ...Array.from({ length: shards }, (_, i) => `shows-${i}.xml`)]
+  const showRow = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM shows").first<{ n: number }>();
+  const movieRow = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM movies").first<{ n: number }>();
+  const showShards = Math.max(1, Math.ceil((showRow?.n ?? 0) / SHOWS_PER_SITEMAP));
+  const movieShards = Math.ceil((movieRow?.n ?? 0) / SHOWS_PER_SITEMAP);
+  const entries = [
+    "static.xml",
+    ...Array.from({ length: showShards }, (_, i) => `shows-${i}.xml`),
+    ...Array.from({ length: movieShards }, (_, i) => `movies-${i}.xml`),
+  ]
     .map((f) => `<sitemap><loc>${site}/sitemaps/${f}</loc></sitemap>`)
     .join("");
   return xmlRes(c, `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${entries}</sitemapindex>`);
@@ -1025,8 +1380,22 @@ app.get("/sitemaps/:file", async (c) => {
   const file = c.req.param("file");
 
   if (file === "static.xml") {
-    const urls = ["/", "/what-to-watch", "/tonight", "/calendar", "/renewals"]
+    const urls = ["/", "/what-to-watch", "/movies", "/movies/best", "/tonight", "/calendar", "/renewals"]
       .map((p) => `<url><loc>${site}${p}</loc></url>`)
+      .join("");
+    return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
+  }
+
+  const mv = /^movies-(\d+)\.xml$/.exec(file);
+  if (mv) {
+    const { results } = await c.env.DB.prepare(
+      "SELECT slug FROM movies ORDER BY popularity DESC, imdb_id LIMIT ? OFFSET ?",
+    )
+      .bind(SHOWS_PER_SITEMAP, Number(mv[1]) * SHOWS_PER_SITEMAP)
+      .all<{ slug: string }>();
+    if (results.length === 0) return c.notFound();
+    const urls = results
+      .map((r) => `<url><loc>${site}/movie/${r.slug}</loc></url>`)
       .join("");
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
   }

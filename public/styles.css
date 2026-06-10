@@ -163,6 +163,7 @@ li.is-watched { opacity: 0.55; }
 }
 .footer-sub { margin-bottom: 1rem; }
 .footer-sub p { margin: 0 0 0.5rem; color: var(--text); }
+.tmdb-logo { height: 11px; vertical-align: baseline; }
 
 .picker-form {
   display: flex;

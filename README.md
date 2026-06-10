@@ -48,6 +48,18 @@ Nothing else changes.
 Subscriptions are double opt-in (HMAC-signed confirm/unsubscribe links). Set the
 signing key in prod: `npx wrangler secret put SECRET` (long random string).
 
+## Movies (phase 4)
+
+Movie data comes from TMDB (key in `.dev.vars` as `TMDB_API_KEY`):
+
+```sh
+npm run movies:fetch          # top 500 by vote count -> seed/movies.sql (~40s)
+npm run movies:load:local     # snapshot load (DELETE + INSERT, idempotent)
+```
+
+Refresh monthly-ish for new releases and rating drift. For more movies:
+`PAGES=100 npm run movies:fetch` (100 pages = top 2,000).
+
 ## First deploy
 
 1. `npx wrangler login`

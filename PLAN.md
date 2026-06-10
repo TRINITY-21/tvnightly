@@ -28,8 +28,12 @@ live countdowns, rankings, schedules, notify-me alerts — utility over prose.
 - **Phase 2 (only if traffic demands):** lightweight accounts syncing the localStorage
   watch-state. Likely never needed — Television Stats proves traffic without auth.
 - **Phase 3:** "what should I watch tonight" interactive picker (link magnet). ✅ DONE — /what-to-watch with genre/status/rating/runtime filters over the TVmaze mirror (genres+runtime mirrored since migration 0003).
-- **Phase 4 (needs movie data):** movies via Wikidata (CC0, free) or TMDB commercial
-  license at $149/mo once ad revenue covers it.
+- **Phase 4 (movies):** ✅ DONE — TMDB-powered (user's key, accepted risk stance per §7;
+  $149/mo commercial license is the legalization path once revenue exists). Top-500 movie
+  mirror in D1 (scripts/seed-movies.mjs; refresh = movies:fetch + movies:load:remote,
+  snapshot-style DELETE+INSERT), /movies + /movies/best (+validated genre filter) +
+  /movie/{slug}, movie mode in the picker, movies in search/typeahead/sitemaps, required
+  TMDB attribution in footer. Multi-agent review: 13 findings, 9 confirmed, all fixed.
 
 ## 3. MVP feature list (phase 1, complete scope)
 

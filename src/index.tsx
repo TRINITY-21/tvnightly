@@ -58,6 +58,7 @@ interface ShowRow {
   blurb: string | null;
   genres: string | null; // JSON string array, e.g. '["Drama","Crime"]'
   runtime: number | null;
+  providers_intl: string | null; // JSON object: country code -> service names
 }
 
 interface EpisodeRow {
@@ -90,7 +91,48 @@ interface MovieRow {
   popularity: number | null;
   poster_url: string | null;
   providers: string | null; // JSON string array of US streaming services
+  providers_intl: string | null; // JSON object: country code -> service names
 }
+
+// Regions we mirror providers for (must match scripts/seed-movies.mjs).
+const REGIONS = ["US", "GB", "CA", "AU", "IN", "DE", "FR", "ES", "IT", "BR", "MX", "NG", "NL", "SE", "JP", "KR"];
+
+/** Visitor region: explicit ?region= override, else Cloudflare geo, else US. */
+function visitorRegion(c: AppContext): string {
+  const param = (c.req.query("region") ?? "").toUpperCase();
+  if (REGIONS.includes(param)) return param;
+  const geo = (c.req.header("cf-ipcountry") ?? "").toUpperCase();
+  return REGIONS.includes(geo) ? geo : "US";
+}
+
+/** Provider names for a title in the given region (US fallback marked). */
+function providersFor(
+  row: { providers_intl: string | null },
+  region: string,
+): { names: string[]; region: string } {
+  const intl: Record<string, string[]> = row.providers_intl ? JSON.parse(row.providers_intl) : {};
+  if (intl[region]?.length) return { names: intl[region], region };
+  if (region !== "US" && intl.US?.length) return { names: intl.US, region: "US" };
+  return { names: [], region };
+}
+
+const ProviderLine: FC<{ row: { providers_intl: string | null }; region: string }> = ({
+  row,
+  region,
+}) => {
+  const prov = providersFor(row, region);
+  if (!prov.names.length) return null;
+  return (
+    <p class="provs">
+      <span class="muted">
+        Streaming on{prov.region !== region ? ` (${prov.region} — not on your region's services)` : ` (${prov.region})`}
+      </span>{" "}
+      {prov.names.map((p) => (
+        <span class="prov">{p}</span>
+      ))}
+    </p>
+  );
+};
 
 const stripHtml = (s: string | null) => (s ?? "").replace(/<[^>]*>/g, "").trim();
 const epCode = (e: EpisodeRow) =>
@@ -534,6 +576,7 @@ app.get("/show/:slug", async (c) => {
               <a href={`/show/${show.slug}/release-date`}>Release date</a>
               <a href={`/show/${show.slug}/calendar.ics`}>📅 Calendar</a>
             </nav>
+            <ProviderLine row={show} region={visitorRegion(c)} />
             <RateInline kind="tv" refId={String(show.id)} stat={stat} />
             {show.blurb ? <p class="blurb">{show.blurb}</p> : null}
             {show.summary ? <div class="summary">{raw(show.summary)}</div> : null}
@@ -2111,14 +2154,7 @@ app.get("/movie/:slug", async (c) => {
               {movie.runtime ? <span class="muted"> · {movie.runtime} min</span> : null}
               {genres.length ? <span class="muted"> · {genres.join(", ")}</span> : null}
             </p>
-            {movie.providers && JSON.parse(movie.providers).length ? (
-              <p class="provs">
-                <span class="muted">Streaming on</span>{" "}
-                {(JSON.parse(movie.providers) as string[]).map((p) => (
-                  <span class="prov">{p}</span>
-                ))}
-              </p>
-            ) : null}
+            <ProviderLine row={movie} region={visitorRegion(c)} />
             {movie.overview ? <div class="summary">{movie.overview}</div> : null}
             {(() => {
               const fr = franchiseOfMovie(movie);
@@ -2193,21 +2229,34 @@ app.get("/what-to-watch", async (c) => {
   // Only genres that actually exist pass through to the LIKE pattern.
   const genre = genreRows.some((r) => r.g === rawGenre) ? rawGenre : "";
 
-  // Service filter (movies): dropdown derived from real provider data.
-  let service = "";
-  let serviceRows: { p: string }[] = [];
-  if (type === "movie") {
-    serviceRows = (
-      await db
-        .prepare(
-          `SELECT value AS p, COUNT(*) AS n FROM movies, json_each(movies.providers)
-           GROUP BY value ORDER BY n DESC LIMIT 12`,
-        )
-        .all<{ p: string }>()
-    ).results;
-    const reqService = (c.req.query("service") ?? "").trim();
-    service = serviceRows.some((r) => r.p === reqService) ? reqService : "";
-  }
+  // Service filter (both mediums): dropdown derived from real provider data,
+  // localized to the visitor's region (CF geo, ?region= override).
+  const region = visitorRegion(c);
+  const serviceRows =
+    type === "movie"
+      ? (
+          await db
+            .prepare(
+              `SELECT value AS p, COUNT(*) AS n
+               FROM movies, json_each(json_extract(movies.providers_intl, ?))
+               GROUP BY value ORDER BY n DESC LIMIT 12`,
+            )
+            .bind(`$.${region}`)
+            .all<{ p: string }>()
+        ).results
+      : (
+          await db
+            .prepare(
+              `SELECT value AS p, COUNT(*) AS n
+               FROM shows, json_each(json_extract(shows.providers_intl, ?))
+               WHERE shows.weight >= ?
+               GROUP BY value ORDER BY n DESC LIMIT 12`,
+            )
+            .bind(`$.${region}`, PICKER_MIN_WEIGHT)
+            .all<{ p: string }>()
+        ).results;
+  const reqService = (c.req.query("service") ?? "").trim();
+  const service = serviceRows.some((r) => r.p === reqService) ? reqService : "";
 
   const who = COMPANY[c.req.query("who") ?? ""] ? (c.req.query("who") as string) : "";
 
@@ -2231,8 +2280,8 @@ app.get("/what-to-watch", async (c) => {
     binds.push(`%"${genre}"%`);
   }
   if (service) {
-    conds.push("providers LIKE ?");
-    binds.push(`%"${service}"%`);
+    conds.push("json_extract(providers_intl, ?) LIKE ?");
+    binds.push(`$.${region}`, `%"${service}"%`);
   }
   if (who) {
     const cfg = COMPANY[who];
@@ -2291,7 +2340,7 @@ app.get("/what-to-watch", async (c) => {
         href: `/movie/${m.slug}`,
         image: m.poster_url,
         genres: m.genres ? JSON.parse(m.genres) : [],
-        providers: m.providers ? JSON.parse(m.providers) : [],
+        providers: providersFor(m, region).names,
         rating: m.rating,
         runtime: m.runtime,
         desc: (m.overview ?? "").slice(0, 220),
@@ -2311,7 +2360,7 @@ app.get("/what-to-watch", async (c) => {
         href: `/show/${s.slug}`,
         image: s.image_url,
         genres: s.genres ? JSON.parse(s.genres) : [],
-        providers: [],
+        providers: providersFor(s, region).names,
         rating: s.rating,
         runtime: s.runtime,
         desc: s.blurb ?? stripHtml(s.summary).slice(0, 220),
@@ -2368,9 +2417,9 @@ app.get("/what-to-watch", async (c) => {
             ))}
           </select>
         </label>
-        {type === "movie" && serviceRows.length ? (
+        {serviceRows.length ? (
           <label>
-            Streaming on (US){" "}
+            Streaming on ({region}){" "}
             <select name="service">
               <option value="">Any service</option>
               {serviceRows.map((r) => (

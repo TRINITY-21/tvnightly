@@ -15,7 +15,10 @@
     "blurbs:load:remote": "wrangler d1 execute tvnightly --remote --file=scripts/blurbs.sql",
     "movies:fetch": "node scripts/seed-movies.mjs",
     "movies:load:local": "wrangler d1 execute tvnightly --local --file=seed/movies.sql",
-    "movies:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/movies.sql"
+    "movies:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/movies.sql",
+    "providers:tv:fetch": "node scripts/seed-show-providers.mjs",
+    "providers:tv:load:local": "wrangler d1 execute tvnightly --local --file=seed/show-providers.sql",
+    "providers:tv:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/show-providers.sql"
   },
   "dependencies": {
     "hono": "^4",

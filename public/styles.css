@@ -178,6 +178,19 @@ li.is-watched { opacity: 0.55; }
 .graph-wrap { overflow-x: auto; background: var(--panel); border-radius: 10px; padding: 0.5rem; }
 .graph-wrap svg { display: block; min-width: 420px; }
 
+.vote { display: inline-flex; gap: 0.4rem; margin-left: 0.5rem; vertical-align: middle; }
+.vote-btn {
+  background: var(--panel);
+  border: 1px solid #2a2f3d;
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.75rem;
+  padding: 0.1rem 0.55rem;
+  cursor: pointer;
+}
+.vote-btn:hover { border-color: var(--accent); }
+.vote.voted .vote-btn { opacity: 0.5; cursor: default; }
+
 .picker-form {
   display: flex;
   gap: 1rem;

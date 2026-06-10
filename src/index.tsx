@@ -67,6 +67,30 @@ const epCode = (e: EpisodeRow) =>
 const getShow = (db: D1Database, slug: string) =>
   db.prepare("SELECT * FROM shows WHERE slug = ?").bind(slug).first<ShowRow>();
 
+/**
+ * Popular shows ranked by genre overlap (2+ shared genres when possible) —
+ * internal links to their money pages.
+ */
+async function similarShows(
+  db: D1Database,
+  show: ShowRow,
+): Promise<{ name: string; slug: string }[]> {
+  const genres: string[] = show.genres ? JSON.parse(show.genres) : [];
+  const gs = genres.slice(0, 3);
+  if (gs.length === 0) return [];
+  const overlapExpr = gs.map(() => "(CASE WHEN genres LIKE ? THEN 1 ELSE 0 END)").join(" + ");
+  const { results } = await db
+    .prepare(
+      `SELECT name, slug FROM (
+         SELECT name, slug, weight, (${overlapExpr}) AS ov
+         FROM shows WHERE id != ? AND weight >= ?
+       ) WHERE ov >= ? ORDER BY ov DESC, weight DESC LIMIT 6`,
+    )
+    .bind(...gs.map((g) => `%"${g}"%`), show.id, PICKER_MIN_WEIGHT, Math.min(2, gs.length))
+    .all<{ name: string; slug: string }>();
+  return results;
+}
+
 const origin = (c: AppContext) => c.env.SITE_ORIGIN ?? new URL(c.req.url).origin;
 const canonical = (c: AppContext) => origin(c) + new URL(c.req.url).pathname;
 
@@ -353,6 +377,7 @@ app.get("/show/:slug", async (c) => {
     if (!seasons.has(s)) seasons.set(s, []);
     seasons.get(s)!.push(e);
   }
+  const similar = await similarShows(c.env.DB, show);
 
   const site = origin(c);
   const ld: unknown[] = [
@@ -430,6 +455,18 @@ app.get("/show/:slug", async (c) => {
             </ol>
           </section>
         ))}
+        {similar.length ? (
+          <section>
+            <h2>More like {show.name}</h2>
+            <ul class="ep-list">
+              {similar.map((s) => (
+                <li>
+                  <a href={`/show/${s.slug}/best-episodes`}>The best episodes of {s.name}</a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </article>
     </Layout>,
   );
@@ -704,16 +741,37 @@ const rankedPage =
   (order: "DESC" | "ASC") => async (c: Context<{ Bindings: Bindings }, "/show/:slug">) => {
     const show = await getShow(c.env.DB, c.req.param("slug"));
     if (!show) return c.notFound();
-    const { results: eps } = await c.env.DB.prepare(
-      `SELECT * FROM episodes WHERE show_id = ? AND rating IS NOT NULL
-       ORDER BY rating ${order}, season, number LIMIT 25`,
+    const kind = order === "DESC" ? "best" : "worst";
+    const base = `/show/${show.slug}/${kind}-episodes`;
+
+    // Optional per-season filter, validated against the show's real seasons.
+    const { results: seasonRows } = await c.env.DB.prepare(
+      "SELECT DISTINCT season AS s FROM episodes WHERE show_id = ? AND season IS NOT NULL ORDER BY season",
     )
       .bind(show.id)
-      .all<EpisodeRow>();
+      .all<{ s: number }>();
+    const seasons = seasonRows.map((r) => r.s);
+    const rawSeason = (c.req.query("season") ?? "").trim();
+    let season: number | null = null;
+    if (rawSeason) {
+      const n = Number(rawSeason);
+      if (!seasons.includes(n)) return c.redirect(base, 301);
+      season = n;
+    }
 
-    const kind = order === "DESC" ? "best" : "worst";
+    const { results: eps } = await c.env.DB.prepare(
+      `SELECT e.*, v.up, v.down FROM episodes e
+       LEFT JOIN episode_votes v ON v.episode_id = e.id
+       WHERE e.show_id = ? AND e.rating IS NOT NULL${season != null ? " AND e.season = ?" : ""}
+       ORDER BY e.rating ${order}, e.season, e.number LIMIT 25`,
+    )
+      .bind(...(season != null ? [show.id, season] : [show.id]))
+      .all<EpisodeRow & { up: number | null; down: number | null }>();
+
+    const similar = kind === "best" ? await similarShows(c.env.DB, show) : [];
     const site = origin(c);
     const path = new URL(c.req.url).pathname;
+    const seasonLabel = season != null ? ` Season ${season}` : "";
     const ld: unknown[] = [
       breadcrumbLd(site, show, `${kind} episodes`, path),
       {
@@ -731,20 +789,34 @@ const rankedPage =
     c.header("Cache-Control", "public, max-age=3600");
     return c.html(
       <Layout
-        title={`The ${eps.length} ${kind} episodes of ${show.name}, ranked | TV Nightly`}
-        description={`${show.name}'s ${kind} episodes ranked by viewer rating, from ${
+        title={`The ${eps.length} ${kind} episodes of ${show.name}${seasonLabel}, ranked | TV Nightly`}
+        description={`${show.name}${seasonLabel}'s ${kind} episodes ranked by viewer rating, from ${
           eps[0] ? `"${eps[0].name}"` : "the top"
         } down.`}
-        canonical={canonical(c)}
+        canonical={season != null ? `${site}${base}?season=${season}` : `${site}${base}`}
         ogImage={show.image_url ?? undefined}
-        scripts={["/js/watched.js"]}
+        scripts={["/js/watched.js", "/js/votes.js"]}
         ld={ld}
       >
         <article data-show-id={String(show.id)}>
           <h1>
             The {kind} episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
+            {seasonLabel}
           </h1>
           {show.blurb && kind === "best" ? <p class="blurb">{show.blurb}</p> : null}
+          {seasons.length > 1 && seasons.length <= 30 ? (
+            <p class="muted">
+              Filter: <a href={base}>{season == null ? <strong>All</strong> : "All"}</a>
+              {seasons.map((s) => (
+                <>
+                  {" · "}
+                  <a href={`${base}?season=${s}`}>
+                    {season === s ? <strong>S{s}</strong> : `S${s}`}
+                  </a>
+                </>
+              ))}
+            </p>
+          ) : null}
           {eps.length < 10 ? (
             <p class="muted">
               Not enough rated episodes yet for a reliable ranking — check back as ratings come in.
@@ -757,8 +829,16 @@ const rankedPage =
                   <input type="checkbox" class="watched" data-ep-id={String(e.id)} />{" "}
                   <strong>{e.name}</strong> <span class="muted">{epCode(e)}</span>
                   <span class="rating"> ★ {e.rating!.toFixed(1)}</span>
-                  {e.summary ? <p class="muted">{stripHtml(e.summary)}</p> : null}
                 </label>
+                <span class="vote" data-ep-id={String(e.id)}>
+                  <button class="vote-btn" data-dir="up" aria-label="Agree with this ranking">
+                    👍 <span class="vote-count">{e.up ?? 0}</span>
+                  </button>
+                  <button class="vote-btn" data-dir="down" aria-label="Disagree with this ranking">
+                    👎 <span class="vote-count">{e.down ?? 0}</span>
+                  </button>
+                </span>
+                {e.summary ? <p class="muted">{stripHtml(e.summary)}</p> : null}
               </li>
             ))}
           </ol>
@@ -768,6 +848,18 @@ const rankedPage =
               · <a href={`/show/${show.slug}/ratings`}>Ratings graph</a> ·{" "}
               <a href="/best-episodes">All-time top 100</a>
             </p>
+          ) : null}
+          {similar.length ? (
+            <section>
+              <h2>More like {show.name}</h2>
+              <ul class="ep-list">
+                {similar.map((s) => (
+                  <li>
+                    <a href={`/show/${s.slug}/best-episodes`}>The best episodes of {s.name}</a>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : null}
           <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
         </article>
@@ -1495,6 +1587,57 @@ app.get("/api/search", async (c) => {
       })),
     ].slice(0, 8),
   );
+});
+
+async function ipHash(secret: string, ip: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${secret}:${ip}`));
+  return [...new Uint8Array(d)]
+    .slice(0, 16)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+app.post("/api/vote", async (c) => {
+  let body: { episodeId?: unknown; dir?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "bad request" }, 400);
+  }
+  const episodeId = Number(body.episodeId);
+  const dir = body.dir === "up" ? "up" : body.dir === "down" ? "down" : null;
+  if (!Number.isInteger(episodeId) || !dir) return c.json({ error: "bad request" }, 400);
+  const db = c.env.DB;
+  const exists = await db.prepare("SELECT 1 AS x FROM episodes WHERE id = ?").bind(episodeId).first();
+  if (!exists) return c.json({ error: "not found" }, 404);
+
+  // One vote per (HMAC-hashed IP, episode); raw IPs never touch the database.
+  const ip = c.req.header("cf-connecting-ip") ?? "0.0.0.0";
+  const hash = await ipHash(c.env.SECRET ?? "anon-salt", ip);
+  const dup = await db
+    .prepare("SELECT 1 AS x FROM vote_log WHERE ip_hash = ? AND episode_id = ?")
+    .bind(hash, episodeId)
+    .first();
+  if (!dup) {
+    await db.batch([
+      db
+        .prepare(
+          "INSERT OR IGNORE INTO vote_log (ip_hash, episode_id, created_at) VALUES (?,?,unixepoch())",
+        )
+        .bind(hash, episodeId),
+      db
+        .prepare(
+          `INSERT INTO episode_votes (episode_id, up, down) VALUES (?,?,?)
+           ON CONFLICT(episode_id) DO UPDATE SET up = up + excluded.up, down = down + excluded.down`,
+        )
+        .bind(episodeId, dir === "up" ? 1 : 0, dir === "down" ? 1 : 0),
+    ]);
+  }
+  const counts = await db
+    .prepare("SELECT up, down FROM episode_votes WHERE episode_id = ?")
+    .bind(episodeId)
+    .first<{ up: number; down: number }>();
+  return c.json({ up: counts?.up ?? 0, down: counts?.down ?? 0, deduped: !!dup });
 });
 
 app.get("/search", async (c) => {

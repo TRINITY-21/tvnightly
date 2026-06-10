@@ -9,10 +9,13 @@ export interface SyncEnv extends EmailEnv {
 }
 
 // Free Workers allow 50 subrequests per invocation, and D1 calls count as
-// subrequests too. Budget: 1 updates fetch + ~6 stale-scan queries + 1 preload
-// + 10 shows x (1 fetch + 1 batch) + alert enqueue (2) + outbox drain
-// (1 select + 1 send + 1 update) + 1 log = ~33, with headroom.
-const MAX_SHOWS_PER_RUN = 10;
+// subrequests too. Budget: ~12 fixed (updates fetch, stale scan, preload,
+// alert enqueues, outbox drain, sync_log) + 8 shows x (1 TVmaze fetch +
+// 1 old-ratings read + 1 batch) = ~39, with headroom.
+const MAX_SHOWS_PER_RUN = 8;
+// "Instant classic" alerts: newly aired episode crosses this rating.
+const TOP_EPISODE_RATING = 8.5;
+const TOP_EPISODE_WINDOW_MS = 14 * 24 * 3600 * 1000;
 // Gmail free SMTP allows ~500 sends/day; 15/run x 24 runs = 360 stays safe.
 const MAX_EMAILS_PER_RUN = 15;
 
@@ -165,6 +168,52 @@ async function enqueueAlerts(env: SyncEnv, changes: StatusChange[]): Promise<num
   return stmts.length;
 }
 
+export interface TopEpisode {
+  showId: number;
+  showName: string;
+  slug: string;
+  epName: string;
+  code: string;
+  rating: number;
+}
+
+/** Queue "instant classic" emails to a show's subscribers (deduped per episode). */
+async function enqueueTopEpisodeAlerts(env: SyncEnv, tops: TopEpisode[]): Promise<number> {
+  if (tops.length === 0 || !env.SECRET) return 0;
+  const origin = env.SITE_ORIGIN ?? "https://tvnightly.com";
+  const byShow = new Map(tops.map((t) => [t.showId, t]));
+  const placeholders = tops.map(() => "?").join(",");
+  const { results: subs } = await env.DB.prepare(
+    `SELECT email, show_id FROM subscriptions
+     WHERE confirmed = 1 AND kind = 'renewal' AND show_id IN (${placeholders})`,
+  )
+    .bind(...tops.map((t) => t.showId))
+    .all<{ email: string; show_id: number }>();
+  if (subs.length === 0) return 0;
+
+  const stmts: D1PreparedStatement[] = [];
+  for (const sub of subs) {
+    const t = byShow.get(sub.show_id)!;
+    const unsubToken = await signToken(
+      { email: sub.email, showId: sub.show_id, kind: "renewal", action: "unsub" },
+      env.SECRET,
+    );
+    const html =
+      `<p><strong>${t.showName}</strong> just aired one of its best episodes ever: ` +
+      `<strong>"${t.epName}"</strong> (${t.code}) — rated ★${t.rating.toFixed(1)}.</p>` +
+      `<p><a href="${origin}/show/${t.slug}/best-episodes">See where it ranks</a></p>` +
+      `<p style="color:#888;font-size:12px">You asked TV Nightly to notify you about this show. ` +
+      `<a href="${origin}/unsubscribe?token=${unsubToken}">Unsubscribe</a></p>`;
+    stmts.push(
+      env.DB.prepare(
+        "INSERT INTO outbox (to_email, subject, html, created_at) VALUES (?,?,?,unixepoch())",
+      ).bind(sub.email, `${t.showName}: "${t.epName}" is an instant classic (★${t.rating.toFixed(1)})`, html),
+    );
+  }
+  await env.DB.batch(stmts);
+  return stmts.length;
+}
+
 /** Send a budgeted batch of queued emails; one SMTP/API call covers the batch. */
 export async function drainOutbox(env: SyncEnv): Promise<number> {
   const { results: pending } = await env.DB.prepare(
@@ -228,12 +277,21 @@ export async function runSync(env: SyncEnv): Promise<{ checked: number; updated:
 
   let updated = 0;
   const changes: StatusChange[] = [];
+  const topCandidates: (TopEpisode & { episodeId: number })[] = [];
   const errors: string[] = [];
+  const now = Date.now();
   for (const { id } of batch) {
     try {
       const show = await fetchShowWithEpisodes(id);
       if (show) {
         const prev = existing.get(id) ?? null;
+        // Old ratings snapshot lets us detect episodes newly crossing the bar.
+        const { results: oldEps } = await db
+          .prepare("SELECT id, rating FROM episodes WHERE show_id = ?")
+          .bind(id)
+          .all<{ id: number; rating: number | null }>();
+        const oldRating = new Map(oldEps.map((e) => [e.id, e.rating]));
+
         const { statusChanged } = await upsertShow(db, show, prev);
         if (statusChanged && prev) {
           changes.push({
@@ -243,6 +301,31 @@ export async function runSync(env: SyncEnv): Promise<{ checked: number; updated:
             oldStatus: prev.status,
             newStatus: show.status ?? null,
           });
+        }
+        if (prev) {
+          for (const ep of show._embedded?.episodes ?? []) {
+            const rating = ep.rating?.average ?? null;
+            const aired = ep.airstamp ? Date.parse(ep.airstamp) : NaN;
+            const old = oldRating.get(ep.id) ?? null;
+            if (
+              rating != null &&
+              rating >= TOP_EPISODE_RATING &&
+              (old == null || old < TOP_EPISODE_RATING) &&
+              Number.isFinite(aired) &&
+              aired <= now &&
+              now - aired < TOP_EPISODE_WINDOW_MS
+            ) {
+              topCandidates.push({
+                episodeId: ep.id,
+                showId: show.id,
+                showName: show.name,
+                slug: prev.slug,
+                epName: ep.name ?? "New episode",
+                code: `S${String(ep.season ?? 0).padStart(2, "0")}E${String(ep.number ?? 0).padStart(2, "0")}`,
+                rating,
+              });
+            }
+          }
         }
         updated++;
       }
@@ -254,6 +337,28 @@ export async function runSync(env: SyncEnv): Promise<{ checked: number; updated:
   let emailed = 0;
   try {
     await enqueueAlerts(env, changes);
+    // One alert per episode ever: filter against episode_alerts, then record.
+    let tops: TopEpisode[] = [];
+    if (topCandidates.length) {
+      const placeholders = topCandidates.map(() => "?").join(",");
+      const { results: already } = await db
+        .prepare(`SELECT episode_id FROM episode_alerts WHERE episode_id IN (${placeholders})`)
+        .bind(...topCandidates.map((t) => t.episodeId))
+        .all<{ episode_id: number }>();
+      const seen = new Set(already.map((r) => r.episode_id));
+      const fresh = topCandidates.filter((t) => !seen.has(t.episodeId));
+      if (fresh.length) {
+        await db.batch(
+          fresh.map((t) =>
+            db
+              .prepare("INSERT OR IGNORE INTO episode_alerts (episode_id, created_at) VALUES (?,unixepoch())")
+              .bind(t.episodeId),
+          ),
+        );
+        tops = fresh;
+      }
+    }
+    await enqueueTopEpisodeAlerts(env, tops);
     emailed = await drainOutbox(env);
   } catch (e) {
     errors.push(`email: ${e instanceof Error ? e.message : String(e)}`);

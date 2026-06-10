@@ -25,6 +25,8 @@ interface ShowRow {
   summary: string | null;
   imdb_id: string | null;
   blurb: string | null;
+  genres: string | null; // JSON string array, e.g. '["Drama","Crime"]'
+  runtime: number | null;
 }
 
 interface EpisodeRow {
@@ -97,6 +99,7 @@ const Layout: FC<
           <input type="search" name="q" placeholder="Search shows…" required />
         </form>
         <nav>
+          <a href="/what-to-watch">What to watch</a>
           <a href="/tonight">Tonight</a>
           <a href="/calendar">Calendar</a>
           <a href="/renewals">Renewals</a>
@@ -670,6 +673,145 @@ app.get("/calendar", async (c) => {
   );
 });
 
+// ----------------------------------------------------- what-to-watch picker
+
+// Pool floor: TVmaze weight >= 75 keeps picks recognizable (and the indexed
+// range scan keeps D1 rows-read low even on a full 80K-show mirror).
+const PICKER_MIN_WEIGHT = 75;
+
+app.get("/what-to-watch", async (c) => {
+  const db = c.env.DB;
+  const genre = (c.req.query("genre") ?? "").trim();
+  const status = c.req.query("status") ?? "";
+  const minRating = Number(c.req.query("min") ?? 0) || 0;
+  const maxRuntime = Number(c.req.query("runtime") ?? 0) || 0;
+
+  const conds = ["weight >= ?", "rating IS NOT NULL"];
+  const binds: (string | number)[] = [PICKER_MIN_WEIGHT];
+  if (genre) {
+    conds.push("genres LIKE ?");
+    binds.push(`%"${genre}"%`);
+  }
+  if (status === "ended") conds.push("status = 'Ended'");
+  if (status === "running") conds.push("status = 'Running'");
+  if (minRating) {
+    conds.push("rating >= ?");
+    binds.push(minRating);
+  }
+  if (maxRuntime) {
+    conds.push("runtime <= ?");
+    binds.push(maxRuntime);
+  }
+
+  const pick = await db
+    .prepare(`SELECT * FROM shows WHERE ${conds.join(" AND ")} ORDER BY RANDOM() LIMIT 1`)
+    .bind(...binds)
+    .first<ShowRow>();
+  const { results: genreRows } = await db
+    .prepare(
+      `SELECT DISTINCT value AS g FROM shows, json_each(shows.genres)
+       WHERE shows.weight >= ? ORDER BY 1`,
+    )
+    .bind(PICKER_MIN_WEIGHT)
+    .all<{ g: string }>();
+
+  const pickGenres: string[] = pick?.genres ? JSON.parse(pick.genres) : [];
+  c.header("Cache-Control", "no-store");
+  return c.html(
+    <Layout
+      title="What should I watch tonight? — TV show picker | TV Nightly"
+      description="Can't decide what to watch? Spin the picker: a great TV show matching your genre, rating, and episode-length filters."
+      canonical={origin(c) + "/what-to-watch"}
+    >
+      <h1>What should I watch tonight?</h1>
+      <form method="get" action="/what-to-watch" class="picker-form">
+        <label>
+          Genre{" "}
+          <select name="genre">
+            <option value="">Any</option>
+            {genreRows.map((r) => (
+              <option value={r.g} selected={r.g === genre}>
+                {r.g}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Status{" "}
+          <select name="status">
+            <option value="" selected={status === ""}>
+              Any
+            </option>
+            <option value="ended" selected={status === "ended"}>
+              Finished (bingeable)
+            </option>
+            <option value="running" selected={status === "running"}>
+              Still running
+            </option>
+          </select>
+        </label>
+        <label>
+          Rating{" "}
+          <select name="min">
+            <option value="" selected={!minRating}>
+              Any
+            </option>
+            <option value="7" selected={minRating === 7}>
+              7+ good
+            </option>
+            <option value="8" selected={minRating === 8}>
+              8+ great
+            </option>
+          </select>
+        </label>
+        <label>
+          Episode length{" "}
+          <select name="runtime">
+            <option value="" selected={!maxRuntime}>
+              Any
+            </option>
+            <option value="35" selected={maxRuntime === 35}>
+              ≤ 35 min
+            </option>
+            <option value="65" selected={maxRuntime === 65}>
+              ≤ 65 min
+            </option>
+          </select>
+        </label>
+        <button type="submit">Spin 🎲</button>
+      </form>
+
+      {pick ? (
+        <div class="pick-card">
+          {pick.image_url ? (
+            <img class="poster" src={pick.image_url} alt={pick.name} />
+          ) : (
+            <div class="poster card-fallback">{pick.name}</div>
+          )}
+          <div>
+            <h2>
+              <a href={`/show/${pick.slug}`}>{pick.name}</a>
+            </h2>
+            <p>
+              <StatusBadge status={pick.status} />
+              {pick.rating != null ? <span class="rating"> · ★ {pick.rating.toFixed(1)}</span> : null}
+              {pick.runtime ? <span class="muted"> · ~{pick.runtime} min/ep</span> : null}
+              {pickGenres.length ? <span class="muted"> · {pickGenres.join(", ")}</span> : null}
+            </p>
+            <p>{pick.blurb ?? stripHtml(pick.summary).slice(0, 220)}</p>
+            <p>
+              <a href={`/show/${pick.slug}/best-episodes`}>Best episodes</a> ·{" "}
+              <a href={`/show/${pick.slug}/next-episode`}>Next episode</a>
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p class="muted">Nothing matches those filters — try loosening one.</p>
+      )}
+    </Layout>,
+  );
+});
+
 // ------------------------------------------------------------- renewals
 
 app.get("/renewals", async (c) => {
@@ -883,7 +1025,7 @@ app.get("/sitemaps/:file", async (c) => {
   const file = c.req.param("file");
 
   if (file === "static.xml") {
-    const urls = ["/", "/tonight", "/calendar", "/renewals"]
+    const urls = ["/", "/what-to-watch", "/tonight", "/calendar", "/renewals"]
       .map((p) => `<url><loc>${site}${p}</loc></url>`)
       .join("");
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);

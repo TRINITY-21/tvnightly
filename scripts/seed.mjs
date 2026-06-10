@@ -63,11 +63,13 @@ for (const s of shows) {
 
 const lines = [];
 for (const s of shows) {
+  const genres = s.genres?.length ? JSON.stringify(s.genres) : null;
   lines.push(
-    `INSERT OR REPLACE INTO shows (id, slug, name, status, premiered, ended, network, web_channel, rating, weight, image_url, summary, imdb_id, tvdb_id, updated_at) VALUES (` +
+    `INSERT OR REPLACE INTO shows (id, slug, name, status, premiered, ended, network, web_channel, rating, weight, image_url, summary, imdb_id, tvdb_id, updated_at, genres, runtime) VALUES (` +
       `${s.id}, ${esc(s._slug)}, ${esc(s.name)}, ${esc(s.status)}, ${esc(s.premiered)}, ${esc(s.ended)}, ` +
       `${esc(s.network?.name)}, ${esc(s.webChannel?.name)}, ${esc(s.rating?.average)}, ${s.weight ?? 0}, ` +
-      `${esc(s.image?.medium)}, ${esc(s.summary)}, ${esc(s.externals?.imdb)}, ${esc(s.externals?.thetvdb)}, ${s.updated ?? 0});`,
+      `${esc(s.image?.medium)}, ${esc(s.summary)}, ${esc(s.externals?.imdb)}, ${esc(s.externals?.thetvdb)}, ${s.updated ?? 0}, ` +
+      `${esc(genres)}, ${esc(s.averageRuntime)});`,
   );
 }
 

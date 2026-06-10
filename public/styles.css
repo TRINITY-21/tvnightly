@@ -163,3 +163,43 @@ li.is-watched { opacity: 0.55; }
 }
 .footer-sub { margin-bottom: 1rem; }
 .footer-sub p { margin: 0 0 0.5rem; color: var(--text); }
+
+.picker-form {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: end;
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.picker-form label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+.picker-form select {
+  background: var(--bg);
+  border: 1px solid #2a2f3d;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+}
+.picker-form button {
+  background: var(--accent);
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.55rem 1.4rem;
+  cursor: pointer;
+}
+.pick-card {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+.pick-card .poster { width: 160px; }
+.pick-card h2 { margin-top: 0; }

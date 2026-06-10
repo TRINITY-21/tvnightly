@@ -59,8 +59,9 @@ export async function upsertShow(
       .prepare(
         `INSERT OR REPLACE INTO shows
          (id, slug, name, status, premiered, ended, network, web_channel,
-          rating, weight, image_url, summary, imdb_id, tvdb_id, updated_at, blurb)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
+          rating, weight, image_url, summary, imdb_id, tvdb_id, updated_at,
+          genres, runtime, blurb)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
                  (SELECT blurb FROM shows WHERE id = ?))`,
       )
       .bind(
@@ -79,6 +80,8 @@ export async function upsertShow(
         show.externals?.imdb ?? null,
         show.externals?.thetvdb ?? null,
         show.updated,
+        show.genres?.length ? JSON.stringify(show.genres) : null,
+        show.averageRuntime ?? null,
         show.id,
       ),
   ];

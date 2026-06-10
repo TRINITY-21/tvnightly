@@ -19,6 +19,8 @@ export interface TvmShow {
   id: number;
   name: string;
   status: string | null;
+  genres: string[] | null;
+  averageRuntime: number | null;
   premiered: string | null;
   ended: string | null;
   network: { name: string } | null;

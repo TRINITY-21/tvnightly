@@ -156,6 +156,7 @@ const Layout: FC<
         </form>
         <nav>
           <a href="/recommend">Recommend me</a>
+          <a href="/loved">Loved</a>
           <a href="/what-to-watch">What to watch</a>
           <a href="/movies">Movies</a>
           <a href="/tonight">Tonight</a>
@@ -297,6 +298,13 @@ app.get("/", async (c) => {
      WHERE date(e.airstamp) = date('now')
      ORDER BY e.airstamp LIMIT 12`,
   ).all<TonightRow>();
+  const { results: premieres } = await c.env.DB.prepare(
+    `SELECT e.airdate, e.season, s.name AS show_name, s.slug AS show_slug
+     FROM episodes e JOIN shows s ON s.id = e.show_id
+     WHERE e.number = 1 AND e.airstamp > datetime('now')
+       AND e.airstamp < datetime('now', '+21 days')
+     ORDER BY e.airstamp LIMIT 8`,
+  ).all<{ airdate: string | null; season: number | null; show_name: string; show_slug: string }>();
 
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
@@ -319,6 +327,25 @@ app.get("/", async (c) => {
                 <a href={`/show/${e.show_slug}`}>{e.show_name}</a> {epCode(e)}
                 {e.name ? ` — ${e.name}` : ""}
                 {e.network ? <span class="muted"> · {e.network}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {premieres.length ? (
+        <section>
+          <h2>
+            Premiering soon{" "}
+            <a class="more" href="/premieres">
+              all upcoming →
+            </a>
+          </h2>
+          <ul class="ep-list">
+            {premieres.map((p) => (
+              <li>
+                <span class="muted">{p.airdate}</span>{" "}
+                <a href={`/show/${p.show_slug}/release-date`}>{p.show_name}</a> Season {p.season}{" "}
+                premiere
               </li>
             ))}
           </ul>
@@ -468,6 +495,7 @@ app.get("/show/:slug", async (c) => {
               <a href={`/show/${show.slug}/ratings`}>Ratings graph</a>
               <a href={`/show/${show.slug}/next-episode`}>Next episode</a>
               <a href={`/show/${show.slug}/release-date`}>Release date</a>
+              <a href={`/show/${show.slug}/calendar.ics`}>📅 Calendar</a>
             </nav>
             <RateInline kind="tv" refId={String(show.id)} stat={stat} />
             {show.blurb ? <p class="blurb">{show.blurb}</p> : null}
@@ -505,6 +533,49 @@ app.get("/show/:slug", async (c) => {
       </article>
     </Layout>,
   );
+});
+
+// ----------------------------------------------------- ICS calendar feed
+
+app.get("/show/:slug/calendar.ics", async (c) => {
+  const show = await getShow(c.env.DB, c.req.param("slug"));
+  if (!show) return c.notFound();
+  const { results: eps } = await c.env.DB.prepare(
+    `SELECT * FROM episodes WHERE show_id = ? AND airstamp > datetime('now', '-7 days')
+     ORDER BY airstamp LIMIT 100`,
+  )
+    .bind(show.id)
+    .all<EpisodeRow>();
+
+  const icsEsc = (s: string) =>
+    s.replace(/\\/g, "\\\\").replace(/[;,]/g, (m) => "\\" + m).replace(/\n/g, "\\n");
+  const dt = (iso: string) => new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const stamp = dt(new Date().toISOString());
+
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//TV Nightly//tvnightly.com//EN",
+    "CALSCALE:GREGORIAN",
+    `X-WR-CALNAME:${icsEsc(show.name)} — TV Nightly`,
+  ];
+  for (const e of eps) {
+    if (!e.airstamp) continue;
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:ep-${e.id}@tvnightly.com`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${dt(e.airstamp)}`,
+      `DURATION:PT${e.runtime ?? 60}M`,
+      `SUMMARY:${icsEsc(`${show.name} ${epCode(e)}${e.name ? ` — ${e.name}` : ""}`)}`,
+      `URL:${origin(c)}/show/${show.slug}`,
+      "END:VEVENT",
+    );
+  }
+  lines.push("END:VCALENDAR");
+  c.header("Content-Type", "text/calendar; charset=utf-8");
+  c.header("Cache-Control", "public, max-age=21600");
+  return c.body(lines.join("\r\n") + "\r\n");
 });
 
 // ---------------------------------------------------------- season pages
@@ -950,6 +1021,9 @@ app.get("/show/:slug/next-episode", async (c) => {
           </p>
         </div>
       )}
+      <p>
+        <a href={`/show/${show.slug}/calendar.ics`}>📅 Add {show.name} to your calendar</a>
+      </p>
       <SubscribeForm showId={show.id} label={`Email me when ${show.name} gets schedule news:`} />
     </Layout>,
   );
@@ -978,13 +1052,21 @@ app.get("/show/:slug/release-date", async (c) => {
     .first<EpisodeRow>();
   const { results: history } = await db
     .prepare(
-      `SELECT old_status, new_status, detected_at FROM status_changes
+      `SELECT type, season, old_value, new_value, detected_at FROM show_events
        WHERE show_id = ? ORDER BY detected_at DESC LIMIT 10`,
     )
     .bind(show.id)
-    .all<{ old_status: string | null; new_status: string | null; detected_at: number }>();
+    .all<Omit<EventRow, "name" | "slug">>();
 
   const maxAired = lastAired?.season ?? 0;
+  // People search for the NEXT season ("X season 3 release date") — name it,
+  // announced or not.
+  const targetSeason =
+    next && (next.season ?? 0) > maxAired
+      ? (next.season ?? null)
+      : show.status !== "Ended"
+        ? maxAired + 1
+        : null;
   let answer: string;
   let showCountdown = false;
   if (next && (next.season ?? 0) > maxAired) {
@@ -1010,14 +1092,30 @@ app.get("/show/:slug/release-date", async (c) => {
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
     <Layout
-      title={`${show.name} ${next?.season ? `Season ${next.season} ` : ""}release date & renewal status | TV Nightly`}
+      title={
+        targetSeason
+          ? `${show.name} Season ${targetSeason} release date${
+              next && (next.season ?? 0) === targetSeason && next.airdate
+                ? `: ${next.airdate}`
+                : " — not announced yet"
+            } | TV Nightly`
+          : `${show.name} release date & renewal status | TV Nightly`
+      }
       description={answer.slice(0, 155)}
       canonical={canonical(c)}
       ogImage={show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, "Release date", path)]}
     >
       <h1>
-        <a href={`/show/${show.slug}`}>{show.name}</a>: release date & renewal status
+        {targetSeason ? (
+          <>
+            When is <a href={`/show/${show.slug}`}>{show.name}</a> Season {targetSeason}?
+          </>
+        ) : (
+          <>
+            <a href={`/show/${show.slug}`}>{show.name}</a>: release date & renewal status
+          </>
+        )}
       </h1>
       <div class="answer">
         <p>
@@ -1039,16 +1137,37 @@ app.get("/show/:slug/release-date", async (c) => {
         showId={show.id}
         label={`Email me when ${show.name} renewal or premiere news lands:`}
       />
+      <p>
+        <a href={`/show/${show.slug}/calendar.ics`}>📅 Add {show.name} to your calendar</a>{" "}
+        <span class="muted">— subscribe in Google/Apple Calendar and never miss an episode</span>
+      </p>
       {history.length ? (
         <section>
-          <h2>Status history</h2>
+          <h2>News history</h2>
           <ul class="ep-list">
             {history.map((h) => (
               <li>
                 <span class="muted">
                   {new Date(h.detected_at * 1000).toISOString().slice(0, 10)}
                 </span>{" "}
-                {h.old_status ?? "?"} → <strong>{h.new_status ?? "?"}</strong>
+                {h.type === "season_announced" ? (
+                  <>
+                    Renewed — <strong>Season {h.season} confirmed</strong>
+                  </>
+                ) : h.type === "premiere_set" ? (
+                  <>
+                    Season {h.season} premiere date set: <strong>{h.new_value}</strong>
+                  </>
+                ) : h.type === "premiere_moved" ? (
+                  <>
+                    Premiere moved <span class="muted">{h.old_value}</span> →{" "}
+                    <strong>{h.new_value}</strong>
+                  </>
+                ) : (
+                  <>
+                    {h.old_value ?? "?"} → <strong>{h.new_value ?? "?"}</strong>
+                  </>
+                )}
               </li>
             ))}
           </ul>
@@ -2072,42 +2191,140 @@ app.get("/what-to-watch", async (c) => {
 
 // ------------------------------------------------------------- renewals
 
+interface EventRow {
+  type: string;
+  season: number | null;
+  old_value: string | null;
+  new_value: string | null;
+  detected_at: number;
+  name: string;
+  slug: string;
+}
+
+const eventLine = (ev: EventRow) => {
+  const date = new Date(ev.detected_at * 1000).toISOString().slice(0, 10);
+  switch (ev.type) {
+    case "season_announced":
+      return (
+        <>
+          <a href={`/show/${ev.slug}/release-date`}>{ev.name}</a> renewed —{" "}
+          <strong>Season {ev.season} confirmed</strong> <span class="muted">· {date}</span>
+        </>
+      );
+    case "premiere_set":
+      return (
+        <>
+          <a href={`/show/${ev.slug}/release-date`}>{ev.name}</a> Season {ev.season} premieres{" "}
+          <strong>{ev.new_value}</strong> <span class="muted">· {date}</span>
+        </>
+      );
+    case "premiere_moved":
+      return (
+        <>
+          <a href={`/show/${ev.slug}/release-date`}>{ev.name}</a> premiere moved{" "}
+          <span class="muted">{ev.old_value}</span> → <strong>{ev.new_value}</strong>{" "}
+          <span class="muted">· {date}</span>
+        </>
+      );
+    default:
+      return (
+        <>
+          <a href={`/show/${ev.slug}/release-date`}>{ev.name}</a>:{" "}
+          <span class="muted">{ev.old_value ?? "?"}</span> → <strong>{ev.new_value ?? "?"}</strong>{" "}
+          <span class="muted">· {date}</span>
+        </>
+      );
+  }
+};
+
 app.get("/renewals", async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT sc.old_status, sc.new_status, sc.detected_at, s.name, s.slug
-     FROM status_changes sc JOIN shows s ON s.id = sc.show_id
-     ORDER BY sc.detected_at DESC LIMIT 50`,
-  ).all<{
-    old_status: string | null;
-    new_status: string | null;
-    detected_at: number;
-    name: string;
-    slug: string;
-  }>();
+    `SELECT ev.type, ev.season, ev.old_value, ev.new_value, ev.detected_at, s.name, s.slug
+     FROM show_events ev JOIN shows s ON s.id = ev.show_id
+     ORDER BY ev.detected_at DESC LIMIT 100`,
+  ).all<EventRow>();
+
+  const renewed = results.filter((r) => r.type === "season_announced");
+  const dates = results.filter((r) => r.type === "premiere_set" || r.type === "premiere_moved");
+  const status = results.filter((r) => r.type === "status");
+
+  const Section = ({ title, rows }: { title: string; rows: EventRow[] }) =>
+    rows.length ? (
+      <section>
+        <h2>{title}</h2>
+        <ul class="ep-list">
+          {rows.map((r) => (
+            <li>{eventLine(r)}</li>
+          ))}
+        </ul>
+      </section>
+    ) : null;
 
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
     <Layout
-      title="Recently renewed & cancelled TV shows | TV Nightly"
-      description="A live feed of TV shows whose status just changed: renewals, cancellations, and endings."
+      title="Renewed & cancelled TV shows — live tracker | TV Nightly"
+      description="A live feed of TV renewals, cancellations, and premiere-date announcements, detected hourly from schedule data."
       canonical={canonical(c)}
     >
-      <h1>Status changes</h1>
+      <h1>Renewals, cancellations & premiere dates</h1>
+      <p class="muted">
+        Detected hourly from schedule data. <a href="/premieres">See upcoming premieres →</a>
+      </p>
       {results.length === 0 ? (
-        <p class="muted">No status changes detected yet — the sync job updates this hourly.</p>
+        <p class="muted">No events detected yet — the sync job updates this hourly.</p>
       ) : null}
-      <ul class="ep-list">
-        {results.map((r) => (
-          <li>
-            <a href={`/show/${r.slug}/release-date`}>{r.name}</a>:{" "}
-            <span class="muted">{r.old_status ?? "?"}</span> → <strong>{r.new_status ?? "?"}</strong>
-            <span class="muted">
-              {" "}
-              · {new Date(r.detected_at * 1000).toISOString().slice(0, 10)}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <Section title="Renewed — new seasons confirmed" rows={renewed} />
+      <Section title="Premiere dates set & moved" rows={dates} />
+      <Section title="Status changes" rows={status} />
+    </Layout>,
+  );
+});
+
+// ------------------------------------------------------------- premieres
+
+app.get("/premieres", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT e.*, s.name AS show_name, s.slug AS show_slug, s.network AS network
+     FROM episodes e JOIN shows s ON s.id = e.show_id
+     WHERE e.number = 1 AND e.airstamp > datetime('now')
+       AND e.airstamp < datetime('now', '+90 days')
+     ORDER BY e.airstamp`,
+  ).all<TonightRow & { season: number | null }>();
+
+  const byMonth = new Map<string, typeof results>();
+  for (const e of results) {
+    const month = (e.airdate ?? e.airstamp ?? "").slice(0, 7);
+    if (!byMonth.has(month)) byMonth.set(month, [] as typeof results);
+    byMonth.get(month)!.push(e);
+  }
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title="Upcoming TV premieres — the next 90 days | TV Nightly"
+      description="Every season premiere coming in the next three months, with dates and countdowns."
+      canonical={canonical(c)}
+    >
+      <h1>Upcoming TV premieres</h1>
+      {results.length === 0 ? (
+        <p class="muted">No premieres scheduled in the next 90 days (yet).</p>
+      ) : null}
+      {[...byMonth.entries()].map(([month, eps]) => (
+        <section>
+          <h2>{month}</h2>
+          <ul class="ep-list">
+            {eps.map((e) => (
+              <li>
+                <span class="muted">{e.airdate}</span>{" "}
+                <a href={`/show/${e.show_slug}/release-date`}>{e.show_name}</a>{" "}
+                <strong>Season {e.season} premiere</strong>
+                {e.network ? <span class="muted"> · {e.network}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </Layout>,
   );
 });
@@ -2389,7 +2606,7 @@ app.get("/sitemaps/:file", async (c) => {
   const file = c.req.param("file");
 
   if (file === "static.xml") {
-    const urls = ["/", "/recommend", "/loved", "/what-to-watch", "/movies", "/movies/best", "/best-episodes", "/tonight", "/calendar", "/renewals"]
+    const urls = ["/", "/recommend", "/loved", "/what-to-watch", "/movies", "/movies/best", "/best-episodes", "/premieres", "/tonight", "/calendar", "/renewals"]
       .map((p) => `<url><loc>${site}${p}</loc></url>`)
       .join("");
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);

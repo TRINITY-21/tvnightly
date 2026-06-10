@@ -9,15 +9,15 @@ export interface SyncEnv extends EmailEnv {
 }
 
 // Free Workers allow 50 subrequests per invocation, and D1 calls count as
-// subrequests too. Budget: ~12 fixed (updates fetch, stale scan, preload,
-// alert enqueues, outbox drain, sync_log) + 8 shows x (1 TVmaze fetch +
-// 1 old-ratings read + 1 batch) = ~39, with headroom.
+// subrequests too. Budget: ~13 fixed (updates fetch, stale scan, preload,
+// event batch, alert enqueues, outbox drain, sync_log) + 8 shows x (1 TVmaze
+// fetch + 1 old-episodes read + 1 batch) = ~40, with headroom.
 const MAX_SHOWS_PER_RUN = 8;
+// Gmail free SMTP allows ~500 sends/day; 15/run x 24 runs = 360 stays safe.
+const MAX_EMAILS_PER_RUN = 15;
 // "Instant classic" alerts: newly aired episode crosses this rating.
 const TOP_EPISODE_RATING = 8.5;
 const TOP_EPISODE_WINDOW_MS = 14 * 24 * 3600 * 1000;
-// Gmail free SMTP allows ~500 sends/day; 15/run x 24 runs = 360 stays safe.
-const MAX_EMAILS_PER_RUN = 15;
 
 export function slugify(name: string): string {
   return (
@@ -36,12 +36,25 @@ interface ExistingShow {
   status: string | null;
 }
 
-export interface StatusChange {
-  id: number;
+export type ShowEventType = "status" | "season_announced" | "premiere_set" | "premiere_moved";
+
+export interface ShowEvent {
+  showId: number;
   name: string;
   slug: string;
-  oldStatus: string | null;
-  newStatus: string | null;
+  type: ShowEventType;
+  season: number | null;
+  oldValue: string | null;
+  newValue: string | null;
+}
+
+export interface TopEpisode {
+  showId: number;
+  showName: string;
+  slug: string;
+  epName: string;
+  code: string;
+  rating: number;
 }
 
 /**
@@ -89,17 +102,6 @@ export async function upsertShow(
       ),
   ];
 
-  if (statusChanged) {
-    stmts.push(
-      db
-        .prepare(
-          `INSERT INTO status_changes (show_id, old_status, new_status, detected_at)
-           VALUES (?,?,?,unixepoch())`,
-        )
-        .bind(show.id, existing!.status, show.status ?? null),
-    );
-  }
-
   for (const ep of show._embedded?.episodes ?? []) {
     stmts.push(
       db
@@ -129,52 +131,151 @@ export async function upsertShow(
   return { statusChanged };
 }
 
-/** Queue renewal-alert emails for confirmed subscribers of changed shows. */
-async function enqueueAlerts(env: SyncEnv, changes: StatusChange[]): Promise<number> {
-  if (changes.length === 0 || !env.SECRET) return 0;
-  const origin = env.SITE_ORIGIN ?? "https://tvnightly.com";
-  const byId = new Map(changes.map((ch) => [ch.id, ch]));
+interface OldEpisode {
+  id: number;
+  rating: number | null;
+  season: number | null;
+  number: number | null;
+  airstamp: string | null;
+}
 
-  const placeholders = changes.map(() => "?").join(",");
+/**
+ * Renewals rarely change TVmaze status — new-season episodes just appear.
+ * Diff the old mirror against the fresh payload to derive the events people
+ * actually subscribe for.
+ */
+function detectEvents(
+  prev: ExistingShow,
+  show: TvmShow,
+  oldEps: OldEpisode[],
+  nowMs: number,
+): ShowEvent[] {
+  const events: ShowEvent[] = [];
+  const base = { showId: show.id, name: show.name, slug: prev.slug };
+
+  if (prev.status !== (show.status ?? null)) {
+    events.push({ ...base, type: "status", season: null, oldValue: prev.status, newValue: show.status ?? null });
+  }
+
+  // Never fire announcement events on a show whose episodes we had not
+  // mirrored yet — the first fill would look like a renewal.
+  if (oldEps.length === 0) return events;
+
+  const newEps = show._embedded?.episodes ?? [];
+  const maxOldSeason = Math.max(...oldEps.map((e) => e.season ?? 0));
+  const oldById = new Map(oldEps.map((e) => [e.id, e]));
+
+  const announced = new Set<number>();
+  for (const ep of newEps) {
+    const s = ep.season ?? 0;
+    if (s > maxOldSeason && !announced.has(s)) {
+      announced.add(s);
+      events.push({ ...base, type: "season_announced", season: s, oldValue: null, newValue: String(s) });
+    }
+  }
+
+  const dated = new Set<number>();
+  for (const ep of newEps) {
+    if (ep.number !== 1 || !ep.airstamp) continue;
+    const t = Date.parse(ep.airstamp);
+    if (!Number.isFinite(t) || t <= nowMs) continue;
+    const s = ep.season ?? 0;
+    const date = ep.airdate ?? ep.airstamp.slice(0, 10);
+    const old = oldById.get(ep.id);
+    if (!old || !old.airstamp) {
+      if (!dated.has(s)) {
+        dated.add(s);
+        events.push({ ...base, type: "premiere_set", season: s, oldValue: null, newValue: date });
+      }
+    } else if (old.airstamp !== ep.airstamp) {
+      events.push({
+        ...base,
+        type: "premiere_moved",
+        season: s,
+        oldValue: old.airstamp.slice(0, 10),
+        newValue: date,
+      });
+    }
+  }
+
+  // A date-known new season fires both 'announced' and 'set' — keep the more
+  // informative one.
+  return events.filter(
+    (ev) => !(ev.type === "season_announced" && dated.has(ev.season ?? -1)),
+  );
+}
+
+function eventEmail(
+  ev: ShowEvent,
+  origin: string,
+  unsubToken: string,
+): { subject: string; html: string } {
+  let subject: string;
+  let line: string;
+  switch (ev.type) {
+    case "season_announced":
+      subject = `${ev.name} is coming back — Season ${ev.season} confirmed 🎉`;
+      line = `<strong>${ev.name}</strong> has been renewed: <strong>Season ${ev.season}</strong> is officially happening.`;
+      break;
+    case "premiere_set":
+      subject = `${ev.name} Season ${ev.season} premieres ${ev.newValue}`;
+      line = `<strong>${ev.name}</strong> Season ${ev.season} now has a premiere date: <strong>${ev.newValue}</strong>.`;
+      break;
+    case "premiere_moved":
+      subject = `${ev.name} premiere moved to ${ev.newValue}`;
+      line = `<strong>${ev.name}</strong> Season ${ev.season}'s premiere moved from ${ev.oldValue} to <strong>${ev.newValue}</strong>.`;
+      break;
+    default:
+      subject = `${ev.name}: ${ev.oldValue ?? "?"} → ${ev.newValue ?? "?"}`;
+      line = `<strong>${ev.name}</strong> just changed status: <strong>${ev.oldValue ?? "unknown"}</strong> → <strong>${ev.newValue ?? "unknown"}</strong>.`;
+  }
+  const html =
+    `<p>${line}</p>` +
+    `<p><a href="${origin}/show/${ev.slug}/release-date">See the latest release info</a></p>` +
+    `<p style="color:#888;font-size:12px">You asked TV Nightly to notify you about this show. ` +
+    `<a href="${origin}/unsubscribe?token=${unsubToken}">Unsubscribe</a></p>`;
+  return { subject, html };
+}
+
+/** Persist events and queue alert emails for confirmed subscribers. */
+async function enqueueEventAlerts(env: SyncEnv, events: ShowEvent[]): Promise<void> {
+  if (events.length === 0) return;
+  await env.DB.batch(
+    events.map((ev) =>
+      env.DB.prepare(
+        `INSERT INTO show_events (show_id, type, season, old_value, new_value, detected_at)
+         VALUES (?,?,?,?,?,unixepoch())`,
+      ).bind(ev.showId, ev.type, ev.season, ev.oldValue, ev.newValue),
+    ),
+  );
+  if (!env.SECRET) return;
+  const origin = env.SITE_ORIGIN ?? "https://tvnightly.com";
+  const showIds = [...new Set(events.map((ev) => ev.showId))];
+  const placeholders = showIds.map(() => "?").join(",");
   const { results: subs } = await env.DB.prepare(
     `SELECT email, show_id FROM subscriptions
      WHERE confirmed = 1 AND kind = 'renewal' AND show_id IN (${placeholders})`,
   )
-    .bind(...changes.map((ch) => ch.id))
+    .bind(...showIds)
     .all<{ email: string; show_id: number }>();
-  if (subs.length === 0) return 0;
+  if (subs.length === 0) return;
 
   const stmts: D1PreparedStatement[] = [];
   for (const sub of subs) {
-    const ch = byId.get(sub.show_id)!;
     const unsubToken = await signToken(
       { email: sub.email, showId: sub.show_id, kind: "renewal", action: "unsub" },
       env.SECRET,
     );
-    const subject = `${ch.name}: ${ch.oldStatus ?? "?"} → ${ch.newStatus ?? "?"}`;
-    const html =
-      `<p><strong>${ch.name}</strong> just changed status: ` +
-      `<strong>${ch.oldStatus ?? "unknown"}</strong> → <strong>${ch.newStatus ?? "unknown"}</strong>.</p>` +
-      `<p><a href="${origin}/show/${ch.slug}/release-date">See the latest release info</a></p>` +
-      `<p style="color:#888;font-size:12px">You asked TV Nightly to notify you about this show. ` +
-      `<a href="${origin}/unsubscribe?token=${unsubToken}">Unsubscribe</a></p>`;
-    stmts.push(
-      env.DB.prepare(
-        "INSERT INTO outbox (to_email, subject, html, created_at) VALUES (?,?,?,unixepoch())",
-      ).bind(sub.email, subject, html),
-    );
+    for (const ev of events.filter((e) => e.showId === sub.show_id)) {
+      const { subject, html } = eventEmail(ev, origin, unsubToken);
+      stmts.push(
+        env.DB.prepare(
+          "INSERT INTO outbox (to_email, subject, html, created_at) VALUES (?,?,?,unixepoch())",
+        ).bind(sub.email, subject, html),
+      );
+    }
   }
-  await env.DB.batch(stmts);
-  return stmts.length;
-}
-
-export interface TopEpisode {
-  showId: number;
-  showName: string;
-  slug: string;
-  epName: string;
-  code: string;
-  rating: number;
+  if (stmts.length) await env.DB.batch(stmts);
 }
 
 /** Queue "instant classic" emails to a show's subscribers (deduped per episode). */
@@ -239,8 +340,8 @@ export async function drainOutbox(env: SyncEnv): Promise<number> {
 
 /**
  * Hourly cron entry point: pull TVmaze's daily update feed, refresh the
- * mirrored shows that are stale (highest popularity first), queue renewal
- * alerts for status changes, drain the email outbox, log the run.
+ * mirrored shows that are stale (highest popularity first), derive renewal/
+ * premiere/status events, queue alerts, drain the email outbox, log the run.
  */
 export async function runSync(env: SyncEnv): Promise<{ checked: number; updated: number; emailed: number }> {
   const db = env.DB;
@@ -276,7 +377,7 @@ export async function runSync(env: SyncEnv): Promise<{ checked: number; updated:
   }
 
   let updated = 0;
-  const changes: StatusChange[] = [];
+  const allEvents: ShowEvent[] = [];
   const topCandidates: (TopEpisode & { episodeId: number })[] = [];
   const errors: string[] = [];
   const now = Date.now();
@@ -285,24 +386,15 @@ export async function runSync(env: SyncEnv): Promise<{ checked: number; updated:
       const show = await fetchShowWithEpisodes(id);
       if (show) {
         const prev = existing.get(id) ?? null;
-        // Old ratings snapshot lets us detect episodes newly crossing the bar.
         const { results: oldEps } = await db
-          .prepare("SELECT id, rating FROM episodes WHERE show_id = ?")
+          .prepare("SELECT id, rating, season, number, airstamp FROM episodes WHERE show_id = ?")
           .bind(id)
-          .all<{ id: number; rating: number | null }>();
+          .all<OldEpisode>();
         const oldRating = new Map(oldEps.map((e) => [e.id, e.rating]));
 
-        const { statusChanged } = await upsertShow(db, show, prev);
-        if (statusChanged && prev) {
-          changes.push({
-            id: show.id,
-            name: show.name,
-            slug: prev.slug,
-            oldStatus: prev.status,
-            newStatus: show.status ?? null,
-          });
-        }
+        await upsertShow(db, show, prev);
         if (prev) {
+          allEvents.push(...detectEvents(prev, show, oldEps, now));
           for (const ep of show._embedded?.episodes ?? []) {
             const rating = ep.rating?.average ?? null;
             const aired = ep.airstamp ? Date.parse(ep.airstamp) : NaN;
@@ -336,7 +428,7 @@ export async function runSync(env: SyncEnv): Promise<{ checked: number; updated:
 
   let emailed = 0;
   try {
-    await enqueueAlerts(env, changes);
+    await enqueueEventAlerts(env, allEvents);
     // One alert per episode ever: filter against episode_alerts, then record.
     let tops: TopEpisode[] = [];
     if (topCandidates.length) {

@@ -261,13 +261,77 @@ app.get("/", async (c) => {
         </section>
       ) : null}
       <section>
-        <h2>Popular shows</h2>
+        <h2>
+          Popular shows{" "}
+          <a class="more" href="/best-episodes">
+            all-time top episodes →
+          </a>
+        </h2>
         <div class="grid">
           {top.map((s) => (
             <ShowCard show={s} />
           ))}
         </div>
       </section>
+    </Layout>,
+  );
+});
+
+// ------------------------------------------- all-time best episodes (global)
+
+app.get("/best-episodes", async (c) => {
+  // TVmaze exposes no episode vote counts, so raw averages include one-voter
+  // 10.0s. Shrink each episode toward its show's overall rating (Bayesian-ish
+  // prior) and cap each show at 3 entries to keep the list honest and varied.
+  const { results } = await c.env.DB.prepare(
+    `SELECT * FROM (
+       SELECT e.*, s.name AS show_name, s.slug AS show_slug,
+              (e.rating + 2.0 * s.rating) / 3.0 AS score,
+              ROW_NUMBER() OVER (PARTITION BY e.show_id ORDER BY e.rating DESC) AS rn
+       FROM episodes e JOIN shows s ON s.id = e.show_id
+       WHERE e.rating IS NOT NULL AND s.rating IS NOT NULL AND s.weight >= 75
+     ) WHERE rn <= 3 ORDER BY score DESC, id LIMIT 100`,
+  ).all<EpisodeRow & { show_name: string; show_slug: string }>();
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title="The 100 highest-rated TV episodes of all time | TV Nightly"
+      description={`The best single episodes of television ever made, ranked by viewer rating${
+        results[0] ? `, starting with ${results[0].show_name}'s "${results[0].name}"` : ""
+      }.`}
+      canonical={canonical(c)}
+      ld={[
+        {
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          name: "The highest-rated TV episodes of all time",
+          itemListElement: results.slice(0, 25).map((e, i) => ({
+            "@type": "ListItem",
+            position: i + 1,
+            name: `${e.show_name}: ${e.name ?? epCode(e)} (${epCode(e)})`,
+            url: `${origin(c)}/show/${e.show_slug}/best-episodes`,
+          })),
+        },
+      ]}
+    >
+      <h1>The highest-rated TV episodes of all time</h1>
+      <p class="muted">
+        Ranked by viewer rating, weighted against each show's overall score so tiny-sample
+        outliers don't game the list. Max three entries per show.
+      </p>
+      {results.length === 0 ? <p class="muted">Ratings are still loading — check back soon.</p> : null}
+      <ol class="ranked">
+        {results.map((e) => (
+          <li>
+            <strong>
+              <a href={`/show/${e.show_slug}/best-episodes`}>{e.show_name}</a>: {e.name}
+            </strong>{" "}
+            <span class="muted">{epCode(e)}</span>
+            <span class="rating"> ★ {e.rating!.toFixed(1)}</span>
+          </li>
+        ))}
+      </ol>
     </Layout>,
   );
 });
@@ -335,6 +399,8 @@ app.get("/show/:slug", async (c) => {
             </p>
             <nav class="show-nav">
               <a href={`/show/${show.slug}/best-episodes`}>Best episodes</a>
+              <a href={`/show/${show.slug}/essential`}>Essential</a>
+              <a href={`/show/${show.slug}/ratings`}>Ratings graph</a>
               <a href={`/show/${show.slug}/next-episode`}>Next episode</a>
               <a href={`/show/${show.slug}/release-date`}>Release date</a>
             </nav>
@@ -410,6 +476,228 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
   );
 });
 
+// ------------------------------------------------- essential episodes
+
+interface EssentialPick {
+  ep: EpisodeRow;
+  why: string;
+}
+
+/**
+ * Skip-guide algorithm: structural picks (pilot, series finale when ended,
+ * each season's peak) plus top-rated fillers, capped at n, in watch order.
+ */
+function essentialPicks(eps: EpisodeRow[], n: number, ended: boolean): EssentialPick[] {
+  const chrono = [...eps].sort(
+    (a, b) => (a.season ?? 0) - (b.season ?? 0) || (a.number ?? 0) - (b.number ?? 0),
+  );
+  if (chrono.length === 0) return [];
+  const picked = new Map<number, EssentialPick>();
+  const add = (ep: EpisodeRow | undefined, why: string) => {
+    if (ep && !picked.has(ep.id)) picked.set(ep.id, { ep, why });
+  };
+
+  add(chrono[0], "Pilot");
+  if (ended) add(chrono[chrono.length - 1], "Series finale");
+
+  const bySeason = new Map<number, EpisodeRow[]>();
+  for (const e of chrono) {
+    const s = e.season ?? 0;
+    if (!bySeason.has(s)) bySeason.set(s, []);
+    bySeason.get(s)!.push(e);
+  }
+  for (const [s, seasonEps] of bySeason) {
+    const peak = seasonEps.filter((e) => e.rating != null).sort((a, b) => b.rating! - a.rating!)[0];
+    add(peak, `Season ${s} peak`);
+  }
+  for (const e of [...eps].filter((e) => e.rating != null).sort((a, b) => b.rating! - a.rating!)) {
+    if (picked.size >= n) break;
+    add(e, "Top rated");
+  }
+  // More seasons than slots: drop the lowest-rated season peaks, keep structure.
+  while (picked.size > n) {
+    const droppable = [...picked.values()]
+      .filter((p) => p.why.endsWith("peak"))
+      .sort((a, b) => (a.ep.rating ?? 0) - (b.ep.rating ?? 0))[0];
+    if (!droppable) break;
+    picked.delete(droppable.ep.id);
+  }
+  return [...picked.values()].sort(
+    (a, b) =>
+      (a.ep.season ?? 0) - (b.ep.season ?? 0) || (a.ep.number ?? 0) - (b.ep.number ?? 0),
+  );
+}
+
+app.get("/show/:slug/essential", async (c) => {
+  const show = await getShow(c.env.DB, c.req.param("slug"));
+  if (!show) return c.notFound();
+  const { results: eps } = await c.env.DB.prepare(
+    "SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number",
+  )
+    .bind(show.id)
+    .all<EpisodeRow>();
+  const lengthParam = Number(c.req.query("length") ?? 15);
+  const n = [10, 15, 25].includes(lengthParam) ? lengthParam : 15;
+  const ratedCount = eps.filter((e) => e.rating != null).length;
+  const picks = ratedCount >= 10 ? essentialPicks(eps, n, show.status === "Ended") : [];
+
+  const site = origin(c);
+  const path = `/show/${show.slug}/essential`;
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`The ${picks.length || "essential"} episodes of ${show.name} you must watch | TV Nightly`}
+      description={`Short on time? The essential ${show.name} watch list: pilot, every season's peak, and the all-time greats — skip the rest.`}
+      canonical={n === 15 ? `${site}${path}` : `${site}${path}?length=${n}`}
+      ogImage={show.image_url ?? undefined}
+      scripts={["/js/watched.js"]}
+      ld={[breadcrumbLd(site, show, "Essential episodes", path)]}
+    >
+      <article data-show-id={String(show.id)}>
+        <h1>
+          The essential episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
+        </h1>
+        {picks.length === 0 ? (
+          <p class="muted">
+            Not enough rated episodes yet to build a reliable essential list — check back soon.
+          </p>
+        ) : (
+          <>
+            <p class="muted">
+              Watch these {picks.length} in order and you've got {show.name}. How much time do you
+              have? <a href={`${path}?length=10`}>10 episodes</a> ·{" "}
+              <a href={`${path}?length=15`}>15</a> · <a href={`${path}?length=25`}>25</a>
+            </p>
+            <ol class="ep-list">
+              {picks.map(({ ep, why }) => (
+                <li>
+                  <label>
+                    <input type="checkbox" class="watched" data-ep-id={String(ep.id)} />{" "}
+                    <span class="muted">{epCode(ep)}</span> <strong>{ep.name}</strong>{" "}
+                    <span class="why-tag">{why}</span>
+                    {ep.rating != null ? <span class="rating"> ★ {ep.rating.toFixed(1)}</span> : null}
+                    {ep.summary ? <p class="muted">{stripHtml(ep.summary)}</p> : null}
+                  </label>
+                </li>
+              ))}
+            </ol>
+            <p>
+              Want the full picture? <a href={`/show/${show.slug}/best-episodes`}>Best episodes</a>{" "}
+              · <a href={`/show/${show.slug}/ratings`}>Ratings graph</a>
+            </p>
+          </>
+        )}
+        <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
+      </article>
+    </Layout>,
+  );
+});
+
+// ------------------------------------------------- episode ratings graph
+
+function ratingsSvg(eps: EpisodeRow[]): string {
+  const rated = eps.filter((e) => e.rating != null);
+  if (rated.length === 0) return "";
+  const PAD = 34;
+  const STEP = 9;
+  const W = Math.max(420, rated.length * STEP + PAD * 2);
+  const H = 240;
+  const yFor = (r: number) => {
+    const clamped = Math.max(5, Math.min(10, r));
+    return PAD + (10 - clamped) * ((H - PAD * 2) / 5);
+  };
+  const colorFor = (r: number) => {
+    const t = Math.max(0, Math.min(1, (r - 6) / 3.5)); // 6 -> red, 9.5+ -> green
+    return `hsl(${Math.round(t * 120)},70%,50%)`;
+  };
+  const parts: string[] = [
+    `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Episode ratings by season">`,
+  ];
+  // season bands
+  let x = PAD;
+  let season = rated[0].season ?? 0;
+  let bandStart = x;
+  let bandIdx = 0;
+  const flushBand = (endX: number) => {
+    parts.push(
+      `<rect x="${bandStart}" y="${PAD}" width="${endX - bandStart}" height="${H - PAD * 2}" fill="${bandIdx % 2 ? "#181b24" : "#11141d"}"/>`,
+      `<text x="${(bandStart + endX) / 2}" y="${H - 10}" fill="#8b91a0" font-size="10" text-anchor="middle">S${season}</text>`,
+    );
+    bandIdx++;
+  };
+  for (const e of rated) {
+    if ((e.season ?? 0) !== season) {
+      flushBand(x);
+      season = e.season ?? 0;
+      bandStart = x;
+    }
+    x += STEP;
+  }
+  flushBand(x);
+  // gridlines
+  for (const r of [5, 6, 7, 8, 9, 10]) {
+    parts.push(
+      `<line x1="${PAD}" y1="${yFor(r)}" x2="${x}" y2="${yFor(r)}" stroke="#2a2f3d" stroke-width="0.5"/>`,
+      `<text x="${PAD - 6}" y="${yFor(r) + 3}" fill="#8b91a0" font-size="10" text-anchor="end">${r}</text>`,
+    );
+  }
+  // points
+  let px = PAD;
+  for (const e of rated) {
+    const title = `${epCode(e)} ${e.name ?? ""} — ${e.rating!.toFixed(1)}`.replaceAll("&", "&amp;").replaceAll("<", "&lt;");
+    parts.push(
+      `<circle cx="${px + STEP / 2}" cy="${yFor(e.rating!)}" r="3" fill="${colorFor(e.rating!)}"><title>${title}</title></circle>`,
+    );
+    px += STEP;
+  }
+  parts.push("</svg>");
+  return parts.join("");
+}
+
+app.get("/show/:slug/ratings", async (c) => {
+  const show = await getShow(c.env.DB, c.req.param("slug"));
+  if (!show) return c.notFound();
+  const { results: eps } = await c.env.DB.prepare(
+    "SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number",
+  )
+    .bind(show.id)
+    .all<EpisodeRow>();
+  const svg = ratingsSvg(eps);
+  const rated = eps.filter((e) => e.rating != null);
+
+  const site = origin(c);
+  const path = new URL(c.req.url).pathname;
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${show.name} episode ratings graph — every episode charted | TV Nightly`}
+      description={`Every rated ${show.name} episode on one chart: see the peaks, the dips, and how each season compares.`}
+      canonical={canonical(c)}
+      ogImage={show.image_url ?? undefined}
+      ld={[breadcrumbLd(site, show, "Ratings graph", path)]}
+    >
+      <h1>
+        <a href={`/show/${show.slug}`}>{show.name}</a>: episode ratings graph
+      </h1>
+      {svg ? (
+        <>
+          <p class="muted">
+            {rated.length} rated episodes, hover any dot for details. Higher and greener is better.
+          </p>
+          <div class="graph-wrap">{raw(svg)}</div>
+          <p>
+            <a href={`/show/${show.slug}/best-episodes`}>Best episodes</a> ·{" "}
+            <a href={`/show/${show.slug}/worst-episodes`}>Worst episodes</a> ·{" "}
+            <a href={`/show/${show.slug}/essential`}>Essential watch list</a>
+          </p>
+        </>
+      ) : (
+        <p class="muted">No rated episodes yet for {show.name}.</p>
+      )}
+    </Layout>,
+  );
+});
+
 // ------------------------------------------------- best / worst episodes
 
 const rankedPage =
@@ -449,26 +737,40 @@ const rankedPage =
         } down.`}
         canonical={canonical(c)}
         ogImage={show.image_url ?? undefined}
+        scripts={["/js/watched.js"]}
         ld={ld}
       >
-        <h1>
-          The {kind} episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
-        </h1>
-        {show.blurb && kind === "best" ? <p class="blurb">{show.blurb}</p> : null}
-        {eps.length < 10 ? (
-          <p class="muted">
-            Not enough rated episodes yet for a reliable ranking — check back as ratings come in.
-          </p>
-        ) : null}
-        <ol class="ranked">
-          {eps.map((e) => (
-            <li>
-              <strong>{e.name}</strong> <span class="muted">{epCode(e)}</span>
-              <span class="rating"> ★ {e.rating!.toFixed(1)}</span>
-              {e.summary ? <p class="muted">{stripHtml(e.summary)}</p> : null}
-            </li>
-          ))}
-        </ol>
+        <article data-show-id={String(show.id)}>
+          <h1>
+            The {kind} episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
+          </h1>
+          {show.blurb && kind === "best" ? <p class="blurb">{show.blurb}</p> : null}
+          {eps.length < 10 ? (
+            <p class="muted">
+              Not enough rated episodes yet for a reliable ranking — check back as ratings come in.
+            </p>
+          ) : null}
+          <ol class="ranked">
+            {eps.map((e) => (
+              <li>
+                <label>
+                  <input type="checkbox" class="watched" data-ep-id={String(e.id)} />{" "}
+                  <strong>{e.name}</strong> <span class="muted">{epCode(e)}</span>
+                  <span class="rating"> ★ {e.rating!.toFixed(1)}</span>
+                  {e.summary ? <p class="muted">{stripHtml(e.summary)}</p> : null}
+                </label>
+              </li>
+            ))}
+          </ol>
+          {kind === "best" ? (
+            <p>
+              Short on time? <a href={`/show/${show.slug}/essential`}>The essential watch list</a>{" "}
+              · <a href={`/show/${show.slug}/ratings`}>Ratings graph</a> ·{" "}
+              <a href="/best-episodes">All-time top 100</a>
+            </p>
+          ) : null}
+          <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
+        </article>
       </Layout>,
     );
   };
@@ -1380,7 +1682,7 @@ app.get("/sitemaps/:file", async (c) => {
   const file = c.req.param("file");
 
   if (file === "static.xml") {
-    const urls = ["/", "/what-to-watch", "/movies", "/movies/best", "/tonight", "/calendar", "/renewals"]
+    const urls = ["/", "/what-to-watch", "/movies", "/movies/best", "/best-episodes", "/tonight", "/calendar", "/renewals"]
       .map((p) => `<url><loc>${site}${p}</loc></url>`)
       .join("");
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
@@ -1411,7 +1713,7 @@ app.get("/sitemaps/:file", async (c) => {
 
   const urls = results
     .map((r) =>
-      ["", "/best-episodes", "/next-episode", "/release-date"]
+      ["", "/best-episodes", "/essential", "/ratings", "/next-episode", "/release-date"]
         .map((suffix) => `<url><loc>${site}/show/${r.slug}${suffix}</loc></url>`)
         .join(""),
     )

@@ -165,6 +165,19 @@ li.is-watched { opacity: 0.55; }
 .footer-sub p { margin: 0 0 0.5rem; color: var(--text); }
 .tmdb-logo { height: 11px; vertical-align: baseline; }
 
+.why-tag {
+  display: inline-block;
+  background: rgba(108, 123, 255, 0.15);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.graph-wrap { overflow-x: auto; background: var(--panel); border-radius: 10px; padding: 0.5rem; }
+.graph-wrap svg { display: block; min-width: 420px; }
+
 .picker-form {
   display: flex;
   gap: 1rem;

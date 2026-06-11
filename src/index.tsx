@@ -134,7 +134,9 @@ const ProviderLine: FC<{ row: { providers_intl: string | null }; region: string 
   );
 };
 
-// "Standby Glow" mark: a TV on standby — thin 16:9 frame, one glowing LED.
+// "Standby Glow" mark: a TV on standby — thin 16:9 frame, one crisp LED.
+// No blur filters: at header sizes they render as smear; a real standby
+// light reads as a sharp point with a faint halo.
 const LogoMark: FC<{ size?: number }> = ({ size = 26 }) => (
   <svg
     class="logo-mark"
@@ -143,14 +145,9 @@ const LogoMark: FC<{ size?: number }> = ({ size = 26 }) => (
     height={Math.round((size * 24) / 36)}
     aria-hidden="true"
   >
-    <defs>
-      <filter id="lg" x="-60%" y="-60%" width="220%" height="220%">
-        <feGaussianBlur stdDeviation="1.6" />
-      </filter>
-    </defs>
     <rect x="1.25" y="1.25" width="33.5" height="21.5" rx="5.5" fill="none" stroke="#F2F5FA" stroke-width="2.5" />
-    <circle cx="27" cy="17" r="4.6" fill="#FFA94D" opacity="0.35" filter="url(#lg)" />
-    <circle cx="27" cy="17" r="2.4" fill="#FFA94D" />
+    <circle cx="26.5" cy="16.5" r="3.4" fill="#FFA94D" opacity="0.22" />
+    <circle cx="26.5" cy="16.5" r="2.2" fill="#FFA94D" />
   </svg>
 );
 
@@ -246,7 +243,9 @@ const Layout: FC<
       <header class="site-header">
         <a class="logo" href="/">
           <LogoMark />
-          TV NIGHTLY<span class="logo-dot">.</span>
+          <span class="logo-word">
+            TV NIGHTLY<span class="logo-dot"></span>
+          </span>
         </a>
         <form action="/search" method="get" class="search">
           <input type="search" name="q" placeholder="Search shows…" required />
@@ -263,7 +262,7 @@ const Layout: FC<
         <div class="footer-cols">
           <div>
             <p class="tagline">
-              Tonight, decided<span class="logo-dot">.</span>
+              Tonight, decided<span class="logo-dot"></span>
             </p>
             <p>
               Episode rankings, release dates, and where to stream — checked around the clock,

@@ -112,7 +112,16 @@ h3 {
   white-space: nowrap;
 }
 .logo:hover { text-decoration: none; }
-.logo-dot { color: var(--accent); }
+.logo-word { white-space: nowrap; }
+/* the brand period: a drawn dot — Archivo's period glyph is square */
+.logo-dot {
+  display: inline-block;
+  width: 0.17em;
+  height: 0.17em;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 0.13em;
+}
 .logo-mark { display: block; }
 .search { position: relative; }
 .search input {
@@ -567,7 +576,7 @@ button, .verdict-btn {
   color: var(--text);
   margin: 0 0 0.5rem;
 }
-.site-footer .tagline .logo-dot { color: var(--accent); }
+
 .site-footer .disclaimer { max-width: 90ch; }
 .footer-sub { margin-bottom: 1rem; }
 .footer-sub p { margin: 0 0 0.5rem; color: var(--text); }

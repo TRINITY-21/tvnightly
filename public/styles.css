@@ -719,14 +719,6 @@ button, .verdict-btn {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-1);
 }
-.watch-bar::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 169, 77, 0.38), transparent);
-  pointer-events: none;
-}
 .watch-bar-row {
   display: flex;
   flex-direction: column;
@@ -873,19 +865,6 @@ button, .verdict-btn {
   box-shadow: var(--shadow-1);
   transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease),
     box-shadow var(--speed) var(--ease);
-}
-/* the brand duotone, finally in the product: contender A is tungsten,
-   contender B is marquee — same colors as every compare chart */
-.shortlist-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 2px;
-  z-index: 1;
-  background: linear-gradient(90deg, transparent 4%, var(--accent), transparent 96%);
-}
-.shortlist-card--b::before {
-  background: linear-gradient(90deg, transparent 4%, var(--accent-2), transparent 96%);
 }
 /* the deal: contenders drop onto the table one after the other
    (prefers-reduced-motion guard at the top of this file covers it) */

@@ -13,7 +13,11 @@ export const getShow = (db: D1Database, slug: string) =>
  * Popular shows ranked by genre overlap (2+ shared genres when possible) —
  * internal links to their money pages, full rows for card rendering.
  */
-export async function similarShows(db: D1Database, show: ShowRow): Promise<ShowRow[]> {
+export async function similarShows(
+  db: D1Database,
+  show: ShowRow,
+  limit = 6,
+): Promise<ShowRow[]> {
   const genres: string[] = show.genres ? JSON.parse(show.genres) : [];
   const gs = genres.slice(0, 3);
   if (gs.length === 0) return [];
@@ -23,15 +27,19 @@ export async function similarShows(db: D1Database, show: ShowRow): Promise<ShowR
       `SELECT * FROM (
          SELECT *, (${overlapExpr}) AS ov
          FROM shows WHERE id != ? AND weight >= ?
-       ) WHERE ov >= ? ORDER BY ov DESC, weight DESC LIMIT 6`,
+       ) WHERE ov >= ? ORDER BY ov DESC, weight DESC LIMIT ?`,
     )
-    .bind(...gs.map((g) => `%"${g}"%`), show.id, PICKER_MIN_WEIGHT, Math.min(2, gs.length))
+    .bind(...gs.map((g) => `%"${g}"%`), show.id, PICKER_MIN_WEIGHT, Math.min(2, gs.length), limit)
     .all<ShowRow>();
   return results;
 }
 
 /** Movie counterpart: genre-overlap similarity over the curated movies table. */
-export async function similarMovies(db: D1Database, movie: MovieRow): Promise<MovieRow[]> {
+export async function similarMovies(
+  db: D1Database,
+  movie: MovieRow,
+  limit = 6,
+): Promise<MovieRow[]> {
   const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
   const gs = genres.slice(0, 3);
   if (gs.length === 0) return [];
@@ -40,9 +48,9 @@ export async function similarMovies(db: D1Database, movie: MovieRow): Promise<Mo
     .prepare(
       `SELECT * FROM (
          SELECT *, (${overlapExpr}) AS ov FROM movies WHERE imdb_id != ?
-       ) WHERE ov >= ? ORDER BY ov DESC, rating DESC, popularity DESC LIMIT 6`,
+       ) WHERE ov >= ? ORDER BY ov DESC, rating DESC, popularity DESC LIMIT ?`,
     )
-    .bind(...gs.map((g) => `%"${g}"%`), movie.imdb_id, Math.min(2, gs.length))
+    .bind(...gs.map((g) => `%"${g}"%`), movie.imdb_id, Math.min(2, gs.length), limit)
     .all<MovieRow>();
   return results;
 }

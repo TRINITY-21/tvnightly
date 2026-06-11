@@ -11,6 +11,8 @@ import { Layout } from "../components/Layout";
 import { MovieCard, ExploreCard, ClampSummary } from "../components/cards";
 import { ProviderLine } from "../components/providers";
 import { RateInline } from "../components/forms";
+import { buildMovieDossier } from "../lib/dossier";
+import { DossierRow } from "../components/dossier";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -160,6 +162,7 @@ app.get("/movie/:slug", async (c) => {
     .first<MovieRow>();
   if (!movie) return c.notFound();
   const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
+  const region = visitorRegion(c);
   const stat = await titleStat(c.env.DB, "movie", movie.imdb_id);
   const simMovies = await similarMovies(c.env.DB, movie);
 
@@ -249,19 +252,41 @@ app.get("/movie/:slug", async (c) => {
           </div>
         </header>
         {simMovies.length ? (
-          <section>
-            <h2>Movies like {movie.title}</h2>
-            <div class="grid">
-              {simMovies.map((m) => (
-                <MovieCard movie={m} />
+          <section id="similar">
+            <h2>
+              Movies like {movie.title}{" "}
+              <a class="more" href={`/movie/${movie.slug}/similar`}>
+                all similar movies
+              </a>
+            </h2>
+            <p class="dossier-method">
+              The closest matches on shared genres, ranked by match strength and rating.
+            </p>
+            <ol class="dossier-board">
+              {simMovies.map((m, i) => (
+                <DossierRow
+                  i={i}
+                  href={`/movie/${m.slug}`}
+                  name={m.title}
+                  d={buildMovieDossier(movie, m, region)}
+                  rating={m.rating}
+                  poster={
+                    m.poster_url
+                      ? {
+                          src: m.poster_url,
+                          srcset: `${m.poster_url} 1x, ${m.poster_url.replace("/w342/", "/w780/")} 2x`,
+                        }
+                      : null
+                  }
+                />
               ))}
-            </div>
+            </ol>
           </section>
         ) : null}
         {(() => {
           const fr = franchiseOfMovie(movie);
           const hub = hubForGenres(genres, movie.year);
-          const prov0 = providersFor(movie, visitorRegion(c)).names[0];
+          const prov0 = providersFor(movie, region).names[0];
           return (
             <section>
               <h2>
@@ -273,7 +298,7 @@ app.get("/movie/:slug", async (c) => {
               <div class="explore-grid">
                 {fr ? (
                   <ExploreCard
-                    icon="📋"
+                    icon="Guides"
                     title={`${fr.name} watch order`}
                     desc="Every film in the franchise, release and chronological order."
                     href={`/watch-order/${fr.slug}`}
@@ -281,7 +306,7 @@ app.get("/movie/:slug", async (c) => {
                 ) : null}
                 {genres.slice(0, 2).map((g) => (
                   <ExploreCard
-                    icon="GEN"
+                    icon="Genre"
                     title={`Best ${g.toLowerCase()} films & shows`}
                     desc={`The top of the ${g.toLowerCase()} pile, across both mediums.`}
                     href={`/genre/${slugifyName(g)}`}
@@ -289,7 +314,7 @@ app.get("/movie/:slug", async (c) => {
                 ))}
                 {prov0 ? (
                   <ExploreCard
-                    icon="PICK"
+                    icon="Picker"
                     title={`Spin a ${prov0} movie`}
                     desc="Random great pick from the same service you already pay for."
                     href={`/what-to-watch?type=movie&service=${encodeURIComponent(prov0)}`}
@@ -297,7 +322,7 @@ app.get("/movie/:slug", async (c) => {
                 ) : null}
                 {hub ? (
                   <ExploreCard
-                    icon="HUB"
+                    icon="Hub"
                     title={`The ${hub.name.toLowerCase()} hub`}
                     desc="The whole fandom on one bookmarkable page — rankings, premieres, what's new."
                     href={`/${hub.slug}`}
@@ -307,6 +332,122 @@ app.get("/movie/:slug", async (c) => {
             </section>
           );
         })()}
+      </article>
+    </Layout>,
+  );
+});
+
+// "Movies like X" gets the full dossier on its own page, same as shows.
+app.get("/movie/:slug/similar", async (c) => {
+  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
+    .bind(c.req.param("slug"))
+    .first<MovieRow>();
+  if (!movie) return c.notFound();
+  const simMovies = await similarMovies(c.env.DB, movie, 18);
+  if (!simMovies.length) return c.redirect(`/movie/${movie.slug}`, 302);
+  const region = visitorRegion(c);
+  const site = origin(c);
+  const base = `/movie/${movie.slug}/similar`;
+
+  const ld = [
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Movies", item: `${site}/movies` },
+        { "@type": "ListItem", position: 2, name: movie.title, item: `${site}/movie/${movie.slug}` },
+        { "@type": "ListItem", position: 3, name: "Similar movies", item: `${site}${base}` },
+      ],
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: `Movies like ${movie.title}`,
+      itemListElement: simMovies.map((m, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `${site}/movie/${m.slug}`,
+        name: m.title,
+      })),
+    },
+  ];
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`Movies like ${movie.title} — ${simMovies.length} similar movies ranked | TV Nightly`}
+      description={`The ${simMovies.length} closest matches to ${movie.title}: ${simMovies
+        .slice(0, 4)
+        .map((m) => m.title)
+        .join(", ")} and more, ranked by match strength with ratings and where to stream.`}
+      canonical={`${site}${base}`}
+      ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+      ld={ld}
+    >
+      <article class="show-hub">
+        <header class="detail-hero">
+          {movie.poster_url ? (
+            <div class="hero-backdrop" style={`background-image:url('${movie.poster_url}')`}></div>
+          ) : null}
+          <div class="detail-head">
+            {movie.poster_url ? (
+              <img
+                class="poster"
+                src={movie.poster_url}
+                srcset={`${movie.poster_url} 1x, ${movie.poster_url.replace("/w342/", "/w780/")} 2x`}
+                alt={movie.title}
+              />
+            ) : (
+              <div class="poster card-fallback">{movie.title}</div>
+            )}
+            <div class="detail-info">
+              <p class="ep-eyebrow">
+                <a href={`/movie/${movie.slug}`}>{movie.title}</a>
+                <span class="sep">·</span> More like this
+              </p>
+              <h1>Movies like {movie.title}</h1>
+              <p class="summary">
+                The {simMovies.length} closest matches on shared genres, ranked by match strength
+                and rating — with where each is streaming in your region.
+              </p>
+            </div>
+          </div>
+        </header>
+        <section>
+          <h2>The closest matches</h2>
+          <ol class="dossier-board">
+            {simMovies.map((m, i) => (
+              <DossierRow
+                i={i}
+                href={`/movie/${m.slug}`}
+                name={m.title}
+                d={buildMovieDossier(movie, m, region)}
+                rating={m.rating}
+                poster={
+                  m.poster_url
+                    ? {
+                        src: m.poster_url,
+                        srcset: `${m.poster_url} 1x, ${m.poster_url.replace("/w342/", "/w780/")} 2x`,
+                      }
+                    : null
+                }
+              />
+            ))}
+          </ol>
+        </section>
+        <section>
+          <h2>Keep going</h2>
+          <nav class="pill-nav">
+            <a class="chev-after" href={`/movie/${movie.slug}`}>
+              {movie.title} overview
+            </a>
+            <a class="chev-after" href="/movies/best">
+              Best movies
+            </a>
+            <a class="chev-after" href="/what-to-watch?type=movie">
+              What should I watch tonight?
+            </a>
+          </nav>
+        </section>
       </article>
     </Layout>,
   );

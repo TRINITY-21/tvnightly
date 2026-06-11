@@ -85,7 +85,11 @@ app.get("/sitemaps/:file", async (c) => {
       .all<{ slug: string }>();
     if (results.length === 0) return c.notFound();
     const urls = results
-      .map((r) => `<url><loc>${site}/movie/${r.slug}</loc></url>`)
+      .map((r) =>
+        ["", "/similar"]
+          .map((suffix) => `<url><loc>${site}/movie/${r.slug}${suffix}</loc></url>`)
+          .join(""),
+      )
       .join("");
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
   }
@@ -134,7 +138,7 @@ app.get("/sitemaps/:file", async (c) => {
 
   const urls = results
     .map((r) =>
-      ["", "/where-to-watch", "/best-episodes", "/worst-episodes", "/essential", "/ratings", "/next-episode", "/release-date", "/cast"]
+      ["", "/where-to-watch", "/similar", "/best-episodes", "/worst-episodes", "/essential", "/ratings", "/next-episode", "/release-date", "/cast"]
         .map((suffix) => `<url><loc>${site}/show/${r.slug}${suffix}</loc></url>`)
         .join(""),
     )

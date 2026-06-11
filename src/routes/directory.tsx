@@ -34,37 +34,37 @@ app.get("/lists", async (c) => {
       <section>
         <div class="explore-grid">
           <ExploreCard
-            icon="TOP"
+            icon="Charts"
             title="Top TV shows"
             desc="The highest-rated series we track, ranked honestly."
             href="/top/tv"
           />
           <ExploreCard
-            icon="EPS"
+            icon="Shortcut"
             title="All-time best episodes"
             desc="The single greatest hours of television, across every show."
             href="/best-episodes"
           />
           <ExploreCard
-            icon="FILM"
+            icon="Film"
             title="Top movies"
             desc="The best films of all time, with where to stream them."
             href="/movies/best"
           />
           <ExploreCard
-            icon="♥"
+            icon="Community"
             title="Most loved (community)"
             desc="What TV Nightly visitors actually loved — voted here, not imported."
             href="/loved"
           />
           <ExploreCard
-            icon="VS"
+            icon="Matchup"
             title="Compare two shows"
             desc="Episode-by-episode rating history, head to head on one chart."
             href="/compare"
           />
           <ExploreCard
-            icon="📋"
+            icon="Guides"
             title="Watch-order guides"
             desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
             href="/watch-orders"

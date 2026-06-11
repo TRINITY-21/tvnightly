@@ -1,7 +1,7 @@
-// The match dossier: why each similar show made the list, computed from
+// The match dossier: why each similar title made the list, computed from
 // fields already on the row — no new queries, no invented copy. Every
 // signal is a verifiable fact; if we can't back it, we don't say it.
-import { ShowRow } from "../types";
+import { MovieRow, ShowRow } from "../types";
 import { stripHtml } from "./format";
 import { providerBrand } from "./providers";
 
@@ -32,13 +32,45 @@ export const firstSentence = (text: string): string | null => {
 const castNames = (row: ShowRow): string[] =>
   (row.cast_json ? (JSON.parse(row.cast_json) as CastEntry[]) : []).map((p) => p.n);
 
-export function buildDossier(home: ShowRow, s: ShowRow, region: string): Dossier {
-  const homeGenres = new Set<string>(home.genres ? JSON.parse(home.genres) : []);
-  const genres: string[] = s.genres ? JSON.parse(s.genres) : [];
-  const genreLine = [
-    ...genres.filter((g) => homeGenres.has(g)).map((g) => ({ g, hit: true })),
-    ...genres.filter((g) => !homeGenres.has(g)).map((g) => ({ g, hit: false })),
+const genreTokens = (
+  homeGenres: string | null,
+  ownGenres: string | null,
+): { g: string; hit: boolean }[] => {
+  const home = new Set<string>(homeGenres ? JSON.parse(homeGenres) : []);
+  const own: string[] = ownGenres ? JSON.parse(ownGenres) : [];
+  return [
+    ...own.filter((g) => home.has(g)).map((g) => ({ g, hit: true })),
+    ...own.filter((g) => !home.has(g)).map((g) => ({ g, hit: false })),
   ].slice(0, 4);
+};
+
+/** Streaming receipt for the visitor's region ONLY — a US fallback here
+ *  would assert availability the visitor doesn't have. */
+const streamingSignal = (
+  home: { providers_intl: string | null },
+  s: { providers_intl: string | null },
+  region: string,
+): string | null => {
+  const intl: Record<string, string[]> = s.providers_intl ? JSON.parse(s.providers_intl) : {};
+  const provs = intl[region] ?? [];
+  if (!provs.length) return null;
+  // providerBrand() is a lowercase dedupe key — display the shortest raw
+  // name of that brand ("Netflix" beats "Netflix Standard with Ads")
+  const brand = providerBrand(provs[0]);
+  const name = provs
+    .filter((p) => providerBrand(p) === brand)
+    .reduce((a, b) => (b.trim().length < a.trim().length ? b : a))
+    .trim();
+  const homeIntl: Record<string, string[]> = home.providers_intl
+    ? JSON.parse(home.providers_intl)
+    : {};
+  const homeBrands = new Set((homeIntl[region] ?? []).map(providerBrand));
+  // "Also on" = you can keep watching where you already are
+  return homeBrands.has(brand) ? `Also on ${name}` : `Streaming on ${name}`;
+};
+
+export function buildDossier(home: ShowRow, s: ShowRow, region: string): Dossier {
+  const genreLine = genreTokens(home.genres, s.genres);
 
   const signals: string[] = [];
 
@@ -50,26 +82,9 @@ export function buildDossier(home: ShowRow, s: ShowRow, region: string): Dossier
 
   if (s.network && s.network === home.network) signals.push(`Same network — ${s.network}`);
 
-  // streaming receipt: the visitor's region ONLY — a US fallback here would
-  // assert availability the visitor doesn't have
   if (signals.length < 2) {
-    const intl: Record<string, string[]> = s.providers_intl ? JSON.parse(s.providers_intl) : {};
-    const provs = intl[region] ?? [];
-    if (provs.length) {
-      // providerBrand() is a lowercase dedupe key — display the shortest raw
-      // name of that brand ("Netflix" beats "Netflix Standard with Ads")
-      const brand = providerBrand(provs[0]);
-      const name = provs
-        .filter((p) => providerBrand(p) === brand)
-        .reduce((a, b) => (b.trim().length < a.trim().length ? b : a))
-        .trim();
-      const homeIntl: Record<string, string[]> = home.providers_intl
-        ? JSON.parse(home.providers_intl)
-        : {};
-      const homeBrands = new Set((homeIntl[region] ?? []).map(providerBrand));
-      // "Also on" = you can keep watching where you already are
-      signals.push(homeBrands.has(brand) ? `Also on ${name}` : `Streaming on ${name}`);
-    }
+    const sig = streamingSignal(home, s, region);
+    if (sig) signals.push(sig);
   }
 
   // the era cluster names the network only when no signal already does —
@@ -97,4 +112,20 @@ export function buildDossier(home: ShowRow, s: ShowRow, region: string): Dossier
     : null;
 
   return { genreLine, era, metaNet, signals, pitch, isBlurb };
+}
+
+/** Movie variant: no cast mirror, no networks, no editorial blurbs —
+ *  genres, year, the streaming receipt, and the overview's first sentence. */
+export function buildMovieDossier(home: MovieRow, m: MovieRow, region: string): Dossier {
+  const signals: string[] = [];
+  const sig = streamingSignal(home, m, region);
+  if (sig) signals.push(sig);
+  return {
+    genreLine: genreTokens(home.genres, m.genres),
+    era: m.year != null ? String(m.year) : null,
+    metaNet: null,
+    signals,
+    pitch: m.overview ? firstSentence(stripHtml(m.overview)) : null,
+    isBlurb: false,
+  };
 }

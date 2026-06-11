@@ -50,6 +50,8 @@ export const MovieCard: FC<{ movie: MovieRow }> = ({ movie }) => (
   </a>
 );
 
+// A destination slate in the lower-third voice: kicker word up top with the
+// house chevron, confident display title, one quiet line of why-go.
 export const ExploreCard: FC<{ icon: string; title: string; desc: string; href: string }> = ({
   icon,
   title,
@@ -57,11 +59,11 @@ export const ExploreCard: FC<{ icon: string; title: string; desc: string; href: 
   href,
 }) => (
   <a class="explore-card" href={href}>
-    <span class="explore-icon">{icon}</span>
-    <span>
-      <strong>{title}</strong>
-      <p class="muted">{desc}</p>
+    <span class="explore-kicker">
+      {icon}
+      <span class="chev-icon explore-arrow" aria-hidden="true"></span>
     </span>
-    <span class="chev-icon explore-arrow" aria-hidden="true"></span>
+    <strong class="explore-title">{title}</strong>
+    <p class="muted">{desc}</p>
   </a>
 );

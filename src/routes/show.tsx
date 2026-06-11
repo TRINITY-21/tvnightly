@@ -8,6 +8,7 @@ import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { buildDossier } from "../lib/dossier";
+import { DossierRow } from "../components/dossier";
 import { hubForGenres } from "../lib/verticals";
 import { Layout } from "../components/Layout";
 import { ShowTabs, SeasonTabs } from "../components/nav";
@@ -450,90 +451,34 @@ app.get("/show/:slug", async (c) => {
         ) : null}
         {similar.length ? (
           <section id="similar">
-            <h2>Shows like {show.name}</h2>
+            <h2>
+              Shows like {show.name}{" "}
+              <a class="more" href={`/show/${show.slug}/similar`}>
+                all similar shows
+              </a>
+            </h2>
             {/* the method line is literally what the SQL does — same honesty
                 move as the tab rail: say only what we can back */}
             <p class="dossier-method">
               The closest matches on shared genres, ranked by match strength and popularity.
             </p>
             <ol class="dossier-board">
-              {similar.map((s, i) => {
-                const d = buildDossier(show, s, region);
-                return (
-                  <li class="dossier-row">
-                    <span class="dossier-num">{String(i + 1).padStart(2, "0")}</span>
-                    <a class="dossier-poster" href={`/show/${s.slug}`} tabindex={-1} aria-hidden="true">
-                      {s.image_url ? (
-                        <img
-                          src={s.image_url}
-                          srcset={retinaSet(s.image_url)}
-                          width="64"
-                          height="90"
-                          alt=""
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : (
-                        <span class="dossier-poster-empty"></span>
-                      )}
-                    </a>
-                    <span class="dossier-main">
-                      {d.genreLine.length ? (
-                        <span class="dossier-genres">
-                          {d.genreLine.map((t, j) => (
-                            <>
-                              {j > 0 ? <span class="g-sep">·</span> : null}
-                              <span class={t.hit ? undefined : "g-dim"}>{t.g}</span>
-                            </>
-                          ))}
-                        </span>
-                      ) : null}
-                      <span class="dossier-line">
-                        <a class="dossier-name" href={`/show/${s.slug}`}>
-                          {s.name}
-                        </a>
-                        <span class="dossier-leader"></span>
-                        {d.era ? (
-                          <span class="dossier-era">
-                            {d.era}
-                            {d.metaNet ? (
-                              <>
-                                <span class="sep">·</span>
-                                {d.metaNet}
-                              </>
-                            ) : null}
-                          </span>
-                        ) : null}
-                      </span>
-                      {d.signals.length ? (
-                        <span class="dossier-receipt">
-                          {d.signals.map((sig, j) => (
-                            <>
-                              {j > 0 ? <span class="sep">·</span> : null}
-                              {sig}
-                            </>
-                          ))}
-                        </span>
-                      ) : null}
-                      {d.pitch ? (
-                        <span class={d.isBlurb ? "dossier-pitch is-blurb" : "dossier-pitch"}>
-                          {d.pitch}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span class="dossier-score">
-                      {s.rating != null ? <span class="rating">★ {s.rating.toFixed(1)}</span> : null}
-                      <a
-                        class="dossier-compare chev-after"
-                        href={comparePathFor(show.slug, s.slug)}
-                        aria-label={`Compare ${s.name} with ${show.name}`}
-                      >
-                        Compare
-                      </a>
-                    </span>
-                  </li>
-                );
-              })}
+              {similar.map((s, i) => (
+                <DossierRow
+                  i={i}
+                  href={`/show/${s.slug}`}
+                  name={s.name}
+                  d={buildDossier(show, s, region)}
+                  rating={s.rating}
+                  poster={
+                    s.image_url ? { src: s.image_url, srcset: retinaSet(s.image_url) } : null
+                  }
+                  compare={{
+                    href: comparePathFor(show.slug, s.slug),
+                    label: `Compare ${s.name} with ${show.name}`,
+                  }}
+                />
+              ))}
             </ol>
           </section>
         ) : null}
@@ -550,20 +495,20 @@ app.get("/show/:slug", async (c) => {
               </h2>
               <div class="explore-grid">
                 <ExploreCard
-                  icon="VS"
+                  icon="Matchup"
                   title={`Compare ${show.name}`}
                   desc="Stack its full episode-rating history against any other show, on one chart."
                   href={`/compare?a=${show.slug}`}
                 />
                 <ExploreCard
-                  icon="EPS"
+                  icon="Shortcut"
                   title="The essential episodes"
                   desc="Short on time? The pilot-to-finale shortcut, only the episodes that matter."
                   href={`/show/${show.slug}/essential`}
                 />
                 {netEntry ? (
                   <ExploreCard
-                    icon="NET"
+                    icon="Network"
                     title={`Best ${netEntry.name} shows`}
                     desc="More from the same network, ranked by rating."
                     href={`/network/${netEntry.slug}`}
@@ -571,7 +516,7 @@ app.get("/show/:slug", async (c) => {
                 ) : null}
                 {genres.slice(0, 2).map((g) => (
                   <ExploreCard
-                    icon="GEN"
+                    icon="Genre"
                     title={`Best ${g.toLowerCase()} shows & films`}
                     desc={`The top of the ${g.toLowerCase()} pile, across both mediums.`}
                     href={`/genre/${slugifyName(g)}`}
@@ -579,7 +524,7 @@ app.get("/show/:slug", async (c) => {
                 ))}
                 {hub ? (
                   <ExploreCard
-                    icon="HUB"
+                    icon="Hub"
                     title={`The ${hub.name.toLowerCase()} hub`}
                     desc="The whole fandom on one bookmarkable page — rankings, premieres, what's new."
                     href={`/${hub.slug}`}
@@ -789,6 +734,123 @@ app.get("/show/:slug/where-to-watch", async (c) => {
             </a>
             <a class="chev-after" href={`/whats-new`}>
               What's new on streaming
+            </a>
+          </nav>
+        </section>
+        <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
+      </article>
+    </Layout>,
+  );
+});
+
+// "Shows like X" is its own query pattern — the full dossier gets a page.
+app.get("/show/:slug/similar", async (c) => {
+  const show = await getShow(c.env.DB, c.req.param("slug"));
+  if (!show) return c.notFound();
+  const similar = await similarShows(c.env.DB, show, 18);
+  if (!similar.length) return c.redirect(`/show/${show.slug}`, 302);
+  const region = visitorRegion(c);
+  const base = `/show/${show.slug}/similar`;
+
+  const backdrop =
+    show.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id)
+      : null;
+  const posterBg = hiRes(show.image_url);
+  const heroFrame = backdrop
+    ? heroBg(backdrop.x1, backdrop.x2)
+    : posterBg
+      ? heroBg(posterBg)
+      : null;
+
+  const site = origin(c);
+  const ld = [
+    breadcrumbLd(site, show, "Similar shows", base),
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: `Shows like ${show.name}`,
+      itemListElement: similar.map((s, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `${site}/show/${s.slug}`,
+        name: s.name,
+      })),
+    },
+  ];
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`Shows like ${show.name} — ${similar.length} similar shows ranked | TV Nightly`}
+      description={`The ${similar.length} closest matches to ${show.name}: ${similar
+        .slice(0, 4)
+        .map((s) => s.name)
+        .join(", ")} and more, ranked by match strength with ratings and where to stream.`}
+      canonical={`${site}${base}`}
+      ogImage={show.image_url ?? undefined}
+      ld={ld}
+    >
+      <article class="show-hub">
+        <header class="detail-hero frame-hero">
+          {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
+          <div class="detail-head">
+            <div class="detail-side">
+              {show.image_url ? (
+                <img
+                  class="poster"
+                  src={show.image_url}
+                  srcset={retinaSet(show.image_url)}
+                  alt={show.name}
+                />
+              ) : (
+                <div class="poster card-fallback">{show.name}</div>
+              )}
+            </div>
+            <div class="detail-info">
+              <p class="ep-eyebrow">
+                <a href={`/show/${show.slug}`}>{show.name}</a>
+                <span class="sep">·</span> More like this
+              </p>
+              <h1>Shows like {show.name}</h1>
+              <p class="summary">
+                The {similar.length} closest matches on shared genres, ranked by match strength
+                and popularity — each with its evidence: shared cast, networks, and where it's
+                streaming in your region.
+              </p>
+            </div>
+          </div>
+        </header>
+        <ShowTabs slug={show.slug} current="similar" />
+        <section>
+          <h2>The closest matches</h2>
+          <ol class="dossier-board">
+            {similar.map((s, i) => (
+              <DossierRow
+                i={i}
+                href={`/show/${s.slug}`}
+                name={s.name}
+                d={buildDossier(show, s, region)}
+                rating={s.rating}
+                poster={s.image_url ? { src: s.image_url, srcset: retinaSet(s.image_url) } : null}
+                compare={{
+                  href: comparePathFor(show.slug, s.slug),
+                  label: `Compare ${s.name} with ${show.name}`,
+                }}
+              />
+            ))}
+          </ol>
+        </section>
+        <section>
+          <h2>Keep going</h2>
+          <nav class="pill-nav">
+            <a class="chev-after" href={`/show/${show.slug}`}>
+              {show.name} overview
+            </a>
+            <a class="chev-after" href={`/show/${show.slug}/where-to-watch`}>
+              Where to watch
+            </a>
+            <a class="chev-after" href="/what-to-watch">
+              What should I watch tonight?
             </a>
           </nav>
         </section>

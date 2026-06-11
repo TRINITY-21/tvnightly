@@ -42,7 +42,13 @@ export interface EpisodeRow {
   summary: string | null;
 }
 
-export type TonightRow = EpisodeRow & { show_name: string; show_slug: string; network: string | null };
+export type TonightRow = EpisodeRow & {
+  show_name: string;
+  show_slug: string;
+  network: string | null;
+  show_poster: string | null;
+  show_image: string | null;
+};
 
 export interface MovieRow {
   imdb_id: string;

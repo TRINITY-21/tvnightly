@@ -2176,89 +2176,89 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 .evening-head h2 { margin: 0; }
 .evening-main { min-width: 0; }
 
-.tonight-timeline {
+/* ---- the evening shelves: posters with airtime / date chips ---- */
+/* Schedule as a shelf of one-sheets — the chip (a legibility scrim over
+   the art, never an edge) answers "when", the poster answers "what". */
+.poster-shelf {
   list-style: none;
   padding: 0;
   margin: 1rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem 0.6rem;
 }
-.tonight-row {
-  display: grid;
-  grid-template-columns: 3.4rem 1fr;
-  gap: 0.85rem;
-  align-items: baseline;
-  padding: 0.55rem 0;
-  border-bottom: 1px solid var(--line);
-}
-.tonight-row:last-child { border-bottom: 0; }
-.tonight-time {
-  font-family: var(--display);
-  font-stretch: 90%;
-  font-weight: 700;
-  font-size: 0.92rem;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-.tonight-info a { font-weight: 600; }
-.tonight-info .muted { display: block; font-size: 0.84rem; margin-top: 0.12rem; }
-
-.premiere-list {
-  list-style: none;
-  padding: 0;
-  margin: 1rem 0 0;
+.poster-shelf li {
+  width: 92px;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.3rem;
 }
-.premiere-card {
-  display: flex;
-  gap: 0.85rem;
-  align-items: center;
-  padding: 0.65rem 0.75rem;
-  border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--text);
-  transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
-}
-.premiere-card:hover {
+.shelf-tile {
+  position: relative;
+  display: block;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
   background: var(--surface-2);
-  text-decoration: none;
+  border: 1px solid var(--line);
 }
-.premiere-date {
+.shelf-tile img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  transition: transform var(--speed) var(--ease);
+}
+.shelf-tile:hover img {
+  transform: scale(1.05);
+}
+.shelf-tile:hover {
+  border-color: var(--accent);
+}
+.shelf-fallback {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  flex: 0 0 2.6rem;
-  line-height: 1.05;
+  justify-content: center;
+  aspect-ratio: 2 / 3;
+  padding: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: center;
 }
-.premiere-day {
+.shelf-chip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1.2rem 0.3rem 0.32rem;
+  background: linear-gradient(to top, rgba(10, 10, 12, 0.88) 35%, transparent);
   font-family: var(--display);
-  font-stretch: 90%;
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.premiere-month {
-  font-family: var(--display);
-  font-stretch: 75%;
+  font-stretch: 105%;
   font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.shelf-chip-date {
   color: var(--accent);
 }
-.premiere-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  min-width: 0;
-}
-.premiere-info strong {
+.shelf-name {
+  font-size: 0.74rem;
+  line-height: 1.25;
+  color: var(--muted);
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.9rem;
 }
-.premiere-info .muted { font-size: 0.78rem; }
+@media (max-width: 600px) {
+  .poster-shelf li {
+    width: 78px;
+  }
+}
 
 .evening-cta {
   display: flex;

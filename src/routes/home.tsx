@@ -30,7 +30,8 @@ app.get("/", async (c) => {
       .all<MovieRow>()
       .then((r) => r.results),
     c.env.DB.prepare(
-      `SELECT e.*, s.name AS show_name, s.slug AS show_slug, s.network AS network
+      `SELECT e.*, s.name AS show_name, s.slug AS show_slug, s.network AS network,
+              s.poster_url AS show_poster, s.image_url AS show_image
        FROM episodes e JOIN shows s ON s.id = e.show_id
        WHERE e.airstamp >= datetime('now','start of day')
          AND e.airstamp < datetime('now','start of day','+1 day')
@@ -39,13 +40,21 @@ app.get("/", async (c) => {
       .all<TonightRow>()
       .then((r) => r.results),
     c.env.DB.prepare(
-      `SELECT e.airdate, e.season, s.name AS show_name, s.slug AS show_slug
+      `SELECT e.airdate, e.season, s.name AS show_name, s.slug AS show_slug,
+              s.poster_url AS show_poster, s.image_url AS show_image
        FROM episodes e JOIN shows s ON s.id = e.show_id
        WHERE e.number = 1 AND e.airstamp > datetime('now')
          AND e.airstamp < datetime('now', '+21 days')
        ORDER BY e.airstamp LIMIT 6`,
     )
-      .all<{ airdate: string | null; season: number | null; show_name: string; show_slug: string }>()
+      .all<{
+        airdate: string | null;
+        season: number | null;
+        show_name: string;
+        show_slug: string;
+        show_poster: string | null;
+        show_image: string | null;
+      }>()
       .then((r) => r.results),
     // spotlight: tonight's biggest show by popularity weight
     c.env.DB.prepare(
@@ -189,18 +198,30 @@ app.get("/", async (c) => {
                 <p class="section-lead muted">Every episode airing today, in air-time order.</p>
               </div>
               {alsoTonight.length ? (
-                <ol class="tonight-timeline">
+                <ol class="poster-shelf">
                   {alsoTonight.map((e) => (
-                    <li class="tonight-row">
-                      <time class="tonight-time">{airTime(e.airstamp) ?? "—:—"}</time>
-                      <span class="tonight-info">
-                        <a href={`/show/${e.show_slug}`}>{e.show_name}</a>{" "}
-                        <span class="muted">
-                          {epCode(e)}
-                          {e.name ? ` — ${e.name}` : ""}
-                          {e.network ? ` · ${e.network}` : ""}
-                        </span>
-                      </span>
+                    <li>
+                      <a
+                        class="shelf-tile"
+                        href={`/show/${e.show_slug}`}
+                        title={`${e.show_name} ${epCode(e)}${e.name ? ` — ${e.name}` : ""}${e.network ? ` · ${e.network}` : ""}`}
+                        aria-label={`${e.show_name} ${epCode(e)}, ${airTime(e.airstamp) ?? "tonight"}`}
+                      >
+                        {(e.show_poster ?? e.show_image) ? (
+                          <img
+                            src={(e.show_poster ?? e.show_image)!}
+                            alt=""
+                            width="92"
+                            height="138"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : (
+                          <span class="shelf-fallback">{e.show_name}</span>
+                        )}
+                        <span class="shelf-chip">{airTime(e.airstamp) ?? "tonight"}</span>
+                      </a>
+                      <span class="shelf-name">{e.show_name}</span>
                     </li>
                   ))}
                 </ol>
@@ -223,21 +244,34 @@ app.get("/", async (c) => {
                 <p class="section-lead muted">Season premieres in the next three weeks.</p>
               </div>
               {premieres.length ? (
-                <ul class="premiere-list">
+                <ul class="poster-shelf">
                   {premieres.map((p) => {
                     const { day, month } = premiereDateParts(p.airdate);
                     return (
                       <li>
-                        <a class="premiere-card" href={`/show/${p.show_slug}/release-date`}>
-                          <span class="premiere-date">
-                            <span class="premiere-day">{day}</span>
-                            {month ? <span class="premiere-month">{month}</span> : null}
-                          </span>
-                          <span class="premiere-info">
-                            <strong>{p.show_name}</strong>
-                            <span class="muted">Season {p.season} premiere</span>
+                        <a
+                          class="shelf-tile"
+                          href={`/show/${p.show_slug}/release-date`}
+                          title={`${p.show_name} — Season ${p.season} premiere`}
+                          aria-label={`${p.show_name} Season ${p.season} premieres ${month ? `${month} ${day}` : "soon"}`}
+                        >
+                          {(p.show_poster ?? p.show_image) ? (
+                            <img
+                              src={(p.show_poster ?? p.show_image)!}
+                              alt=""
+                              width="92"
+                              height="138"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : (
+                            <span class="shelf-fallback">{p.show_name}</span>
+                          )}
+                          <span class="shelf-chip shelf-chip-date">
+                            {month ? `${month} ${day}` : "Soon"}
                           </span>
                         </a>
+                        <span class="shelf-name">{p.show_name}</span>
                       </li>
                     );
                   })}

@@ -151,10 +151,10 @@ const ProviderLine: FC<{
     return fallbackHref ? (
       <p class="provs">
         <span class="muted">Not streaming in your region —</span>{" "}
-        <a href={fallbackHref}>
+        <a class="chev-after" href={fallbackHref}>
           {fallbackHref.startsWith("/what-to-watch")
-            ? "find one that is streaming →"
-            : "check the release date →"}
+            ? "find one that is streaming"
+            : "check the release date"}
         </a>
       </p>
     ) : null;
@@ -279,8 +279,8 @@ const ShowTabs: FC<{ slug: string; imdbId?: string | null; current?: string }> =
       ))}
       <a href={`/show/${slug}/calendar.ics`}>📅 Calendar</a>
       {imdbId ? (
-        <a href={`https://www.imdb.com/title/${imdbId}/`} rel="noopener">
-          IMDb ↗
+        <a class="chev-after" href={`https://www.imdb.com/title/${imdbId}/`} rel="noopener">
+          IMDb
         </a>
       ) : null}
     </nav>
@@ -1245,7 +1245,7 @@ app.get("/show/:slug", async (c) => {
             <p class="answer">
               <span class="live-dot"></span>Next episode: <strong>{epCode(nextEp)}</strong>
               {nextEp.name ? ` — ${nextEp.name}` : ""} · {nextEp.airdate}{" "}
-              <a href={`/show/${show.slug}/next-episode`}>countdown →</a>
+              <a href={`/show/${show.slug}/next-episode`} class="chev-after">countdown</a>
             </p>
           ) : null;
         })()}
@@ -1259,7 +1259,7 @@ app.get("/show/:slug", async (c) => {
               <h2>
                 Highest-rated episodes{" "}
                 <a class="more" href={`/show/${show.slug}/best-episodes`}>
-                  all ranked →
+                  all ranked
                 </a>
               </h2>
               <ol class="top3">
@@ -1286,7 +1286,7 @@ app.get("/show/:slug", async (c) => {
                 Cast
                 {cast.length > 8 ? (
                   <a class="more" href={`/show/${show.slug}/cast`}>
-                    full cast & details →
+                    full cast & details
                   </a>
                 ) : null}
               </h2>
@@ -1349,8 +1349,8 @@ app.get("/show/:slug", async (c) => {
                       ))}
                     </ol>
                     <p>
-                      <a href={`/show/${show.slug}/season/${season}`}>
-                        Season {season} ranked & reviewed →
+                      <a class="chev-after" href={`/show/${show.slug}/season/${season}`}>
+                        Season {season} ranked & reviewed
                       </a>
                     </p>
                   </details>
@@ -1382,7 +1382,7 @@ app.get("/show/:slug", async (c) => {
               <h2>
                 Keep exploring{" "}
                 <a class="more" href="/top/tv">
-                  top shows →
+                  top shows
                 </a>
               </h2>
               <div class="explore-grid">
@@ -1637,7 +1637,6 @@ app.get("/show/:slug/cast", async (c) => {
           <h2>Main cast</h2>
           <div class="cast-grid">
             {main.map((p) => {
-              const age = ageOf(p.birthday ?? undefined, p.deathday ?? undefined);
               return (
                 <a class="cast-tile" href={`/person/${slugifyName(p.name)}-${p.id}`}>
                   {p.image_url ? (
@@ -1648,16 +1647,6 @@ app.get("/show/:slug/cast", async (c) => {
                   <div class="cast-tile-body">
                     <strong>{p.name}</strong>
                     {p.character ? <span class="cast-char muted">as {p.character}</span> : null}
-                    {p.birthday || p.country ? (
-                      <span class="cast-meta muted">
-                        {p.deathday && p.birthday
-                          ? `${p.birthday.slice(0, 4)}–${p.deathday.slice(0, 4)}`
-                          : age != null
-                            ? `Age ${age}`
-                            : ""}
-                        {p.country ? `${p.birthday ? " · " : ""}${p.country}` : ""}
-                      </span>
-                    ) : null}
                     {p.episodes ? (
                       <span class="cast-eps">
                         {p.episodes} episode{p.episodes === 1 ? "" : "s"}
@@ -2331,12 +2320,15 @@ app.get("/show/:slug/release-date", async (c) => {
                   </>
                 ) : h.type === "premiere_moved" ? (
                   <>
-                    Premiere moved <span class="muted">{h.old_value}</span> →{" "}
+                    Premiere moved <span class="muted">{h.old_value}</span>{" "}
+                    <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>{" "}
                     <strong>{h.new_value}</strong>
                   </>
                 ) : (
                   <>
-                    {h.old_value ?? "?"} → <strong>{h.new_value ?? "?"}</strong>
+                    {h.old_value ?? "?"}{" "}
+                    <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>{" "}
+                    <strong>{h.new_value ?? "?"}</strong>
                   </>
                 )}
               </li>
@@ -2843,7 +2835,7 @@ app.get("/recommend", async (c) => {
         ))}
       </p>
       <p>
-        <a href="/loved">See what the community loves →</a>
+        <a class="chev-after" href="/loved">See what the community loves</a>
       </p>
     </Layout>,
   );
@@ -3064,7 +3056,7 @@ app.get("/top/tv", async (c) => {
             {s.premiered ? <span class="muted">({s.premiered.slice(0, 4)})</span> : null}
             <span class="rating"> ★ {s.rating!.toFixed(1)}</span>{" "}
             <a class="muted" href={`/show/${s.slug}/best-episodes`}>
-              best episodes →
+              best episodes
             </a>
           </li>
         ))}
@@ -3472,7 +3464,7 @@ app.get("/network/:slug", async (c) => {
               <li>
                 <a href={`/show/${s.slug}`}>{s.name}</a>{" "}
                 <a class="muted" href={`/show/${s.slug}/next-episode`}>
-                  next episode →
+                  next episode
                 </a>
               </li>
             ))}
@@ -3480,7 +3472,7 @@ app.get("/network/:slug", async (c) => {
         </section>
       ) : null}
       <p>
-        <a href="/top/networks">All networks ranked →</a> · <a href="/lists">Directory</a>
+        <a class="chev-after" href="/top/networks">All networks ranked</a> · <a href="/lists">Directory</a>
       </p>
     </Layout>,
   );
@@ -3559,7 +3551,7 @@ app.get("/genre/:slug", async (c) => {
         </section>
       ) : null}
       <p>
-        <a href="/lists">All genres →</a>
+        <a class="chev-after" href="/lists">All genres</a>
       </p>
     </Layout>,
   );
@@ -3758,7 +3750,9 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
               .map((r) => (
                 <li>
                   <a href={r.kind === "tv" ? `/show/${r.slug}` : `/movie/${r.slug}`}>{r.title}</a>{" "}
-                  <span class="muted">→ {r.service}</span>
+                  <span class="muted">
+                    <span class="chev-icon chev-icon-sm" aria-hidden="true"></span> {r.service}
+                  </span>
                 </li>
               ))}
           </ul>
@@ -3937,7 +3931,7 @@ app.get("/watch-order/:slug", async (c) => {
         </ol>
       </section>
       <p>
-        <a href="/watch-orders">All watch-order guides →</a>
+        <a class="chev-after" href="/watch-orders">All watch-order guides</a>
       </p>
     </Layout>,
   );
@@ -4038,7 +4032,7 @@ app.get("/movies", async (c) => {
     >
       <h1>Popular movies</h1>
       <p>
-        <a href="/movies/best">Best movies, ranked →</a> ·{" "}
+        <a class="chev-after" href="/movies/best">Best movies, ranked</a> ·{" "}
         <a href="/what-to-watch?type=movie">Pick one for me</a>
       </p>
       {results.length === 0 ? (
@@ -4207,7 +4201,7 @@ app.get("/movie/:slug", async (c) => {
               />
               <nav class="pill-nav">
                 <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} rel="noopener">
-                  IMDb ↗
+                  IMDb
                 </a>
                 <a href="/what-to-watch?type=movie">Pick me another</a>
               </nav>
@@ -4241,7 +4235,7 @@ app.get("/movie/:slug", async (c) => {
               <h2>
                 Keep exploring{" "}
                 <a class="more" href="/movies/best">
-                  top movies →
+                  top movies
                 </a>
               </h2>
               <div class="explore-grid">
@@ -4755,7 +4749,9 @@ const eventLine = (ev: EventRow) => {
       return (
         <>
           <a href={`/show/${ev.slug}/release-date`}>{ev.name}</a> premiere moved{" "}
-          <span class="muted">{ev.old_value}</span> → <strong>{ev.new_value}</strong>{" "}
+          <span class="muted">{ev.old_value}</span>{" "}
+          <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>{" "}
+          <strong>{ev.new_value}</strong>{" "}
           <span class="muted">· {date}</span>
         </>
       );
@@ -4763,7 +4759,9 @@ const eventLine = (ev: EventRow) => {
       return (
         <>
           <a href={`/show/${ev.slug}/release-date`}>{ev.name}</a>:{" "}
-          <span class="muted">{ev.old_value ?? "?"}</span> → <strong>{ev.new_value ?? "?"}</strong>{" "}
+          <span class="muted">{ev.old_value ?? "?"}</span>{" "}
+          <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>{" "}
+          <strong>{ev.new_value ?? "?"}</strong>{" "}
           <span class="muted">· {date}</span>
         </>
       );
@@ -4803,7 +4801,7 @@ app.get("/renewals", async (c) => {
       <SubNav items={NEWS_TABS} current="/renewals" />
       <h1>Renewals, cancellations & premiere dates</h1>
       <p class="muted">
-        Detected hourly from schedule data. <a href="/premieres">See upcoming premieres →</a>
+        Detected hourly from schedule data. <a class="chev-after" href="/premieres">See upcoming premieres</a>
       </p>
       {results.length === 0 ? (
         <p class="muted">No events detected yet — the sync job updates this hourly.</p>

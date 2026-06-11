@@ -46,7 +46,15 @@ for (const id of ids) {
     const n = cr.person?.name;
     if (!n || seen.has(n)) continue;
     seen.add(n);
-    cast.push({ n, c: cr.character?.name ?? null, img: cr.person?.image?.medium ?? null });
+    cast.push({
+      n,
+      c: cr.character?.name ?? null,
+      img: cr.person?.image?.medium ?? null,
+      ...(cr.person?.birthday ? { b: cr.person.birthday } : {}),
+      ...(cr.person?.deathday ? { d: cr.person.deathday } : {}),
+      ...(cr.person?.country?.name ? { cn: cr.person.country.name } : {}),
+      ...(cr.voice ? { v: true } : {}),
+    });
     if (cast.length >= 10) break;
   }
   if (cast.length) {

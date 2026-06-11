@@ -268,7 +268,7 @@ const ShowTabs: FC<{ slug: string; imdbId?: string | null; current?: string }> =
     ["ratings", "Ratings graph", `/show/${slug}/ratings`],
     ["next", "Next episode", `/show/${slug}/next-episode`],
     ["release", "Release date", `/show/${slug}/release-date`],
-    ["cast", "Cast", `/show/${slug}#cast`],
+    ["cast", "Cast", `/show/${slug}/cast`],
   ];
   return (
     <nav class="subnav subnav-scroll">
@@ -1280,7 +1280,12 @@ app.get("/show/:slug", async (c) => {
             : [];
           return cast.length ? (
             <section id="cast">
-              <h2>Cast</h2>
+              <h2>
+                Cast{" "}
+                <a class="more" href={`/show/${show.slug}/cast`}>
+                  full cast & details →
+                </a>
+              </h2>
               <div class="cast-row">
                 {cast.map((p) => (
                   <div class="cast-card">
@@ -1548,6 +1553,89 @@ function essentialPicks(eps: EpisodeRow[], n: number, ended: boolean): Essential
       (a.ep.season ?? 0) - (b.ep.season ?? 0) || (a.ep.number ?? 0) - (b.ep.number ?? 0),
   );
 }
+
+interface CastEntry {
+  n: string;
+  c: string | null;
+  img: string | null;
+  b?: string; // birthday YYYY-MM-DD
+  d?: string; // deathday
+  cn?: string; // country
+  v?: boolean; // voice role
+}
+
+const ageOf = (b?: string, d?: string): number | null => {
+  if (!b) return null;
+  const end = d ? new Date(d) : new Date();
+  const born = new Date(b);
+  let a = end.getFullYear() - born.getFullYear();
+  const m = end.getMonth() - born.getMonth();
+  if (m < 0 || (m === 0 && end.getDate() < born.getDate())) a--;
+  return a;
+};
+
+app.get("/show/:slug/cast", async (c) => {
+  const show = await getShow(c.env.DB, c.req.param("slug"));
+  if (!show) return c.notFound();
+  const cast: CastEntry[] = show.cast_json ? JSON.parse(show.cast_json) : [];
+  const site = origin(c);
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${show.name} cast — who plays whom | TV Nightly`}
+      description={
+        cast.length
+          ? `The top-billed cast of ${show.name}: ${cast
+              .slice(0, 5)
+              .map((p) => p.n)
+              .join(", ")} — characters, ages and nationalities.`
+          : `The cast of ${show.name}.`
+      }
+      canonical={canonical(c)}
+      ogImage={show.image_url ?? undefined}
+      ld={[breadcrumbLd(site, show, "Cast", `/show/${show.slug}/cast`)]}
+    >
+      <h1>
+        Cast of <a href={`/show/${show.slug}`}>{show.name}</a>
+      </h1>
+      <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="cast" />
+      {cast.length ? (
+        <div class="cast-grid">
+          {cast.map((p) => {
+            const age = ageOf(p.b, p.d);
+            return (
+              <article class="cast-tile">
+                {p.img ? (
+                  <img src={p.img} alt={p.n} loading="lazy" />
+                ) : (
+                  <div class="cast-fallback">{p.n}</div>
+                )}
+                <div class="cast-tile-body">
+                  <strong>{p.n}</strong>
+                  {p.c ? <span class="cast-char muted">as {p.c}</span> : null}
+                  {p.b || p.cn ? (
+                    <span class="cast-meta muted">
+                      {p.d && p.b
+                        ? `${p.b.slice(0, 4)}–${p.d.slice(0, 4)}`
+                        : age != null
+                          ? `Age ${age}`
+                          : ""}
+                      {p.cn ? `${p.b ? " · " : ""}${p.cn}` : ""}
+                    </span>
+                  ) : null}
+                  {p.v ? <span class="badge">Voice</span> : null}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <p class="muted">Cast data for this show is still syncing — check back soon.</p>
+      )}
+    </Layout>,
+  );
+});
 
 app.get("/show/:slug/essential", async (c) => {
   const show = await getShow(c.env.DB, c.req.param("slug"));
@@ -5031,7 +5119,7 @@ app.get("/sitemaps/:file", async (c) => {
 
   const urls = results
     .map((r) =>
-      ["", "/best-episodes", "/worst-episodes", "/essential", "/ratings", "/next-episode", "/release-date"]
+      ["", "/best-episodes", "/worst-episodes", "/essential", "/ratings", "/next-episode", "/release-date", "/cast"]
         .map((suffix) => `<url><loc>${site}/show/${r.slug}${suffix}</loc></url>`)
         .join(""),
     )

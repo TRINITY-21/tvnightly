@@ -35,11 +35,20 @@ export interface TvmShow {
 }
 
 export interface TvmCastCredit {
-  person: { name: string; image: { medium?: string } | null } | null;
+  person: {
+    name: string;
+    image: { medium?: string } | null;
+    birthday?: string | null;
+    deathday?: string | null;
+    country?: { name: string } | null;
+  } | null;
   character: { name: string | null } | null;
+  voice?: boolean;
 }
 
-/** Top-billed cast as the compact JSON stored in shows.cast_json. */
+/** Top-billed cast as the compact JSON stored in shows.cast_json.
+ *  {n: name, c: character, img: headshot, b: birthday, d: deathday,
+ *   cn: country, v: voice-role} — only meaningful fields, omitted when null. */
 export function castJson(show: TvmShow): string | null {
   const credits = show._embedded?.cast ?? [];
   const seen = new Set<string>();
@@ -48,7 +57,15 @@ export function castJson(show: TvmShow): string | null {
     const n = cr.person?.name;
     if (!n || seen.has(n)) continue; // actors repeat per character credit
     seen.add(n);
-    cast.push({ n, c: cr.character?.name ?? null, img: cr.person?.image?.medium ?? null });
+    cast.push({
+      n,
+      c: cr.character?.name ?? null,
+      img: cr.person?.image?.medium ?? null,
+      ...(cr.person?.birthday ? { b: cr.person.birthday } : {}),
+      ...(cr.person?.deathday ? { d: cr.person.deathday } : {}),
+      ...(cr.person?.country?.name ? { cn: cr.person.country.name } : {}),
+      ...(cr.voice ? { v: true } : {}),
+    });
     if (cast.length >= 10) break;
   }
   return cast.length ? JSON.stringify(cast) : null;

@@ -1,0 +1,82 @@
+/* top-3 episodes: editorial ranking numerals */
+.top3 { list-style: none; padding: 0; margin: 0; }
+.top3 li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.85rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.top3-num {
+  font-family: var(--display);
+  font-stretch: 110%;
+  font-weight: 750;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--accent);
+  opacity: 0.85;
+  min-width: 2.1rem;
+}
+.top3-name { flex: 1; min-width: 0; }
+.top3 .rating { font-weight: 600; }
+.blurb {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+  font-style: italic;
+  max-width: 65ch;
+  margin: 1rem 0;
+}
+/* labeled editorial voice — distinct from the official synopsis */
+.blurb-label {
+  display: block;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-style: normal;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+}
+.blurb p { margin: 0; }
+
+.ep-list { list-style: none; padding: 0; }
+.ep-list li { padding: 0.32rem 0; border-bottom: 1px solid var(--line); }
+.ranked li { margin-bottom: 0.9rem; }
+.ranked p { margin: 0.15rem 0 0; font-size: 0.88rem; max-width: 65ch; }
+
+.answer {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  padding: 1rem 1.25rem;
+  font-size: 1.05rem;
+}
+.countdown {
+  font-family: var(--display);
+  font-stretch: 110%;
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+/* the standby LED, alive */
+.live-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--glow);
+  margin-right: 0.45rem;
+  vertical-align: 6%;
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+

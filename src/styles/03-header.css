@@ -1,0 +1,186 @@
+/* ---- header: sticky glass over scrolled content ---- */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 1rem;
+  background: rgba(26, 26, 30, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site-header { background: var(--surface); }
+}
+/* header & footer ride the same 948px column as main's content box */
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 948px;
+  margin: 0 auto;
+}
+.footer-inner { max-width: 948px; margin: 0 auto; }
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--display);
+  font-stretch: 120%;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  font-size: 1.02rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+.logo:hover { text-decoration: none; }
+.logo-word { white-space: nowrap; }
+/* the brand period: a drawn dot — Archivo's period glyph is square */
+.logo-dot {
+  display: inline-block;
+  width: 0.17em;
+  height: 0.17em;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 0.13em;
+}
+.logo-mark { display: block; }
+.search {
+  position: relative;
+  margin-left: auto;
+  flex: 0 1 14.5rem;
+  min-width: 11.5rem;
+  transition: flex-basis 0.22s var(--ease), max-width 0.22s var(--ease);
+}
+.search:focus-within {
+  flex-basis: 18rem;
+  max-width: 100%;
+}
+.search::before {
+  content: "";
+  position: absolute;
+  left: 0.82rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.92rem;
+  height: 0.92rem;
+  background: no-repeat center / contain
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Ccircle cx='8.75' cy='8.75' r='5.25' stroke='%23a39e97' stroke-width='1.6'/%3E%3Cpath d='M13 13l4 4' stroke='%23a39e97' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity var(--speed) var(--ease);
+}
+.search:focus-within::before {
+  opacity: 0.9;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Ccircle cx='8.75' cy='8.75' r='5.25' stroke='%23ffa94d' stroke-width='1.6'/%3E%3Cpath d='M13 13l4 4' stroke='%23ffa94d' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.search input {
+  width: 100%;
+  min-width: 0;
+  background: rgba(18, 18, 20, 0.72);
+  border: 1px solid rgba(43, 43, 50, 0.95);
+  border-radius: 999px;
+  color: var(--text);
+  padding: 0.48rem 0.95rem 0.48rem 2.35rem;
+  font: inherit;
+  font-size: 0.84rem;
+  letter-spacing: 0.01em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease),
+    box-shadow var(--speed) var(--ease);
+}
+.search input::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+.search input:hover {
+  border-color: rgba(255, 169, 77, 0.28);
+  background: rgba(22, 22, 26, 0.88);
+}
+.search input:focus-visible {
+  border-color: rgba(255, 169, 77, 0.55);
+  background: rgba(14, 14, 16, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 3px rgba(255, 169, 77, 0.1);
+  outline: none;
+}
+/* hide WebKit's default search cancel — clashes with the pill treatment */
+.search input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+/* nav speaks the display voice; the active section gets the standby LED */
+.site-header nav {
+  display: flex;
+  gap: 1.35rem;
+  flex-wrap: wrap;
+}
+.site-header nav a {
+  position: relative;
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  padding: 0.3rem 0;
+}
+.site-header nav a::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateX(-50%) scale(0);
+  transition: transform var(--speed) var(--ease);
+}
+.site-header nav a:hover { color: var(--text); text-decoration: none; }
+.site-header nav a.active { color: var(--text); }
+.site-header nav a.active::after {
+  transform: translateX(-50%) scale(1);
+  box-shadow: var(--glow);
+}
+
+.search .ta-box {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(35, 35, 40, 0.96);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  z-index: 20;
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .search .ta-box { background: var(--surface-2); }
+}
+.search .ta-box a {
+  padding: 0.52rem 0.85rem;
+  color: var(--text);
+  font-size: 0.86rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.search .ta-box a:last-child { border-bottom: 0; }
+.search .ta-box a:hover {
+  background: rgba(255, 169, 77, 0.08);
+  text-decoration: none;
+}
+

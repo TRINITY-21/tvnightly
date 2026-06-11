@@ -1,0 +1,388 @@
+/* ============================================================
+   THE CHART — all-time episode leaderboard (/best-episodes)
+   An editorial awards countdown rendered in the theater's dark:
+   a lone cinematic #1, a two-up runner-up tier, then a
+   typographic numeral ledger. Belongs to "Standby Glow" —
+   solid 1px var(--line) borders only, ★ ratings in --warn gold,
+   amber reserved for interaction, gradients only as scrims
+   painted OVER stills for legibility (content, never an edge).
+   ============================================================ */
+
+/* ---- masthead: magazine register, type on the page glow ---- */
+.chart-head { margin-top: 1rem; }
+.chart-kicker {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);              /* a label, not a link → never amber */
+  margin: 0 0 0.45rem;
+}
+.chart-head h1 { margin: 0 0 0.6rem; }   /* inherits the brand h1 voice */
+.chart-intro {
+  color: var(--muted);
+  max-width: 60ch;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0 0 0.9rem;
+}
+.chart-statline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.55rem;
+  margin: 0;
+  padding-bottom: 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid var(--line);   /* the hairline that opens the chart */
+}
+.chart-statline strong { color: var(--text); font-weight: 650; }
+.chart-statline .sep { opacity: 0.4; }
+
+/* ---- shared still framing (hero, podium) ---- */
+.chart-still {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: var(--surface-2);
+  transition: transform 0.5s var(--ease);
+}
+/* gold rating chip — reuses the shipped .card-rating glass component */
+.chart-rating {
+  z-index: 2;
+  top: 0.7rem;
+  right: 0.7rem;
+  font-size: 0.9rem;
+  padding: 0.24rem 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ============================================================
+   #1 HERO — the one full, cinematic moment
+   ============================================================ */
+.chart-hero {
+  position: relative;
+  display: block;
+  margin: 1.3rem 0 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-2);
+  background: var(--surface);
+  color: var(--text);
+  aspect-ratio: 16 / 9;
+  transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+.chart-hero:hover { text-decoration: none; border-color: var(--accent); }
+.chart-hero:hover .chart-still { transform: scale(1.03); }
+/* legibility scrim PAINTED OVER the still — content, not a decorative edge */
+.chart-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(18, 18, 20, 0.94) 0%,
+    rgba(18, 18, 20, 0.82) 24%,
+    rgba(18, 18, 20, 0.34) 54%,
+    rgba(18, 18, 20, 0) 78%
+  );
+}
+.chart-hero__bill {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: end;
+  gap: 0 1.2rem;
+  padding: clamp(1.1rem, 3vw, 1.9rem);
+}
+.chart-hero__poster {
+  width: clamp(78px, 11vw, 116px);
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-2);
+  align-self: end;
+}
+/* the colossal folio numeral — paper-white type, never amber */
+.chart-hero__rank {
+  font-family: var(--display);
+  font-stretch: 62%;
+  font-weight: 800;
+  font-size: clamp(4rem, 14vw, 8rem);
+  line-height: 0.72;
+  letter-spacing: 0.005em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 22px rgba(0, 0, 0, 0.5);
+  align-self: end;
+}
+.chart-hero__text { min-width: 0; align-self: end; }
+.chart-hero__show {
+  display: block;
+  font-family: var(--display);
+  font-stretch: 84%;
+  font-weight: 700;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin: 0 0 0.25rem;
+  transition: color var(--speed) var(--ease);
+}
+.chart-hero:hover .chart-hero__show { color: var(--accent); }   /* amber = interaction */
+.chart-hero__title {
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-weight: 650;
+  font-size: clamp(1.35rem, 3.4vw, 2.15rem);
+  line-height: 1.08;
+  color: var(--text);
+  margin: 0 0 0.5rem;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.45);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;            /* long titles never crowd the numeral */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.chart-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.chart-hero__meta .sep { opacity: 0.45; }
+
+/* ============================================================
+   RUNNER-UP TIER — ranks 2 & 3, two-up
+   ============================================================ */
+.chart-podium {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 0 0 1.6rem;
+}
+.chart-podium-card {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  background: var(--surface);
+  color: var(--text);
+  aspect-ratio: 16 / 9;
+  transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease),
+    transform var(--speed) var(--ease);
+}
+.chart-podium-card:hover {
+  text-decoration: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-2);
+  transform: translateY(-2px);
+}
+.chart-podium-card:hover .chart-still { transform: scale(1.04); }
+.chart-podium-card:active { transform: translateY(0); }
+.chart-podium-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(18, 18, 20, 0.93) 0%,
+    rgba(18, 18, 20, 0.72) 34%,
+    rgba(18, 18, 20, 0.06) 76%
+  );
+}
+.chart-podium__bill {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: end;
+  gap: 0 0.85rem;
+  padding: 0.95rem 1.1rem 1rem;
+}
+.chart-podium__rank {
+  font-family: var(--display);
+  font-stretch: 62%;
+  font-weight: 800;
+  font-size: clamp(2.4rem, 6vw, 3.4rem);
+  line-height: 0.72;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+}
+.chart-podium__text { min-width: 0; }
+.chart-podium__show {
+  display: block;
+  font-family: var(--display);
+  font-stretch: 84%;
+  font-weight: 700;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--muted);
+  margin: 0 0 0.12rem;
+  transition: color var(--speed) var(--ease);
+}
+.chart-podium-card:hover .chart-podium__show { color: var(--accent); }
+.chart-podium__title {
+  font-family: var(--display);
+  font-stretch: 104%;
+  font-weight: 600;
+  font-size: 1.02rem;
+  line-height: 1.16;
+  color: var(--text);
+  margin: 0 0 0.2rem;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.4);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.chart-podium__meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.chart-podium__meta .sep { opacity: 0.45; }
+
+/* ============================================================
+   THE LEDGER — ranks 4..100, a single typeset instrument
+   ============================================================ */
+.chart-list { list-style: none; margin: 0; padding: 0; }
+.chart-row {
+  display: grid;
+  grid-template-columns: 3.1rem 116px 1fr;
+  align-items: center;
+  column-gap: 1.1rem;
+  padding: 0.7rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  transition: background-color var(--speed) var(--ease);
+}
+.chart-row:hover { text-decoration: none; background: var(--surface); }
+.chart-row__rank {
+  font-family: var(--display);
+  font-stretch: 62%;
+  font-weight: 700;
+  font-size: 2.5rem;
+  line-height: 1;
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  transition: color var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+.chart-row:hover .chart-row__rank { color: var(--text); transform: translateX(2px); }
+.chart-row__thumb {
+  position: relative;
+  width: 116px;
+  height: 65px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: var(--surface-2);
+  transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+.chart-row__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.chart-row:hover .chart-row__thumb { border-color: var(--accent); box-shadow: var(--shadow-1); }
+.chart-row__thumb--empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-stretch: 88%;
+  font-weight: 700;
+  font-size: 0.92rem;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.chart-row__body { min-width: 0; }
+.chart-row__head { margin: 0 0 0.18rem; line-height: 1.3; }
+.chart-row__show { font-weight: 650; transition: color var(--speed) var(--ease); }
+.chart-row:hover .chart-row__show { color: var(--accent); }
+.chart-row__title { color: var(--text); }
+.chart-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.chart-row__meta .sep { opacity: 0.45; }
+.chart-row__meta .rating { font-weight: 600; }
+.chart-row__summary {
+  margin: 0.28rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* a quiet closing affordance under the ledger */
+.chart-foot { margin: 1.6rem 0 0; font-size: 0.9rem; color: var(--muted); }
+
+/* ---- responsive ---- */
+@media (max-width: 680px) {
+  .chart-podium { grid-template-columns: 1fr; gap: 0.8rem; }
+}
+@media (max-width: 560px) {
+  .chart-hero { aspect-ratio: 4 / 5; }
+  .chart-hero__bill { grid-template-columns: auto 1fr; gap: 0 0.85rem; padding: 1rem; }
+  .chart-hero__poster { display: none; }
+  .chart-row {
+    grid-template-columns: 2rem 84px 1fr;
+    column-gap: 0.75rem;
+    padding: 0.65rem 0.15rem;
+  }
+  .chart-row__rank { font-size: 1.8rem; }
+  .chart-row__thumb { width: 84px; height: 47px; }
+  .chart-row__summary { display: none; }
+}
+
+/* reduced-motion: neutralize the hover transforms (the global guard only
+   zeroes durations, not the transform end-states) */
+@media (prefers-reduced-motion: reduce) {
+  .chart-hero:hover .chart-still,
+  .chart-podium-card:hover .chart-still,
+  .chart-podium-card:hover,
+  .chart-row:hover .chart-row__rank { transform: none; }
+}

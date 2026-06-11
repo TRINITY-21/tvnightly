@@ -1,0 +1,58 @@
+/* ---- explore cards ---- */
+.explore-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0.8rem;
+}
+.explore-card {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1rem;
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+.explore-card:hover { border-color: var(--accent); transform: translateY(-1px); text-decoration: none; }
+.explore-card p { margin: 0.1rem 0 0; font-size: 0.84rem; }
+.explore-icon {
+  background: rgba(255, 169, 77, 0.12);
+  color: var(--accent);
+  border-radius: var(--radius);
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.55rem 0.5rem;
+  min-width: 2.4rem;
+  text-align: center;
+}
+.explore-arrow { margin-left: auto; }
+
+/* ---- graphs ---- */
+.graph-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  padding: 0.5rem;
+}
+.graph-wrap svg { display: block; min-width: 420px; }
+
+/* ---- watch orders ---- */
+.wo-list { list-style: none; }
+.wo-row { display: flex; gap: 0.7rem; align-items: center; padding: 0.45rem 0; }
+.wo-num {
+  flex: 0 0 1.6rem;
+  color: var(--muted);
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-weight: 700;
+  text-align: right;
+}
+.wo-poster { width: 38px; border-radius: var(--radius-sm); flex: 0 0 auto; }
+

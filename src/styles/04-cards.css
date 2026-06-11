@@ -1,0 +1,99 @@
+/* ---- cards & grids ---- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1rem;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease),
+    box-shadow var(--speed) var(--ease);
+}
+.card:hover {
+  text-decoration: none;
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+.card img { width: 100%; aspect-ratio: 2/2.8; object-fit: cover; display: block; }
+.card-fallback {
+  width: 100%;
+  aspect-ratio: 2/2.8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.5rem;
+  font-family: var(--display);
+  font-stretch: 115%;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.85rem;
+  background: linear-gradient(160deg, #1d1c20, #121114);
+  color: var(--muted);
+}
+.card-media { position: relative; }
+/* rating chip lives on the art, streaming-app style */
+.card-rating {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(18, 18, 20, 0.78);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: var(--radius-sm);
+  color: var(--warn);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.14rem 0.42rem;
+  white-space: nowrap;
+}
+.card-body {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.84rem;
+}
+.card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-stack { display: flex; flex-direction: column; gap: 0.4rem; }
+
+/* ---- badges: broadcast chyrons ---- */
+.badge {
+  display: inline-block;
+  padding: 0.16rem 0.55rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--display);
+  font-stretch: 75%;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.badge.ok { background: rgba(60, 223, 142, 0.14); color: var(--ok); }
+.badge.ended { background: rgba(255, 107, 107, 0.14); color: var(--bad); }
+.badge.tbd { background: rgba(255, 178, 36, 0.14); color: var(--warn); }
+
+.why-tag {
+  display: inline-block;
+  background: rgba(255, 169, 77, 0.12);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0.1rem 0.5rem;
+  font-family: var(--display);
+  font-stretch: 75%;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+

@@ -9,6 +9,30 @@ See [PLAN.md](PLAN.md) for the full founding plan.
 Cloudflare Workers (Hono SSR) + D1 (SQLite) + TVmaze API mirror + hourly Cron sync.
 $0/month on free tiers. Only cost: the domain.
 
+## Code layout
+
+```
+src/
+  index.tsx        app assembly: mounts routes, exports fetch/scheduled
+  types.ts         shared row shapes (ShowRow, EpisodeRow, MovieRow, …)
+  sync.ts          hourly cron: mirror refresh, events, digest, patrol
+  email.ts         provider-swappable sender (console/gmail/resend)
+  tokens.ts        HMAC tokens for confirm/unsubscribe links
+  tvmaze.ts        TVmaze fetch + cast helpers
+  lib/             pure helpers: format, seo, queries, ratings, providers,
+                   franchises, verticals, crypto
+  components/      JSX building blocks: Layout, nav, cards, providers, forms
+  routes/          one Hono sub-app per page family (home, show, people,
+                   movies, what-to-watch, news, sitemaps, …)
+  styles/          numbered CSS partials -> public/styles.css
+public/            static assets; styles.css is GENERATED (npm run css)
+scripts/           seed/backfill tooling (node, run on demand)
+migrations/        D1 schema, applied in order
+```
+
+CSS: edit `src/styles/*.css`, then `npm run css` (or `npm run css:watch`
+during styling work). `npm run dev`/`deploy` rebuild it automatically.
+
 ## Local development
 
 ```sh

@@ -1,0 +1,111 @@
+/* ---- buttons & forms ---- */
+button, .verdict-btn {
+  font: inherit;
+}
+.verdict-btn,
+.picker-form button,
+.watch-submit,
+.sub-form button,
+.search .verdict-btn {
+  display: inline-block;
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0.55rem 1.2rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+.verdict-btn:hover, .picker-form button:hover, .watch-submit:hover, .sub-form button:hover {
+  filter: brightness(1.12);
+  text-decoration: none;
+}
+.verdict-btn:active, .picker-form button:active, .watch-submit:active, .sub-form button:active {
+  filter: brightness(0.95);
+  transform: translateY(1px);
+}
+.vote-btn:active, .chip:active, .btn-ghost:active, .pill-nav a:active {
+  background: var(--surface-2);
+  transform: translateY(1px);
+}
+.card:active { transform: translateY(0); }
+/* one easing for every hover-able (plain .prov chips are static info, not controls) */
+.chip, .vote-btn, .btn-ghost, .subnav a, .site-header nav a, .footer-cols a, .ta-box a {
+  transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease),
+    color var(--speed) var(--ease), filter var(--speed) var(--ease);
+}
+.verdicts { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1rem 0; }
+.verdict-form { display: inline; }
+
+.vote { display: inline-flex; gap: 0.4rem; margin-left: 0.5rem; vertical-align: middle; }
+.vote-btn {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.78rem;
+  padding: 0.28rem 0.7rem;
+  cursor: pointer;
+}
+.vote-btn:hover { border-color: var(--accent); text-decoration: none; }
+.vote.voted .vote-btn { opacity: 0.6; cursor: default; }
+.vote.voted .vote-count { opacity: 1; color: var(--text); }
+.compare-btn {
+  text-align: center;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+
+.rate-inline { display: flex; gap: 0.4rem; align-items: center; margin: 0.6rem 0; flex-wrap: wrap; }
+.rate-inline .vote-btn { font-size: 1rem; }
+
+.picker-form {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: end;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.picker-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.picker-form select, .picker-form input {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+}
+
+.sub-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.sub-form.inline {
+  margin: 1.25rem 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem;
+}
+.sub-form label { flex-basis: 100%; font-weight: 600; color: var(--text); }
+.sub-form input[type="email"] {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 0.45rem 0.7rem;
+  min-width: 220px;
+  font: inherit;
+}
+

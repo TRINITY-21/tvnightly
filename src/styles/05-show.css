@@ -1,0 +1,252 @@
+/* ---- detail pages: the decision hero ---- */
+/* Cinematic panel: the title's own poster blurred into ambient light behind
+   the facts. Pure CSS — no extra image fetched. */
+.detail-hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.4rem;
+  margin-top: 1rem;
+  box-shadow: var(--shadow-1);
+}
+.hero-backdrop {
+  position: absolute;
+  inset: -48px;
+  background-size: cover;
+  background-position: center 25%;
+  filter: blur(56px) saturate(1.2);
+  opacity: 0.25;
+  pointer-events: none;
+}
+.detail-hero::after {
+  /* settle the blur into the panel so text stays AA-readable — 0.65 top stop
+     keeps badge/muted text >=4.6:1 even over a pure-white blurred poster */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(175deg, rgba(18, 18, 20, 0.65), rgba(18, 18, 20, 0.8));
+  pointer-events: none;
+}
+.detail-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 1.4rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.detail-head h1 { margin: 0.1rem 0 0.5rem; }
+.detail-info { flex: 1 1 320px; min-width: 0; }
+.meta-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.8rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.meta-strip .sep { opacity: 0.45; }
+
+/* money-page links as pills, not bare links */
+.pill-nav { display: flex; gap: 0.45rem; margin: 0.8rem 0; flex-wrap: wrap; }
+.pill-nav a {
+  background: rgba(18, 18, 20, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  padding: 0.3rem 0.8rem;
+  font-size: 0.84rem;
+  transition: border-color var(--speed) var(--ease);
+}
+.pill-nav a:hover { border-color: var(--accent); text-decoration: none; }
+
+.poster { width: 180px; border-radius: var(--radius-lg); box-shadow: var(--shadow-2); }
+.summary { max-width: 62ch; }
+/* 3-line synopsis clamp, pure CSS (checkbox toggle) */
+.clampable .summary-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.clampable .summary-text p { margin: 0 0 0.55em; }
+.clamp-toggle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.clamp-toggle:checked ~ .summary-text {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+.clamp-label {
+  display: inline-block;
+  margin-top: 0.3rem;
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.clamp-label::after { content: "Show more"; }
+.clamp-toggle:checked ~ .clamp-label::after { content: "Show less"; }
+.clamp-label:hover { text-decoration: underline; }
+.clamp-toggle:focus-visible ~ .clamp-label {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* season archive: collapsed digest, latest season open */
+.season-fold summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+.season-fold summary::-webkit-details-marker { display: none; }
+.season-fold summary::before {
+  content: "";
+  flex-shrink: 0;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform var(--speed) var(--ease);
+}
+.season-fold[open] summary::before { transform: rotate(45deg); }
+.fold-title {
+  font-family: var(--display);
+  font-stretch: 112%;
+  font-weight: 600;
+  font-size: 1rem;
+}
+.fold-stats { margin-left: auto; font-size: 0.85rem; }
+.season-fold summary:hover .fold-title { color: var(--accent); }
+
+/* hero gets title-sequence scale on detail pages */
+.detail-head h1 { font-size: clamp(1.8rem, 3.2vw, 2.3rem); }
+.detail-head .poster { width: 200px; }
+
+/* ---- detail pages: full-bleed cinematic hero (no card chrome) ----
+   The show's own art, blurred to ambient light, runs edge to edge and
+   melts into the page background. Content stays on the 948px column. */
+.show-hub .detail-hero {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  margin: -1rem calc(50% - 50vw) 0;
+  padding: 2.6rem 0 1.7rem;
+}
+.show-hub .hero-backdrop {
+  filter: blur(64px) saturate(1.15);
+  opacity: 0.35;
+}
+.show-hub .detail-hero::after {
+  /* darken for AA up top, dissolve into --bg at the bottom — no hard edge */
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 18, 20, 0.6) 0%,
+    rgba(18, 18, 20, 0.74) 55%,
+    var(--bg) 100%
+  );
+}
+.show-hub .detail-head {
+  max-width: 948px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+.show-hub .detail-head .poster {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+/* left column: poster + the actions that belong to it */
+.detail-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  flex: 0 0 200px;
+  width: 200px;
+}
+.detail-side .poster { width: 100%; }
+.detail-side .rate-inline {
+  justify-content: center;
+  margin: 0;
+  font-size: 0.8rem;
+}
+@media (max-width: 600px) {
+  .detail-side { flex-basis: 128px; width: 128px; }
+}
+
+/* show tab rail: scrolls instead of wrapping, ride below the hero */
+.subnav-scroll {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  margin-top: 1rem;
+  scrollbar-width: none;
+}
+.subnav-scroll::-webkit-scrollbar { display: none; }
+.subnav-scroll a { white-space: nowrap; flex-shrink: 0; }
+
+/* cast rail: headshot cards, same edge-fade language as poster rails */
+.cast-row {
+  display: grid;
+  /* eight equal shares of the full column — 8 cast fill it edge to edge,
+     fewer keep the same card size (empty tracks, no giant stretch) */
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 4px 4px 0.6rem;
+}
+@media (max-width: 700px) {
+  /* phones: back to a scroll rail */
+  .cast-row {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 102px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface-2) transparent;
+  }
+}
+.cast-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+.cast-card img,
+.cast-fallback {
+  width: 100%;
+  aspect-ratio: 5 / 6;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+}
+.cast-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.4rem;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.cast-name { font-weight: 600; }
+.cast-char { font-size: 0.72rem; }
+a.cast-card { color: var(--text); }
+a.cast-card:hover { text-decoration: none; }
+a.cast-card:hover .cast-name { color: var(--accent); }
+a.cast-card:hover img { border-color: var(--accent); }
+a.cast-tile { display: block; color: var(--text); }
+a.cast-tile:hover { text-decoration: none; }
+.credit-as { font-size: 0.76rem; text-align: center; line-height: 1.3; }
+

@@ -83,20 +83,58 @@ button, .verdict-btn {
 }
 
 .sub-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+/* the alerts card: copy block left, joined input+button control right */
 .sub-form.inline {
-  margin: 1.25rem 0;
+  margin: 1.5rem 0 1.25rem;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-1);
+  padding: 1.1rem 1.25rem;
+  gap: 0.9rem 1.6rem;
+}
+.sub-copy {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.sub-kicker {
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .sub-form label { flex-basis: 100%; font-weight: 600; color: var(--text); }
+.sub-copy label.sub-title {
+  flex-basis: auto;
+  font-weight: 650;
+}
+.sub-note {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.sub-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex: 1 1 280px;
+}
+.sub-controls input[type="email"] {
+  flex: 1;
+  min-width: 0;
+}
 .sub-form input[type="email"] {
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   color: var(--text);
-  padding: 0.45rem 0.7rem;
+  padding: 0.55rem 0.75rem;
   min-width: 220px;
   font: inherit;
 }

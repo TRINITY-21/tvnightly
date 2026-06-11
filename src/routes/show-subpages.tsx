@@ -462,7 +462,7 @@ const rankedPage =
     const plates = eps.length >= 10 ? 3 : eps.length >= 4 ? 1 : 0;
     const q = season != null ? `?season=${season}` : "";
 
-    const similar = kind === "best" ? await similarShows(c.env.DB, show) : [];
+    const similar = await similarShows(c.env.DB, show);
     const region = visitorRegion(c);
     const site = origin(c);
     const path = new URL(c.req.url).pathname;
@@ -630,8 +630,8 @@ const rankedPage =
                 {similar.map((s, i) => (
                   <DossierRow
                     i={i}
-                    href={`/show/${s.slug}/best-episodes`}
-                    name={`The best episodes of ${s.name}`}
+                    href={`/show/${s.slug}/${kind}-episodes`}
+                    name={`The ${kind} episodes of ${s.name}`}
                     d={buildDossier(show, s, region)}
                     rating={s.rating}
                     poster={posterSrc(s)}

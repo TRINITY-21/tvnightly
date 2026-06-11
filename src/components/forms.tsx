@@ -29,12 +29,21 @@ export const SubscribeForm: FC<{ showId: number; label: string }> = ({ showId, l
   <form action="/subscribe" method="post" class="sub-form inline">
     <input type="hidden" name="kind" value="renewal" />
     <input type="hidden" name="show_id" value={String(showId)} />
-    {/* id-less wrapping label = programmatic association without unique ids */}
-    <label>
-      {label}
-      <input type="email" name="email" placeholder="you@example.com" required />
-    </label>
-    <button type="submit">Notify me</button>
+    <div class="sub-copy">
+      <span class="sub-kicker">Alerts</span>
+      {/* one SubscribeForm per page, so a fixed id is safe */}
+      <label class="sub-title" for="sub-email">
+        {label}
+      </label>
+      <span class="sub-note">
+        Renewal news, premiere dates and streaming moves. One confirmation email first —
+        unsubscribe any time.
+      </span>
+    </div>
+    <div class="sub-controls">
+      <input id="sub-email" type="email" name="email" placeholder="you@example.com" required />
+      <button type="submit">Notify me</button>
+    </div>
   </form>
 );
 

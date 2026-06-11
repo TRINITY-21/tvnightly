@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { raw } from "hono/html";
 import { Bindings, EpisodeRow, ShowRow } from "../types";
 import { visitorRegion, REGIONS, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
-import { stripHtml, epCode, epHref, hiRes, retinaSet, posterSrc, heroBg, longDate, slugifyName, personHref, comparePathFor } from "../lib/format";
+import { stripHtml, epCode, epHref, hiRes, retinaSet, posterSrc, heroBg, longDate, slugifyName, personHref, comparePathFor, largeStill } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
@@ -1116,23 +1116,63 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, `Season ${n}`, path)]}
     >
-      <h1>
+      <h1 class="epreg-h1">
         <a href={`/show/${show.slug}`}>{show.name}</a> — Season {n}
       </h1>
       <SeasonTabs slug={show.slug} season={n} current="overview" latest={n === maxRow?.m} />
-      <ol class="ep-list">
-        {eps.map((e) => (
-          <li>
-            <span class="muted">{epCode(e)}</span>{" "}
-            <strong>
-              <a href={epHref(show.slug, e)}>{e.name ?? epCode(e)}</a>
-            </strong>
-            {e.rating != null ? <span class="rating"> ★ {e.rating.toFixed(1)}</span> : null}
-            {e.airdate ? <span class="muted"> · {longDate(e.airdate)}</span> : null}
-            {e.summary ? <p class="muted">{stripHtml(e.summary)}</p> : null}
-          </li>
-        ))}
-      </ol>
+      <p class="epreg-method">
+        All {eps.length} episodes in airing order, with first-run dates and viewer ratings.
+      </p>
+      {(() => {
+        const anyStill = eps.some((e) => e.image_url);
+        return (
+          <ol class={anyStill ? "epreg" : "epreg epreg--textonly"}>
+            {eps.map((e, i) => (
+              <li>
+                {/* the numeral IS the episode number here, so the chyron
+                    skips the code — one encoding per fact */}
+                <span class="epreg-num">{String(e.number ?? i + 1).padStart(2, "0")}</span>
+                {anyStill ? (
+                  <a class="epreg-still-link" href={epHref(show.slug, e)} tabindex={-1} aria-hidden="true">
+                    {e.image_url ? (
+                      <img
+                        class="epreg-still"
+                        src={e.image_url}
+                        srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
+                        width="168"
+                        height="95"
+                        alt=""
+                        loading={i === 0 ? "eager" : "lazy"}
+                        fetchpriority={i === 0 ? "high" : undefined}
+                        decoding="async"
+                      />
+                    ) : (
+                      <span class="epreg-still--empty">{epCode(e)}</span>
+                    )}
+                  </a>
+                ) : null}
+                <span class="epreg-main">
+                  {e.airdate || e.runtime ? (
+                    <p class="epreg-meta">
+                      {e.airdate ? <span>{longDate(e.airdate)}</span> : null}
+                      {e.airdate && e.runtime ? <span class="sep"> · </span> : null}
+                      {e.runtime ? <span class="epreg-rt">{e.runtime} min</span> : null}
+                    </p>
+                  ) : null}
+                  <p class="epreg-line">
+                    <a class="epreg-name" href={epHref(show.slug, e)}>
+                      {e.name ?? epCode(e)}
+                    </a>
+                    <span class="epreg-leader"></span>
+                    {e.rating != null ? <span class="rating">★ {e.rating.toFixed(1)}</span> : null}
+                  </p>
+                  {e.summary ? <p class="epreg-sum">{stripHtml(e.summary)}</p> : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        );
+      })()}
     </Layout>,
   );
 });

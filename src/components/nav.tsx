@@ -32,6 +32,7 @@ export const MovieTabs: FC<{ slug: string; current?: string }> = ({ slug, curren
   const tabs: [string, string, string][] = [
     ["overview", "Overview", `/movie/${slug}`],
     ["similar", "Similar movies", `/movie/${slug}/similar`],
+    ["compare", "Compare", `/movie/${slug}/compare`],
     ["media", "Media", `/movie/${slug}/media`],
     ["cast", "Cast", `/movie/${slug}/cast`],
   ];

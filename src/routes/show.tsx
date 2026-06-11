@@ -9,6 +9,7 @@ import { titleStat } from "../lib/ratings";
 import { tmdbBackdrop, tmdbMedia } from "../lib/tmdb";
 import { buildDossier } from "../lib/dossier";
 import { DossierRow } from "../components/dossier";
+import { VsCard } from "../components/compare";
 import { IconPlay } from "../components/icons";
 import { hubForGenres } from "../lib/verticals";
 import { Layout } from "../components/Layout";
@@ -90,6 +91,17 @@ app.get("/show/:slug", async (c) => {
     : posterBg
       ? heroBg(posterBg)
       : null;
+
+  // the rivals' backdrops for the head-to-head split cards (edge-cached)
+  const rivalBackdrops = c.env.TMDB_API_KEY
+    ? await Promise.all(
+        similar
+          .slice(0, 3)
+          .map((s) =>
+            s.tmdb_id ? tmdbBackdrop(c.env.TMDB_API_KEY!, s.tmdb_id) : Promise.resolve(null),
+          ),
+      )
+    : [];
 
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
@@ -502,38 +514,23 @@ app.get("/show/:slug", async (c) => {
               Stack {show.name}'s full episode-rating history against a rival, on one chart.
             </p>
             <div class="vs-grid">
-              {similar.slice(0, 3).map((s) => {
-                const a = posterSrc(show);
-                const b = posterSrc(s);
+              {similar.slice(0, 3).map((s, i) => {
+                const small = (u: string) => u.replace("/w1280/", "/w780/");
                 return (
-                  <a class="vs-card" href={comparePathFor(show.slug, s.slug)}>
-                    <span class="vs-posters" aria-hidden="true">
-                      {a ? (
-                        <img class="vs-p vs-p-a" src={a.src} alt="" width="64" height="96" loading="lazy" />
-                      ) : null}
-                      <span class="vs-badge">VS</span>
-                      {b ? (
-                        <img class="vs-p vs-p-b" src={b.src} alt="" width="64" height="96" loading="lazy" />
-                      ) : null}
-                    </span>
-                    <span class="vs-names">
-                      {show.name} <span class="vs-v">vs</span> {s.name}
-                    </span>
-                    <span class="vs-ratings">
-                      {show.rating != null ? (
-                        <span class="rating">★ {show.rating.toFixed(1)}</span>
-                      ) : (
-                        <span class="muted">—</span>
-                      )}
-                      <span class="muted">·</span>
-                      {s.rating != null ? (
-                        <span class="rating">★ {s.rating.toFixed(1)}</span>
-                      ) : (
-                        <span class="muted">—</span>
-                      )}
-                    </span>
-                    <span class="vs-cta chev-after">Full episode chart</span>
-                  </a>
+                  <VsCard
+                    href={comparePathFor(show.slug, s.slug)}
+                    a={{
+                      name: show.name,
+                      poster: posterSrc(show)?.src ?? null,
+                      backdrop: backdrop ? small(backdrop.x1) : null,
+                    }}
+                    b={{
+                      name: s.name,
+                      poster: posterSrc(s)?.src ?? null,
+                      backdrop: rivalBackdrops[i] ? small(rivalBackdrops[i]!.x1) : null,
+                    }}
+                    cta="Full episode chart"
+                  />
                 );
               })}
             </div>

@@ -89,4 +89,8 @@ export const heroBg = (x1: string, x2?: string): string =>
 export const comparePathFor = (a: string, b: string) =>
   a.localeCompare(b) <= 0 ? `/compare/${a}-vs-${b}` : `/compare/${b}-vs-${a}`;
 
+/** Movie matchups live under /compare/movie/, same alphabetical canonical. */
+export const movieComparePathFor = (a: string, b: string) =>
+  a.localeCompare(b) <= 0 ? `/compare/movie/${a}-vs-${b}` : `/compare/movie/${b}-vs-${a}`;
+
 export const fmtMarathon = (mins: number) => `${Math.floor(mins / 60)}h ${mins % 60}m`;

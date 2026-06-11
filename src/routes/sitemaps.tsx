@@ -86,7 +86,7 @@ app.get("/sitemaps/:file", async (c) => {
     if (results.length === 0) return c.notFound();
     const urls = results
       .map((r) =>
-        ["", "/where-to-watch", "/similar", "/media", "/cast"]
+        ["", "/where-to-watch", "/similar", "/compare", "/media", "/cast"]
           .map((suffix) => `<url><loc>${site}/movie/${r.slug}${suffix}</loc></url>`)
           .join(""),
       )

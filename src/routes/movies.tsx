@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { Bindings, MovieRow } from "../types";
 import { franchiseOfMovie } from "../lib/franchises";
 import { visitorRegion, providersFor, REGIONS, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
-import { slugifyName, heroBg, stripHtml } from "../lib/format";
+import { slugifyName, heroBg, stripHtml, movieComparePathFor } from "../lib/format";
+import { VsCard } from "../components/compare";
 import { tmdbMovieBackdrop, tmdbMovieMedia, tmdbMovieCast } from "../lib/tmdb";
 import { MovieTabs } from "../components/nav";
 import { IconPlay } from "../components/icons";
@@ -190,6 +191,12 @@ app.get("/movie/:slug", async (c) => {
       ])
     : [null, []];
   const heroFrame = backdrop ? heroBg(backdrop.x1, backdrop.x2) : null;
+  // the rivals' backdrops for the head-to-head split cards (edge-cached)
+  const rivalBackdrops = c.env.TMDB_API_KEY
+    ? await Promise.all(
+        simMovies.slice(0, 3).map((m) => tmdbMovieBackdrop(c.env.TMDB_API_KEY!, m.imdb_id)),
+      )
+    : [];
   // link the actors we already track (scoped to this movie's enriched credits)
   const linkable = new Map<string, number>();
   if (cast.length) {
@@ -342,6 +349,41 @@ app.get("/movie/:slug", async (c) => {
                 />
               ))}
             </ol>
+          </section>
+        ) : null}
+        {simMovies.length ? (
+          <section id="head-to-head">
+            <h2>
+              Head-to-head{" "}
+              <a class="more" href={`/movie/${movie.slug}/compare`}>
+                all matchups
+              </a>
+            </h2>
+            <p class="dossier-method">
+              {movie.title} against its closest rivals — ratings, votes, runtime and where to
+              stream, side by side.
+            </p>
+            <div class="vs-grid">
+              {simMovies.slice(0, 3).map((m, i) => {
+                const small = (u: string) => u.replace("/w1280/", "/w780/");
+                return (
+                  <VsCard
+                    href={movieComparePathFor(movie.slug, m.slug)}
+                    a={{
+                      name: movie.title,
+                      poster: movie.poster_url,
+                      backdrop: backdrop ? small(backdrop.x1) : null,
+                    }}
+                    b={{
+                      name: m.title,
+                      poster: m.poster_url,
+                      backdrop: rivalBackdrops[i] ? small(rivalBackdrops[i]!.x1) : null,
+                    }}
+                    cta="Side by side"
+                  />
+                );
+              })}
+            </div>
           </section>
         ) : null}
         {(() => {
@@ -960,6 +1002,201 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
           </nav>
         </section>
       </article>
+    </Layout>,
+  );
+});
+
+// The matchup hub: every rival as a versus card, the tab's stable home.
+app.get("/movie/:slug/compare", async (c) => {
+  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
+    .bind(c.req.param("slug"))
+    .first<MovieRow>();
+  if (!movie) return c.notFound();
+  const rivals = await similarMovies(c.env.DB, movie, 6);
+  if (!rivals.length) return c.redirect(`/movie/${movie.slug}`, 302);
+  const [backdrop, ...rivalBackdrops] = c.env.TMDB_API_KEY
+    ? await Promise.all([
+        tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id),
+        ...rivals.map((m) => tmdbMovieBackdrop(c.env.TMDB_API_KEY!, m.imdb_id)),
+      ])
+    : [null];
+  const small = (u: string) => u.replace("/w1280/", "/w780/");
+  const site = origin(c);
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`Compare ${movie.title} — head-to-head matchups | TV Nightly`}
+      description={`${movie.title} against ${rivals
+        .slice(0, 3)
+        .map((m) => m.title)
+        .join(", ")} and more — ratings, votes, runtime and streaming, side by side.`}
+      canonical={`${site}/movie/${movie.slug}/compare`}
+      ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+    >
+      <h1>
+        Compare <a href={`/movie/${movie.slug}`}>{movie.title}</a>
+      </h1>
+      <MovieTabs slug={movie.slug} current="compare" />
+      <p class="dossier-method">
+        Pick a matchup — ratings, votes, runtime and where to stream, side by side.
+      </p>
+      <div class="vs-grid">
+        {rivals.map((m, i) => (
+          <VsCard
+            href={movieComparePathFor(movie.slug, m.slug)}
+            a={{
+              name: movie.title,
+              poster: movie.poster_url,
+              backdrop: backdrop ? small(backdrop.x1) : null,
+            }}
+            b={{
+              name: m.title,
+              poster: m.poster_url,
+              backdrop: rivalBackdrops[i] ? small(rivalBackdrops[i]!.x1) : null,
+            }}
+            cta="Side by side"
+          />
+        ))}
+      </div>
+    </Layout>,
+  );
+});
+
+// One matchup, settled with facts: /compare/movie/{a}-vs-{b}, alphabetical
+// canonical (reversed forms 301). "-vs-" can appear inside a slug, so every
+// split is tried until both sides resolve.
+app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
+  const pair = c.req.param("pair");
+  let a: MovieRow | null = null;
+  let b: MovieRow | null = null;
+  let idx = pair.indexOf("-vs-");
+  while (idx !== -1) {
+    const left = pair.slice(0, idx);
+    const right = pair.slice(idx + 4);
+    const rows = await c.env.DB.prepare(
+      "SELECT * FROM movies WHERE slug IN (?, ?)",
+    )
+      .bind(left, right)
+      .all<MovieRow>();
+    const l = rows.results.find((m) => m.slug === left);
+    const r = rows.results.find((m) => m.slug === right);
+    if (l && r) {
+      a = l;
+      b = r;
+      break;
+    }
+    idx = pair.indexOf("-vs-", idx + 1);
+  }
+  if (!a || !b || a.slug === b.slug) return c.notFound();
+  const canonicalPath = movieComparePathFor(a.slug, b.slug);
+  if (`/compare/movie/${pair}` !== canonicalPath) return c.redirect(canonicalPath, 301);
+
+  const region = visitorRegion(c);
+  const provs = (m: MovieRow): string[] => {
+    const intl: Record<string, string[]> = m.providers_intl ? JSON.parse(m.providers_intl) : {};
+    const seen = new Set<string>();
+    return (intl[region] ?? []).filter((n) => {
+      const k = providerBrand(n);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  };
+  const genresOf = (m: MovieRow): string[] => (m.genres ? JSON.parse(m.genres) : []);
+  const site = origin(c);
+  const rows: { label: string; a: string | null; b: string | null }[] = [
+    {
+      label: "Rating",
+      a: a.rating != null ? `★ ${a.rating.toFixed(1)}` : null,
+      b: b.rating != null ? `★ ${b.rating.toFixed(1)}` : null,
+    },
+    {
+      label: "Votes",
+      a: a.votes ? a.votes.toLocaleString() : null,
+      b: b.votes ? b.votes.toLocaleString() : null,
+    },
+    { label: "Year", a: a.year ? String(a.year) : null, b: b.year ? String(b.year) : null },
+    {
+      label: "Runtime",
+      a: a.runtime ? `${a.runtime} min` : null,
+      b: b.runtime ? `${b.runtime} min` : null,
+    },
+    {
+      label: "Genres",
+      a: genresOf(a).slice(0, 3).join(", ") || null,
+      b: genresOf(b).slice(0, 3).join(", ") || null,
+    },
+    {
+      label: `Streaming (${region})`,
+      a: provs(a).slice(0, 3).join(", ") || "Not streaming",
+      b: provs(b).slice(0, 3).join(", ") || "Not streaming",
+    },
+  ];
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${a.title} vs ${b.title} — which should you watch? | TV Nightly`}
+      description={`${a.title} or ${b.title}? Ratings, votes, runtime and where to stream, side by side.`}
+      canonical={`${site}${canonicalPath}`}
+      ogImage={a.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+      ld={[
+        {
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Movies", item: `${site}/movies` },
+            { "@type": "ListItem", position: 2, name: a.title, item: `${site}/movie/${a.slug}` },
+            { "@type": "ListItem", position: 3, name: `vs ${b.title}`, item: `${site}${canonicalPath}` },
+          ],
+        },
+      ]}
+    >
+      <h1>
+        {a.title} <span class="vs-v">vs</span> {b.title}
+      </h1>
+      <div class="duel-board">
+        <div class="duel-head">
+          <a class="duel-side" href={`/movie/${a.slug}`}>
+            {a.poster_url ? (
+              <img src={a.poster_url} alt={a.title} width="120" height="180" loading="lazy" />
+            ) : null}
+            <strong>{a.title}</strong>
+          </a>
+          <span class="vs-badge" aria-hidden="true">
+            VS
+          </span>
+          <a class="duel-side" href={`/movie/${b.slug}`}>
+            {b.poster_url ? (
+              <img src={b.poster_url} alt={b.title} width="120" height="180" loading="lazy" />
+            ) : null}
+            <strong>{b.title}</strong>
+          </a>
+        </div>
+        <dl class="duel-ledger">
+          {rows.map((r) => (
+            <div class="duel-row">
+              <dd class="duel-a">{r.a ?? <span class="muted">—</span>}</dd>
+              <dt>{r.label}</dt>
+              <dd class="duel-b">{r.b ?? <span class="muted">—</span>}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+      <section>
+        <h2>Keep going</h2>
+        <nav class="pill-nav">
+          <a class="chev-after" href={`/movie/${a.slug}`}>
+            {a.title} overview
+          </a>
+          <a class="chev-after" href={`/movie/${b.slug}`}>
+            {b.title} overview
+          </a>
+          <a class="chev-after" href={`/movie/${a.slug}/compare`}>
+            More {a.title} matchups
+          </a>
+        </nav>
+      </section>
     </Layout>,
   );
 });

@@ -4119,7 +4119,7 @@ app.get("/what-to-watch", async (c) => {
           </p>
         </header>
 
-        <form method="get" action="/what-to-watch#picks" class="watch-bar">
+        <form method="get" action="/what-to-watch" class="watch-bar">
           <div class="watch-bar-row">
             <div class="watch-bar-fields">
             <label>

@@ -681,6 +681,13 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 }
 .cast-name { font-weight: 600; }
 .cast-char { font-size: 0.72rem; }
+a.cast-card { color: var(--text); }
+a.cast-card:hover { text-decoration: none; }
+a.cast-card:hover .cast-name { color: var(--accent); }
+a.cast-card:hover img { border-color: var(--accent); }
+a.cast-tile { display: block; color: var(--text); }
+a.cast-tile:hover { text-decoration: none; }
+.credit-as { font-size: 0.76rem; text-align: center; line-height: 1.3; }
 
 /* full cast page: tile grid with the meaningful person facts */
 .cast-grid {

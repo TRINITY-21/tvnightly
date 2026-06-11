@@ -1291,17 +1291,27 @@ app.get("/show/:slug", async (c) => {
                 ) : null}
               </h2>
               <div class="cast-row">
-                {cast.slice(0, 7).map((p) => (
-                  <div class="cast-card">
-                    {p.img ? (
-                      <img src={p.img} alt={p.n} loading="lazy" />
-                    ) : (
-                      <div class="cast-fallback">{p.n}</div>
-                    )}
-                    <span class="cast-name">{p.n}</span>
-                    {p.c ? <span class="cast-char muted">{p.c}</span> : null}
-                  </div>
-                ))}
+                {cast.slice(0, 7).map((p) => {
+                  const href = personHref(p);
+                  const inner = (
+                    <>
+                      {p.img ? (
+                        <img src={p.img} alt={p.n} loading="lazy" />
+                      ) : (
+                        <div class="cast-fallback">{p.n}</div>
+                      )}
+                      <span class="cast-name">{p.n}</span>
+                      {p.c ? <span class="cast-char muted">{p.c}</span> : null}
+                    </>
+                  );
+                  return href ? (
+                    <a class="cast-card" href={href}>
+                      {inner}
+                    </a>
+                  ) : (
+                    <div class="cast-card">{inner}</div>
+                  );
+                })}
               </div>
             </section>
           ) : null;
@@ -1559,6 +1569,7 @@ function essentialPicks(eps: EpisodeRow[], n: number, ended: boolean): Essential
 }
 
 interface CastEntry {
+  id?: number; // TVmaze person id — present after the v3 backfill
   n: string;
   c: string | null;
   img: string | null;
@@ -1567,6 +1578,8 @@ interface CastEntry {
   cn?: string; // country
   v?: boolean; // voice role
 }
+
+const personHref = (p: CastEntry) => (p.id ? `/person/${slugifyName(p.n)}-${p.id}` : null);
 
 const ageOf = (b?: string, d?: string): number | null => {
   if (!b) return null;
@@ -1608,8 +1621,9 @@ app.get("/show/:slug/cast", async (c) => {
         <div class="cast-grid">
           {cast.map((p) => {
             const age = ageOf(p.b, p.d);
-            return (
-              <article class="cast-tile">
+            const href = personHref(p);
+            const body = (
+              <>
                 {p.img ? (
                   <img src={p.img} alt={p.n} loading="lazy" />
                 ) : (
@@ -1630,13 +1644,153 @@ app.get("/show/:slug/cast", async (c) => {
                   ) : null}
                   {p.v ? <span class="badge">Voice</span> : null}
                 </div>
-              </article>
+              </>
+            );
+            return href ? (
+              <a class="cast-tile" href={href}>
+                {body}
+              </a>
+            ) : (
+              <article class="cast-tile">{body}</article>
             );
           })}
         </div>
       ) : (
         <p class="muted">Cast data for this show is still syncing — check back soon.</p>
       )}
+    </Layout>,
+  );
+});
+
+interface PersonRow {
+  id: number;
+  name: string;
+  birthday: string | null;
+  deathday: string | null;
+  country: string | null;
+  image_url: string | null;
+}
+
+app.get("/person/:slug", async (c) => {
+  const slug = c.req.param("slug");
+  const idMatch = /-(\d+)$/.exec(slug);
+  if (!idMatch) return c.notFound();
+  const person = await c.env.DB.prepare("SELECT * FROM people WHERE id = ?")
+    .bind(Number(idMatch[1]))
+    .first<PersonRow>();
+  if (!person) return c.notFound();
+  // one canonical URL per person — name drift 301s home
+  const canonicalSlug = `${slugifyName(person.name)}-${person.id}`;
+  if (slug !== canonicalSlug) return c.redirect(`/person/${canonicalSlug}`, 301);
+
+  const { results: roles } = await c.env.DB.prepare(
+    `SELECT cr.character, cr.voice, s.* FROM credits cr JOIN shows s ON s.id = cr.show_id
+     WHERE cr.person_id = ? ORDER BY s.weight DESC LIMIT 24`,
+  )
+    .bind(person.id)
+    .all<ShowRow & { character: string | null; voice: number }>();
+
+  const age = ageOf(person.birthday ?? undefined, person.deathday ?? undefined);
+  const years =
+    person.birthday && person.deathday
+      ? `${person.birthday.slice(0, 4)}–${person.deathday.slice(0, 4)}`
+      : null;
+  const ld = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: person.name,
+    url: `${origin(c)}/person/${canonicalSlug}`,
+    ...(person.image_url ? { image: person.image_url } : {}),
+    ...(person.birthday ? { birthDate: person.birthday } : {}),
+    ...(person.deathday ? { deathDate: person.deathday } : {}),
+    ...(person.country ? { nationality: person.country } : {}),
+  };
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${person.name} — TV shows, age & roles | TV Nightly`}
+      description={`${person.name}${age != null && !years ? `, ${age},` : ""} — known for ${roles
+        .slice(0, 3)
+        .map((r) => r.name)
+        .join(", ")}. Every show, every role, where to stream them.`}
+      canonical={canonical(c)}
+      ogImage={person.image_url ?? undefined}
+      ld={[ld]}
+    >
+      <article class="show-hub">
+        <header class="detail-hero">
+          {person.image_url ? (
+            <div class="hero-backdrop" style={`background-image:url('${person.image_url}')`}></div>
+          ) : null}
+          <div class="detail-head">
+            <div class="detail-side">
+              {person.image_url ? (
+                <img class="poster" src={person.image_url} alt={person.name} />
+              ) : (
+                <div class="poster card-fallback">{person.name}</div>
+              )}
+            </div>
+            <div class="detail-info">
+              <h1>{person.name}</h1>
+              <p class="meta-strip">
+                {years ? (
+                  <span>{years}</span>
+                ) : age != null ? (
+                  <span>Age {age}</span>
+                ) : null}
+                {person.country ? (
+                  <>
+                    {age != null || years ? <span class="sep">·</span> : null}
+                    <span>{person.country}</span>
+                  </>
+                ) : null}
+                {roles.length ? (
+                  <>
+                    {age != null || years || person.country ? <span class="sep">·</span> : null}
+                    <span>
+                      {roles.length} show{roles.length === 1 ? "" : "s"} on TV Nightly
+                    </span>
+                  </>
+                ) : null}
+              </p>
+              {roles.length ? (
+                <p class="summary">
+                  Best known around here for{" "}
+                  {roles.slice(0, 2).map((r, i) => (
+                    <>
+                      {i > 0 ? " and " : ""}
+                      <a href={`/show/${r.slug}`}>{r.name}</a>
+                      {r.character ? ` (as ${r.character})` : ""}
+                    </>
+                  ))}
+                  .
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </header>
+        {roles.length ? (
+          <section>
+            <h2>Known for</h2>
+            <div class="grid">
+              {roles.map((r) => (
+                <div class="card-stack">
+                  <ShowCard show={r} />
+                  {r.character ? (
+                    <span class="credit-as muted">
+                      as {r.character}
+                      {r.voice ? " (voice)" : ""}
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <p class="muted">No tracked roles yet — the sync adds shows hourly.</p>
+        )}
+      </article>
     </Layout>,
   );
 });
@@ -5044,14 +5198,19 @@ const xmlRes = (c: AppContext, xml: string) => {
 
 app.get("/sitemap.xml", async (c) => {
   const site = origin(c);
-  const showRow = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM shows").first<{ n: number }>();
-  const movieRow = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM movies").first<{ n: number }>();
+  const [showRow, movieRow, peopleRow] = await Promise.all([
+    c.env.DB.prepare("SELECT COUNT(*) AS n FROM shows").first<{ n: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS n FROM movies").first<{ n: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) AS n FROM people").first<{ n: number }>(),
+  ]);
   const showShards = Math.max(1, Math.ceil((showRow?.n ?? 0) / SHOWS_PER_SITEMAP));
   const movieShards = Math.ceil((movieRow?.n ?? 0) / SHOWS_PER_SITEMAP);
+  const peopleShards = Math.ceil((peopleRow?.n ?? 0) / SHOWS_PER_SITEMAP);
   const entries = [
     "static.xml",
     ...Array.from({ length: showShards }, (_, i) => `shows-${i}.xml`),
     ...Array.from({ length: movieShards }, (_, i) => `movies-${i}.xml`),
+    ...Array.from({ length: peopleShards }, (_, i) => `people-${i}.xml`),
   ]
     .map((f) => `<sitemap><loc>${site}/sitemaps/${f}</loc></sitemap>`)
     .join("");
@@ -5108,6 +5267,20 @@ app.get("/sitemaps/:file", async (c) => {
     if (results.length === 0) return c.notFound();
     const urls = results
       .map((r) => `<url><loc>${site}/movie/${r.slug}</loc></url>`)
+      .join("");
+    return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
+  }
+
+  const pp = /^people-(\d+)\.xml$/.exec(file);
+  if (pp) {
+    const { results } = await c.env.DB.prepare(
+      "SELECT id, name FROM people ORDER BY id LIMIT ? OFFSET ?",
+    )
+      .bind(SHOWS_PER_SITEMAP, Number(pp[1]) * SHOWS_PER_SITEMAP)
+      .all<{ id: number; name: string }>();
+    if (results.length === 0) return c.notFound();
+    const urls = results
+      .map((r) => `<url><loc>${site}/person/${slugifyName(r.name)}-${r.id}</loc></url>`)
       .join("");
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
   }

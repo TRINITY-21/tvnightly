@@ -1,4 +1,4 @@
-import { castJson, fetchShowWithEpisodes, fetchUpdates, type TvmShow } from "./tvmaze";
+import { castJson, fetchShowWithEpisodes, fetchUpdates, topCast, type TvmShow } from "./tvmaze";
 import { sendEmails, type EmailEnv } from "./email";
 import { signToken } from "./tokens";
 
@@ -111,6 +111,32 @@ export async function upsertShow(
         show.id,
       ),
   ];
+
+  // People + credits ride the same batch (drives /person pages).
+  for (const cr of topCast(show)) {
+    const p = cr.person!;
+    stmts.push(
+      db
+        .prepare(
+          `INSERT OR REPLACE INTO people (id, name, birthday, deathday, country, image_url, updated_at)
+           VALUES (?,?,?,?,?,?,unixepoch())`,
+        )
+        .bind(
+          p.id,
+          p.name,
+          p.birthday ?? null,
+          p.deathday ?? null,
+          p.country?.name ?? null,
+          p.image?.medium ?? null,
+        ),
+      db
+        .prepare(
+          `INSERT OR REPLACE INTO credits (person_id, show_id, character, voice)
+           VALUES (?,?,?,?)`,
+        )
+        .bind(p.id, show.id, cr.character?.name ?? null, cr.voice ? 1 : 0),
+    );
+  }
 
   for (const ep of show._embedded?.episodes ?? []) {
     stmts.push(

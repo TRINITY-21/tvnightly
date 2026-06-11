@@ -17,8 +17,9 @@ const out = execSync(
 const ids = JSON.parse(out)[0].results.map((r) => r.id);
 console.log(`${ids.length} shows to backfill`);
 
-const esc = (s) => `'${String(s).replaceAll("'", "''")}'`;
+const esc = (s) => (s == null ? "NULL" : `'${String(s).replaceAll("'", "''")}'`);
 const lines = [];
+const peopleSeen = new Set();
 let done = 0;
 for (const id of ids) {
   // TVmaze rate limit: 20 calls / 10s — stay at ~1.8/s
@@ -43,11 +44,12 @@ for (const id of ids) {
   const seen = new Set();
   const cast = [];
   for (const cr of credits) {
-    const n = cr.person?.name;
-    if (!n || seen.has(n)) continue;
-    seen.add(n);
+    const pid = cr.person?.id;
+    if (!pid || seen.has(pid)) continue;
+    seen.add(pid);
     cast.push({
-      n,
+      id: pid,
+      n: cr.person.name,
       c: cr.character?.name ?? null,
       img: cr.person?.image?.medium ?? null,
       ...(cr.person?.birthday ? { b: cr.person.birthday } : {}),
@@ -55,6 +57,19 @@ for (const id of ids) {
       ...(cr.person?.country?.name ? { cn: cr.person.country.name } : {}),
       ...(cr.voice ? { v: true } : {}),
     });
+    // people + credits rows for the /person pages
+    if (!peopleSeen.has(pid)) {
+      peopleSeen.add(pid);
+      lines.push(
+        `INSERT OR REPLACE INTO people (id, name, birthday, deathday, country, image_url, updated_at) VALUES (` +
+          `${pid}, ${esc(cr.person.name)}, ${esc(cr.person.birthday ?? null)}, ${esc(cr.person.deathday ?? null)}, ` +
+          `${esc(cr.person.country?.name ?? null)}, ${esc(cr.person.image?.medium ?? null)}, ${Math.floor(Date.now() / 1000)});`,
+      );
+    }
+    lines.push(
+      `INSERT OR REPLACE INTO credits (person_id, show_id, character, voice) VALUES (` +
+        `${pid}, ${id}, ${esc(cr.character?.name ?? null)}, ${cr.voice ? 1 : 0});`,
+    );
     if (cast.length >= 10) break;
   }
   if (cast.length) {

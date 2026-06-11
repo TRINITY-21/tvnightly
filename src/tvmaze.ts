@@ -36,6 +36,7 @@ export interface TvmShow {
 
 export interface TvmCastCredit {
   person: {
+    id: number;
     name: string;
     image: { medium?: string } | null;
     birthday?: string | null;
@@ -46,28 +47,35 @@ export interface TvmCastCredit {
   voice?: boolean;
 }
 
-/** Top-billed cast as the compact JSON stored in shows.cast_json.
- *  {n: name, c: character, img: headshot, b: birthday, d: deathday,
+/** Top-billed cast, deduped (actors repeat per character credit), max 10. */
+export function topCast(show: TvmShow): TvmCastCredit[] {
+  const credits = show._embedded?.cast ?? [];
+  const seen = new Set<number>();
+  const out: TvmCastCredit[] = [];
+  for (const cr of credits) {
+    const id = cr.person?.id;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(cr);
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
+/** Compact JSON stored in shows.cast_json:
+ *  {id, n: name, c: character, img: headshot, b: birthday, d: deathday,
  *   cn: country, v: voice-role} — only meaningful fields, omitted when null. */
 export function castJson(show: TvmShow): string | null {
-  const credits = show._embedded?.cast ?? [];
-  const seen = new Set<string>();
-  const cast = [];
-  for (const cr of credits) {
-    const n = cr.person?.name;
-    if (!n || seen.has(n)) continue; // actors repeat per character credit
-    seen.add(n);
-    cast.push({
-      n,
-      c: cr.character?.name ?? null,
-      img: cr.person?.image?.medium ?? null,
-      ...(cr.person?.birthday ? { b: cr.person.birthday } : {}),
-      ...(cr.person?.deathday ? { d: cr.person.deathday } : {}),
-      ...(cr.person?.country?.name ? { cn: cr.person.country.name } : {}),
-      ...(cr.voice ? { v: true } : {}),
-    });
-    if (cast.length >= 10) break;
-  }
+  const cast = topCast(show).map((cr) => ({
+    id: cr.person!.id,
+    n: cr.person!.name,
+    c: cr.character?.name ?? null,
+    img: cr.person?.image?.medium ?? null,
+    ...(cr.person?.birthday ? { b: cr.person.birthday } : {}),
+    ...(cr.person?.deathday ? { d: cr.person.deathday } : {}),
+    ...(cr.person?.country?.name ? { cn: cr.person.country.name } : {}),
+    ...(cr.voice ? { v: true } : {}),
+  }));
   return cast.length ? JSON.stringify(cast) : null;
 }
 

@@ -3953,26 +3953,31 @@ const COMPANY: Record<
   },
 };
 
-// Short filters are segmented radio pills, not dropdowns: every option visible,
-// one tap, zero JS, native keyboard semantics. Only long lists get a <select>.
-const FilterSeg: FC<{
+// Every filter is the custom dropdown (js/dropdown.js enhances data-fancy
+// selects on fine-pointer devices; touch keeps the OS picker, no-JS keeps
+// the native select).
+const FilterSelect: FC<{
   label: string;
   name: string;
   current: string;
   options: { value: string; text: string }[];
-}> = ({ label, name, current, options }) => (
-  <div class="watch-field">
-    <span class="watch-field-label">{label}</span>
-    <div class="seg">
-      {options.map((o) => (
-        <label class="seg-opt">
-          <input type="radio" name={name} value={o.value} checked={o.value === current} />
-          <span>{o.text}</span>
-        </label>
-      ))}
+}> = ({ label, name, current, options }) => {
+  const id = `${name}-label`;
+  return (
+    <div class="watch-field">
+      <span class="watch-field-label" id={id}>
+        {label}
+      </span>
+      <select name={name} data-fancy aria-labelledby={id}>
+        {options.map((o) => (
+          <option value={o.value} selected={o.value === current}>
+            {o.text}
+          </option>
+        ))}
+      </select>
     </div>
-  </div>
-);
+  );
+};
 
 app.get("/what-to-watch", async (c) => {
   const db = c.env.DB;
@@ -4175,7 +4180,7 @@ app.get("/what-to-watch", async (c) => {
         <form method="get" action="/what-to-watch" class="watch-bar">
           <div class="watch-bar-row">
             <div class="watch-bar-fields">
-              <FilterSeg
+              <FilterSelect
                 label="Format"
                 name="type"
                 current={type}
@@ -4184,7 +4189,7 @@ app.get("/what-to-watch", async (c) => {
                   { value: "movie", text: "Movie" },
                 ]}
               />
-              <FilterSeg
+              <FilterSelect
                 label="Who's watching"
                 name="who"
                 current={who}
@@ -4196,7 +4201,16 @@ app.get("/what-to-watch", async (c) => {
                   })),
                 ]}
               />
-              <FilterSeg
+              <FilterSelect
+                label="Genre"
+                name="genre"
+                current={genre}
+                options={[
+                  { value: "", text: "Any" },
+                  ...genreRows.map((r) => ({ value: r.g, text: r.g })),
+                ]}
+              />
+              <FilterSelect
                 label="Rating"
                 name="min"
                 current={minRating ? String(minRating) : ""}
@@ -4206,7 +4220,7 @@ app.get("/what-to-watch", async (c) => {
                   { value: "8", text: "8+" },
                 ]}
               />
-              <FilterSeg
+              <FilterSelect
                 label={type === "movie" ? "Length" : "Ep. length"}
                 name="runtime"
                 current={runtimeBand === "short" || runtimeBand === "long" ? runtimeBand : ""}
@@ -4216,33 +4230,16 @@ app.get("/what-to-watch", async (c) => {
                   { value: "long", text: `≤ ${RUNTIME_CAPS[type].long}m` },
                 ]}
               />
-              <div class="watch-field">
-                <span class="watch-field-label" id="genre-label">
-                  Genre
-                </span>
-                <select name="genre" data-fancy aria-labelledby="genre-label">
-                  <option value="">Any</option>
-                  {genreRows.map((r) => (
-                    <option value={r.g} selected={r.g === genre}>
-                      {r.g}
-                    </option>
-                  ))}
-                </select>
-              </div>
               {serviceRows.length ? (
-                <div class="watch-field">
-                  <span class="watch-field-label" id="service-label">
-                    Streaming on ({region})
-                  </span>
-                  <select name="service" data-fancy aria-labelledby="service-label">
-                    <option value="">Any</option>
-                    {serviceRows.map((r) => (
-                      <option value={r.p} selected={r.p === service}>
-                        {r.p}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <FilterSelect
+                  label={`Streaming on (${region})`}
+                  name="service"
+                  current={service}
+                  options={[
+                    { value: "", text: "Any" },
+                    ...serviceRows.map((r) => ({ value: r.p, text: r.p })),
+                  ]}
+                />
               ) : null}
             </div>
             {skipNext ? <input type="hidden" name="skip" value={skipNext} /> : null}

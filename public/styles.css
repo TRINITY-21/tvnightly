@@ -2147,14 +2147,143 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 }
 .section-lead { margin: 0.2rem 0 0; font-size: 0.88rem; max-width: 52ch; }
 
+/* ---- sign-on: the cardless spotlight ---- */
+/* No chrome anywhere: the show's real backdrop runs full-bleed in the house
+   frame treatment and the scrim resolves to --bg, so the section ends by
+   becoming the page. Everything in the frame is data. */
 .spotlight {
-  margin-top: 0.6rem;
-  padding: 2rem 1.75rem;
-  min-height: 14rem;
+  position: relative;
+  overflow: hidden;
+  margin: -1rem calc(50% - 50vw) 0;
+  padding: 8.5rem 0 1.9rem;
 }
-.spotlight .spot-poster { width: 172px; }
-.spot-title { font-size: 2.35rem; margin: 0 0 0.55rem; }
-.spot-actions { margin: 0.9rem 0 0; }
+.spotlight .hero-backdrop {
+  position: absolute;
+  inset: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, 1280px);
+  background-size: cover;
+  background-position: center 22%;
+  filter: none;
+  opacity: 0.78;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
+}
+/* fallback: no designed backdrop — the poster blurred into ambient light */
+.spot-ambient {
+  padding-top: 3.2rem;
+}
+.spot-ambient .hero-backdrop {
+  width: 100%;
+  inset: -48px;
+  filter: blur(64px) saturate(1.15);
+  opacity: 0.35;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* legibility scrim over the still: clean viewing band up top, dark where
+     the lower-third sits, resolving to the page itself */
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 18, 20, 0.18) 0%,
+    rgba(18, 18, 20, 0.34) 42%,
+    rgba(18, 18, 20, 0.82) 78%,
+    var(--bg) 100%
+  );
+}
+.spot-head {
+  position: relative;
+  z-index: 1;
+  max-width: 948px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5rem;
+}
+.spot-poster {
+  width: 172px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: var(--shadow-2);
+  flex: 0 0 auto;
+}
+.spot-info {
+  min-width: 0;
+}
+.spot-title {
+  font-family: var(--display);
+  font-stretch: 114%;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: clamp(1.9rem, 4.6vw, 3rem);
+  line-height: 1.05;
+  margin: 0.15rem 0 0.55rem;
+  text-wrap: balance;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.spot-title a {
+  color: var(--text);
+}
+.spot-title a:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+/* lift the whole lower-third off the still */
+.spotlight .eyebrow,
+.spotlight .meta-strip,
+.spotlight .spot-dek,
+.spotlight .spot-ep,
+.spotlight .provs {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.spot-dek {
+  max-width: 58ch;
+  margin: 0 0 0.4rem;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.spot-ep {
+  margin: 0 0 0.3rem;
+}
+.spot-actions {
+  margin: 0.9rem 0 0;
+}
+/* the outline button needs its own dark to hold AA over bright frames */
+.spotlight .btn-ghost {
+  background: rgba(18, 18, 20, 0.5);
+}
+.spotlight + .evening {
+  margin-top: 1.75rem;
+}
+@media (max-width: 600px) {
+  .spotlight {
+    padding: 4.5rem 0 1.4rem;
+  }
+  .spot-ambient {
+    padding-top: 2.4rem;
+  }
+  .spot-head {
+    gap: 1rem;
+  }
+  .spot-poster {
+    width: 104px;
+  }
+  .spot-title {
+    font-size: clamp(1.4rem, 7vw, 1.9rem);
+    overflow-wrap: anywhere;
+  }
+}
 
 /* evening: asymmetric broadcast guide */
 .evening-grid {
@@ -2729,12 +2858,7 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   .detail-hero { padding: 1rem; }
   .detail-head { gap: 1rem; }
   .poster { width: 128px; }
-  .spotlight { padding: 1.15rem 1rem; min-height: 0; }
-  .spotlight .spot-poster { width: 104px; }
-  .spot-title { font-size: 1.55rem; }
   .home > section + section { margin-top: 2.25rem; }
-  .evening-panel { padding: 1rem 1.05rem 1.15rem; }
-  .evening-cta { flex-direction: column; }
   .search {
     margin-left: 0;
     flex: 1 1 100%;

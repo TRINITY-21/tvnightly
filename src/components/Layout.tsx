@@ -33,6 +33,9 @@ export const Layout: FC<
     ogImage?: string;
     scripts?: string[];
     noindex?: boolean;
+    /** LCP insurance for full-bleed CSS-background heroes, which browsers
+     *  discover late: preload the backdrop with a density srcset. */
+    preloadImage?: { x1: string; x2: string };
   }>
 > = (props) => {
   // active nav section, derived from the canonical URL every page already sets
@@ -55,6 +58,14 @@ export const Layout: FC<
       {props.canonical ? <link rel="canonical" href={props.canonical} /> : null}
       {props.noindex ? <meta name="robots" content="noindex" /> : null}
       <meta name="theme-color" content="#121214" />
+      {props.preloadImage ? (
+        <link
+          rel="preload"
+          as="image"
+          href={props.preloadImage.x1}
+          imagesrcset={`${props.preloadImage.x1} 1x, ${props.preloadImage.x2} 2x`}
+        />
+      ) : null}
       <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <meta property="og:site_name" content="TV Nightly" />
       <meta property="og:type" content="website" />

@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
 import { visitorRegion } from "../lib/providers";
-import { epCode, airTime, premiereDateParts, homeDateline, retinaSet, posterSrc } from "../lib/format";
+import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml } from "../lib/format";
+import { tmdbBackdrop } from "../lib/tmdb";
 import { canonical } from "../lib/seo";
 import { VERTICALS } from "../lib/verticals";
 import { Layout } from "../components/Layout";
@@ -92,11 +93,24 @@ app.get("/", async (c) => {
   const spotEyebrow = spotTonight
     ? "On tonight"
     : spotPremiere
-      ? `Premieres ${spotPremiere.ep_airdate ?? "soon"}`
+      ? `Premieres ${spotPremiere.ep_airdate ? longDate(spotPremiere.ep_airdate) : "soon"}`
       : "Tonight's pick";
   const spotAirTime = spotTonight?.ep_airstamp ? airTime(spotTonight.ep_airstamp) : null;
   const spotGenres: string[] = spot?.genres ? JSON.parse(spot.genres) : [];
   const alsoTonight = spotTonight ? tonight.filter((e) => e.show_slug !== spotTonight.slug) : tonight;
+
+  // the sign-on frame: the spotlight show's real designed backdrop (one
+  // edge-cached call); falls back to its poster blurred into ambient light
+  const backdrop =
+    spot?.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbBackdrop(c.env.TMDB_API_KEY, spot.tmdb_id)
+      : null;
+  const spotPosterBg = spot ? hiRes(spot.image_url) : null;
+  const spotFrame = backdrop
+    ? heroBg(backdrop.x1, backdrop.x2)
+    : spotPosterBg
+      ? heroBg(spotPosterBg)
+      : null;
 
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
@@ -105,25 +119,35 @@ app.get("/", async (c) => {
       description="Track the best episodes of every TV show, season release dates, renewal status, and what's airing tonight."
       canonical={canonical(c)}
       scripts={["/js/poster-rail.js"]}
+      preloadImage={backdrop ?? undefined}
     >
       <div class="home">
-        {/* The evening opens on a headline, not a list: tonight's biggest show
-            in the cinematic hero treatment. Data-driven, never a marketing banner. */}
+        {/* Sign-on: tonight's headline in the house frame treatment. The
+            section has no chrome — the scrim resolves to --bg, so it melts
+            into the page. Data-driven, never a marketing banner. */}
         {spot ? (
-          <section class="detail-hero spotlight">
-            {spot.image_url ? (
-              <div class="hero-backdrop" style={`background-image:url('${spot.image_url}')`}></div>
-            ) : null}
-            <div class="detail-head">
+          <section
+            class={backdrop ? "spotlight" : "spotlight spot-ambient"}
+            aria-labelledby="spot-title"
+          >
+            {spotFrame ? <div class="hero-backdrop" style={spotFrame}></div> : null}
+            <div class="spot-head">
               {(() => {
                 const p = posterSrc(spot);
                 return p ? (
-                  <img class="poster spot-poster" src={p.src} srcset={p.srcset} alt={spot.name} />
-                ) : (
-                  <div class="poster spot-poster card-fallback">{spot.name}</div>
-                );
+                  <img
+                    class="spot-poster"
+                    src={p.src}
+                    srcset={p.srcset}
+                    alt={spot.name}
+                    width="172"
+                    height="258"
+                    fetchpriority="high"
+                    decoding="async"
+                  />
+                ) : null;
               })()}
-              <div class="detail-info">
+              <div class="spot-info">
                 <p class="eyebrow">
                   {spotTonight ? <span class="live-dot"></span> : null}
                   {homeDateline()}
@@ -136,7 +160,7 @@ app.get("/", async (c) => {
                     </>
                   ) : null}
                 </p>
-                <h1 class="spot-title">
+                <h1 class="spot-title" id="spot-title">
                   <a href={`/show/${spot.slug}`}>{spot.name}</a>
                 </h1>
                 <p class="meta-strip">
@@ -155,8 +179,9 @@ app.get("/", async (c) => {
                     </>
                   ) : null}
                 </p>
+                {spot.summary ? <p class="spot-dek">{stripHtml(spot.summary)}</p> : null}
                 {spot.ep_season != null ? (
-                  <p>
+                  <p class="spot-ep">
                     S{String(spot.ep_season).padStart(2, "0")}E
                     {String(spot.ep_number ?? 0).padStart(2, "0")}
                     {spot.ep_name ? ` — ${spot.ep_name}` : ""}
@@ -167,9 +192,9 @@ app.get("/", async (c) => {
                 ) : null}
                 <ProviderLine row={spot} region={visitorRegion(c)} pickerType="tv" />
                 <p class="spot-actions">
-                <a class="btn-ghost chev-after" href={`/show/${spot.slug}`}>
-                  Episode guide & ratings
-                </a>
+                  <a class="btn-ghost chev-after" href={`/show/${spot.slug}`}>
+                    Episode guide & ratings
+                  </a>
                 </p>
               </div>
             </div>
@@ -358,11 +383,15 @@ app.get("/", async (c) => {
               <span class="chev-icon" aria-hidden="true"></span>
             </a>
             <a class="tool-tile tool-tile-lg" href="/what-to-watch">
-              <strong>What should I watch tonight?</strong>
-              <p class="muted">Filter by mood, runtime, and streaming service — then spin.</p>
+              <strong>Tonight's picker</strong>
+              <p class="muted">Filter by genre, runtime, and streaming service — then spin.</p>
               <span class="chev-icon" aria-hidden="true"></span>
             </a>
             <div class="tools-bento-rest">
+              <a class="tool-tile tool-tile-sm" href="/tonight">
+                <span>Tonight's full schedule</span>
+                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
+              </a>
               <a class="tool-tile tool-tile-sm" href="/movies/best">
                 <span>Top movies</span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>

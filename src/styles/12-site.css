@@ -123,12 +123,7 @@
   .detail-hero { padding: 1rem; }
   .detail-head { gap: 1rem; }
   .poster { width: 128px; }
-  .spotlight { padding: 1.15rem 1rem; min-height: 0; }
-  .spotlight .spot-poster { width: 104px; }
-  .spot-title { font-size: 1.55rem; }
   .home > section + section { margin-top: 2.25rem; }
-  .evening-panel { padding: 1rem 1.05rem 1.15rem; }
-  .evening-cta { flex-direction: column; }
   .search {
     margin-left: 0;
     flex: 1 1 100%;

@@ -754,11 +754,22 @@ button, .verdict-btn {
   gap: 0.9rem;
   padding: 1.05rem 1.2rem 1.1rem;
 }
-/* six uniform dropdowns on an aligned grid */
+/* six uniform dropdowns, one row — they share the width equally */
 .watch-bar-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.8rem 0.85rem;
+}
+/* last column's panel hugs the right edge instead of overflowing the bar */
+.watch-bar-fields > :last-child .dd-list {
+  left: auto;
+  right: 0;
+}
+@media (max-width: 900px) {
+  .watch-bar-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .watch-bar-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .watch-bar label,
 .watch-field {

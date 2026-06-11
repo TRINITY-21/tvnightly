@@ -2,6 +2,7 @@
 // Shared by show + movie similar sections and their dedicated pages.
 import { FC } from "hono/jsx";
 import { Dossier } from "../lib/dossier";
+import { slugifyName } from "../lib/format";
 
 export const DossierRow: FC<{
   i: number;
@@ -35,7 +36,9 @@ export const DossierRow: FC<{
           {d.genreLine.map((t, j) => (
             <>
               {j > 0 ? <span class="g-sep">·</span> : null}
-              <span class={t.hit ? undefined : "g-dim"}>{t.g}</span>
+              <a class={t.hit ? undefined : "g-dim"} href={`/genre/${slugifyName(t.g)}`}>
+                {t.g}
+              </a>
             </>
           ))}
         </span>

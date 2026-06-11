@@ -66,9 +66,21 @@
   flex-wrap: wrap;
   gap: 0 0.4rem;
 }
+/* genre tokens are doors into /genre/{slug} — chyron-quiet until hover */
+.dossier-genres a {
+  color: var(--text);
+}
+.dossier-genres a:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
 .dossier-genres .g-dim {
   color: var(--muted);
   opacity: 0.75;
+}
+.dossier-genres a.g-dim:hover {
+  color: var(--accent);
+  opacity: 1;
 }
 .dossier-genres .g-sep {
   color: var(--muted);

@@ -438,7 +438,6 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   font-size: 0.84rem;
 }
 .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-stack { display: flex; flex-direction: column; gap: 0.4rem; }
 
 /* ---- badges: broadcast chyrons ---- */
 .badge {
@@ -1433,14 +1432,6 @@ button, .verdict-btn {
 .vote-btn:hover { border-color: var(--accent); text-decoration: none; }
 .vote.voted .vote-btn { opacity: 0.6; cursor: default; }
 .vote.voted .vote-count { opacity: 1; color: var(--text); }
-.compare-btn {
-  text-align: center;
-  font-family: var(--display);
-  font-stretch: 80%;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-}
-
 .rate-inline { display: flex; gap: 0.4rem; align-items: center; margin: 0.6rem 0; flex-wrap: wrap; }
 .rate-inline .vote-btn { font-size: 1rem; }
 
@@ -3074,4 +3065,171 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   .chart-podium-card:hover .chart-still,
   .chart-podium-card:hover,
   .chart-row:hover .chart-row__rank { transform: none; }
+}
+/* ---- the match dossier: shows like X, with receipts ---- */
+/* Open ledger rows on hairlines — the Rundown Board above owns the carded
+   register, so this section deliberately doesn't repeat it. Each row states
+   its evidence: shared-genre chyron (matches bright, flavor dim), a receipt
+   line of computed facts, one gold number, the compare link. */
+.dossier-method {
+  margin: -0.3rem 0 0.9rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.dossier-board {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dossier-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  gap: 0 0.9rem;
+  align-items: center;
+  padding: 0.75rem 0.35rem;
+  border-top: 1px solid var(--line);
+}
+.dossier-row:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.dossier-row:hover {
+  background: rgba(248, 246, 242, 0.03);
+}
+.dossier-num {
+  font-family: var(--display);
+  font-stretch: 92%;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  opacity: 0.55;
+  min-width: 1.3rem;
+  text-align: right;
+}
+.dossier-row:hover .dossier-num {
+  opacity: 1;
+}
+.dossier-poster img,
+.dossier-poster-empty {
+  display: block;
+  width: 64px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.dossier-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.dossier-genres {
+  font-family: var(--display);
+  font-size: 0.66rem;
+  font-stretch: 105%;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.4rem;
+}
+.dossier-genres .g-dim {
+  color: var(--muted);
+  opacity: 0.75;
+}
+.dossier-genres .g-sep {
+  color: var(--muted);
+  opacity: 0.5;
+}
+.dossier-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  min-width: 0;
+}
+a.dossier-name {
+  color: var(--text);
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+a.dossier-name:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+.dossier-leader {
+  flex: 1;
+  min-width: 1.5rem;
+  border-bottom: 1px dotted rgba(182, 177, 169, 0.35);
+  transform: translateY(-0.22em);
+}
+.dossier-era {
+  color: var(--muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.dossier-receipt {
+  font-size: 0.85rem;
+}
+.dossier-receipt .sep,
+.dossier-era .sep {
+  color: var(--muted);
+  opacity: 0.6;
+  margin: 0 0.3rem;
+}
+.dossier-pitch {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dossier-pitch.is-blurb {
+  font-style: italic;
+}
+.dossier-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+}
+a.dossier-compare {
+  font-family: var(--display);
+  font-size: 0.68rem;
+  font-stretch: 105%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  /* padded hit area so the SEO-mesh link survives a thumb */
+  padding: 0.5rem 0 0.5rem 0.5rem;
+  margin: -0.35rem 0;
+}
+@media (max-width: 700px) {
+  .dossier-row {
+    gap: 0 0.7rem;
+    padding: 0.65rem 0.1rem;
+  }
+  .dossier-poster img,
+  .dossier-poster-empty {
+    width: 48px;
+    height: 67px;
+  }
+  .dossier-num {
+    font-size: 0.7rem;
+    min-width: 1.1rem;
+  }
+  .dossier-pitch {
+    display: none;
+  }
+}
+@media (max-width: 560px) {
+  .dossier-leader,
+  .dossier-era {
+    display: none;
+  }
 }

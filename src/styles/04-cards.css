@@ -62,7 +62,6 @@
   font-size: 0.84rem;
 }
 .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-stack { display: flex; flex-direction: column; gap: 0.4rem; }
 
 /* ---- badges: broadcast chyrons ---- */
 .badge {

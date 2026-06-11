@@ -52,14 +52,6 @@ button, .verdict-btn {
 .vote-btn:hover { border-color: var(--accent); text-decoration: none; }
 .vote.voted .vote-btn { opacity: 0.6; cursor: default; }
 .vote.voted .vote-count { opacity: 1; color: var(--text); }
-.compare-btn {
-  text-align: center;
-  font-family: var(--display);
-  font-stretch: 80%;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-}
-
 .rate-inline { display: flex; gap: 0.4rem; align-items: center; margin: 0.6rem 0; flex-wrap: wrap; }
 .rate-inline .vote-btn { font-size: 1rem; }
 

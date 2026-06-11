@@ -7,10 +7,11 @@ import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
 import { tmdbBackdrop } from "../lib/tmdb";
+import { buildDossier } from "../lib/dossier";
 import { hubForGenres } from "../lib/verticals";
 import { Layout } from "../components/Layout";
 import { ShowTabs, SeasonTabs } from "../components/nav";
-import { StatusBadge, ShowCard, ExploreCard, ClampSummary } from "../components/cards";
+import { StatusBadge, ExploreCard, ClampSummary } from "../components/cards";
 import { ProviderLine } from "../components/providers";
 import { RateInline, SubscribeForm } from "../components/forms";
 
@@ -32,6 +33,7 @@ app.get("/show/:slug", async (c) => {
     seasons.get(s)!.push(e);
   }
   const netName = show.network ?? show.web_channel;
+  const region = visitorRegion(c);
   // one bound COUNT instead of the full network GROUP-BY scan per pageview
   const [similar, stat, netCount] = await Promise.all([
     similarShows(c.env.DB, show),
@@ -161,7 +163,7 @@ app.get("/show/:slug", async (c) => {
               </p>
               <ProviderLine
                 row={show}
-                region={visitorRegion(c)}
+                region={region}
                 fallbackHref={`/show/${show.slug}/release-date`}
                 pickerType="tv"
                 allHref={`/show/${show.slug}/where-to-watch`}
@@ -447,18 +449,92 @@ app.get("/show/:slug", async (c) => {
           </section>
         ) : null}
         {similar.length ? (
-          <section>
+          <section id="similar">
             <h2>Shows like {show.name}</h2>
-            <div class="grid">
-              {similar.map((s) => (
-                <div class="card-stack">
-                  <ShowCard show={s} />
-                  <a class="vote-btn compare-btn" href={comparePathFor(show.slug, s.slug)}>
-                    COMPARE
-                  </a>
-                </div>
-              ))}
-            </div>
+            {/* the method line is literally what the SQL does — same honesty
+                move as the tab rail: say only what we can back */}
+            <p class="dossier-method">
+              The closest matches on shared genres, ranked by match strength and popularity.
+            </p>
+            <ol class="dossier-board">
+              {similar.map((s, i) => {
+                const d = buildDossier(show, s, region);
+                return (
+                  <li class="dossier-row">
+                    <span class="dossier-num">{String(i + 1).padStart(2, "0")}</span>
+                    <a class="dossier-poster" href={`/show/${s.slug}`} tabindex={-1} aria-hidden="true">
+                      {s.image_url ? (
+                        <img
+                          src={s.image_url}
+                          srcset={retinaSet(s.image_url)}
+                          width="64"
+                          height="90"
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <span class="dossier-poster-empty"></span>
+                      )}
+                    </a>
+                    <span class="dossier-main">
+                      {d.genreLine.length ? (
+                        <span class="dossier-genres">
+                          {d.genreLine.map((t, j) => (
+                            <>
+                              {j > 0 ? <span class="g-sep">·</span> : null}
+                              <span class={t.hit ? undefined : "g-dim"}>{t.g}</span>
+                            </>
+                          ))}
+                        </span>
+                      ) : null}
+                      <span class="dossier-line">
+                        <a class="dossier-name" href={`/show/${s.slug}`}>
+                          {s.name}
+                        </a>
+                        <span class="dossier-leader"></span>
+                        {d.era ? (
+                          <span class="dossier-era">
+                            {d.era}
+                            {d.metaNet ? (
+                              <>
+                                <span class="sep">·</span>
+                                {d.metaNet}
+                              </>
+                            ) : null}
+                          </span>
+                        ) : null}
+                      </span>
+                      {d.signals.length ? (
+                        <span class="dossier-receipt">
+                          {d.signals.map((sig, j) => (
+                            <>
+                              {j > 0 ? <span class="sep">·</span> : null}
+                              {sig}
+                            </>
+                          ))}
+                        </span>
+                      ) : null}
+                      {d.pitch ? (
+                        <span class={d.isBlurb ? "dossier-pitch is-blurb" : "dossier-pitch"}>
+                          {d.pitch}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span class="dossier-score">
+                      {s.rating != null ? <span class="rating">★ {s.rating.toFixed(1)}</span> : null}
+                      <a
+                        class="dossier-compare chev-after"
+                        href={comparePathFor(show.slug, s.slug)}
+                        aria-label={`Compare ${s.name} with ${show.name}`}
+                      >
+                        Compare
+                      </a>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
           </section>
         ) : null}
         {(() => {

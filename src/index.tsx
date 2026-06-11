@@ -1284,14 +1284,14 @@ app.get("/show/:slug", async (c) => {
             <section id="cast">
               <h2>
                 Cast
-                {cast.length > 7 ? (
+                {cast.length > 8 ? (
                   <a class="more" href={`/show/${show.slug}/cast`}>
                     full cast & details →
                   </a>
                 ) : null}
               </h2>
               <div class="cast-row">
-                {cast.slice(0, 7).map((p) => {
+                {cast.slice(0, 8).map((p) => {
                   const href = personHref(p);
                   const inner = (
                     <>
@@ -1594,19 +1594,34 @@ const ageOf = (b?: string, d?: string): number | null => {
 app.get("/show/:slug/cast", async (c) => {
   const show = await getShow(c.env.DB, c.req.param("slug"));
   if (!show) return c.notFound();
-  const cast: CastEntry[] = show.cast_json ? JSON.parse(show.cast_json) : [];
+  type CreditRow = PersonRow & {
+    character: string | null;
+    voice: number;
+    episodes: number | null;
+    guest: number;
+  };
+  const { results: credits } = await c.env.DB.prepare(
+    `SELECT p.*, cr.character, cr.voice, cr.episodes, cr.guest
+     FROM credits cr JOIN people p ON p.id = cr.person_id
+     WHERE cr.show_id = ?
+     ORDER BY cr.guest ASC, cr.episodes DESC, p.name`,
+  )
+    .bind(show.id)
+    .all<CreditRow>();
+  const main = credits.filter((r) => !r.guest);
+  const guests = credits.filter((r) => r.guest);
   const site = origin(c);
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title={`${show.name} cast — who plays whom | TV Nightly`}
+      title={`${show.name} cast — main cast & guest stars | TV Nightly`}
       description={
-        cast.length
-          ? `The top-billed cast of ${show.name}: ${cast
+        main.length
+          ? `The cast of ${show.name}: ${main
               .slice(0, 5)
-              .map((p) => p.n)
-              .join(", ")} — characters, ages and nationalities.`
+              .map((p) => p.name)
+              .join(", ")} — roles, episode counts${guests.length ? ", and notable guest stars" : ""}.`
           : `The cast of ${show.name}.`
       }
       canonical={canonical(c)}
@@ -1617,47 +1632,74 @@ app.get("/show/:slug/cast", async (c) => {
         Cast of <a href={`/show/${show.slug}`}>{show.name}</a>
       </h1>
       <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="cast" />
-      {cast.length ? (
-        <div class="cast-grid">
-          {cast.map((p) => {
-            const age = ageOf(p.b, p.d);
-            const href = personHref(p);
-            const body = (
-              <>
-                {p.img ? (
-                  <img src={p.img} alt={p.n} loading="lazy" />
-                ) : (
-                  <div class="cast-fallback">{p.n}</div>
-                )}
-                <div class="cast-tile-body">
-                  <strong>{p.n}</strong>
-                  {p.c ? <span class="cast-char muted">as {p.c}</span> : null}
-                  {p.b || p.cn ? (
-                    <span class="cast-meta muted">
-                      {p.d && p.b
-                        ? `${p.b.slice(0, 4)}–${p.d.slice(0, 4)}`
-                        : age != null
-                          ? `Age ${age}`
-                          : ""}
-                      {p.cn ? `${p.b ? " · " : ""}${p.cn}` : ""}
-                    </span>
-                  ) : null}
-                  {p.v ? <span class="badge">Voice</span> : null}
-                </div>
-              </>
-            );
-            return href ? (
-              <a class="cast-tile" href={href}>
-                {body}
-              </a>
-            ) : (
-              <article class="cast-tile">{body}</article>
-            );
-          })}
-        </div>
+      {main.length ? (
+        <>
+          <h2>Main cast</h2>
+          <div class="cast-grid">
+            {main.map((p) => {
+              const age = ageOf(p.birthday ?? undefined, p.deathday ?? undefined);
+              return (
+                <a class="cast-tile" href={`/person/${slugifyName(p.name)}-${p.id}`}>
+                  {p.image_url ? (
+                    <img src={p.image_url} alt={p.name} loading="lazy" />
+                  ) : (
+                    <div class="cast-fallback">{p.name}</div>
+                  )}
+                  <div class="cast-tile-body">
+                    <strong>{p.name}</strong>
+                    {p.character ? <span class="cast-char muted">as {p.character}</span> : null}
+                    {p.birthday || p.country ? (
+                      <span class="cast-meta muted">
+                        {p.deathday && p.birthday
+                          ? `${p.birthday.slice(0, 4)}–${p.deathday.slice(0, 4)}`
+                          : age != null
+                            ? `Age ${age}`
+                            : ""}
+                        {p.country ? `${p.birthday ? " · " : ""}${p.country}` : ""}
+                      </span>
+                    ) : null}
+                    {p.episodes ? (
+                      <span class="cast-eps">
+                        {p.episodes} episode{p.episodes === 1 ? "" : "s"}
+                      </span>
+                    ) : null}
+                    {p.voice ? <span class="badge">Voice</span> : null}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </>
       ) : (
         <p class="muted">Cast data for this show is still syncing — check back soon.</p>
       )}
+      {guests.length ? (
+        <section>
+          <h2>Guest stars</h2>
+          <div class="guest-list">
+            {guests.map((p) => (
+              <a class="guest-row" href={`/person/${slugifyName(p.name)}-${p.id}`}>
+                {p.image_url ? (
+                  <img src={p.image_url} alt={p.name} loading="lazy" />
+                ) : (
+                  <span class="guest-fallback" aria-hidden="true">
+                    {p.name.slice(0, 1)}
+                  </span>
+                )}
+                <span class="guest-who">
+                  <span class="guest-name">{p.name}</span>
+                  {p.character ? <span class="guest-char muted">as {p.character}</span> : null}
+                </span>
+                {p.episodes ? (
+                  <span class="guest-eps">
+                    {p.episodes} ep{p.episodes === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+              </a>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </Layout>,
   );
 });

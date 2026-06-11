@@ -1,12 +1,12 @@
-import { Hono } from "hono";
 import type { Context } from "hono";
-import type { FC, PropsWithChildren } from "hono/jsx";
+import { Hono } from "hono";
 import { raw } from "hono/html";
-import { runSync, providerPatrol, sendDailyDigest, type SyncEnv } from "./sync";
-import { sendEmails } from "./email";
-import { signToken, verifyToken } from "./tokens";
+import type { FC, PropsWithChildren } from "hono/jsx";
 import franchisesData from "../data/franchises.json";
 import providerLogosData from "../data/provider-logos.json";
+import { sendEmails } from "./email";
+import { providerPatrol, runSync, sendDailyDigest, type SyncEnv } from "./sync";
+import { signToken, verifyToken } from "./tokens";
 
 // provider_name -> TMDB logo URL; regenerate with scripts/fetch-provider-logos.mjs
 const PROVIDER_LOGOS: Record<string, string> = providerLogosData;
@@ -202,6 +202,39 @@ const ProviderLine: FC<{
   );
 };
 
+const ProviderChips: FC<{
+  row: { providers_intl: string | null };
+  region: string;
+  max?: number;
+}> = ({ row, region, max = 4 }) => {
+  const prov = providersFor(row, region);
+  if (!prov.names.length) return <span class="muted shortlist-nostream">Not streaming</span>;
+  const seen = new Set<string>();
+  const entries: { name: string; logo?: string }[] = [];
+  for (const name of prov.names) {
+    const brand = providerBrand(name);
+    if (seen.has(brand)) continue;
+    seen.add(brand);
+    entries.push({ name, logo: PROVIDER_LOGOS[name] });
+  }
+  const shown = entries.slice(0, max);
+  const extra = entries.length - shown.length;
+  return (
+    <div class="shortlist-provs">
+      {shown.map(({ name, logo }) =>
+        logo ? (
+          <span class="prov-tile" title={name}>
+            <img src={logo} alt={name} width="28" height="28" loading="lazy" />
+          </span>
+        ) : (
+          <span class="prov">{name}</span>
+        ),
+      )}
+      {extra > 0 ? <span class="muted shortlist-more">+{extra}</span> : null}
+    </div>
+  );
+};
+
 // "Standby Glow" mark: a TV on standby — thin 16:9 frame, one crisp LED.
 // No blur filters: at header sizes they render as smear; a real standby
 // light reads as a sharp point with a faint halo.
@@ -242,6 +275,22 @@ const ShowPills: FC<{ slug: string; imdbId?: string | null }> = ({ slug, imdbId 
 const stripHtml = (s: string | null) => (s ?? "").replace(/<[^>]*>/g, "").trim();
 const epCode = (e: EpisodeRow) =>
   `S${String(e.season ?? 0).padStart(2, "0")}E${String(e.number ?? 0).padStart(2, "0")}`;
+const airTime = (airstamp: string | null) =>
+  airstamp ? new Date(airstamp).toISOString().slice(11, 16) : null;
+const premiereDateParts = (airdate: string | null) => {
+  if (!airdate) return { day: "—", month: "" };
+  const d = new Date(`${airdate}T12:00:00`);
+  return {
+    day: String(d.getUTCDate()),
+    month: d.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase(),
+  };
+};
+const homeDateline = () => {
+  const d = new Date();
+  const weekday = d.toLocaleString("en-US", { weekday: "long" });
+  const monthDay = d.toLocaleString("en-US", { month: "long", day: "numeric" });
+  return `${weekday} · ${monthDay}`;
+};
 
 const getShow = (db: D1Database, slug: string) =>
   db.prepare("SELECT * FROM shows WHERE slug = ?").bind(slug).first<ShowRow>();
@@ -343,12 +392,14 @@ const Layout: FC<
             <a href="/whats-new">News</a>
             <a href="/lists">Browse</a>
           </nav>
-          <form action="/search" method="get" class="search">
+          <form action="/search" method="get" class="search" role="search">
             <input
               type="search"
               name="q"
-              placeholder="Search shows & movies…"
+              placeholder="Search shows & movies"
               aria-label="Search shows and movies"
+              autocomplete="off"
+              spellcheck={false}
               required
             />
           </form>
@@ -404,7 +455,7 @@ const Layout: FC<
           shows, networks, or data sources. While we aim to provide reliable information, the data
           presented on this site is not guaranteed to be accurate, complete, or current.
         </p>
-        <p>
+        <p class="footer-attribution">
           TV information from{" "}
           <a href="https://www.tvmaze.com" rel="noopener">
             TVmaze.com
@@ -425,9 +476,11 @@ const Layout: FC<
           </a>{" "}
           via TMDB.
         </p>
-        <p>
-          <a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a> · © 2026 TV
-          Nightly. All rights reserved.
+        <p class="footer-legal">
+          <span>
+            <a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a>
+          </span>
+          <span>© 2026 TV Nightly. All rights reserved.</span>
         </p>
         </div>
       </footer>
@@ -530,7 +583,7 @@ const ExploreCard: FC<{ icon: string; title: string; desc: string; href: string 
       <strong>{title}</strong>
       <p class="muted">{desc}</p>
     </span>
-    <span class="explore-arrow">→</span>
+    <span class="chev-icon explore-arrow" aria-hidden="true"></span>
   </a>
 );
 
@@ -575,6 +628,7 @@ app.get("/", async (c) => {
     ep_season: number | null;
     ep_number: number | null;
     ep_airdate: string | null;
+    ep_airstamp: string | null;
   };
   const [top, topMovies, tonight, premieres, spotTonight, spotPremiere] = await Promise.all([
     // weight-only ORDER BY rides idx_shows_weight; a rating tiebreak would
@@ -606,7 +660,7 @@ app.get("/", async (c) => {
     // spotlight: tonight's biggest show by popularity weight
     c.env.DB.prepare(
       `SELECT s.*, e.name AS ep_name, e.season AS ep_season, e.number AS ep_number,
-              e.airdate AS ep_airdate
+              e.airdate AS ep_airdate, e.airstamp AS ep_airstamp
        FROM episodes e JOIN shows s ON s.id = e.show_id
        WHERE e.airstamp >= datetime('now','start of day')
          AND e.airstamp < datetime('now','start of day','+1 day')
@@ -615,7 +669,7 @@ app.get("/", async (c) => {
     // fallback spotlight: the biggest premiere of the next three weeks
     c.env.DB.prepare(
       `SELECT s.*, e.name AS ep_name, e.season AS ep_season, e.number AS ep_number,
-              e.airdate AS ep_airdate
+              e.airdate AS ep_airdate, e.airstamp AS ep_airstamp
        FROM episodes e JOIN shows s ON s.id = e.show_id
        WHERE e.number = 1 AND e.airstamp > datetime('now')
          AND e.airstamp < datetime('now', '+21 days')
@@ -626,13 +680,24 @@ app.get("/", async (c) => {
   const spot: SpotRow | null =
     spotTonight ??
     spotPremiere ??
-    (top[0] ? { ...top[0], ep_name: null, ep_season: null, ep_number: null, ep_airdate: null } : null);
+    (top[0]
+      ? {
+          ...top[0],
+          ep_name: null,
+          ep_season: null,
+          ep_number: null,
+          ep_airdate: null,
+          ep_airstamp: null,
+        }
+      : null);
   const spotEyebrow = spotTonight
     ? "On tonight"
     : spotPremiere
       ? `Premieres ${spotPremiere.ep_airdate ?? "soon"}`
       : "Tonight's pick";
+  const spotAirTime = spotTonight?.ep_airstamp ? airTime(spotTonight.ep_airstamp) : null;
   const spotGenres: string[] = spot?.genres ? JSON.parse(spot.genres) : [];
+  const alsoTonight = spotTonight ? tonight.filter((e) => e.show_slug !== spotTonight.slug) : tonight;
 
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
@@ -640,186 +705,275 @@ app.get("/", async (c) => {
       title="TV Nightly — best episodes, release dates & what's on TV tonight"
       description="Track the best episodes of every TV show, season release dates, renewal status, and what's airing tonight."
       canonical={canonical(c)}
+      scripts={["/js/poster-rail.js"]}
     >
-      {/* The evening opens on a headline, not a list: tonight's biggest show
-          in the cinematic hero treatment. Data-driven, never a marketing banner. */}
-      {spot ? (
-        <section class="detail-hero spotlight">
-          {spot.image_url ? (
-            <div class="hero-backdrop" style={`background-image:url('${spot.image_url}')`}></div>
-          ) : null}
-          <div class="detail-head">
+      <div class="home">
+        {/* The evening opens on a headline, not a list: tonight's biggest show
+            in the cinematic hero treatment. Data-driven, never a marketing banner. */}
+        {spot ? (
+          <section class="detail-hero spotlight">
             {spot.image_url ? (
-              <img class="poster spot-poster" src={spot.image_url} alt={spot.name} />
-            ) : (
-              <div class="poster spot-poster card-fallback">{spot.name}</div>
-            )}
-            <div class="detail-info">
-              <p class="eyebrow">
-                {spotTonight ? <span class="live-dot"></span> : null}
-                {spotEyebrow}
-              </p>
-              <h1 class="spot-title">
-                <a href={`/show/${spot.slug}`}>{spot.name}</a>
-              </h1>
-              <p class="meta-strip">
-                <StatusBadge status={spot.status} />
-                {spot.premiered ? <span>{spot.premiered.slice(0, 4)}</span> : null}
-                {spotGenres.length ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>{spotGenres.slice(0, 3).join(", ")}</span>
-                  </>
-                ) : null}
-                {spot.rating != null ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span class="rating">★ {spot.rating.toFixed(1)}</span>
-                  </>
-                ) : null}
-              </p>
-              {spot.ep_season != null ? (
-                <p>
-                  S{String(spot.ep_season).padStart(2, "0")}E
-                  {String(spot.ep_number ?? 0).padStart(2, "0")}
-                  {spot.ep_name ? ` — ${spot.ep_name}` : ""}
-                  {spot.network || spot.web_channel ? (
-                    <span class="muted"> · {spot.network ?? spot.web_channel}</span>
+              <div class="hero-backdrop" style={`background-image:url('${spot.image_url}')`}></div>
+            ) : null}
+            <div class="detail-head">
+              {spot.image_url ? (
+                <img class="poster spot-poster" src={spot.image_url} alt={spot.name} />
+              ) : (
+                <div class="poster spot-poster card-fallback">{spot.name}</div>
+              )}
+              <div class="detail-info">
+                <p class="eyebrow">
+                  {spotTonight ? <span class="live-dot"></span> : null}
+                  {homeDateline()}
+                  <span class="eyebrow-sep">·</span>
+                  {spotEyebrow}
+                  {spotAirTime ? (
+                    <>
+                      <span class="eyebrow-sep">·</span>
+                      {spotAirTime} UTC
+                    </>
                   ) : null}
                 </p>
-              ) : null}
-              <ProviderLine row={spot} region={visitorRegion(c)} pickerType="tv" />
-              <p class="spot-actions">
-                <a class="btn-ghost" href={`/show/${spot.slug}`}>
-                  Episode guide & ratings →
+                <h1 class="spot-title">
+                  <a href={`/show/${spot.slug}`}>{spot.name}</a>
+                </h1>
+                <p class="meta-strip">
+                  <StatusBadge status={spot.status} />
+                  {spot.premiered ? <span>{spot.premiered.slice(0, 4)}</span> : null}
+                  {spotGenres.length ? (
+                    <>
+                      <span class="sep">·</span>
+                      <span>{spotGenres.slice(0, 3).join(", ")}</span>
+                    </>
+                  ) : null}
+                  {spot.rating != null ? (
+                    <>
+                      <span class="sep">·</span>
+                      <span class="rating">★ {spot.rating.toFixed(1)}</span>
+                    </>
+                  ) : null}
+                </p>
+                {spot.ep_season != null ? (
+                  <p>
+                    S{String(spot.ep_season).padStart(2, "0")}E
+                    {String(spot.ep_number ?? 0).padStart(2, "0")}
+                    {spot.ep_name ? ` — ${spot.ep_name}` : ""}
+                    {spot.network || spot.web_channel ? (
+                      <span class="muted"> · {spot.network ?? spot.web_channel}</span>
+                    ) : null}
+                  </p>
+                ) : null}
+                <ProviderLine row={spot} region={visitorRegion(c)} pickerType="tv" />
+                <p class="spot-actions">
+                <a class="btn-ghost chev-after" href={`/show/${spot.slug}`}>
+                  Episode guide & ratings
                 </a>
-              </p>
+                </p>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        <section class="evening-panel">
+          <p class="section-eyebrow">Your evening</p>
+          <div class="evening-grid">
+            <div class="evening-main">
+              <div class="evening-head">
+                <h2>
+                  {spotTonight ? (
+                    <>
+                      <span class="live-dot"></span>Also on tonight
+                    </>
+                  ) : (
+                    <>
+                      <span class="live-dot"></span>On tonight
+                    </>
+                  )}{" "}
+                  <a class="more" href="/tonight">
+                    full schedule
+                  </a>
+                </h2>
+                <p class="section-lead muted">Every episode airing today, in air-time order.</p>
+              </div>
+              {alsoTonight.length ? (
+                <ol class="tonight-timeline">
+                  {alsoTonight.map((e) => (
+                    <li class="tonight-row">
+                      <time class="tonight-time">{airTime(e.airstamp) ?? "—:—"}</time>
+                      <span class="tonight-info">
+                        <a href={`/show/${e.show_slug}`}>{e.show_name}</a>{" "}
+                        <span class="muted">
+                          {epCode(e)}
+                          {e.name ? ` — ${e.name}` : ""}
+                          {e.network ? ` · ${e.network}` : ""}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p class="muted">
+                  {spotTonight
+                    ? "Nothing else on the schedule tonight — the spotlight has the room."
+                    : "Quiet night in the schedule — a good one to start something."}
+                </p>
+              )}
+            </div>
+            <div class="evening-aside">
+              <div class="evening-head">
+                <h2>
+                  Coming up{" "}
+                  <a class="more" href="/premieres">
+                    all premieres
+                  </a>
+                </h2>
+                <p class="section-lead muted">Season premieres in the next three weeks.</p>
+              </div>
+              {premieres.length ? (
+                <ul class="premiere-list">
+                  {premieres.map((p) => {
+                    const { day, month } = premiereDateParts(p.airdate);
+                    return (
+                      <li>
+                        <a class="premiere-card" href={`/show/${p.show_slug}/release-date`}>
+                          <span class="premiere-date">
+                            <span class="premiere-day">{day}</span>
+                            {month ? <span class="premiere-month">{month}</span> : null}
+                          </span>
+                          <span class="premiere-info">
+                            <strong>{p.show_name}</strong>
+                            <span class="muted">Season {p.season} premiere</span>
+                          </span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p class="muted">No premieres in the next three weeks.</p>
+              )}
+            </div>
+          </div>
+          <div class="evening-cta">
+            <a class="verdict-btn" href="/what-to-watch">
+              What should I watch tonight?
+            </a>
+            <a class="btn-ghost chev-after" href="/recommend">
+              Rate one thing, get a personal pick
+            </a>
+          </div>
+        </section>
+
+        <section class="home-discover">
+          <p class="section-eyebrow">Discover</p>
+          <div class="discover-tabs">
+            <input type="radio" name="discover" id="discover-tv" class="discover-input" checked />
+            <input type="radio" name="discover" id="discover-movies" class="discover-input" />
+            <div class="discover-head">
+              <h2>Popular right now</h2>
+              <p class="section-lead muted">Ranked by what people search and return to most.</p>
+            </div>
+            <div class="discover-tablist">
+              <label for="discover-tv">TV shows</label>
+              <label for="discover-movies">Movies</label>
+              <span class="discover-more">
+                <a class="more more-tv" href="/top/tv">
+                  top-rated
+                </a>
+                <a class="more more-movies" href="/movies/best">
+                  best of all time
+                </a>
+              </span>
+            </div>
+            <div class="discover-panel panel-tv">
+              <div class="poster-rail">
+                <button type="button" class="rail-btn rail-btn-prev" aria-label="Scroll shows left">
+                  <span class="chev-icon chev-icon-prev" aria-hidden="true"></span>
+                </button>
+                <div class="poster-row">
+                  {top.map((s) => (
+                    <ShowCard show={s} />
+                  ))}
+                </div>
+                <button type="button" class="rail-btn rail-btn-next" aria-label="Scroll shows right">
+                  <span class="chev-icon" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
+            <div class="discover-panel panel-movies">
+              <div class="poster-rail">
+                <button type="button" class="rail-btn rail-btn-prev" aria-label="Scroll movies left">
+                  <span class="chev-icon chev-icon-prev" aria-hidden="true"></span>
+                </button>
+                <div class="poster-row">
+                  {topMovies.map((m) => (
+                    <MovieCard movie={m} />
+                  ))}
+                </div>
+                <button type="button" class="rail-btn rail-btn-next" aria-label="Scroll movies right">
+                  <span class="chev-icon" aria-hidden="true"></span>
+                </button>
+              </div>
             </div>
           </div>
         </section>
-      ) : null}
-      <section class="home-grid">
-        <div class="hero-side">
-          <h2>
-            <span class="live-dot"></span>On tonight{" "}
-            <a class="more" href="/tonight">
-              full schedule →
+
+        <section class="home-tools">
+          <p class="section-eyebrow">Tools</p>
+          <h2>Go deeper</h2>
+          <div class="tools-bento">
+            <a class="tool-tile tool-tile-lg" href="/best-episodes">
+              <strong>The greatest episodes ever aired</strong>
+              <p class="muted">Every show's finest hours, ranked on one honest list.</p>
+              <span class="chev-icon" aria-hidden="true"></span>
             </a>
-          </h2>
-          {tonight.length ? (
-            <ul class="ep-list">
-              {tonight.map((e) => (
-                <li>
-                  <a href={`/show/${e.show_slug}`}>{e.show_name}</a> {epCode(e)}
-                  {e.name ? ` — ${e.name}` : ""}
-                  {e.network ? <span class="muted"> · {e.network}</span> : null}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p class="muted">Quiet night in the schedule — a good one to start something.</p>
-          )}
-        </div>
-        <div class="hero-side">
-          <h2>
-            Premiering soon{" "}
-            <a class="more" href="/premieres">
-              all →
+            <a class="tool-tile tool-tile-lg" href="/what-to-watch">
+              <strong>What should I watch tonight?</strong>
+              <p class="muted">Filter by mood, runtime, and streaming service — then spin.</p>
+              <span class="chev-icon" aria-hidden="true"></span>
             </a>
-          </h2>
-          {premieres.length ? (
-            <ul class="ep-list">
-              {premieres.map((p) => (
-                <li>
-                  <span class="muted">{p.airdate}</span>{" "}
-                  <a href={`/show/${p.show_slug}/release-date`}>{p.show_name}</a> S{p.season}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p class="muted">No premieres in the next three weeks.</p>
-          )}
-          <div class="hero-tools">
-            <a class="verdict-btn" href="/what-to-watch">
-              What should I watch tonight? 🎲
-            </a>
-            <a class="btn-ghost" href="/recommend">
-              Rate one thing, get a personal pick →
-            </a>
+            <div class="tools-bento-rest">
+              <a class="tool-tile tool-tile-sm" href="/movies/best">
+                <span>Top movies</span>
+                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
+              </a>
+              <a class="tool-tile tool-tile-sm" href="/compare">
+                <span>Compare two shows</span>
+                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
+              </a>
+              <a class="tool-tile tool-tile-sm" href="/loved">
+                <span>Loved by this community</span>
+                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
+              </a>
+              <a class="tool-tile tool-tile-sm" href="/top/seasons">
+                <span>Best TV seasons</span>
+                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
+              </a>
+              <a class="tool-tile tool-tile-sm" href="/top/networks">
+                <span>Top networks</span>
+                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
+              </a>
+              <a class="tool-tile tool-tile-sm" href="/top/tv">
+                <span>Top TV shows</span>
+                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
+              </a>
+            </div>
           </div>
-        </div>
-      </section>
-      <section>
-        <h2>
-          Popular shows{" "}
-          <a class="more" href="/top/tv">
-            top-rated →
-          </a>
-        </h2>
-        <div class="poster-row">
-          {top.map((s) => (
-            <ShowCard show={s} />
-          ))}
-        </div>
-      </section>
-      <section>
-        <h2>
-          Popular movies{" "}
-          <a class="more" href="/movies/best">
-            best of all time →
-          </a>
-        </h2>
-        <div class="poster-row">
-          {topMovies.map((m) => (
-            <MovieCard movie={m} />
-          ))}
-        </div>
-      </section>
-      <section>
-        <h2>Go deeper</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="EPS"
-            title="The greatest episodes ever aired"
-            desc="Every show's finest hours, ranked honestly on one all-time list."
-            href="/best-episodes"
-          />
-          <ExploreCard
-            icon="📋"
-            title="Franchise watch orders"
-            desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
-            href="/watch-orders"
-          />
-          <ExploreCard
-            icon="VS"
-            title="Compare two shows"
-            desc="Full episode-rating histories, head to head on one chart."
-            href="/compare"
-          />
-          <ExploreCard
-            icon="♥"
-            title="Loved by this community"
-            desc="What TV Nightly visitors actually rate highest — voted here, not imported."
-            href="/loved"
-          />
-        </div>
-        <p class="quick-picks">
-          {VERTICALS.map((v) => (
-            <a class="chip" href={`/${v.slug}`}>
-              {v.name} hub
+          <p class="browse-line">
+            <span class="browse-label">Browse</span>
+            {VERTICALS.map((v, i) => (
+              <>
+                {i > 0 ? " · " : " "}
+                <a href={`/${v.slug}`}>{v.name}</a>
+              </>
+            ))}
+            {" · "}
+            <a class="chev-after" href="/lists">
+              All lists
             </a>
-          ))}
-          <a class="chip" href="/top/seasons">
-            Best TV seasons
-          </a>
-          <a class="chip" href="/top/networks">
-            Top networks
-          </a>
-          <a class="chip" href="/lists">
-            Browse everything
-          </a>
-        </p>
-      </section>
+          </p>
+        </section>
+      </div>
     </Layout>,
   );
 });
@@ -3829,6 +3983,16 @@ app.get("/what-to-watch", async (c) => {
     .map((s) => s.trim())
     .filter((s) => (type === "movie" ? /^tt\d+$/.test(s) : /^\d+$/.test(s)))
     .slice(-20);
+  const hasSpun = Boolean(
+    c.req.query("type") ||
+      c.req.query("genre") ||
+      c.req.query("who") ||
+      c.req.query("service") ||
+      c.req.query("status") ||
+      c.req.query("min") ||
+      c.req.query("runtime") ||
+      c.req.query("skip"),
+  );
 
   const conds: string[] = ["rating IS NOT NULL"];
   const binds: (string | number)[] = [];
@@ -3883,7 +4047,7 @@ app.get("/what-to-watch", async (c) => {
     href: string;
     image: string | null;
     genres: string[];
-    providers: string[];
+    providers_intl: string | null;
     rating: number | null;
     runtime: number | null;
     desc: string;
@@ -3891,49 +4055,54 @@ app.get("/what-to-watch", async (c) => {
     slug: string;
     refId: string; // shows.id / movies.imdb_id — for skip trail + rating
   }
-  let pick: PickView | null = null;
-  if (type === "movie") {
-    const m = await db
-      .prepare(`SELECT * FROM movies WHERE ${where} ORDER BY RANDOM() LIMIT 1`)
-      .bind(...binds)
-      .first<MovieRow>();
-    if (m) {
-      pick = {
-        name: m.year ? `${m.title} (${m.year})` : m.title,
-        href: `/movie/${m.slug}`,
-        image: m.poster_url,
-        genres: m.genres ? JSON.parse(m.genres) : [],
-        providers: providersFor(m, region).names,
-        rating: m.rating,
-        runtime: m.runtime,
-        desc: (m.overview ?? "").slice(0, 220),
-        status: null,
-        slug: m.slug,
-        refId: m.imdb_id,
-      };
-    }
-  } else {
-    const s = await db
-      .prepare(`SELECT * FROM shows WHERE ${where} ORDER BY RANDOM() LIMIT 1`)
-      .bind(...binds)
-      .first<ShowRow>();
-    if (s) {
-      pick = {
-        name: s.name,
-        href: `/show/${s.slug}`,
-        image: s.image_url,
-        genres: s.genres ? JSON.parse(s.genres) : [],
-        providers: providersFor(s, region).names,
-        rating: s.rating,
-        runtime: s.runtime,
-        desc: s.blurb ?? stripHtml(s.summary).slice(0, 220),
-        status: s.status,
-        slug: s.slug,
-        refId: String(s.id),
-      };
+  const PICK_LIMIT = 2;
+  const picks: PickView[] = [];
+  if (hasSpun) {
+    if (type === "movie") {
+      const { results } = await db
+        .prepare(`SELECT * FROM movies WHERE ${where} ORDER BY RANDOM() LIMIT ${PICK_LIMIT}`)
+        .bind(...binds)
+        .all<MovieRow>();
+      for (const m of results) {
+        picks.push({
+          name: m.year ? `${m.title} (${m.year})` : m.title,
+          href: `/movie/${m.slug}`,
+          image: m.poster_url,
+          genres: m.genres ? JSON.parse(m.genres) : [],
+          providers_intl: m.providers_intl,
+          rating: m.rating,
+          runtime: m.runtime,
+          desc: (m.overview ?? "").slice(0, 160),
+          status: null,
+          slug: m.slug,
+          refId: m.imdb_id,
+        });
+      }
+    } else {
+      const { results } = await db
+        .prepare(`SELECT * FROM shows WHERE ${where} ORDER BY RANDOM() LIMIT ${PICK_LIMIT}`)
+        .bind(...binds)
+        .all<ShowRow>();
+      for (const s of results) {
+        picks.push({
+          name: s.name,
+          href: `/show/${s.slug}`,
+          image: s.image_url,
+          genres: s.genres ? JSON.parse(s.genres) : [],
+          providers_intl: s.providers_intl,
+          rating: s.rating,
+          runtime: s.runtime,
+          desc: s.blurb ?? stripHtml(s.summary).slice(0, 160),
+          status: s.status,
+          slug: s.slug,
+          refId: String(s.id),
+        });
+      }
     }
   }
-  const skipNext = pick ? [...skip, pick.refId].slice(-20).join(",") : skip.join(",");
+  const skipNext = picks.length
+    ? [...skip, ...picks.map((p) => p.refId)].slice(-20).join(",")
+    : skip.join(",");
   c.header("Cache-Control", "no-store");
   return c.html(
     <Layout
@@ -3941,153 +4110,216 @@ app.get("/what-to-watch", async (c) => {
       description="Can't decide what to watch? Spin the picker: a great TV show matching your genre, rating, and episode-length filters."
       canonical={origin(c) + "/what-to-watch"}
     >
-      <h1>What should I watch tonight?</h1>
-      <form method="get" action="/what-to-watch" class="picker-form">
-        <label>
-          What{" "}
-          {/* Filters are per-medium (movies: service; TV: status) to keep the
-              form lean — auto-submit so switching reveals them immediately. */}
-          <select name="type" onchange="this.form.submit()">
-            <option value="tv" selected={type === "tv"}>
-              TV show
-            </option>
-            <option value="movie" selected={type === "movie"}>
-              Movie
-            </option>
-          </select>
-        </label>
-        <label>
-          Who's watching?{" "}
-          <select name="who">
-            <option value="" selected={!who}>
-              Anyone
-            </option>
-            {Object.entries(COMPANY).map(([key, cfg]) => (
-              <option value={key} selected={who === key}>
-                {cfg.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Genre{" "}
-          <select name="genre">
-            <option value="">Any</option>
-            {genreRows.map((r) => (
-              <option value={r.g} selected={r.g === genre}>
-                {r.g}
-              </option>
-            ))}
-          </select>
-        </label>
-        {serviceRows.length ? (
-          <label>
-            Streaming on ({region}){" "}
-            <select name="service">
-              <option value="">Any service</option>
-              {serviceRows.map((r) => (
-                <option value={r.p} selected={r.p === service}>
-                  {r.p}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        {type === "tv" ? (
-          <label>
-            Status{" "}
-            <select name="status">
-              <option value="" selected={status === ""}>
-                Any
-              </option>
-              <option value="ended" selected={status === "ended"}>
-                Finished (bingeable)
-              </option>
-              <option value="running" selected={status === "running"}>
-                Still running
-              </option>
-            </select>
-          </label>
-        ) : null}
-        <label>
-          Rating{" "}
-          <select name="min">
-            <option value="" selected={!minRating}>
-              Any
-            </option>
-            <option value="7" selected={minRating === 7}>
-              7+ good
-            </option>
-            <option value="8" selected={minRating === 8}>
-              8+ great
-            </option>
-          </select>
-        </label>
-        <label>
-          {type === "movie" ? "Length" : "Episode length"}{" "}
-          <select name="runtime">
-            <option value="" selected={!runtimeBand}>
-              Any
-            </option>
-            <option value="short" selected={runtimeBand === "short"}>
-              ≤ {RUNTIME_CAPS[type].short} min
-            </option>
-            <option value="long" selected={runtimeBand === "long"}>
-              ≤ {RUNTIME_CAPS[type].long} min
-            </option>
-          </select>
-        </label>
-        {skipNext ? <input type="hidden" name="skip" value={skipNext} /> : null}
-        <button type="submit">Settle it for us 🎲</button>
-      </form>
+      <div class="watch-page">
+        <header class="watch-head">
+          <p class="section-eyebrow">What to watch</p>
+          <h1>Two for tonight</h1>
+          <p class="watch-tagline muted">
+            Tell us the shape of your evening — we'll deal two worth arguing over.
+          </p>
+        </header>
 
-      {pick ? (
-        <div class="pick-card">
-          {pick.image ? (
-            <img class="poster" src={pick.image} alt={pick.name} />
-          ) : (
-            <div class="poster card-fallback">{pick.name}</div>
-          )}
-          <div>
-            <h2>
-              <a href={pick.href}>{pick.name}</a>
-            </h2>
-            <p>
-              {type === "tv" ? <StatusBadge status={pick.status} /> : null}
-              {pick.rating != null ? <span class="rating"> · ★ {pick.rating.toFixed(1)}</span> : null}
-              {pick.runtime ? (
-                <span class="muted">
-                  {" "}
-                  · {type === "movie" ? `${pick.runtime} min` : `~${pick.runtime} min/ep`}
-                </span>
-              ) : null}
-              {pick.genres.length ? <span class="muted"> · {pick.genres.join(", ")}</span> : null}
-            </p>
-            {pick.providers.length ? (
-              <p class="provs">
-                <span class="muted">Streaming on</span>{" "}
-                {pick.providers.map((p) => (
-                  <span class="prov">{p}</span>
+        <form method="get" action="/what-to-watch#picks" class="watch-bar">
+          <div class="watch-bar-row">
+            <div class="watch-bar-fields">
+            <label>
+              Format
+              {/* Filters are per-medium (movies: service; TV: status) to keep the
+                  form lean — auto-submit so switching reveals them immediately. */}
+              <select name="type" onchange="this.form.submit()">
+                <option value="tv" selected={type === "tv"}>
+                  TV show
+                </option>
+                <option value="movie" selected={type === "movie"}>
+                  Movie
+                </option>
+              </select>
+            </label>
+            <label>
+              Who's watching
+              <select name="who">
+                <option value="" selected={!who}>
+                  Anyone
+                </option>
+                {Object.entries(COMPANY).map(([key, cfg]) => (
+                  <option value={key} selected={who === key}>
+                    {cfg.label}
+                  </option>
                 ))}
-              </p>
+              </select>
+            </label>
+            <label>
+              Genre
+              <select name="genre">
+                <option value="">Any</option>
+                {genreRows.map((r) => (
+                  <option value={r.g} selected={r.g === genre}>
+                    {r.g}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Rating
+              <select name="min">
+                <option value="" selected={!minRating}>
+                  Any
+                </option>
+                <option value="7" selected={minRating === 7}>
+                  7+
+                </option>
+                <option value="8" selected={minRating === 8}>
+                  8+
+                </option>
+              </select>
+            </label>
+            <label>
+              {type === "movie" ? "Length" : "Ep. length"}
+              <select name="runtime">
+                <option value="" selected={!runtimeBand}>
+                  Any
+                </option>
+                <option value="short" selected={runtimeBand === "short"}>
+                  ≤ {RUNTIME_CAPS[type].short}m
+                </option>
+                <option value="long" selected={runtimeBand === "long"}>
+                  ≤ {RUNTIME_CAPS[type].long}m
+                </option>
+              </select>
+            </label>
+            {serviceRows.length ? (
+              <label>
+                Streaming on ({region})
+                <select name="service">
+                  <option value="">Any</option>
+                  {serviceRows.map((r) => (
+                    <option value={r.p} selected={r.p === service}>
+                      {r.p}
+                    </option>
+                  ))}
+                </select>
+              </label>
             ) : null}
-            <p>{pick.desc}</p>
-            <RateInline kind={type} refId={pick.refId} stat={null} />
-            <p>
-              {type === "movie" ? (
-                <a href="/movies/best">Best movies, ranked</a>
-              ) : (
-                <>
-                  <a href={`/show/${pick.slug}/best-episodes`}>Best episodes</a> ·{" "}
-                  <a href={`/show/${pick.slug}/next-episode`}>Next episode</a>
-                </>
-              )}
-            </p>
+            </div>
+            {skipNext ? <input type="hidden" name="skip" value={skipNext} /> : null}
+            <div class="watch-bar-actions">
+              {hasSpun ? (
+                <a class="watch-clear" href="/what-to-watch">
+                  Reset filters
+                </a>
+              ) : null}
+              <button type="submit" class="watch-submit">
+                {picks.length ? "Deal again 🎲" : "Deal me two 🎲"}
+              </button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <p class="muted">Nothing matches those filters — try loosening one.</p>
-      )}
+        </form>
+
+        <section class="watch-results" id="picks" aria-label="Tonight's matchup">
+          {picks.length ? (
+            <>
+              <div class="shortlist-head">
+                <span class="shortlist-rule" aria-hidden="true"></span>
+                <p class="shortlist-kicker">
+                  {picks.length === PICK_LIMIT ? (
+                    "Tonight's matchup"
+                  ) : (
+                    <>
+                      The last one standing
+                      <span class="muted"> · your filters ruled out everything else</span>
+                    </>
+                  )}
+                </p>
+                <span class="shortlist-rule" aria-hidden="true"></span>
+              </div>
+              <div class={`shortlist-duo${picks.length < 2 ? " shortlist-duo--solo" : ""}`}>
+                {picks.flatMap((pick, i) => {
+                  const card = (
+                    <article class={`shortlist-card${i === 1 ? " shortlist-card--b" : ""}`}>
+                      <a class="shortlist-poster" href={pick.href}>
+                        {pick.image ? (
+                          <img src={pick.image} alt={pick.name} loading="lazy" />
+                        ) : (
+                          <div class="card-fallback">{pick.name}</div>
+                        )}
+                        {pick.rating != null ? (
+                          <span class="card-rating">★ {pick.rating.toFixed(1)}</span>
+                        ) : null}
+                      </a>
+                      <div class="shortlist-body">
+                        <h2>
+                          <a href={pick.href}>{pick.name}</a>
+                        </h2>
+                        <p class="shortlist-meta">
+                          {type === "tv" ? <StatusBadge status={pick.status} /> : null}
+                          {pick.runtime ? (
+                            <>
+                              {type === "tv" ? <span class="sep">·</span> : null}
+                              <span>
+                                {type === "movie" ? `${pick.runtime} min` : `~${pick.runtime} min/ep`}
+                              </span>
+                            </>
+                          ) : null}
+                          {pick.genres.length ? (
+                            <>
+                              <span class="sep">·</span>
+                              <span>{pick.genres.slice(0, 2).join(", ")}</span>
+                            </>
+                          ) : null}
+                        </p>
+                        <ProviderChips row={pick} region={region} />
+                        <p class="shortlist-blurb">{pick.desc}</p>
+                        <div class="shortlist-foot">
+                          <a class="verdict-btn shortlist-btn" href={pick.href}>
+                            This one tonight
+                          </a>
+                          <RateInline kind={type} refId={pick.refId} stat={null} />
+                        </div>
+                      </div>
+                    </article>
+                  );
+                  return i === 0
+                    ? [card]
+                    : [
+                        <span class="shortlist-or" aria-hidden="true">
+                          <span class="or-badge">or</span>
+                        </span>,
+                        card,
+                      ];
+                })}
+              </div>
+            </>
+          ) : hasSpun ? (
+            <div class="watch-miss">
+              <p>Nothing survived those filters.</p>
+              <p class="muted">Genre and streaming service cut the deepest — loosen one of those first.</p>
+              <p>
+                <a class="btn-ghost" href="/what-to-watch">
+                  Start over
+                </a>
+              </p>
+            </div>
+          ) : (
+            <div class="watch-primer">
+              <div class="shortlist-head">
+                <span class="shortlist-rule" aria-hidden="true"></span>
+                <p class="shortlist-kicker muted">Your shortlist</p>
+                <span class="shortlist-rule" aria-hidden="true"></span>
+              </div>
+              <div class="watch-primer-duo" aria-hidden="true">
+                <span class="watch-primer-card"></span>
+                <span class="shortlist-or">
+                  <span class="or-badge">or</span>
+                </span>
+                <span class="watch-primer-card"></span>
+              </div>
+              <p class="watch-primer-copy muted">
+                Your two contenders land here — pick whichever feels like tonight.
+              </p>
+            </div>
+          )}
+        </section>
+      </div>
     </Layout>,
   );
 });

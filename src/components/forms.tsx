@@ -1,5 +1,6 @@
 // Interactive fragments: verdict buttons, alert signup, filter dropdowns.
 import { FC } from "hono/jsx";
+import { FaceLove, FaceLike, FaceMeh } from "./icons";
 
 /** One-tap verdict buttons + community stat — every title page collects data. */
 export const RateInline: FC<{ kind: string; refId: string; stat: string | null }> = ({ kind, refId, stat }) => (
@@ -7,17 +8,17 @@ export const RateInline: FC<{ kind: string; refId: string; stat: string | null }
     <span class="muted">{stat ?? "Seen it?"}</span>
     {(
       [
-        ["love", "😍"],
-        ["like", "🙂"],
-        ["meh", "😴"],
+        ["love", "Loved it", FaceLove],
+        ["like", "Liked it", FaceLike],
+        ["meh", "Not for me", FaceMeh],
       ] as const
-    ).map(([value, emoji]) => (
+    ).map(([value, label, Face]) => (
       <form method="post" action="/recommend" class="verdict-form">
         <input type="hidden" name="kind" value={kind} />
         <input type="hidden" name="ref" value={refId} />
         <input type="hidden" name="verdict" value={value} />
-        <button type="submit" class="vote-btn" aria-label={`Rate: ${value}`}>
-          {emoji}
+        <button type="submit" class="vote-btn" aria-label={label} title={label}>
+          <Face />
         </button>
       </form>
     ))}

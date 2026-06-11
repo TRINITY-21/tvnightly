@@ -8,6 +8,7 @@ import { Layout, COUNTDOWN_JS } from "../components/Layout";
 import { ShowTabs } from "../components/nav";
 import { StatusBadge } from "../components/cards";
 import { SubscribeForm } from "../components/forms";
+import { ChevUp, ChevDown, IconCal } from "../components/icons";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -326,10 +327,10 @@ const rankedPage =
                 <span class="rating"> ★ {e.rating!.toFixed(1)}</span>
                 <span class="vote" data-ep-id={String(e.id)}>
                   <button class="vote-btn" data-dir="up" aria-label="Agree with this ranking">
-                    👍 <span class="vote-count">{e.up ?? 0}</span>
+                    <ChevUp /> <span class="vote-count">{e.up ?? 0}</span>
                   </button>
                   <button class="vote-btn" data-dir="down" aria-label="Disagree with this ranking">
-                    👎 <span class="vote-count">{e.down ?? 0}</span>
+                    <ChevDown /> <span class="vote-count">{e.down ?? 0}</span>
                   </button>
                 </span>
                 {e.summary ? <p class="muted">{stripHtml(e.summary)}</p> : null}
@@ -418,7 +419,7 @@ app.get("/show/:slug/next-episode", async (c) => {
         </div>
       )}
       <p>
-        <a href={`/show/${show.slug}/calendar.ics`}>📅 Add {show.name} to your calendar</a>
+        <a href={`/show/${show.slug}/calendar.ics`}><IconCal /> Add {show.name} to your calendar</a>
       </p>
       <SubscribeForm showId={show.id} label={`Email me when ${show.name} gets schedule news:`} />
     </Layout>,
@@ -535,7 +536,7 @@ app.get("/show/:slug/release-date", async (c) => {
         label={`Email me when ${show.name} renewal or premiere news lands:`}
       />
       <p>
-        <a href={`/show/${show.slug}/calendar.ics`}>📅 Add {show.name} to your calendar</a>{" "}
+        <a href={`/show/${show.slug}/calendar.ics`}><IconCal /> Add {show.name} to your calendar</a>{" "}
         <span class="muted">— subscribe in Google/Apple Calendar and never miss an episode</span>
       </p>
       {history.length ? (

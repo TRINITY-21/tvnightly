@@ -6,6 +6,7 @@ import { VERDICTS, RatedEntry, getRatedTitle, parseRated, fmtRated, titleKey } f
 import { ipHash } from "../lib/crypto";
 import { Layout } from "../components/Layout";
 import { ShowCard, MovieCard } from "../components/cards";
+import { FaceLove, FaceLike, FaceMeh } from "../components/icons";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -234,13 +235,14 @@ app.get("/recommend", async (c) => {
     const title = await getRatedTitle(db, kind, ref);
     if (!title) return c.notFound();
     const ratedStr = fmtRated(parseRated(c.req.query("rated")));
-    const Verdict = ({ value, label }: { value: string; label: string }) => (
+    const Verdict = ({ value, label, icon }: { value: string; label: string; icon?: unknown }) => (
       <form method="post" action="/recommend" class="verdict-form">
         <input type="hidden" name="kind" value={kind} />
         <input type="hidden" name="ref" value={ref} />
         {ratedStr ? <input type="hidden" name="rated" value={ratedStr} /> : null}
         <input type="hidden" name="verdict" value={value} />
         <button type="submit" class="verdict-btn">
+          {icon}
           {label}
         </button>
       </form>
@@ -257,9 +259,9 @@ app.get("/recommend", async (c) => {
           <div>
             <h1>How was {title.name}?</h1>
             <div class="verdicts">
-              <Verdict value="love" label="😍 Loved it" />
-              <Verdict value="like" label="🙂 Liked it" />
-              <Verdict value="meh" label="😴 Meh" />
+              <Verdict value="love" label="Loved it" icon={<FaceLove size={16} />} />
+              <Verdict value="like" label="Liked it" icon={<FaceLike size={16} />} />
+              <Verdict value="meh" label="Not for me" icon={<FaceMeh size={16} />} />
             </div>
             <p class="muted">One tap. We save the verdict (nothing else) and pick your next watch.</p>
           </div>

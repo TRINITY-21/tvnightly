@@ -642,7 +642,7 @@ export async function sendDailyDigest(env: SyncEnv): Promise<{ queued: number }>
 
   const bodyCore =
     section(
-      "📺 On tonight",
+      "On tonight",
       tonight.map((t) =>
         li(
           `<a href="${origin}/show/${t.slug}">${t.name}</a> ${code(t.season, t.number)}${t.ep ? ` — ${t.ep}` : ""}${
@@ -668,7 +668,7 @@ export async function sendDailyDigest(env: SyncEnv): Promise<{ queued: number }>
       ),
     ) +
     (pick
-      ? `<h3 style="margin:18px 0 6px">🎲 Tonight's pick</h3><p style="margin:0"><a href="${origin}/show/${pick.slug}">${pick.name}</a> (★${pick.rating.toFixed(1)}) — <a href="${origin}/show/${pick.slug}/essential">start with the essentials</a>.</p>`
+      ? `<h3 style="margin:18px 0 6px">Tonight's pick</h3><p style="margin:0"><a href="${origin}/show/${pick.slug}">${pick.name}</a> (★${pick.rating.toFixed(1)}) — <a href="${origin}/show/${pick.slug}/essential">start with the essentials</a>.</p>`
       : "");
 
   const today = new Date().toISOString().slice(0, 10);

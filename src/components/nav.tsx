@@ -1,5 +1,6 @@
 // Lateral navigation: show tab rail and sibling-page sub-nav.
 import { FC } from "hono/jsx";
+import { IconCal } from "./icons";
 
 export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current }) => {
   const tabs: [string, string, string][] = [
@@ -19,7 +20,9 @@ export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current
           {label}
         </a>
       ))}
-      <a href={`/show/${slug}/calendar.ics`}>📅 Calendar</a>
+      <a href={`/show/${slug}/calendar.ics`}>
+        <IconCal /> Calendar
+      </a>
     </nav>
   );
 };

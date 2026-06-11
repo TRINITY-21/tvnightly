@@ -20,6 +20,14 @@ export const IconCal: FC<{ size?: number }> = ({ size = 15 }) => (
   </svg>
 );
 
+/* play: the broadcast triangle in a ring, same line weight as the faces */
+export const IconPlay: FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg class="icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8" />
+    <path d="M10 8.6l5.4 3.4-5.4 3.4z" fill="currentColor" stroke="currentColor" stroke-linejoin="round" />
+  </svg>
+);
+
 /* verdict faces: one circle, the mouth does the talking */
 export const FaceLove: FC<{ size?: number }> = ({ size = 18 }) => (
   <svg class="icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">

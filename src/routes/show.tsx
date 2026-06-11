@@ -6,9 +6,10 @@ import { stripHtml, epCode, epHref, hiRes, retinaSet, heroBg, longDate, slugifyN
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
-import { tmdbBackdrop } from "../lib/tmdb";
+import { tmdbBackdrop, tmdbMedia } from "../lib/tmdb";
 import { buildDossier } from "../lib/dossier";
 import { DossierRow } from "../components/dossier";
+import { IconPlay } from "../components/icons";
 import { hubForGenres } from "../lib/verticals";
 import { Layout } from "../components/Layout";
 import { ShowTabs, SeasonTabs } from "../components/nav";
@@ -851,6 +852,207 @@ app.get("/show/:slug/similar", async (c) => {
             </a>
             <a class="chev-after" href="/what-to-watch">
               What should I watch tonight?
+            </a>
+          </nav>
+        </section>
+        <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
+      </article>
+    </Layout>,
+  );
+});
+
+// Media: the show's designed artwork and its YouTube trailers/clips,
+// straight from TMDB (one edge-cached call) — no mirror tables touched.
+app.get("/show/:slug/media", async (c) => {
+  const show = await getShow(c.env.DB, c.req.param("slug"));
+  if (!show) return c.notFound();
+  const media =
+    show.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbMedia(c.env.TMDB_API_KEY, show.tmdb_id)
+      : null;
+  const base = `/show/${show.slug}/media`;
+  const site = origin(c);
+
+  const trailer = media?.videos.find((v) => v.type === "Trailer") ?? media?.videos[0] ?? null;
+  const clips = (media?.videos ?? []).filter((v) => v !== trailer).slice(0, 9);
+  const backdrops = (media?.backdrops ?? []).slice(0, 12);
+  const posters = (media?.posters ?? []).slice(0, 12);
+  const hasAny = Boolean(trailer || clips.length || backdrops.length || posters.length);
+
+  const backdrop =
+    show.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id)
+      : null;
+  const posterBg = hiRes(show.image_url);
+  const heroFrame = backdrop
+    ? heroBg(backdrop.x1, backdrop.x2)
+    : posterBg
+      ? heroBg(posterBg)
+      : null;
+
+  const ld: unknown[] = [breadcrumbLd(site, show, "Media", base)];
+  if (trailer) {
+    ld.push({
+      "@context": "https://schema.org",
+      "@type": "VideoObject",
+      name: trailer.name,
+      thumbnailUrl: `https://img.youtube.com/vi/${trailer.key}/hqdefault.jpg`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${trailer.key}`,
+      ...(trailer.published ? { uploadDate: trailer.published } : {}),
+    });
+  }
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${show.name} — trailer, posters & artwork | TV Nightly`}
+      description={`Every trailer, clip, poster and backdrop for ${show.name} in one place.`}
+      canonical={`${site}${base}`}
+      ogImage={show.image_url ?? undefined}
+      ld={ld}
+      scripts={["/js/media-lightbox.js"]}
+    >
+      <article class="show-hub">
+        <header class="detail-hero frame-hero">
+          {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
+          <div class="detail-head">
+            <div class="detail-side">
+              {show.image_url ? (
+                <img
+                  class="poster"
+                  src={show.image_url}
+                  srcset={retinaSet(show.image_url)}
+                  alt={show.name}
+                />
+              ) : (
+                <div class="poster card-fallback">{show.name}</div>
+              )}
+            </div>
+            <div class="detail-info">
+              <p class="ep-eyebrow">
+                <a href={`/show/${show.slug}`}>{show.name}</a>
+                <span class="sep">·</span> Media
+              </p>
+              <h1>{show.name} — trailers & artwork</h1>
+              <p class="summary">
+                {hasAny
+                  ? `The official trailers, clips, posters and backdrops for ${show.name}.`
+                  : `No media available for ${show.name} yet.`}
+              </p>
+            </div>
+          </div>
+        </header>
+        <ShowTabs slug={show.slug} current="media" />
+        {trailer ? (
+          <section>
+            <h2>Trailer</h2>
+            <div class="media-player">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${trailer.key}`}
+                title={trailer.name}
+                loading="lazy"
+                allowfullscreen
+                allow="encrypted-media; picture-in-picture"
+              ></iframe>
+            </div>
+          </section>
+        ) : null}
+        {clips.length ? (
+          <section>
+            <h2>More videos</h2>
+            <div class="media-videos">
+              {clips.map((v) => (
+                <a
+                  class="media-video"
+                  href={`https://www.youtube.com/watch?v=${v.key}`}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <span class="media-thumb">
+                    <img
+                      src={`https://img.youtube.com/vi/${v.key}/hqdefault.jpg`}
+                      alt=""
+                      width="480"
+                      height="360"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <IconPlay size={34} />
+                  </span>
+                  <span class="media-video-kind">{v.type}</span>
+                  <span class="media-video-name">{v.name}</span>
+                </a>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {backdrops.length ? (
+          <section>
+            <h2>Backdrops</h2>
+            <div class="media-backdrops">
+              {backdrops.map((p, i) => (
+                <a
+                  class="media-art"
+                  href={`https://image.tmdb.org/t/p/original${p}`}
+                  target="_blank"
+                  rel="noopener"
+                  data-gallery="backdrops"
+                  data-view={`https://image.tmdb.org/t/p/w1280${p}`}
+                  data-alt={`${show.name} backdrop ${i + 1} of ${backdrops.length}`}
+                >
+                  <img
+                    src={`https://image.tmdb.org/t/p/w780${p}`}
+                    srcset={`https://image.tmdb.org/t/p/w780${p} 1x, https://image.tmdb.org/t/p/w1280${p} 2x`}
+                    alt=""
+                    width="780"
+                    height="439"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </a>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {posters.length ? (
+          <section>
+            <h2>Posters</h2>
+            <div class="media-posters">
+              {posters.map((p, i) => (
+                <a
+                  class="media-art"
+                  href={`https://image.tmdb.org/t/p/original${p}`}
+                  target="_blank"
+                  rel="noopener"
+                  data-gallery="posters"
+                  data-view={`https://image.tmdb.org/t/p/w780${p}`}
+                  data-alt={`${show.name} poster ${i + 1} of ${posters.length}`}
+                >
+                  <img
+                    src={`https://image.tmdb.org/t/p/w342${p}`}
+                    srcset={`https://image.tmdb.org/t/p/w342${p} 1x, https://image.tmdb.org/t/p/w780${p} 2x`}
+                    alt=""
+                    width="342"
+                    height="513"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </a>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        <section>
+          <h2>Keep going</h2>
+          <nav class="pill-nav">
+            <a class="chev-after" href={`/show/${show.slug}`}>
+              {show.name} overview
+            </a>
+            <a class="chev-after" href={`/show/${show.slug}/similar`}>
+              Shows like {show.name}
+            </a>
+            <a class="chev-after" href={`/show/${show.slug}/where-to-watch`}>
+              Where to watch
             </a>
           </nav>
         </section>

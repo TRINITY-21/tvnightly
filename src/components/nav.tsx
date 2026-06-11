@@ -7,6 +7,7 @@ export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current
     ["overview", "Overview", `/show/${slug}`],
     ["watch", "Where to watch", `/show/${slug}/where-to-watch`],
     ["similar", "Similar shows", `/show/${slug}/similar`],
+    ["media", "Media", `/show/${slug}/media`],
     ["best", "Best episodes", `/show/${slug}/best-episodes`],
     ["worst", "Worst", `/show/${slug}/worst-episodes`],
     ["essential", "Essential", `/show/${slug}/essential`],

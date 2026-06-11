@@ -193,15 +193,29 @@ app.get("/show/:slug", async (c) => {
                 </a>
               </h2>
               <ol class="top3">
-                {top3.map((e, i) => (
-                  <li>
-                    <span class="top3-num">{String(i + 1).padStart(2, "0")}</span>
-                    <span class="top3-name">
-                      {e.name} <span class="muted">{epCode(e)}</span>
-                    </span>
-                    <span class="rating">★ {e.rating!.toFixed(1)}</span>
-                  </li>
-                ))}
+                {top3.map((e, i) => {
+                  const pitch = stripHtml(e.summary);
+                  return (
+                    <li>
+                      <span class="top3-num">{String(i + 1).padStart(2, "0")}</span>
+                      {e.image_url ? (
+                        <img class="top3-still" src={e.image_url} alt="" loading="lazy" />
+                      ) : null}
+                      <span class="top3-main">
+                        <span class="top3-name">
+                          {e.name} <span class="muted">{epCode(e)}</span>
+                        </span>
+                        {pitch ? <span class="top3-sub">{pitch}</span> : null}
+                      </span>
+                      <span class="rank-score">
+                        <span class="rank-bar">
+                          <span style={`width:${Math.round(e.rating! * 10)}%`}></span>
+                        </span>
+                        <span class="rating">★ {e.rating!.toFixed(1)}</span>
+                      </span>
+                    </li>
+                  );
+                })}
               </ol>
             </section>
           ) : null;

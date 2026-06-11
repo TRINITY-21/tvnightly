@@ -964,7 +964,7 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
 .top3 { list-style: none; padding: 0; margin: 0; }
 .top3 li {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.85rem;
   padding: 0.55rem 0;
   border-bottom: 1px solid var(--line);
@@ -979,8 +979,31 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   opacity: 0.85;
   min-width: 2.1rem;
 }
-.top3-name { flex: 1; min-width: 0; }
+/* the episode still: a frame from the hour itself, not chrome */
+.top3-still {
+  width: 84px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+.top3-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.12rem; }
+.top3-name { min-width: 0; }
+.top3-sub {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .top3 .rating { font-weight: 600; }
+@media (max-width: 560px) {
+  .top3-still { width: 64px; }
+  .top3-sub { display: none; }
+}
 .blurb {
   border-left: 3px solid var(--accent);
   padding-left: 0.75rem;

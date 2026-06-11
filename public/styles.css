@@ -614,6 +614,23 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 .show-hub .detail-head .poster {
   border: 1px solid rgba(255, 255, 255, 0.09);
 }
+/* left column: poster + the actions that belong to it */
+.detail-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  flex: 0 0 200px;
+  width: 200px;
+}
+.detail-side .poster { width: 100%; }
+.detail-side .rate-inline {
+  justify-content: center;
+  margin: 0;
+  font-size: 0.8rem;
+}
+@media (max-width: 600px) {
+  .detail-side { flex-basis: 128px; width: 128px; }
+}
 
 /* show tab rail: scrolls instead of wrapping, ride below the hero */
 .subnav-scroll {
@@ -632,12 +649,9 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   grid-auto-columns: 108px;
   gap: 0.8rem;
   overflow-x: auto;
-  padding: 4px 32px 0.6rem 4px;
-  scroll-padding-right: 32px;
+  padding: 4px 4px 0.6rem;
   scrollbar-width: thin;
   scrollbar-color: var(--surface-2) transparent;
-  mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 32px), transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 32px), transparent);
 }
 .cast-card {
   display: flex;

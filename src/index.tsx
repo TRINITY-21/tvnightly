@@ -1158,11 +1158,14 @@ app.get("/show/:slug", async (c) => {
             <div class="hero-backdrop" style={`background-image:url('${show.image_url}')`}></div>
           ) : null}
           <div class="detail-head">
-            {show.image_url ? (
-              <img class="poster" src={show.image_url} alt={show.name} />
-            ) : (
-              <div class="poster card-fallback">{show.name}</div>
-            )}
+            <div class="detail-side">
+              {show.image_url ? (
+                <img class="poster" src={show.image_url} alt={show.name} />
+              ) : (
+                <div class="poster card-fallback">{show.name}</div>
+              )}
+              <RateInline kind="tv" refId={String(show.id)} stat={stat} />
+            </div>
             <div class="detail-info">
               <h1>{show.name}</h1>
               <p class="meta-strip">
@@ -1232,7 +1235,6 @@ app.get("/show/:slug", async (c) => {
                   <p>{show.blurb}</p>
                 </aside>
               ) : null}
-              <RateInline kind="tv" refId={String(show.id)} stat={stat} />
             </div>
           </div>
         </header>
@@ -1281,13 +1283,15 @@ app.get("/show/:slug", async (c) => {
           return cast.length ? (
             <section id="cast">
               <h2>
-                Cast{" "}
-                <a class="more" href={`/show/${show.slug}/cast`}>
-                  full cast & details →
-                </a>
+                Cast
+                {cast.length > 7 ? (
+                  <a class="more" href={`/show/${show.slug}/cast`}>
+                    full cast & details →
+                  </a>
+                ) : null}
               </h2>
               <div class="cast-row">
-                {cast.map((p) => (
+                {cast.slice(0, 7).map((p) => (
                   <div class="cast-card">
                     {p.img ? (
                       <img src={p.img} alt={p.n} loading="lazy" />

@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { raw } from "hono/html";
-import { Bindings, EpisodeRow } from "../types";
+import { Bindings, EpisodeRow, ShowRow } from "../types";
 import { visitorRegion, REGIONS, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
-import { stripHtml, epCode, epHref, hiRes, retinaSet, heroBg, longDate, slugifyName, personHref, comparePathFor } from "../lib/format";
+import { stripHtml, epCode, epHref, hiRes, retinaSet, posterSrc, heroBg, longDate, slugifyName, personHref, comparePathFor } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
@@ -18,6 +18,17 @@ import { ProviderLine } from "../components/providers";
 import { RateInline, SubscribeForm } from "../components/forms";
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+// The hero poster: the same canonical art every other surface uses
+// (backfilled TMDB one-sheet, TVmaze fallback) — never a second variant.
+const HeroPoster = (show: ShowRow) => {
+  const p = posterSrc(show);
+  return p ? (
+    <img class="poster" src={p.src} srcset={p.srcset} alt={show.name} />
+  ) : (
+    <div class="poster card-fallback">{show.name}</div>
+  );
+};
 
 app.get("/show/:slug", async (c) => {
   const show = await getShow(c.env.DB, c.req.param("slug"));
@@ -58,7 +69,9 @@ app.get("/show/:slug", async (c) => {
       "@type": "TVSeries",
       name: show.name,
       url: `${site}/show/${show.slug}`,
-      ...(show.image_url ? { image: show.image_url } : {}),
+      ...(show.poster_url || show.image_url
+        ? { image: show.poster_url ?? show.image_url }
+        : {}),
       ...(show.premiered ? { startDate: show.premiered } : {}),
       ...(show.ended ? { endDate: show.ended } : {}),
       ...(seasons.size ? { numberOfSeasons: Math.max(...seasons.keys()) } : {}),
@@ -85,7 +98,7 @@ app.get("/show/:slug", async (c) => {
       description={stripHtml(show.summary).slice(0, 155)}
       canonical={canonical(c)}
       ld={ld}
-      ogImage={show.image_url ?? undefined}
+      ogImage={show.poster_url ?? show.image_url ?? undefined}
     >
       <article class="show-hub">
         <header class="detail-hero frame-hero">
@@ -94,11 +107,7 @@ app.get("/show/:slug", async (c) => {
           ) : null}
           <div class="detail-head">
             <div class="detail-side">
-              {show.image_url ? (
-                <img class="poster" src={show.image_url} srcset={retinaSet(show.image_url)} alt={show.name} />
-              ) : (
-                <div class="poster card-fallback">{show.name}</div>
-              )}
+              {HeroPoster(show)}
               <RateInline kind="tv" refId={String(show.id)} stat={stat} />
             </div>
             <div class="detail-info">
@@ -471,9 +480,7 @@ app.get("/show/:slug", async (c) => {
                   name={s.name}
                   d={buildDossier(show, s, region)}
                   rating={s.rating}
-                  poster={
-                    s.image_url ? { src: s.image_url, srcset: retinaSet(s.image_url) } : null
-                  }
+                  poster={posterSrc(s)}
                   compare={{
                     href: comparePathFor(show.slug, s.slug),
                     label: `Compare ${s.name} with ${show.name}`,
@@ -623,7 +630,7 @@ app.get("/show/:slug/where-to-watch", async (c) => {
           : `Where ${show.name} is streaming, region by region — checked around the clock.`
       }
       canonical={`${site}${base}`}
-      ogImage={show.image_url ?? undefined}
+      ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, "Where to watch", base)]}
     >
       <article class="show-hub">
@@ -633,16 +640,7 @@ app.get("/show/:slug/where-to-watch", async (c) => {
           ) : null}
           <div class="detail-head">
             <div class="detail-side">
-              {show.image_url ? (
-                <img
-                  class="poster"
-                  src={show.image_url}
-                  srcset={retinaSet(show.image_url)}
-                  alt={show.name}
-                />
-              ) : (
-                <div class="poster card-fallback">{show.name}</div>
-              )}
+              {HeroPoster(show)}
             </div>
             <div class="detail-info">
               <p class="ep-eyebrow">
@@ -788,7 +786,7 @@ app.get("/show/:slug/similar", async (c) => {
         .map((s) => s.name)
         .join(", ")} and more, ranked by match strength with ratings and where to stream.`}
       canonical={`${site}${base}`}
-      ogImage={show.image_url ?? undefined}
+      ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={ld}
     >
       <article class="show-hub">
@@ -796,16 +794,7 @@ app.get("/show/:slug/similar", async (c) => {
           {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
           <div class="detail-head">
             <div class="detail-side">
-              {show.image_url ? (
-                <img
-                  class="poster"
-                  src={show.image_url}
-                  srcset={retinaSet(show.image_url)}
-                  alt={show.name}
-                />
-              ) : (
-                <div class="poster card-fallback">{show.name}</div>
-              )}
+              {HeroPoster(show)}
             </div>
             <div class="detail-info">
               <p class="ep-eyebrow">
@@ -832,7 +821,7 @@ app.get("/show/:slug/similar", async (c) => {
                 name={s.name}
                 d={buildDossier(show, s, region)}
                 rating={s.rating}
-                poster={s.image_url ? { src: s.image_url, srcset: retinaSet(s.image_url) } : null}
+                poster={posterSrc(s)}
                 compare={{
                   href: comparePathFor(show.slug, s.slug),
                   label: `Compare ${s.name} with ${show.name}`,
@@ -908,7 +897,7 @@ app.get("/show/:slug/media", async (c) => {
       title={`${show.name} — trailer, posters & artwork | TV Nightly`}
       description={`Every trailer, clip, poster and backdrop for ${show.name} in one place.`}
       canonical={`${site}${base}`}
-      ogImage={show.image_url ?? undefined}
+      ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={ld}
       scripts={["/js/media-lightbox.js"]}
     >
@@ -917,16 +906,7 @@ app.get("/show/:slug/media", async (c) => {
           {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
           <div class="detail-head">
             <div class="detail-side">
-              {show.image_url ? (
-                <img
-                  class="poster"
-                  src={show.image_url}
-                  srcset={retinaSet(show.image_url)}
-                  alt={show.name}
-                />
-              ) : (
-                <div class="poster card-fallback">{show.name}</div>
-              )}
+              {HeroPoster(show)}
             </div>
             <div class="detail-info">
               <p class="ep-eyebrow">
@@ -1084,7 +1064,7 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
       title={`${show.name} Season ${n} — episode list, ratings & air dates | TV Nightly`}
       description={`All ${eps.length} episodes of ${show.name} Season ${n}, with air dates and viewer ratings.`}
       canonical={canonical(c)}
-      ogImage={show.image_url ?? undefined}
+      ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, `Season ${n}`, path)]}
     >
       <h1>

@@ -1,7 +1,7 @@
 // Poster cards, badges, explore tiles, the 3-line synopsis clamp.
 import { FC, PropsWithChildren } from "hono/jsx";
 import { ShowRow, MovieRow } from "../types";
-import { retinaSet } from "../lib/format";
+import { posterSrc } from "../lib/format";
 
 // Long synopses clamp to 3 lines with a pure-CSS show more/less toggle
 // (hidden checkbox — no JS; the label is the control).
@@ -21,11 +21,14 @@ export const StatusBadge: FC<{ status: string | null }> = ({ status }) => {
 export const ShowCard: FC<{ show: ShowRow }> = ({ show }) => (
   <a class="card" href={`/show/${show.slug}`}>
     <div class="card-media">
-      {show.image_url ? (
-        <img src={show.image_url} srcset={retinaSet(show.image_url)} alt={show.name} loading="lazy" />
-      ) : (
-        <div class="card-fallback">{show.name}</div>
-      )}
+      {(() => {
+        const p = posterSrc(show);
+        return p ? (
+          <img src={p.src} srcset={p.srcset} alt={show.name} loading="lazy" />
+        ) : (
+          <div class="card-fallback">{show.name}</div>
+        );
+      })()}
       {show.rating != null ? <span class="card-rating">★ {show.rating.toFixed(1)}</span> : null}
     </div>
     <div class="card-body">

@@ -17,6 +17,7 @@ export interface ShowRow {
   rating: number | null;
   weight: number;
   image_url: string | null;
+  poster_url: string | null; // TMDB top-voted one-sheet (w342 URL); image_url is the fallback
   summary: string | null;
   imdb_id: string | null;
   blurb: string | null;

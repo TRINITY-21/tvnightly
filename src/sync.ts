@@ -77,13 +77,15 @@ export async function upsertShow(
         `INSERT OR REPLACE INTO shows
          (id, slug, name, status, premiered, ended, network, web_channel,
           rating, weight, image_url, summary, imdb_id, tvdb_id, updated_at,
-          genres, runtime, cast_json, blurb, providers_intl, tmdb_id, providers_checked_at)
+          genres, runtime, cast_json, blurb, providers_intl, tmdb_id, providers_checked_at,
+          poster_url)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
                  COALESCE(?, (SELECT cast_json FROM shows WHERE id = ?)),
                  (SELECT blurb FROM shows WHERE id = ?),
                  (SELECT providers_intl FROM shows WHERE id = ?),
                  (SELECT tmdb_id FROM shows WHERE id = ?),
-                 (SELECT providers_checked_at FROM shows WHERE id = ?))`,
+                 (SELECT providers_checked_at FROM shows WHERE id = ?),
+                 (SELECT poster_url FROM shows WHERE id = ?))`,
       )
       .bind(
         show.id,
@@ -104,6 +106,7 @@ export async function upsertShow(
         show.genres?.length ? JSON.stringify(show.genres) : null,
         show.averageRuntime ?? null,
         castJson(show),
+        show.id,
         show.id,
         show.id,
         show.id,

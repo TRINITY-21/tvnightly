@@ -65,6 +65,18 @@ export const retinaSet = (url: string | null): string | undefined =>
     ? `${url} 1x, ${url.replace(/\/medium_(portrait|landscape)\//, "/original_untouched/")} 2x`
     : undefined;
 
+/** ONE poster per show, everywhere: the backfilled TMDB one-sheet when the
+ *  bridge exists, the TVmaze poster otherwise — same art on cards, heroes,
+ *  and ledger rows. */
+export const posterSrc = (
+  s: { poster_url: string | null; image_url: string | null },
+): { src: string; srcset?: string } | null =>
+  s.poster_url
+    ? { src: s.poster_url, srcset: `${s.poster_url} 1x, ${s.poster_url.replace("/w342/", "/w780/")} 2x` }
+    : s.image_url
+      ? { src: s.image_url, srcset: retinaSet(s.image_url) }
+      : null;
+
 /** Inline style for a hero backdrop: image-set picks the heavy rendition
  *  only on dense screens (a CSS background can never use srcset). */
 export const heroBg = (x1: string, x2?: string): string =>

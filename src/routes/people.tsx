@@ -81,7 +81,7 @@ async function seasonCastPage(
           : `The Season ${season} cast of ${show.name}.`
       }
       canonical={`${site}${base}?season=${season}`}
-      ogImage={show.image_url ?? undefined}
+      ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, `Season ${season} cast`, base)]}
     >
       <h1>
@@ -192,7 +192,7 @@ app.get("/show/:slug/cast", async (c) => {
           : `The cast of ${show.name}.`
       }
       canonical={canonical(c)}
-      ogImage={show.image_url ?? undefined}
+      ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, "Cast", `/show/${show.slug}/cast`)]}
     >
       <h1>
@@ -491,8 +491,8 @@ app.get("/person/:slug", async (c) => {
               {roles.map((r, i) => (
                 <li class="rank-row">
                   <span class="rank-num">{i + 1}</span>
-                  {r.image_url ? (
-                    <img class="rank-thumb" src={r.image_url} alt="" loading="lazy" />
+                  {(r.poster_url ?? r.image_url) ? (
+                    <img class="rank-thumb" src={r.poster_url ?? r.image_url!} alt="" loading="lazy" />
                   ) : (
                     <span class="rank-thumb rank-thumb-empty" aria-hidden="true"></span>
                   )}

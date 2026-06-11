@@ -3,7 +3,7 @@
 // the edge cache so the D1 mirror stays lean.
 import { Hono } from "hono";
 import { Bindings, EpisodeRow } from "../types";
-import { stripHtml, epCode, epHref, hiRes, retinaSet, longDate, slugifyName } from "../lib/format";
+import { stripHtml, epCode, epHref, hiRes, retinaSet, posterSrc, longDate, slugifyName } from "../lib/format";
 import { origin, canonical } from "../lib/seo";
 import { getShow } from "../lib/queries";
 import { visitorRegion } from "../lib/providers";
@@ -144,11 +144,14 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
           ) : null}
           <div class="detail-head">
             <div class="detail-side">
-              {show.image_url ? (
-                <img class="poster" src={show.image_url} srcset={retinaSet(show.image_url)} alt={show.name} />
-              ) : (
-                <div class="poster card-fallback">{show.name}</div>
-              )}
+              {(() => {
+                const p = posterSrc(show);
+                return p ? (
+                  <img class="poster" src={p.src} srcset={p.srcset} alt={show.name} />
+                ) : (
+                  <div class="poster card-fallback">{show.name}</div>
+                );
+              })()}
               {ep.rating != null ? (
                 <span class="vote ep-vote" data-ep-id={String(ep.id)}>
                   <span class="muted">Fair rating?</span>

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { Bindings, ShowRow, MovieRow } from "../types";
 import { visitorRegion } from "../lib/providers";
-import { stripHtml } from "../lib/format";
+import { stripHtml, posterSrc } from "../lib/format";
 import { origin, canonical } from "../lib/seo";
 import { PICKER_MIN_WEIGHT } from "../lib/queries";
 import { Layout } from "../components/Layout";
@@ -203,7 +203,7 @@ app.get("/what-to-watch", async (c) => {
         picks.push({
           name: s.name,
           href: `/show/${s.slug}`,
-          image: s.image_url,
+          image: posterSrc(s)?.src ?? null,
           genres: s.genres ? JSON.parse(s.genres) : [],
           providers_intl: s.providers_intl,
           rating: s.rating,

@@ -128,7 +128,7 @@ app.get("/show/:slug/essential", async (c) => {
             ? `${site}${path}`
             : `${site}${path}?length=${n}`
       }
-      ogImage={show.image_url ?? undefined}
+      ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, `Essential${seasonLabel} episodes`, path)]}
     >
       <article>
@@ -280,7 +280,7 @@ app.get("/show/:slug/ratings", async (c) => {
           : `Every rated ${show.name} episode on one chart: see the peaks, the dips, and how each season compares.`
       }
       canonical={season != null ? `${site}${base}?season=${season}` : `${site}${base}`}
-      ogImage={show.image_url ?? undefined}
+      ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, `${seasonLabel || "Episode"} ratings graph`.trim(), path)]}
     >
       <h1>
@@ -389,7 +389,7 @@ const rankedPage =
           eps[0] ? `"${eps[0].name}"` : "the top"
         } down.`}
         canonical={season != null ? `${site}${base}?season=${season}` : `${site}${base}`}
-        ogImage={show.image_url ?? undefined}
+        ogImage={show.poster_url ?? show.image_url ?? undefined}
         scripts={["/js/votes.js"]}
         ld={ld}
       >
@@ -444,9 +444,19 @@ const rankedPage =
           </ol>
           {kind === "best" ? (
             <p>
-              Short on time? <a href={`/show/${show.slug}/essential`}>The essential watch list</a>{" "}
-              · <a href={`/show/${show.slug}/ratings`}>Ratings graph</a> ·{" "}
-              <a href="/best-episodes">All-time top 100</a>
+              Short on time?{" "}
+              <a href={`/show/${show.slug}/essential${season != null ? `?season=${season}` : ""}`}>
+                The essential watch list
+              </a>{" "}
+              ·{" "}
+              <a href={`/show/${show.slug}/worst-episodes${season != null ? `?season=${season}` : ""}`}>
+                Worst episodes
+              </a>{" "}
+              ·{" "}
+              <a href={`/show/${show.slug}/ratings${season != null ? `?season=${season}` : ""}`}>
+                Ratings graph
+              </a>{" "}
+              · <a href="/best-episodes">All-time top 100</a>
             </p>
           ) : null}
           {similar.length ? (
@@ -494,7 +504,7 @@ app.get("/show/:slug/next-episode", async (c) => {
           : `${show.name} has no scheduled next episode. Status: ${show.status ?? "unknown"}.`
       }
       canonical={canonical(c)}
-      ogImage={show.image_url ?? undefined}
+      ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, "Next episode", path)]}
     >
       <h1>
@@ -605,7 +615,7 @@ app.get("/show/:slug/release-date", async (c) => {
       }
       description={answer.slice(0, 155)}
       canonical={canonical(c)}
-      ogImage={show.image_url ?? undefined}
+      ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, "Release date", path)]}
     >
       <h1>

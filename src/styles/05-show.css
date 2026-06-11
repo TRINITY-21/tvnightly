@@ -37,7 +37,12 @@
   align-items: flex-start;
   flex-wrap: wrap;
 }
-.detail-head h1 { margin: 0.1rem 0 0.5rem; }
+/* the title is the marquee: Archivo black, lifted off the still */
+.detail-head h1 {
+  margin: 0.1rem 0 0.5rem;
+  font-weight: 900;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
+}
 .detail-info { flex: 1 1 320px; min-width: 0; }
 .meta-strip {
   display: flex;

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
 import { visitorRegion } from "../lib/providers";
-import { epCode, airTime, premiereDateParts, homeDateline, retinaSet } from "../lib/format";
+import { epCode, airTime, premiereDateParts, homeDateline, retinaSet, posterSrc } from "../lib/format";
 import { canonical } from "../lib/seo";
 import { VERTICALS } from "../lib/verticals";
 import { Layout } from "../components/Layout";
@@ -106,11 +106,14 @@ app.get("/", async (c) => {
               <div class="hero-backdrop" style={`background-image:url('${spot.image_url}')`}></div>
             ) : null}
             <div class="detail-head">
-              {spot.image_url ? (
-                <img class="poster spot-poster" src={spot.image_url} srcset={retinaSet(spot.image_url)} alt={spot.name} />
-              ) : (
-                <div class="poster spot-poster card-fallback">{spot.name}</div>
-              )}
+              {(() => {
+                const p = posterSrc(spot);
+                return p ? (
+                  <img class="poster spot-poster" src={p.src} srcset={p.srcset} alt={spot.name} />
+                ) : (
+                  <div class="poster spot-poster card-fallback">{spot.name}</div>
+                );
+              })()}
               <div class="detail-info">
                 <p class="eyebrow">
                   {spotTonight ? <span class="live-dot"></span> : null}

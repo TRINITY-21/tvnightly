@@ -16,6 +16,8 @@
     "blurbs:load:local": "wrangler d1 execute tvnightly --local --file=scripts/blurbs.sql",
     "cast:backfill:local": "node scripts/backfill-cast.mjs",
     "cast:backfill:remote": "REMOTE=1 node scripts/backfill-cast.mjs",
+    "posters:backfill:local": "node scripts/backfill-posters.mjs",
+    "posters:backfill:remote": "REMOTE=1 node scripts/backfill-posters.mjs",
     "people:enrich:local": "node scripts/backfill-people-tmdb.mjs",
     "people:enrich:remote": "REMOTE=1 node scripts/backfill-people-tmdb.mjs",
     "credits:tmdb:local": "node scripts/backfill-credits-tmdb.mjs",

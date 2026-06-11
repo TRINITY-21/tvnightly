@@ -87,15 +87,28 @@ app.get("/show/:slug", async (c) => {
               <h1>{show.name}</h1>
               <p class="meta-strip">
                 <StatusBadge status={show.status} />
+                <span>TV series</span>
                 {show.premiered ? (
-                  <span>
-                    {show.premiered.slice(0, 4)}
-                    {show.ended
-                      ? `–${show.ended.slice(0, 4)}`
-                      : show.status === "Running"
-                        ? "–"
-                        : ""}
-                  </span>
+                  <>
+                    <span class="sep">·</span>
+                    <span>
+                      {show.premiered.slice(0, 4)}
+                      {show.ended
+                        ? `–${show.ended.slice(0, 4)}`
+                        : show.status === "Running"
+                          ? "–"
+                          : ""}
+                    </span>
+                  </>
+                ) : null}
+                {episodes.length ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span>
+                      {seasons.size} season{seasons.size === 1 ? "" : "s"}, {episodes.length}{" "}
+                      episode{episodes.length === 1 ? "" : "s"}
+                    </span>
+                  </>
                 ) : null}
                 {show.network || show.web_channel ? (
                   <>

@@ -198,7 +198,13 @@ app.get("/movie/:slug", async (c) => {
             <div class="detail-info">
               <h1>{movie.title}</h1>
               <p class="meta-strip">
-                {movie.year ? <span>{movie.year}</span> : null}
+                <span>Movie</span>
+                {movie.year ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span>{movie.year}</span>
+                  </>
+                ) : null}
                 {genres.length ? (
                   <>
                     <span class="sep">·</span>

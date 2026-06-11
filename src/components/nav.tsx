@@ -26,6 +26,24 @@ export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current
   );
 };
 
+// Movie pages get the same lateral rail as shows — fewer questions, same voice.
+export const MovieTabs: FC<{ slug: string; current?: string }> = ({ slug, current }) => {
+  const tabs: [string, string, string][] = [
+    ["overview", "Overview", `/movie/${slug}`],
+    ["similar", "Similar movies", `/movie/${slug}/similar`],
+    ["media", "Media", `/movie/${slug}/media`],
+  ];
+  return (
+    <nav class="subnav subnav-scroll">
+      {tabs.map(([key, label, href]) => (
+        <a href={href} class={key === current ? "active" : ""}>
+          {label}
+        </a>
+      ))}
+    </nav>
+  );
+};
+
 // Inside a season, the rail stays in that season: every tab carries the
 // ?season filter, and "All seasons" is the one exit back to show level.
 // Show-level-only concepts (next episode, release date, cast) don't appear.

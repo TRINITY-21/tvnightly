@@ -20,16 +20,21 @@ type RawBundle = {
   };
 };
 
-/** One call serves every TMDB presentation need for a show (base record +
- *  images + videos via append_to_response), edge-cached for 7 days. */
-async function showBundle(key: string, tmdbId: number): Promise<RawBundle | null> {
-  const cacheKey = new Request(`https://edge-cache.tvnightly.com/media/${tmdbId}`);
+/** One call serves every TMDB presentation need for a title (base record +
+ *  images + videos via append_to_response), edge-cached for 7 days.
+ *  Movies ride their IMDb tt-id — TMDB accepts it directly in the path. */
+async function bundle(
+  key: string,
+  kind: "tv" | "movie",
+  id: number | string,
+): Promise<RawBundle | null> {
+  const cacheKey = new Request(`https://edge-cache.tvnightly.com/media/${kind}/${id}`);
   const cache = caches.default;
   try {
     let res = await cache.match(cacheKey);
     if (!res) {
       const live = await fetch(
-        `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${key}&append_to_response=images,videos&include_image_language=en,null`,
+        `https://api.themoviedb.org/3/${kind}/${id}?api_key=${key}&append_to_response=images,videos&include_image_language=en,null`,
         { headers: { accept: "application/json" } },
       );
       if (!live.ok) return null;
@@ -43,6 +48,8 @@ async function showBundle(key: string, tmdbId: number): Promise<RawBundle | null
   }
 }
 
+const showBundle = (key: string, tmdbId: number) => bundle(key, "tv", tmdbId);
+
 const byVotes = <T extends { vote_count: number }>(arr?: T[]): T[] =>
   (arr ?? []).slice().sort((a, b) => b.vote_count - a.vote_count);
 
@@ -52,10 +59,7 @@ export type TmdbMedia = {
   videos: { key: string; name: string; type: string; published: string | null }[]; // YouTube only
 };
 
-/** Posters, backdrops and YouTube videos for the media page, vote-ordered. */
-export async function tmdbMedia(key: string, tmdbId: number): Promise<TmdbMedia | null> {
-  const data = await showBundle(key, tmdbId);
-  if (!data) return null;
+const mapMedia = (data: RawBundle): TmdbMedia => {
   // trailers first, official before fan uploads, newest first within a tier
   const typeRank = (t: string) =>
     ["Trailer", "Teaser", "Clip", "Featurette", "Behind the Scenes", "Opening Credits"].indexOf(t);
@@ -74,6 +78,18 @@ export async function tmdbMedia(key: string, tmdbId: number): Promise<TmdbMedia 
     backdrops: byVotes(data.images?.backdrops).map((i) => i.file_path),
     videos,
   };
+};
+
+/** Posters, backdrops and YouTube videos for the media pages, vote-ordered. */
+export async function tmdbMedia(key: string, tmdbId: number): Promise<TmdbMedia | null> {
+  const data = await showBundle(key, tmdbId);
+  return data ? mapMedia(data) : null;
+}
+
+/** Movie media: same bundle, keyed on the IMDb id our mirror already holds. */
+export async function tmdbMovieMedia(key: string, imdbId: string): Promise<TmdbMedia | null> {
+  const data = await bundle(key, "movie", imdbId);
+  return data ? mapMedia(data) : null;
 }
 
 /** The hero backdrop. NOT TMDB's designated backdrop_path — that's often a
@@ -82,12 +98,7 @@ export async function tmdbMedia(key: string, tmdbId: number): Promise<TmdbMedia 
  *  under our own h1; backdrop_path is only the last resort.
  *  Returns both renditions: w1280 for 1x screens, the original (often 4K)
  *  for retina — a 1280-CSS-px band needs 2560 source px at DPR 2. */
-export async function tmdbBackdrop(
-  key: string,
-  tmdbId: number,
-): Promise<{ x1: string; x2: string } | null> {
-  const data = await showBundle(key, tmdbId);
-  if (!data) return null;
+const pickBackdrop = (data: RawBundle): { x1: string; x2: string } | null => {
   const ranked = byVotes(data.images?.backdrops);
   const pick =
     ranked.find((i) => i.iso_639_1 === null)?.file_path ??
@@ -99,6 +110,23 @@ export async function tmdbBackdrop(
         x2: `https://image.tmdb.org/t/p/original${pick}`,
       }
     : null;
+};
+
+export async function tmdbBackdrop(
+  key: string,
+  tmdbId: number,
+): Promise<{ x1: string; x2: string } | null> {
+  const data = await showBundle(key, tmdbId);
+  return data ? pickBackdrop(data) : null;
+}
+
+/** Movie hero backdrop, same selection rules, keyed on the IMDb id. */
+export async function tmdbMovieBackdrop(
+  key: string,
+  imdbId: string,
+): Promise<{ x1: string; x2: string } | null> {
+  const data = await bundle(key, "movie", imdbId);
+  return data ? pickBackdrop(data) : null;
 }
 
 /** The hero poster: the community's top-voted one-sheet, preferring the

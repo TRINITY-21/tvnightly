@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import { Bindings, MovieRow } from "../types";
 import { franchiseOfMovie } from "../lib/franchises";
 import { visitorRegion, providersFor } from "../lib/providers";
-import { slugifyName } from "../lib/format";
+import { slugifyName, heroBg, stripHtml } from "../lib/format";
+import { tmdbMovieBackdrop, tmdbMovieMedia } from "../lib/tmdb";
+import { MovieTabs } from "../components/nav";
+import { IconPlay } from "../components/icons";
 import { origin, canonical } from "../lib/seo";
 import { similarMovies } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
@@ -178,6 +181,13 @@ app.get("/movie/:slug", async (c) => {
     ...(movie.release_date ? { datePublished: movie.release_date } : {}),
   };
 
+  // the movie's real designed backdrop (TMDB takes the IMDb id directly);
+  // the blurred poster stays as ambient fallback
+  const backdrop = c.env.TMDB_API_KEY
+    ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id)
+    : null;
+  const heroFrame = backdrop ? heroBg(backdrop.x1, backdrop.x2) : null;
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
@@ -188,16 +198,21 @@ app.get("/movie/:slug", async (c) => {
       ld={[ld]}
     >
       <article class="show-hub">
-        <header class="detail-hero">
-          {movie.poster_url ? (
+        <header class={heroFrame ? "detail-hero frame-hero" : "detail-hero"}>
+          {heroFrame ? (
+            <div class="hero-backdrop" style={heroFrame}></div>
+          ) : movie.poster_url ? (
             <div class="hero-backdrop" style={`background-image:url('${movie.poster_url}')`}></div>
           ) : null}
           <div class="detail-head">
-            {movie.poster_url ? (
-              <img class="poster" src={movie.poster_url} srcset={movie.poster_url ? `${movie.poster_url} 1x, ${movie.poster_url.replace("/w342/", "/w780/")} 2x` : undefined} alt={movie.title} />
-            ) : (
-              <div class="poster card-fallback">{movie.title}</div>
-            )}
+            <div class="detail-side">
+              {movie.poster_url ? (
+                <img class="poster" src={movie.poster_url} srcset={`${movie.poster_url} 1x, ${movie.poster_url.replace("/w342/", "/w780/")} 2x`} alt={movie.title} />
+              ) : (
+                <div class="poster card-fallback">{movie.title}</div>
+              )}
+              <RateInline kind="movie" refId={movie.imdb_id} stat={stat} />
+            </div>
             <div class="detail-info">
               <h1>{movie.title}</h1>
               <p class="meta-strip">
@@ -234,12 +249,6 @@ app.get("/movie/:slug", async (c) => {
                 fallbackHref="/what-to-watch?type=movie"
                 pickerType="movie"
               />
-              <nav class="pill-nav">
-                <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} rel="noopener">
-                  IMDb
-                </a>
-                <a href="/what-to-watch?type=movie">Pick me another</a>
-              </nav>
               {movie.overview ? (
                 movie.overview.length > 280 ? (
                   <ClampSummary id="synopsis-clamp">{movie.overview}</ClampSummary>
@@ -247,10 +256,10 @@ app.get("/movie/:slug", async (c) => {
                   <div class="summary">{movie.overview}</div>
                 )
               ) : null}
-              <RateInline kind="movie" refId={movie.imdb_id} stat={stat} />
             </div>
           </div>
         </header>
+        <MovieTabs slug={movie.slug} current="overview" />
         {simMovies.length ? (
           <section id="similar">
             <h2>
@@ -348,6 +357,10 @@ app.get("/movie/:slug/similar", async (c) => {
   const region = visitorRegion(c);
   const site = origin(c);
   const base = `/movie/${movie.slug}/similar`;
+  const backdrop = c.env.TMDB_API_KEY
+    ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id)
+    : null;
+  const heroFrame = backdrop ? heroBg(backdrop.x1, backdrop.x2) : null;
 
   const ld = [
     {
@@ -384,8 +397,10 @@ app.get("/movie/:slug/similar", async (c) => {
       ld={ld}
     >
       <article class="show-hub">
-        <header class="detail-hero">
-          {movie.poster_url ? (
+        <header class={heroFrame ? "detail-hero frame-hero" : "detail-hero"}>
+          {heroFrame ? (
+            <div class="hero-backdrop" style={heroFrame}></div>
+          ) : movie.poster_url ? (
             <div class="hero-backdrop" style={`background-image:url('${movie.poster_url}')`}></div>
           ) : null}
           <div class="detail-head">
@@ -412,6 +427,7 @@ app.get("/movie/:slug/similar", async (c) => {
             </div>
           </div>
         </header>
+        <MovieTabs slug={movie.slug} current="similar" />
         <section>
           <h2>The closest matches</h2>
           <ol class="dossier-board">
@@ -445,6 +461,214 @@ app.get("/movie/:slug/similar", async (c) => {
             </a>
             <a class="chev-after" href="/what-to-watch?type=movie">
               What should I watch tonight?
+            </a>
+          </nav>
+        </section>
+      </article>
+    </Layout>,
+  );
+});
+
+// Media: the movie's artwork and YouTube trailers, one edge-cached call.
+app.get("/movie/:slug/media", async (c) => {
+  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
+    .bind(c.req.param("slug"))
+    .first<MovieRow>();
+  if (!movie) return c.notFound();
+  const media = c.env.TMDB_API_KEY
+    ? await tmdbMovieMedia(c.env.TMDB_API_KEY, movie.imdb_id)
+    : null;
+  const base = `/movie/${movie.slug}/media`;
+  const site = origin(c);
+
+  const trailer = media?.videos.find((v) => v.type === "Trailer") ?? media?.videos[0] ?? null;
+  const clips = (media?.videos ?? []).filter((v) => v !== trailer).slice(0, 9);
+  const backdrops = (media?.backdrops ?? []).slice(0, 12);
+  const posters = (media?.posters ?? []).slice(0, 12);
+  const hasAny = Boolean(trailer || clips.length || backdrops.length || posters.length);
+
+  const heroArt = backdrops.length
+    ? heroBg(
+        `https://image.tmdb.org/t/p/w1280${backdrops[0]}`,
+        `https://image.tmdb.org/t/p/original${backdrops[0]}`,
+      )
+    : null;
+
+  const ld: unknown[] = [
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Movies", item: `${site}/movies` },
+        { "@type": "ListItem", position: 2, name: movie.title, item: `${site}/movie/${movie.slug}` },
+        { "@type": "ListItem", position: 3, name: "Media", item: `${site}${base}` },
+      ],
+    },
+  ];
+  if (trailer) {
+    ld.push({
+      "@context": "https://schema.org",
+      "@type": "VideoObject",
+      name: trailer.name,
+      thumbnailUrl: `https://img.youtube.com/vi/${trailer.key}/hqdefault.jpg`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${trailer.key}`,
+      ...(trailer.published ? { uploadDate: trailer.published } : {}),
+    });
+  }
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${movie.title} — trailer, posters & artwork | TV Nightly`}
+      description={`Every trailer, clip, poster and backdrop for ${movie.title} in one place.`}
+      canonical={`${site}${base}`}
+      ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+      ld={ld}
+      scripts={["/js/media-lightbox.js"]}
+    >
+      <article class="show-hub">
+        <header class={heroArt ? "detail-hero frame-hero" : "detail-hero"}>
+          {heroArt ? (
+            <div class="hero-backdrop" style={heroArt}></div>
+          ) : movie.poster_url ? (
+            <div class="hero-backdrop" style={`background-image:url('${movie.poster_url}')`}></div>
+          ) : null}
+          <div class="detail-head">
+            {movie.poster_url ? (
+              <img
+                class="poster"
+                src={movie.poster_url}
+                srcset={`${movie.poster_url} 1x, ${movie.poster_url.replace("/w342/", "/w780/")} 2x`}
+                alt={movie.title}
+              />
+            ) : (
+              <div class="poster card-fallback">{movie.title}</div>
+            )}
+            <div class="detail-info">
+              <p class="ep-eyebrow">
+                <a href={`/movie/${movie.slug}`}>{movie.title}</a>
+                <span class="sep">·</span> Media
+              </p>
+              <h1>{movie.title} — trailer & artwork</h1>
+              <p class="summary">
+                {hasAny
+                  ? `The official trailers, clips, posters and backdrops for ${movie.title}.`
+                  : `No media available for ${movie.title} yet.`}
+              </p>
+            </div>
+          </div>
+        </header>
+        <MovieTabs slug={movie.slug} current="media" />
+        {trailer ? (
+          <section>
+            <h2>Trailer</h2>
+            <div class="media-player">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${trailer.key}`}
+                title={trailer.name}
+                loading="lazy"
+                allowfullscreen
+                allow="encrypted-media; picture-in-picture"
+              ></iframe>
+            </div>
+          </section>
+        ) : null}
+        {clips.length ? (
+          <section>
+            <h2>More videos</h2>
+            <div class="media-videos">
+              {clips.map((v) => (
+                <a
+                  class="media-video"
+                  href={`https://www.youtube.com/watch?v=${v.key}`}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <span class="media-thumb">
+                    <img
+                      src={`https://img.youtube.com/vi/${v.key}/hqdefault.jpg`}
+                      alt=""
+                      width="480"
+                      height="360"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <IconPlay size={34} />
+                  </span>
+                  <span class="media-video-kind">{v.type}</span>
+                  <span class="media-video-name">{v.name}</span>
+                </a>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {backdrops.length ? (
+          <section>
+            <h2>Backdrops</h2>
+            <div class="media-backdrops" data-gallery-title={movie.title} data-gallery-kind="Backdrop">
+              {backdrops.map((p, i) => (
+                <a
+                  class="media-art"
+                  href={`https://image.tmdb.org/t/p/original${p}`}
+                  target="_blank"
+                  rel="noopener"
+                  data-gallery="backdrops"
+                  data-view={`https://image.tmdb.org/t/p/w1280${p}`}
+                  data-alt={`${movie.title} backdrop ${i + 1} of ${backdrops.length}`}
+                >
+                  <img
+                    src={`https://image.tmdb.org/t/p/w780${p}`}
+                    srcset={`https://image.tmdb.org/t/p/w780${p} 1x, https://image.tmdb.org/t/p/w1280${p} 2x`}
+                    alt=""
+                    width="780"
+                    height="439"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </a>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {posters.length ? (
+          <section>
+            <h2>Posters</h2>
+            <div class="media-posters" data-gallery-title={movie.title} data-gallery-kind="Poster">
+              {posters.map((p, i) => (
+                <a
+                  class="media-art"
+                  href={`https://image.tmdb.org/t/p/original${p}`}
+                  target="_blank"
+                  rel="noopener"
+                  data-gallery="posters"
+                  data-view={`https://image.tmdb.org/t/p/w780${p}`}
+                  data-alt={`${movie.title} poster ${i + 1} of ${posters.length}`}
+                >
+                  <img
+                    src={`https://image.tmdb.org/t/p/w342${p}`}
+                    srcset={`https://image.tmdb.org/t/p/w342${p} 1x, https://image.tmdb.org/t/p/w780${p} 2x`}
+                    alt=""
+                    width="342"
+                    height="513"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </a>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        <section>
+          <h2>Keep going</h2>
+          <nav class="pill-nav">
+            <a class="chev-after" href={`/movie/${movie.slug}`}>
+              {movie.title} overview
+            </a>
+            <a class="chev-after" href={`/movie/${movie.slug}/similar`}>
+              Movies like {movie.title}
+            </a>
+            <a class="chev-after" href="/movies/best">
+              Best movies
             </a>
           </nav>
         </section>

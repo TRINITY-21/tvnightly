@@ -536,6 +536,15 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   color: var(--muted);
 }
 .meta-strip .sep { opacity: 0.45; }
+/* every meta token is a door now (TV, seasons, network, genres) — keep the
+   strip chyron-quiet; amber only answers the hover */
+.meta-strip a {
+  color: inherit;
+}
+.meta-strip a:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
 /* the headline score is the answer the page exists to give — let it lead */
 .meta-strip .rating { font-size: 1.1rem; font-weight: 700; }
 
@@ -3494,13 +3503,25 @@ a.dossier-name:hover {
   color: var(--accent);
   text-decoration: none;
 }
-/* the streaming receipt as the provider's mark, not a sentence */
+/* the streaming receipt as the provider's mark, not a sentence — and a door
+   into the picker filtered to that service (padded hit area for thumbs) */
+.dossier-receipt .prov-go {
+  display: inline-block;
+  padding: 0.35rem;
+  margin: -0.35rem 0;
+  line-height: 0;
+}
 .dossier-receipt .prov-mini {
   width: 20px;
   height: 20px;
   border-radius: 5px;
   object-fit: cover;
   vertical-align: -0.35em;
+  border: 1px solid transparent;
+  transition: border-color var(--speed) var(--ease);
+}
+.dossier-receipt .prov-go:hover .prov-mini {
+  border-color: var(--accent);
 }
 .dossier-receipt .sep,
 .dossier-era .sep {

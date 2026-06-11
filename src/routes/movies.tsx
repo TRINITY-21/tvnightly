@@ -237,7 +237,9 @@ app.get("/movie/:slug", async (c) => {
             <div class="detail-info">
               <h1>{movie.title}</h1>
               <p class="meta-strip">
-                <span>Movie</span>
+                <span>
+                  <a href="/movies/best" title="The best movies, ranked">Movie</a>
+                </span>
                 {movie.year ? (
                   <>
                     <span class="sep">·</span>
@@ -251,7 +253,7 @@ app.get("/movie/:slug", async (c) => {
                       {genres.slice(0, 3).map((g, i) => (
                         <>
                           {i > 0 ? ", " : ""}
-                          <a href={`/genre/${slugifyName(g)}`}>{g}</a>
+                          <a href={`/genre/${slugifyName(g)}/movies`}>{g}</a>
                         </>
                       ))}
                     </span>
@@ -964,7 +966,7 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
                   <span class="watch-name">{n}</span>
                   <a
                     class="chev-after watch-more"
-                    href={`/what-to-watch?type=movie&service=${encodeURIComponent(providerBrand(n))}`}
+                    href={`/network/${slugifyName(providerBrand(n))}/movies`}
                   >
                     More on {providerBrand(n)}
                   </a>

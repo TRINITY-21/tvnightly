@@ -126,7 +126,9 @@ app.get("/show/:slug", async (c) => {
               <h1>{show.name}</h1>
               <p class="meta-strip">
                 {/* the year range carries the status: closed = ended, –present = airing */}
-                <span>TV</span>
+                <span>
+                  <a href="/top/tv" title="The top TV shows, ranked">TV</a>
+                </span>
                 {show.premiered ? (
                   <>
                     <span class="sep">·</span>
@@ -144,8 +146,13 @@ app.get("/show/:slug", async (c) => {
                   <>
                     <span class="sep">·</span>
                     <span>
-                      {seasons.size} season{seasons.size === 1 ? "" : "s"}, {episodes.length}{" "}
-                      episode{episodes.length === 1 ? "" : "s"}
+                      <a
+                        href={`/show/${show.slug}/best-episodes`}
+                        title={`The best episodes of ${show.name}`}
+                      >
+                        {seasons.size} season{seasons.size === 1 ? "" : "s"}, {episodes.length}{" "}
+                        episode{episodes.length === 1 ? "" : "s"}
+                      </a>
                     </span>
                   </>
                 ) : null}
@@ -166,7 +173,7 @@ app.get("/show/:slug", async (c) => {
                         {g.slice(0, 3).map((x, i) => (
                           <>
                             {i > 0 ? ", " : ""}
-                            <a href={`/genre/${slugifyName(x)}`}>{x}</a>
+                            <a href={`/genre/${slugifyName(x)}/shows`}>{x}</a>
                           </>
                         ))}
                       </span>
@@ -736,7 +743,7 @@ app.get("/show/:slug/where-to-watch", async (c) => {
                   <span class="watch-name">{n}</span>
                   <a
                     class="chev-after watch-more"
-                    href={`/what-to-watch?service=${encodeURIComponent(providerBrand(n))}`}
+                    href={`/network/${slugifyName(providerBrand(n))}/shows`}
                   >
                     More on {providerBrand(n)}
                   </a>

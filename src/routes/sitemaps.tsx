@@ -46,6 +46,8 @@ app.get("/sitemaps/:file", async (c) => {
       genreDirectory(c.env.DB),
     ]);
     const genreSlugs = [...new Set([...genres.tv, ...genres.movie].map((g) => slugifyName(g)))];
+    const tvGenreSlugs = [...new Set(genres.tv.map((g) => slugifyName(g)))];
+    const movieGenreSlugs = [...new Set(genres.movie.map((g) => slugifyName(g)))];
     const urls = [
       "/",
       "/recommend",
@@ -69,7 +71,13 @@ app.get("/sitemaps/:file", async (c) => {
       ...FRANCHISES.map((f) => `/watch-order/${f.slug}`),
       ...VERTICALS.map((v) => `/${v.slug}`),
       ...networks.map((n) => `/network/${n.slug}`),
+      // per-medium top pages: every directory network holds shows by
+      // construction; movie pages are sitemapped only via genre, since
+      // broadcast networks would index thin
+      ...networks.map((n) => `/network/${n.slug}/shows`),
       ...genreSlugs.map((g) => `/genre/${g}`),
+      ...tvGenreSlugs.map((g) => `/genre/${g}/shows`),
+      ...movieGenreSlugs.map((g) => `/genre/${g}/movies`),
     ]
       .map((p) => `<url><loc>${site}${p}</loc></url>`)
       .join("");

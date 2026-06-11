@@ -3,6 +3,7 @@
 import { FC } from "hono/jsx";
 import { Dossier } from "../lib/dossier";
 import { slugifyName } from "../lib/format";
+import { providerBrand } from "../lib/providers";
 
 export const DossierRow: FC<{
   i: number;
@@ -12,7 +13,11 @@ export const DossierRow: FC<{
   rating: number | null;
   poster: { src: string; srcset?: string } | null;
   compare?: { href: string; label: string };
-}> = ({ i, href, name, d, rating, poster, compare }) => (
+}> = ({ i, href, name, d, rating, poster, compare }) => {
+  // genre and provider doors deep-link by context: a movie row leads to
+  // top movies, a show row to top shows
+  const medium = href.startsWith("/movie/") ? "movies" : "shows";
+  return (
   <li class="dossier-row">
     <span class="dossier-num">{String(i + 1).padStart(2, "0")}</span>
     <a class="dossier-poster" href={href} tabindex={-1} aria-hidden="true">
@@ -36,7 +41,7 @@ export const DossierRow: FC<{
           {d.genreLine.map((t, j) => (
             <>
               {j > 0 ? <span class="g-sep">·</span> : null}
-              <a class={t.hit ? undefined : "g-dim"} href={`/genre/${slugifyName(t.g)}`}>
+              <a class={t.hit ? undefined : "g-dim"} href={`/genre/${slugifyName(t.g)}/${medium}`}>
                 {t.g}
               </a>
             </>
@@ -82,20 +87,25 @@ export const DossierRow: FC<{
           {d.stream ? (
             <>
               {d.signals.length ? <span class="sep">·</span> : null}
-              {d.stream.logo ? (
-                <img
-                  class="prov-mini"
-                  src={d.stream.logo}
-                  width="20"
-                  height="20"
-                  alt={`${d.stream.also ? "Also on" : "Streaming on"} ${d.stream.name}`}
-                  title={`${d.stream.also ? "Also on" : "Streaming on"} ${d.stream.name}`}
-                  loading="lazy"
-                  decoding="async"
-                />
-              ) : (
-                `${d.stream.also ? "Also on" : "Streaming on"} ${d.stream.name}`
-              )}
+              <a
+                class="prov-go"
+                href={`/network/${slugifyName(providerBrand(d.stream.name))}/${medium}`}
+                title={`${d.stream.also ? "Also on" : "Streaming on"} ${d.stream.name} — top ${d.stream.name} ${medium}`}
+              >
+                {d.stream.logo ? (
+                  <img
+                    class="prov-mini"
+                    src={d.stream.logo}
+                    width="20"
+                    height="20"
+                    alt={`${d.stream.also ? "Also on" : "Streaming on"} ${d.stream.name}`}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  `${d.stream.also ? "Also on" : "Streaming on"} ${d.stream.name}`
+                )}
+              </a>
             </>
           ) : null}
         </span>
@@ -113,4 +123,5 @@ export const DossierRow: FC<{
       ) : null}
     </span>
   </li>
-);
+  );
+};

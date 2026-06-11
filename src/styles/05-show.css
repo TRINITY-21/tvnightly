@@ -62,6 +62,15 @@
   color: var(--muted);
 }
 .meta-strip .sep { opacity: 0.45; }
+/* every meta token is a door now (TV, seasons, network, genres) — keep the
+   strip chyron-quiet; amber only answers the hover */
+.meta-strip a {
+  color: inherit;
+}
+.meta-strip a:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
 /* the headline score is the answer the page exists to give — let it lead */
 .meta-strip .rating { font-size: 1.1rem; font-weight: 700; }
 

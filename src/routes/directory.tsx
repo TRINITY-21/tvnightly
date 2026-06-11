@@ -242,58 +242,116 @@ app.get("/top/networks", async (c) => {
   );
 });
 
+// ---------------------------------------- network & provider brand pages
+
+type NetEntry = { name: string; slug: string; count: number };
+
+/** Three resolution tiers: directory (top 30), any network we hold shows
+ *  for, then streaming brands the catalogs know but TVmaze doesn't call a
+ *  network ("Paramount+", "fuboTV") — the dossier logos link here, so
+ *  every brand we print must resolve. */
+async function resolveNetwork(db: D1Database, slug: string): Promise<NetEntry | null> {
+  const dir = await networkDirectory(db);
+  const top = dir.find((n) => n.slug === slug);
+  if (top) return top;
+  const { results: nets } = await db
+    .prepare(
+      `SELECT n, COUNT(*) AS c FROM (
+         SELECT COALESCE(network, web_channel) AS n FROM shows
+       ) WHERE n IS NOT NULL GROUP BY n`,
+    )
+    .all<{ n: string; c: number }>();
+  const net = nets.find((r) => slugifyName(r.n) === slug);
+  if (net) return { name: net.n, slug, count: net.c };
+  const { results: provRows } = await db
+    .prepare(
+      `SELECT DISTINCT j.value AS p FROM movies, json_tree(movies.providers_intl) AS j
+         WHERE movies.providers_intl IS NOT NULL AND j.type = 'text'
+       UNION
+       SELECT DISTINCT j.value FROM shows, json_tree(shows.providers_intl) AS j
+         WHERE shows.providers_intl IS NOT NULL AND j.type = 'text'`,
+    )
+    .all<{ p: string }>();
+  const members = provRows.map((r) => r.p).filter((p) => slugifyName(providerBrand(p)) === slug);
+  if (!members.length) return null;
+  const name = members.reduce((a, b) => (b.trim().length < a.trim().length ? b : a)).trim();
+  return { name, slug, count: 0 };
+}
+
+/** The visitor's region decides catalog membership for real, so no page
+ *  ever claims a library they don't have. */
+const regionTester = (region: string, brandName: string) => {
+  const brand = providerBrand(brandName);
+  return (json: string | null): boolean => {
+    const intl: Record<string, string[]> = json ? JSON.parse(json) : {};
+    return (intl[region] ?? []).some((p) => providerBrand(p) === brand);
+  };
+};
+
+/** A brand's shows are its originals AND its regional catalog, merged —
+ *  "Top Hulu shows" must contain the show whose receipt said "Streaming
+ *  on Hulu", not just Hulu originals; FX simply has no catalog side. */
+async function topNetworkShows(
+  db: D1Database,
+  entry: NetEntry,
+  regionHas: (json: string | null) => boolean,
+  limit: number,
+): Promise<ShowRow[]> {
+  const [byNet, pool] = await Promise.all([
+    db
+      .prepare(
+        `SELECT * FROM shows WHERE (network = ? OR web_channel = ?) AND rating IS NOT NULL
+         ORDER BY rating DESC, weight DESC LIMIT ?`,
+      )
+      .bind(entry.name, entry.name, limit)
+      .all<ShowRow>(),
+    db
+      .prepare(
+        `SELECT * FROM shows WHERE providers_intl IS NOT NULL AND rating IS NOT NULL
+         AND weight >= 60 ORDER BY rating DESC, weight DESC LIMIT 400`,
+      )
+      .all<ShowRow>(),
+  ]);
+  const seen = new Set<number>();
+  return [...byNet.results, ...pool.results.filter((s) => regionHas(s.providers_intl))]
+    .filter((s) => !seen.has(s.id) && seen.add(s.id))
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.weight ?? 0) - (a.weight ?? 0))
+    .slice(0, limit);
+}
+
+async function topNetworkMovies(
+  db: D1Database,
+  regionHas: (json: string | null) => boolean,
+  limit: number,
+): Promise<MovieRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM movies WHERE providers_intl IS NOT NULL AND rating IS NOT NULL
+       AND votes >= 1000 ORDER BY rating DESC, votes DESC LIMIT 400`,
+    )
+    .all<MovieRow>();
+  return results.filter((m) => regionHas(m.providers_intl)).slice(0, limit);
+}
+
 app.get("/network/:slug", async (c) => {
   const db = c.env.DB;
-  const dir = await networkDirectory(db);
-  let entry = dir.find((n) => n.slug === c.req.param("slug"));
-  // long-tail fallback: network links now appear on every detail page, so
-  // any network we actually hold shows for must resolve, not just the top 30
-  if (!entry) {
-    const { results: nets } = await db
-      .prepare(
-        `SELECT n, COUNT(*) AS c FROM (
-           SELECT COALESCE(network, web_channel) AS n FROM shows
-         ) WHERE n IS NOT NULL GROUP BY n`,
-      )
-      .all<{ n: string; c: number }>();
-    const hit = nets.find((r) => slugifyName(r.n) === c.req.param("slug"));
-    if (hit) entry = { name: hit.n, slug: slugifyName(hit.n), count: hit.c };
-  }
+  const slug = c.req.param("slug");
+  const entry = await resolveNetwork(db, slug);
   if (!entry) return c.notFound();
+  const regionHas = regionTester(visitorRegion(c), entry.name);
 
-  const { results: best } = await db
-    .prepare(
-      `SELECT * FROM shows WHERE (network = ? OR web_channel = ?) AND rating IS NOT NULL
-       ORDER BY rating DESC, weight DESC LIMIT 12`,
-    )
-    .bind(entry.name, entry.name)
-    .all<ShowRow>();
-  const { results: airing } = await db
-    .prepare(
-      `SELECT * FROM shows WHERE (network = ? OR web_channel = ?) AND status = 'Running'
-       ORDER BY weight DESC LIMIT 10`,
-    )
-    .bind(entry.name, entry.name)
-    .all<ShowRow>();
-  // streaming brands double as movie catalogs — surface their top films the
-  // way genre pages do; broadcast networks simply match nothing and skip it.
-  // LIKE is the coarse pass over the whole intl JSON; the visitor's region
-  // decides for real, so we never claim a catalog they don't have.
-  const region = visitorRegion(c);
-  const netBrand = providerBrand(entry.name);
-  const { results: filmPool } = await db
-    .prepare(
-      `SELECT * FROM movies WHERE providers_intl LIKE ? AND rating IS NOT NULL AND votes >= 1000
-       ORDER BY rating DESC, votes DESC LIMIT 60`,
-    )
-    .bind(`%"${entry.name}%`)
-    .all<MovieRow>();
-  const films = filmPool
-    .filter((m) => {
-      const intl: Record<string, string[]> = m.providers_intl ? JSON.parse(m.providers_intl) : {};
-      return (intl[region] ?? []).some((p) => providerBrand(p) === netBrand);
-    })
-    .slice(0, 12);
+  const [best, films, airingRes] = await Promise.all([
+    topNetworkShows(db, entry, regionHas, 12),
+    topNetworkMovies(db, regionHas, 12),
+    db
+      .prepare(
+        `SELECT * FROM shows WHERE (network = ? OR web_channel = ?) AND status = 'Running'
+         ORDER BY weight DESC LIMIT 10`,
+      )
+      .bind(entry.name, entry.name)
+      .all<ShowRow>(),
+  ]);
+  const airing = airingRes.results;
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -307,17 +365,29 @@ app.get("/network/:slug", async (c) => {
       canonical={canonical(c)}
     >
       <h1>The best of {entry.name}</h1>
-      <section>
-        <h2>Top {entry.name} shows</h2>
-        <div class="grid">
-          {best.map((s) => (
-            <ShowCard show={s} />
-          ))}
-        </div>
-      </section>
+      {best.length ? (
+        <section>
+          <h2>
+            Top {entry.name} shows{" "}
+            <a class="more" href={`/network/${slug}/shows`}>
+              see all
+            </a>
+          </h2>
+          <div class="grid">
+            {best.map((s) => (
+              <ShowCard show={s} />
+            ))}
+          </div>
+        </section>
+      ) : null}
       {films.length ? (
         <section>
-          <h2>Top {entry.name} movies</h2>
+          <h2>
+            Top {entry.name} movies{" "}
+            <a class="more" href={`/network/${slug}/movies`}>
+              see all
+            </a>
+          </h2>
           <div class="grid">
             {films.map((m) => (
               <MovieCard movie={m} />
@@ -347,6 +417,98 @@ app.get("/network/:slug", async (c) => {
   );
 });
 
+// The per-medium top pages the provider logos deep-link into: a show
+// context lands on shows, a movie context on movies.
+app.get("/network/:slug/shows", async (c) => {
+  const db = c.env.DB;
+  const slug = c.req.param("slug");
+  const entry = await resolveNetwork(db, slug);
+  if (!entry) return c.notFound();
+  const regionHas = regionTester(visitorRegion(c), entry.name);
+  const rows = await topNetworkShows(db, entry, regionHas, 48);
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`Top ${entry.name} shows — ranked | TV Nightly`}
+      description={`The best TV shows on ${entry.name}, ranked by viewer rating.`}
+      canonical={canonical(c)}
+    >
+      <h1>Top {entry.name} shows</h1>
+      {rows.length ? (
+        <div class="grid">
+          {rows.map((s) => (
+            <ShowCard show={s} />
+          ))}
+        </div>
+      ) : (
+        <p class="muted">No {entry.name} shows in this region's catalog yet.</p>
+      )}
+      <p>
+        <a class="chev-after" href={`/network/${slug}/movies`}>Top {entry.name} movies</a> ·{" "}
+        <a href={`/network/${slug}`}>The best of {entry.name}</a>
+      </p>
+    </Layout>,
+  );
+});
+
+app.get("/network/:slug/movies", async (c) => {
+  const db = c.env.DB;
+  const slug = c.req.param("slug");
+  const entry = await resolveNetwork(db, slug);
+  if (!entry) return c.notFound();
+  const regionHas = regionTester(visitorRegion(c), entry.name);
+  const rows = await topNetworkMovies(db, regionHas, 48);
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`Top ${entry.name} movies — ranked | TV Nightly`}
+      description={`The best movies on ${entry.name}, ranked by viewer rating.`}
+      canonical={canonical(c)}
+    >
+      <h1>Top {entry.name} movies</h1>
+      {rows.length ? (
+        <div class="grid">
+          {rows.map((m) => (
+            <MovieCard movie={m} />
+          ))}
+        </div>
+      ) : (
+        <p class="muted">No {entry.name} movies in this region's catalog yet.</p>
+      )}
+      <p>
+        <a class="chev-after" href={`/network/${slug}/shows`}>Top {entry.name} shows</a> ·{" "}
+        <a href={`/network/${slug}`}>The best of {entry.name}</a>
+      </p>
+    </Layout>,
+  );
+});
+
+// ------------------------------------------------------------ genre pages
+
+async function topGenreShows(db: D1Database, genre: string, limit: number): Promise<ShowRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM shows WHERE genres LIKE ? AND rating IS NOT NULL AND weight >= 60
+       ORDER BY rating DESC, weight DESC LIMIT ?`,
+    )
+    .bind(`%"${genre}"%`, limit)
+    .all<ShowRow>();
+  return results;
+}
+
+async function topGenreMovies(db: D1Database, genre: string, limit: number): Promise<MovieRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM movies WHERE genres LIKE ? AND rating IS NOT NULL AND votes >= 1000
+       ORDER BY rating DESC, votes DESC LIMIT ?`,
+    )
+    .bind(`%"${genre}"%`, limit)
+    .all<MovieRow>();
+  return results;
+}
+
 app.get("/genre/:slug", async (c) => {
   const db = c.env.DB;
   const dir = await genreDirectory(db);
@@ -356,28 +518,8 @@ app.get("/genre/:slug", async (c) => {
   if (!tvGenre && !movieGenre) return c.notFound();
   const label = tvGenre ?? movieGenre!;
 
-  const shows = tvGenre
-    ? (
-        await db
-          .prepare(
-            `SELECT * FROM shows WHERE genres LIKE ? AND rating IS NOT NULL AND weight >= 60
-             ORDER BY rating DESC, weight DESC LIMIT 12`,
-          )
-          .bind(`%"${tvGenre}"%`)
-          .all<ShowRow>()
-      ).results
-    : [];
-  const movies = movieGenre
-    ? (
-        await db
-          .prepare(
-            `SELECT * FROM movies WHERE genres LIKE ? AND rating IS NOT NULL AND votes >= 1000
-             ORDER BY rating DESC, votes DESC LIMIT 12`,
-          )
-          .bind(`%"${movieGenre}"%`)
-          .all<MovieRow>()
-      ).results
-    : [];
+  const shows = tvGenre ? await topGenreShows(db, tvGenre, 12) : [];
+  const movies = movieGenre ? await topGenreMovies(db, movieGenre, 12) : [];
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -401,7 +543,12 @@ app.get("/genre/:slug", async (c) => {
       </p>
       {shows.length ? (
         <section>
-          <h2>Top {label.toLowerCase()} series</h2>
+          <h2>
+            Top {label.toLowerCase()} series{" "}
+            <a class="more" href={`/genre/${slug}/shows`}>
+              see all
+            </a>
+          </h2>
           <div class="grid">
             {shows.map((s) => (
               <ShowCard show={s} />
@@ -411,7 +558,12 @@ app.get("/genre/:slug", async (c) => {
       ) : null}
       {movies.length ? (
         <section>
-          <h2>Top {label.toLowerCase()} films</h2>
+          <h2>
+            Top {label.toLowerCase()} films{" "}
+            <a class="more" href={`/genre/${slug}/movies`}>
+              see all
+            </a>
+          </h2>
           <div class="grid">
             {movies.map((m) => (
               <MovieCard movie={m} />
@@ -421,6 +573,80 @@ app.get("/genre/:slug", async (c) => {
       ) : null}
       <p>
         <a class="chev-after" href="/lists">All genres</a>
+      </p>
+    </Layout>,
+  );
+});
+
+// Per-medium genre top pages — the genre chyrons deep-link by context:
+// a show page lands on shows, a movie page on movies.
+app.get("/genre/:slug/shows", async (c) => {
+  const db = c.env.DB;
+  const slug = c.req.param("slug");
+  const dir = await genreDirectory(db);
+  const tvGenre = dir.tv.find((g) => slugifyName(g) === slug);
+  if (!tvGenre) return c.notFound();
+  const rows = await topGenreShows(db, tvGenre, 48);
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`Top ${tvGenre.toLowerCase()} shows — ranked | TV Nightly`}
+      description={`The best ${tvGenre.toLowerCase()} TV shows, ranked by viewer rating, with streaming availability.`}
+      canonical={canonical(c)}
+    >
+      <h1>Top {tvGenre.toLowerCase()} shows</h1>
+      <div class="grid">
+        {rows.map((s) => (
+          <ShowCard show={s} />
+        ))}
+      </div>
+      <p>
+        {dir.movie.some((g) => slugifyName(g) === slug) ? (
+          <>
+            <a class="chev-after" href={`/genre/${slug}/movies`}>
+              Top {tvGenre.toLowerCase()} movies
+            </a>{" "}
+            ·{" "}
+          </>
+        ) : null}
+        <a href={`/genre/${slug}`}>The best of {tvGenre}</a>
+      </p>
+    </Layout>,
+  );
+});
+
+app.get("/genre/:slug/movies", async (c) => {
+  const db = c.env.DB;
+  const slug = c.req.param("slug");
+  const dir = await genreDirectory(db);
+  const movieGenre = dir.movie.find((g) => slugifyName(g) === slug);
+  if (!movieGenre) return c.notFound();
+  const rows = await topGenreMovies(db, movieGenre, 48);
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`Top ${movieGenre.toLowerCase()} movies — ranked | TV Nightly`}
+      description={`The best ${movieGenre.toLowerCase()} films, ranked by viewer rating, with streaming availability.`}
+      canonical={canonical(c)}
+    >
+      <h1>Top {movieGenre.toLowerCase()} movies</h1>
+      <div class="grid">
+        {rows.map((m) => (
+          <MovieCard movie={m} />
+        ))}
+      </div>
+      <p>
+        {dir.tv.some((g) => slugifyName(g) === slug) ? (
+          <>
+            <a class="chev-after" href={`/genre/${slug}/shows`}>
+              Top {movieGenre.toLowerCase()} shows
+            </a>{" "}
+            ·{" "}
+          </>
+        ) : null}
+        <a href={`/genre/${slug}`}>The best of {movieGenre}</a>
       </p>
     </Layout>,
   );

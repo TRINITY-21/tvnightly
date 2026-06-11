@@ -1,6 +1,7 @@
 // Where-to-watch rendering: logo tiles and text chips.
 import { FC } from "hono/jsx";
 import { PROVIDER_LOGOS, providersFor, providerBrand } from "../lib/providers";
+import { slugifyName } from "../lib/format";
 
 // The where-to-watch answer is the conversion moment of every detail page:
 // recognizable platform logos instead of a wall of text chips, deduped by
@@ -52,8 +53,8 @@ export const ProviderLine: FC<{
           pickerType ? (
             <a
               class="prov-tile"
-              href={`/what-to-watch?type=${pickerType}&service=${encodeURIComponent(name)}`}
-              title={`${name} — more on this service`}
+              href={`/network/${slugifyName(providerBrand(name))}/${pickerType === "movie" ? "movies" : "shows"}`}
+              title={`${name} — the top ${name} ${pickerType === "movie" ? "movies" : "shows"}`}
             >
               {inner}
             </a>

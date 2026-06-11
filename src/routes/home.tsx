@@ -3,7 +3,16 @@ import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
 import { visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
 import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml } from "../lib/format";
 import { tmdbBackdrop } from "../lib/tmdb";
-import { IconReel } from "../components/icons";
+import {
+  IconReel,
+  IconDial,
+  IconClapper,
+  IconHearts,
+  IconAudience,
+  IconTvPlay,
+  IconVs,
+  IconCal,
+} from "../components/icons";
 import { canonical } from "../lib/seo";
 import { VERTICALS } from "../lib/verticals";
 import { Layout } from "../components/Layout";
@@ -396,14 +405,6 @@ app.get("/", async (c) => {
               ) : null}
               <strong>The greatest episodes ever aired</strong>
               <p class="muted">Every show's finest hours, ranked on one honest list.</p>
-              <span class="chev-icon" aria-hidden="true"></span>
-            </a>
-            <a class="tool-tile tool-tile-lg" href="/what-to-watch">
-              <span class="tool-tile-mark" aria-hidden="true">
-                <IconReel size={150} />
-              </span>
-              <strong>Tonight's picker</strong>
-              <p class="muted">Filter by genre, runtime, and streaming service — then spin.</p>
               <span class="tool-tile-provs" aria-hidden="true">
                 {["Netflix", "Amazon Prime Video", "Hulu", "Disney Plus"].map((n) =>
                   PROVIDER_LOGOS[n] ? (
@@ -413,33 +414,62 @@ app.get("/", async (c) => {
               </span>
               <span class="chev-icon" aria-hidden="true"></span>
             </a>
+            <a class="tool-tile tool-tile-lg" href="/what-to-watch">
+              <span class="tool-tile-glyph" aria-hidden="true">
+                <IconDial size={132} />
+              </span>
+              <strong>Tonight's picker</strong>
+              <p class="muted">Filter by genre, runtime, and streaming service — then spin.</p>
+              <span class="chev-icon" aria-hidden="true"></span>
+            </a>
             <div class="tools-bento-rest">
               <a class="tool-tile tool-tile-sm" href="/tonight">
                 <span>Tonight's full schedule</span>
+                <span class="tool-tile-glyph-sm" aria-hidden="true">
+                  <IconCal size={38} />
+                </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>
               <a class="tool-tile tool-tile-sm" href="/movies/best">
                 <span>Top movies</span>
+                <span class="tool-tile-glyph-sm" aria-hidden="true">
+                  <IconReel size={62} />
+                </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>
               <a class="tool-tile tool-tile-sm" href="/compare">
                 <span>Compare two shows</span>
+                <span class="tool-tile-glyph-sm" aria-hidden="true">
+                  <IconVs size={58} />
+                </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>
               <a class="tool-tile tool-tile-sm" href="/loved">
                 <span>Loved by this community</span>
+                <span class="tool-tile-glyph-sm" aria-hidden="true">
+                  <IconHearts size={56} />
+                </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>
               <a class="tool-tile tool-tile-sm" href="/top/seasons">
                 <span>Best TV seasons</span>
+                <span class="tool-tile-glyph-sm" aria-hidden="true">
+                  <IconClapper size={56} />
+                </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>
               <a class="tool-tile tool-tile-sm" href="/top/networks">
                 <span>Top networks</span>
+                <span class="tool-tile-glyph-sm" aria-hidden="true">
+                  <IconAudience size={50} />
+                </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>
               <a class="tool-tile tool-tile-sm" href="/top/tv">
                 <span>Top TV shows</span>
+                <span class="tool-tile-glyph-sm" aria-hidden="true">
+                  <IconTvPlay size={54} />
+                </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>
             </div>

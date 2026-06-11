@@ -437,19 +437,18 @@
   position: relative;
   z-index: 1;
 }
-/* the reel watermark: drawn in the house line, faded into the tile */
-.tool-tile-mark {
+/* the hero glyph: vivid drawn artwork owning a large tile's right side */
+.tool-tile-glyph {
   position: absolute;
-  right: 0.6rem;
+  right: 1.4rem;
   top: 50%;
-  transform: translateY(-52%) rotate(-8deg);
+  transform: translateY(-50%) rotate(6deg);
   color: var(--muted);
-  opacity: 0.16;
   pointer-events: none;
-  transition: opacity var(--speed) var(--ease);
+  transition: transform var(--speed) var(--ease);
 }
-.tool-tile-lg:hover .tool-tile-mark {
-  opacity: 0.24;
+.tool-tile-lg:hover .tool-tile-glyph {
+  transform: translateY(-50%) rotate(10deg);
 }
 
 /* the picker's actual services, fanned like a pocketful of apps */
@@ -485,15 +484,37 @@
 }
 .tool-tile-lg:hover .chev-icon { transform: translateY(-50%) translateX(2px); }
 .tool-tile-sm {
+  position: relative;
+  overflow: hidden;
   align-items: center;
-  justify-content: space-between;
   gap: 0.6rem;
-  padding: 0.78rem 0.95rem;
+  padding: 0.78rem 5.6rem 0.78rem 0.95rem;
   font-size: 0.88rem;
   color: var(--text);
+  min-height: 3.6rem;
 }
 .tool-tile-sm:hover { color: var(--text); }
 .tool-tile-sm span:first-child { line-height: 1.3; }
+/* each small tile wears its drawn glyph, docked right before the chevron */
+.tool-tile-glyph-sm {
+  position: absolute;
+  right: 2.1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  color: var(--muted);
+  pointer-events: none;
+  transition: transform var(--speed) var(--ease);
+}
+.tool-tile-sm:hover .tool-tile-glyph-sm {
+  transform: translateY(-50%) scale(1.06);
+}
+.tool-tile-sm .chev-icon-sm {
+  position: absolute;
+  right: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
 @media (max-width: 760px) {
   .tools-bento,
   .tools-bento-rest { grid-template-columns: 1fr; }

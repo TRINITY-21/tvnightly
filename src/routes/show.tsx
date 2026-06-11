@@ -552,11 +552,14 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
   const show = await getShow(c.env.DB, c.req.param("slug"));
   if (!show) return c.notFound();
   const n = Number(c.req.param("n"));
-  const { results: eps } = await c.env.DB.prepare(
-    "SELECT * FROM episodes WHERE show_id = ? AND season = ? ORDER BY number",
-  )
-    .bind(show.id, n)
-    .all<EpisodeRow>();
+  const [{ results: eps }, maxRow] = await Promise.all([
+    c.env.DB.prepare("SELECT * FROM episodes WHERE show_id = ? AND season = ? ORDER BY number")
+      .bind(show.id, n)
+      .all<EpisodeRow>(),
+    c.env.DB.prepare("SELECT MAX(season) AS m FROM episodes WHERE show_id = ?")
+      .bind(show.id)
+      .first<{ m: number | null }>(),
+  ]);
   if (eps.length === 0) return c.notFound();
 
   const site = origin(c);
@@ -573,7 +576,7 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
       <h1>
         <a href={`/show/${show.slug}`}>{show.name}</a> — Season {n}
       </h1>
-      <SeasonTabs slug={show.slug} season={n} current="overview" />
+      <SeasonTabs slug={show.slug} season={n} current="overview" latest={n === maxRow?.m} />
       <ol class="ep-list">
         {eps.map((e) => (
           <li>

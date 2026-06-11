@@ -1,17 +1,161 @@
 import { Hono } from "hono";
+import { Context } from "hono";
 import { Bindings, ShowRow, MovieRow, PersonRow } from "../types";
 import { stripHtml, slugifyName, longDate, ageOf } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow } from "../lib/queries";
 import { Layout } from "../components/Layout";
-import { ShowTabs } from "../components/nav";
+import { ShowTabs, SeasonTabs } from "../components/nav";
 import { ClampSummary } from "../components/cards";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
+interface TmdbSeasonCast {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  total_episode_count: number;
+  roles: { character: string }[];
+}
+
+/** TMDB season aggregate credits, edge-cached for a week. Fails to null. */
+async function tmdbSeasonCredits(
+  key: string,
+  tmdbId: number,
+  season: number,
+): Promise<TmdbSeasonCast[] | null> {
+  const cacheKey = new Request(`https://edge-cache.tvnightly.com/season-credits/${tmdbId}/${season}`);
+  const cache = caches.default;
+  try {
+    let res = await cache.match(cacheKey);
+    if (!res) {
+      const live = await fetch(
+        `https://api.themoviedb.org/3/tv/${tmdbId}/season/${season}/aggregate_credits?api_key=${key}`,
+        { headers: { accept: "application/json" } },
+      );
+      if (!live.ok) return null;
+      res = new Response(live.body, live);
+      res.headers.set("Cache-Control", "public, max-age=604800");
+      await cache.put(cacheKey, res.clone());
+    }
+    const data = (await res.json()) as { cast?: TmdbSeasonCast[] };
+    return data.cast ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function seasonCastPage(
+  c: Context<{ Bindings: Bindings }>,
+  show: ShowRow,
+  season: number,
+  latest: boolean,
+) {
+  const cast =
+    show.tmdb_id && c.env.TMDB_API_KEY
+      ? ((await tmdbSeasonCredits(c.env.TMDB_API_KEY, show.tmdb_id, season)) ?? []).slice(0, 24)
+      : [];
+  // link anyone we already track on this show, matched by name
+  const linkable = new Map<string, number>();
+  if (cast.length) {
+    const { results } = await c.env.DB.prepare(
+      `SELECT p.id, p.name FROM credits cr JOIN people p ON p.id = cr.person_id WHERE cr.show_id = ?`,
+    )
+      .bind(show.id)
+      .all<{ id: number; name: string }>();
+    for (const r of results) linkable.set(r.name.toLowerCase(), r.id);
+  }
+
+  const site = origin(c);
+  const base = `/show/${show.slug}/cast`;
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${show.name} Season ${season} cast — who's in it & episode counts | TV Nightly`}
+      description={
+        cast.length
+          ? `Everyone in ${show.name} Season ${season}: ${cast
+              .slice(0, 5)
+              .map((p) => p.name)
+              .join(", ")} — with roles and this season's episode counts.`
+          : `The Season ${season} cast of ${show.name}.`
+      }
+      canonical={`${site}${base}?season=${season}`}
+      ogImage={show.image_url ?? undefined}
+      ld={[breadcrumbLd(site, show, `Season ${season} cast`, base)]}
+    >
+      <h1>
+        <a href={`/show/${show.slug}`}>{show.name}</a> — Season {season} cast
+      </h1>
+      <SeasonTabs slug={show.slug} season={season} current="cast" latest={latest} />
+      {cast.length ? (
+        <>
+          <p class="muted">
+            {cast.length} credited this season, ordered by appearances.{" "}
+            <a href={base}>Full series cast</a>
+          </p>
+          <div class="cast-grid">
+            {cast.map((p) => {
+              const id = linkable.get(p.name.toLowerCase());
+              const img = p.profile_path
+                ? `https://image.tmdb.org/t/p/w185${p.profile_path}`
+                : null;
+              const inner = (
+                <>
+                  {img ? (
+                    <img src={img} alt={p.name} loading="lazy" />
+                  ) : (
+                    <div class="cast-fallback">{p.name}</div>
+                  )}
+                  {p.total_episode_count ? (
+                    <span class="cast-eps">
+                      {p.total_episode_count} ep{p.total_episode_count === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                  <div class="cast-tile-body">
+                    <strong>{p.name}</strong>
+                    {p.roles?.[0]?.character ? (
+                      <span class="cast-char">as {p.roles[0].character}</span>
+                    ) : null}
+                  </div>
+                </>
+              );
+              return id ? (
+                <a class="cast-tile" href={`/person/${slugifyName(p.name)}-${id}`}>
+                  {inner}
+                </a>
+              ) : (
+                <div class="cast-tile">{inner}</div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <p class="muted">
+          Season-level cast isn't available for this show yet —{" "}
+          <a href={base}>see the full series cast</a> instead.
+        </p>
+      )}
+    </Layout>,
+  );
+}
+
 app.get("/show/:slug/cast", async (c) => {
   const show = await getShow(c.env.DB, c.req.param("slug"));
   if (!show) return c.notFound();
+  const rawSeason = (c.req.query("season") ?? "").trim();
+  if (rawSeason !== "") {
+    const { results: seasonRows } = await c.env.DB.prepare(
+      "SELECT DISTINCT season AS s FROM episodes WHERE show_id = ? AND season IS NOT NULL ORDER BY season",
+    )
+      .bind(show.id)
+      .all<{ s: number }>();
+    const seasons = seasonRows.map((r) => r.s);
+    const sn = Number(rawSeason);
+    if (!Number.isInteger(sn) || !seasons.includes(sn))
+      return c.redirect(`/show/${show.slug}/cast`, 301);
+    return seasonCastPage(c, show, sn, sn === Math.max(...seasons));
+  }
   type CreditRow = PersonRow & {
     character: string | null;
     voice: number;

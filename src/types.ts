@@ -24,6 +24,7 @@ export interface ShowRow {
   runtime: number | null;
   cast_json: string | null; // JSON array: {n: name, c: character, img: headshot}
   providers_intl: string | null; // JSON object: country code -> service names
+  tmdb_id: number | null; // bridged from TVmaze external ids (provider patrol)
 }
 
 export interface EpisodeRow {

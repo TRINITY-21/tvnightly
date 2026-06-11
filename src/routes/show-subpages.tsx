@@ -137,7 +137,7 @@ app.get("/show/:slug/essential", async (c) => {
           {seasonLabel}
         </h1>
         {season != null ? (
-          <SeasonTabs slug={show.slug} season={season} current="essential" />
+          <SeasonTabs slug={show.slug} season={season} current="essential" latest={season === Math.max(...seasonsAll)} />
         ) : (
           <ShowTabs slug={show.slug} current="essential" />
         )}
@@ -288,7 +288,7 @@ app.get("/show/:slug/ratings", async (c) => {
         {seasonLabel}: episode ratings graph
       </h1>
       {season != null ? (
-        <SeasonTabs slug={show.slug} season={season} current="ratings" />
+        <SeasonTabs slug={show.slug} season={season} current="ratings" latest={season === Math.max(...seasons)} />
       ) : (
         <ShowTabs slug={show.slug} current="ratings" />
       )}
@@ -399,7 +399,7 @@ const rankedPage =
             {seasonLabel}
           </h1>
           {season != null ? (
-            <SeasonTabs slug={show.slug} season={season} current={kind === "best" ? "best" : "worst"} />
+            <SeasonTabs slug={show.slug} season={season} current={kind === "best" ? "best" : "worst"} latest={season === Math.max(...seasons)} />
           ) : (
             <ShowTabs slug={show.slug} current={kind === "best" ? "best" : "worst"} />
           )}

@@ -196,7 +196,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             </div>
           </div>
         </header>
-        <SeasonTabs slug={show.slug} season={seasonNo} />
+        <SeasonTabs slug={show.slug} season={seasonNo} latest={seasonNo === Math.max(...episodes.map((e) => e.season ?? 0))} />
         {ep.rating != null && (seasonRank || seriesRank) ? (
           <section class="stat-band">
             {seasonRank ? (

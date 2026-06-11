@@ -148,6 +148,8 @@ app.get("/best-episodes", async (c) => {
                         <img
                           class="chart-still"
                           src={midSrc(e.image_url)!}
+                          srcset={`${midSrc(e.image_url)} 400w, ${heroSrc(e.image_url)} 1920w`}
+                          sizes="(max-width: 700px) 100vw, 466px"
                           alt={`${e.show_name}: ${e.name ?? epCode(e)}`}
                           width="460"
                           height="259"

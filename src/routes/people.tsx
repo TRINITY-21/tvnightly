@@ -103,7 +103,12 @@ async function seasonCastPage(
               const inner = (
                 <>
                   {img ? (
-                    <img src={img} alt={p.name} loading="lazy" />
+                    <img
+                      src={img}
+                      srcset={`${img} 1x, https://image.tmdb.org/t/p/w500${p.profile_path} 2x`}
+                      alt={p.name}
+                      loading="lazy"
+                    />
                   ) : (
                     <div class="cast-fallback">{p.name}</div>
                   )}

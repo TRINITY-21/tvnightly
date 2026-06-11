@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { raw } from "hono/html";
 import { Bindings, EpisodeRow } from "../types";
 import { visitorRegion, REGIONS, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
-import { stripHtml, epCode, epHref, hiRes, retinaSet, longDate, slugifyName, personHref, comparePathFor } from "../lib/format";
+import { stripHtml, epCode, epHref, hiRes, retinaSet, heroBg, longDate, slugifyName, personHref, comparePathFor } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
@@ -63,10 +63,16 @@ app.get("/show/:slug", async (c) => {
 
   // The hero frame: the show's real designed backdrop from TMDB (edge-cached),
   // falling back to the poster for the few shows without a TMDB bridge.
-  const heroFrame =
-    (show.tmdb_id && c.env.TMDB_API_KEY
+  const backdrop =
+    show.tmdb_id && c.env.TMDB_API_KEY
       ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id)
-      : null) ?? hiRes(show.image_url);
+      : null;
+  const posterBg = hiRes(show.image_url);
+  const heroFrame = backdrop
+    ? heroBg(backdrop.x1, backdrop.x2)
+    : posterBg
+      ? heroBg(posterBg)
+      : null;
 
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
@@ -80,7 +86,7 @@ app.get("/show/:slug", async (c) => {
       <article class="show-hub">
         <header class="detail-hero frame-hero">
           {heroFrame ? (
-            <div class="hero-backdrop" style={`background-image:url('${heroFrame}')`}></div>
+            <div class="hero-backdrop" style={heroFrame}></div>
           ) : null}
           <div class="detail-head">
             <div class="detail-side">
@@ -573,10 +579,16 @@ app.get("/show/:slug/where-to-watch", async (c) => {
   const names = intl[region] ?? [];
   const elsewhere = REGIONS.filter((r) => r !== region && intl[r]?.length);
 
-  const heroFrame =
-    (show.tmdb_id && c.env.TMDB_API_KEY
+  const backdrop =
+    show.tmdb_id && c.env.TMDB_API_KEY
       ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id)
-      : null) ?? hiRes(show.image_url);
+      : null;
+  const posterBg = hiRes(show.image_url);
+  const heroFrame = backdrop
+    ? heroBg(backdrop.x1, backdrop.x2)
+    : posterBg
+      ? heroBg(posterBg)
+      : null;
 
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
@@ -595,7 +607,7 @@ app.get("/show/:slug/where-to-watch", async (c) => {
       <article class="show-hub">
         <header class="detail-hero frame-hero">
           {heroFrame ? (
-            <div class="hero-backdrop" style={`background-image:url('${heroFrame}')`}></div>
+            <div class="hero-backdrop" style={heroFrame}></div>
           ) : null}
           <div class="detail-head">
             <div class="detail-side">

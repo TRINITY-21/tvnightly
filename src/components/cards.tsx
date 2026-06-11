@@ -1,6 +1,7 @@
 // Poster cards, badges, explore tiles, the 3-line synopsis clamp.
 import { FC, PropsWithChildren } from "hono/jsx";
 import { ShowRow, MovieRow } from "../types";
+import { retinaSet } from "../lib/format";
 
 // Long synopses clamp to 3 lines with a pure-CSS show more/less toggle
 // (hidden checkbox — no JS; the label is the control).
@@ -21,7 +22,7 @@ export const ShowCard: FC<{ show: ShowRow }> = ({ show }) => (
   <a class="card" href={`/show/${show.slug}`}>
     <div class="card-media">
       {show.image_url ? (
-        <img src={show.image_url} alt={show.name} loading="lazy" />
+        <img src={show.image_url} srcset={retinaSet(show.image_url)} alt={show.name} loading="lazy" />
       ) : (
         <div class="card-fallback">{show.name}</div>
       )}

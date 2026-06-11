@@ -65,6 +65,15 @@ export const retinaSet = (url: string | null): string | undefined =>
     ? `${url} 1x, ${url.replace(/\/medium_(portrait|landscape)\//, "/original_untouched/")} 2x`
     : undefined;
 
+/** Inline style for a hero backdrop: image-set picks the heavy rendition
+ *  only on dense screens (a CSS background can never use srcset). */
+export const heroBg = (x1: string, x2?: string): string =>
+  x2 && x2 !== x1
+    ? `background-image:url('${x2}');` +
+      `background-image:-webkit-image-set(url('${x1}') 1x, url('${x2}') 2x);` +
+      `background-image:image-set(url('${x1}') 1x, url('${x2}') 2x)`
+    : `background-image:url('${x1}')`;
+
 export const comparePathFor = (a: string, b: string) =>
   a.localeCompare(b) <= 0 ? `/compare/${a}-vs-${b}` : `/compare/${b}-vs-${a}`;
 

@@ -1,17 +1,18 @@
 import { Hono } from "hono";
 import { raw } from "hono/html";
 import { Bindings, EpisodeRow } from "../types";
-import { visitorRegion } from "../lib/providers";
+import { visitorRegion, REGIONS, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
 import { stripHtml, epCode, epHref, hiRes, retinaSet, longDate, slugifyName, personHref, comparePathFor } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
+import { tmdbBackdrop } from "../lib/tmdb";
 import { hubForGenres } from "../lib/verticals";
 import { Layout } from "../components/Layout";
 import { ShowTabs, SeasonTabs } from "../components/nav";
 import { StatusBadge, ShowCard, ExploreCard, ClampSummary } from "../components/cards";
 import { ProviderLine } from "../components/providers";
-import { RateInline } from "../components/forms";
+import { RateInline, SubscribeForm } from "../components/forms";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -60,15 +61,12 @@ app.get("/show/:slug", async (c) => {
     },
   ];
 
-  // The hero frame: the show's own cinematography — its best-rated episode's
-  // still — sharp behind the facts. Poster is the fallback for unmirrored eps.
-  const heroFrame = hiRes(
-    episodes
-      .filter((e) => e.image_url && e.rating != null)
-      .sort((a, b) => b.rating! - a.rating!)[0]?.image_url ??
-      episodes.find((e) => e.image_url)?.image_url ??
-      show.image_url,
-  );
+  // The hero frame: the show's real designed backdrop from TMDB (edge-cached),
+  // falling back to the poster for the few shows without a TMDB bridge.
+  const heroFrame =
+    (show.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id)
+      : null) ?? hiRes(show.image_url);
 
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
@@ -160,6 +158,7 @@ app.get("/show/:slug", async (c) => {
                 region={visitorRegion(c)}
                 fallbackHref={`/show/${show.slug}/release-date`}
                 pickerType="tv"
+                allHref={`/show/${show.slug}/where-to-watch`}
               />
               
               {show.summary ? (
@@ -557,6 +556,159 @@ app.get("/show/:slug/calendar.ics", async (c) => {
 });
 
 // ---------------------------------------------------------- season pages
+
+// "Where to watch X" is one of TV's biggest query patterns; we answer it
+// region by region from the mirror the provider patrol keeps fresh.
+app.get("/show/:slug/where-to-watch", async (c) => {
+  const show = await getShow(c.env.DB, c.req.param("slug"));
+  if (!show) return c.notFound();
+  const base = `/show/${show.slug}/where-to-watch`;
+  const reqRegion = (c.req.query("region") ?? "").trim().toUpperCase();
+  if (reqRegion && !REGIONS.includes(reqRegion)) return c.redirect(base, 301);
+  const region = reqRegion || visitorRegion(c);
+
+  const intl: Record<string, string[]> = show.providers_intl
+    ? JSON.parse(show.providers_intl)
+    : {};
+  const names = intl[region] ?? [];
+  const elsewhere = REGIONS.filter((r) => r !== region && intl[r]?.length);
+
+  const heroFrame =
+    (show.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id)
+      : null) ?? hiRes(show.image_url);
+
+  const site = origin(c);
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`Where to watch ${show.name} — streaming options | TV Nightly`}
+      description={
+        names.length
+          ? `${show.name} is streaming on ${names.slice(0, 4).join(", ")} in ${region}. Every service and region, checked around the clock.`
+          : `Where ${show.name} is streaming, region by region — checked around the clock.`
+      }
+      canonical={`${site}${base}`}
+      ogImage={show.image_url ?? undefined}
+      ld={[breadcrumbLd(site, show, "Where to watch", base)]}
+    >
+      <article class="show-hub">
+        <header class="detail-hero frame-hero">
+          {heroFrame ? (
+            <div class="hero-backdrop" style={`background-image:url('${heroFrame}')`}></div>
+          ) : null}
+          <div class="detail-head">
+            <div class="detail-side">
+              {show.image_url ? (
+                <img
+                  class="poster"
+                  src={show.image_url}
+                  srcset={retinaSet(show.image_url)}
+                  alt={show.name}
+                />
+              ) : (
+                <div class="poster card-fallback">{show.name}</div>
+              )}
+            </div>
+            <div class="detail-info">
+              <p class="ep-eyebrow">
+                <a href={`/show/${show.slug}`}>{show.name}</a>
+                <span class="sep">·</span> Streaming guide
+              </p>
+              <h1>Where to watch {show.name}</h1>
+              <p class="summary">{stripHtml(show.summary).slice(0, 180)}</p>
+              {/* explicit submit, no onchange (WCAG 3.2.2); works without JS */}
+              <form method="get" action={base} class="sub-form watch-region">
+                <label for="wr-region" class="muted" style="flex-basis:auto;font-weight:400">
+                  Showing options for
+                </label>
+                <select
+                  id="wr-region"
+                  name="region"
+                  style="background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:0.35rem 0.5rem"
+                >
+                  {REGIONS.map((r) => (
+                    <option value={r} selected={r === region}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit">Go</button>
+              </form>
+            </div>
+          </div>
+        </header>
+        <ShowTabs slug={show.slug} current="watch" />
+        <section>
+          <h2>Streaming in {region}</h2>
+          {names.length ? (
+            <ul class="watch-list">
+              {names.map((n) => (
+                <li class="watch-row">
+                  {PROVIDER_LOGOS[n] ? (
+                    <img
+                      class="watch-logo"
+                      src={PROVIDER_LOGOS[n]}
+                      alt=""
+                      width="44"
+                      height="44"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span class="watch-logo watch-logo-fallback" aria-hidden="true">
+                      {n.slice(0, 1)}
+                    </span>
+                  )}
+                  <span class="watch-name">{n}</span>
+                  <a
+                    class="chev-after watch-more"
+                    href={`/what-to-watch?service=${encodeURIComponent(providerBrand(n))}`}
+                  >
+                    More on {providerBrand(n)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="muted">
+              {show.name} isn't on a streaming service in {region} right now
+              {elsewhere.length ? " — but it is elsewhere:" : "."}
+            </p>
+          )}
+          {elsewhere.length ? (
+            <p class="muted watch-elsewhere">
+              Also streaming in:{" "}
+              {elsewhere.map((r, i) => (
+                <>
+                  {i > 0 ? " · " : ""}
+                  <a href={`${base}?region=${r}`}>{r}</a>
+                </>
+              ))}
+            </p>
+          ) : null}
+          <p class="muted watch-src">
+            Streaming data via JustWatch/TMDB, re-checked around the clock by our provider patrol.
+          </p>
+        </section>
+        <section>
+          <h2>Keep going</h2>
+          <nav class="pill-nav">
+            <a class="chev-after" href={`/show/${show.slug}`}>
+              {show.name} overview
+            </a>
+            <a class="chev-after" href={`/show/${show.slug}/best-episodes`}>
+              Best episodes
+            </a>
+            <a class="chev-after" href={`/whats-new`}>
+              What's new on streaming
+            </a>
+          </nav>
+        </section>
+        <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
+      </article>
+    </Layout>,
+  );
+});
 
 app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
   const show = await getShow(c.env.DB, c.req.param("slug"));

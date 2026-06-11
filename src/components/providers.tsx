@@ -10,16 +10,19 @@ export const ProviderLine: FC<{
   region: string;
   fallbackHref?: string;
   pickerType?: "tv" | "movie";
-}> = ({ row, region, fallbackHref, pickerType }) => {
+  allHref?: string; // the dedicated where-to-watch page, when one exists
+}> = ({ row, region, fallbackHref, pickerType, allHref }) => {
   const prov = providersFor(row, region);
   if (!prov.names.length) {
     return fallbackHref ? (
       <p class="provs">
         <span class="muted">Not streaming in your region —</span>{" "}
-        <a class="chev-after" href={fallbackHref}>
-          {fallbackHref.startsWith("/what-to-watch")
-            ? "find one that is streaming"
-            : "check the release date"}
+        <a class="chev-after" href={allHref ?? fallbackHref}>
+          {allHref
+            ? "see every region's options"
+            : fallbackHref.startsWith("/what-to-watch")
+              ? "find one that is streaming"
+              : "check the release date"}
         </a>
       </p>
     ) : null;
@@ -64,6 +67,11 @@ export const ProviderLine: FC<{
         );
       })}
       {extra > 0 ? <span class="muted">+{extra} more</span> : null}
+      {allHref ? (
+        <a class="chev-after provs-all" href={allHref}>
+          See all
+        </a>
+      ) : null}
     </p>
   );
 };

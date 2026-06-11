@@ -804,7 +804,7 @@ a.cast-tile:hover { text-decoration: none; }
 .show-hub .frame-hero { padding-top: 9rem; }
 .show-hub .frame-hero .hero-backdrop {
   filter: none;
-  opacity: 0.55;
+  opacity: 0.78;
   inset: 0;
   background-position: center 22%;
   /* the frame is a centered band — the page's dark owns the margins;
@@ -816,10 +816,13 @@ a.cast-tile:hover { text-decoration: none; }
   mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
 }
 .show-hub .frame-hero::after {
+  /* hold the viewing band clear through the middle; the heavy dark only
+     arrives near the bottom where the page takes over */
   background: linear-gradient(
     to bottom,
-    rgba(18, 18, 20, 0.3) 0%,
-    rgba(18, 18, 20, 0.82) 58%,
+    rgba(18, 18, 20, 0.18) 0%,
+    rgba(18, 18, 20, 0.34) 48%,
+    rgba(18, 18, 20, 0.78) 82%,
     var(--bg) 100%
   );
 }
@@ -893,6 +896,39 @@ a.cast-tile:hover { text-decoration: none; }
   max-width: 100%;
 }
 .pager-sub { font-size: 0.8rem; }
+
+/* ---- where-to-watch: the streaming answer, region by region ---- */
+.watch-region { margin-top: 0.9rem; }
+.watch-list { list-style: none; padding: 0; margin: 0; }
+.watch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.65rem 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+.watch-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.watch-logo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--muted);
+}
+.watch-name { font-weight: 600; font-size: 1.02rem; min-width: 0; }
+.watch-more { margin-left: auto; font-size: 0.88rem; font-weight: 600; white-space: nowrap; }
+.watch-elsewhere { margin-top: 0.9rem; }
+.watch-src { font-size: 0.78rem; margin-top: 1.1rem; }
+.provs-all { margin-left: 0.5rem; font-size: 0.85rem; font-weight: 600; }
 /* ============================================================
    full cast page — editorial overlay tiles
    The headshot IS the card: it fills a portrait frame and the name +

@@ -5,6 +5,7 @@ import { IconCal } from "./icons";
 export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current }) => {
   const tabs: [string, string, string][] = [
     ["overview", "Overview", `/show/${slug}`],
+    ["watch", "Where to watch", `/show/${slug}/where-to-watch`],
     ["best", "Best episodes", `/show/${slug}/best-episodes`],
     ["worst", "Worst", `/show/${slug}/worst-episodes`],
     ["essential", "Essential", `/show/${slug}/essential`],

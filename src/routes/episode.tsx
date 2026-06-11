@@ -202,6 +202,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
                 region={visitorRegion(c)}
                 fallbackHref={`/show/${show.slug}/release-date`}
                 pickerType="tv"
+                allHref={`/show/${show.slug}/where-to-watch`}
               />
             </div>
           </div>

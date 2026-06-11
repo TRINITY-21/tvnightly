@@ -707,7 +707,10 @@ button, .verdict-btn {
   margin: 0.55rem auto 0;
   font-size: 0.94rem;
   line-height: 1.55;
-  max-width: 38ch;
+  white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .watch-tagline { white-space: normal; }
 }
 
 .watch-bar {

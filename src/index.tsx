@@ -4112,7 +4112,6 @@ app.get("/what-to-watch", async (c) => {
     >
       <div class="watch-page">
         <header class="watch-head">
-          <p class="section-eyebrow">What to watch</p>
           <h1>What should I watch tonight?</h1>
           <p class="watch-tagline muted">Tune the filters — we'll deal you two contenders.</p>
         </header>

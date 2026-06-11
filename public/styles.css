@@ -58,6 +58,10 @@
 
 * { box-sizing: border-box; }
 
+/* sticky glass header must never hide a focused element (WCAG 2.4.11);
+   5.5rem clears the ~76px desktop header + outline offset */
+html { scroll-padding-top: 5.5rem; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -293,11 +297,12 @@ h3 {
   pointer-events: none;
 }
 .detail-hero::after {
-  /* settle the blur into the panel so text stays AA-readable */
+  /* settle the blur into the panel so text stays AA-readable — 0.65 top stop
+     keeps badge/muted text >=4.6:1 even over a pure-white blurred poster */
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(175deg, rgba(18, 18, 20, 0.5), rgba(18, 18, 20, 0.75));
+  background: linear-gradient(175deg, rgba(18, 18, 20, 0.65), rgba(18, 18, 20, 0.8));
   pointer-events: none;
 }
 .detail-head {
@@ -427,10 +432,10 @@ button, .verdict-btn {
   transform: translateY(1px);
 }
 .card:active { transform: translateY(0); }
-/* one easing for every hover-able */
-.chip, .vote-btn, .btn-ghost, .subnav a, .site-header nav a, .footer-cols a, .ta-box a, .prov {
+/* one easing for every hover-able (plain .prov chips are static info, not controls) */
+.chip, .vote-btn, .btn-ghost, .subnav a, .site-header nav a, .footer-cols a, .ta-box a, .prov-primary {
   transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease),
-    color var(--speed) var(--ease);
+    color var(--speed) var(--ease), filter var(--speed) var(--ease);
 }
 .verdicts { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1rem 0; }
 .verdict-form { display: inline; }
@@ -541,14 +546,17 @@ button, .verdict-btn {
   font-weight: 600;
   padding: 0.1rem 0.5rem;
 }
-/* first service = the answer; give it button weight */
+/* first service = the answer; button weight AND a real control (links to the
+   picker filtered to that service) */
 .prov-primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--bg);
   font-size: 0.84rem;
+  font-weight: 700;
   padding: 0.22rem 0.7rem;
 }
+a.prov-primary:hover { filter: brightness(1.12); text-decoration: none; color: var(--bg); }
 
 /* ---- explore cards ---- */
 .explore-grid {
@@ -724,6 +732,8 @@ button, .verdict-btn {
 
 /* ---- mobile pass ---- */
 @media (max-width: 600px) {
+  /* wrapped header is ~138px tall on phones */
+  html { scroll-padding-top: 9.5rem; }
   h1 { font-size: 1.35rem; }
   .detail-hero { padding: 1rem; }
   .detail-head { gap: 1rem; }

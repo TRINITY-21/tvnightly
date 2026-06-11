@@ -124,7 +124,8 @@ const ProviderLine: FC<{
   row: { providers_intl: string | null };
   region: string;
   fallbackHref?: string;
-}> = ({ row, region, fallbackHref }) => {
+  pickerType?: "tv" | "movie";
+}> = ({ row, region, fallbackHref, pickerType }) => {
   const prov = providersFor(row, region);
   if (!prov.names.length) {
     return fallbackHref ? (
@@ -144,7 +145,18 @@ const ProviderLine: FC<{
       <span class="muted">
         Streaming on{prov.region !== region ? ` (${prov.region} — not on your region's services)` : ` (${prov.region})`}
       </span>{" "}
-      <span class="prov prov-primary">{first}</span>
+      {pickerType ? (
+        // button-weight CTA must be a real control: it opens the picker
+        // pre-filtered to this service ("more like this, same subscription")
+        <a
+          class="prov prov-primary"
+          href={`/what-to-watch?type=${pickerType}&service=${encodeURIComponent(first)}`}
+        >
+          {first}
+        </a>
+      ) : (
+        <span class="prov">{first}</span>
+      )}
       {rest.map((p) => (
         <span class="prov">{p}</span>
       ))}
@@ -286,7 +298,13 @@ const Layout: FC<
           </span>
         </a>
         <form action="/search" method="get" class="search">
-          <input type="search" name="q" placeholder="Search shows & movies…" required />
+          <input
+            type="search"
+            name="q"
+            placeholder="Search shows & movies…"
+            aria-label="Search shows and movies"
+            required
+          />
         </form>
         <nav>
           <a href="/tonight">Tonight</a>
@@ -328,7 +346,13 @@ const Layout: FC<
             <p>Today's TV, renewals and premieres in your inbox every evening.</p>
             <form action="/subscribe" method="post" class="sub-form">
               <input type="hidden" name="kind" value="daily" />
-              <input type="email" name="email" placeholder="Enter your email" required />
+              <input
+                type="email"
+                name="email"
+                placeholder="Enter your email"
+                aria-label="Email address"
+                required
+              />
               <button type="submit">Subscribe</button>
             </form>
           </div>
@@ -477,8 +501,11 @@ const SubscribeForm: FC<{ showId: number; label: string }> = ({ showId, label })
   <form action="/subscribe" method="post" class="sub-form inline">
     <input type="hidden" name="kind" value="renewal" />
     <input type="hidden" name="show_id" value={String(showId)} />
-    <label>{label}</label>
-    <input type="email" name="email" placeholder="you@example.com" required />
+    {/* id-less wrapping label = programmatic association without unique ids */}
+    <label>
+      {label}
+      <input type="email" name="email" placeholder="you@example.com" required />
+    </label>
     <button type="submit">Notify me</button>
   </form>
 );
@@ -818,6 +845,7 @@ app.get("/show/:slug", async (c) => {
                 row={show}
                 region={visitorRegion(c)}
                 fallbackHref={`/show/${show.slug}/release-date`}
+                pickerType="tv"
               />
               <ShowPills slug={show.slug} imdbId={show.imdb_id} />
               {show.blurb ? <p class="blurb">{show.blurb}</p> : null}
@@ -3478,6 +3506,7 @@ app.get("/movie/:slug", async (c) => {
                 row={movie}
                 region={visitorRegion(c)}
                 fallbackHref="/what-to-watch?type=movie"
+                pickerType="movie"
               />
               <nav class="pill-nav">
                 <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} rel="noopener">
@@ -4035,6 +4064,8 @@ app.get("/whats-new", async (c) => {
         Our patrol re-checks availability around the clock and logs every change. Yesterday's
         catalog shuffle, today's news.
       </p>
+      {/* explicit submit, no onchange: arrow-keying through a closed select
+          must not navigate (WCAG 3.2.2), and it must work without JS */}
       <form method="get" action="/whats-new" class="sub-form">
         <label for="region-sel" class="muted" style="flex-basis:auto;font-weight:400">
           Wrong country?
@@ -4042,7 +4073,6 @@ app.get("/whats-new", async (c) => {
         <select
           id="region-sel"
           name="region"
-          onchange="this.form.submit()"
           style="background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:0.35rem 0.5rem"
         >
           {REGIONS.map((r) => (
@@ -4051,6 +4081,7 @@ app.get("/whats-new", async (c) => {
             </option>
           ))}
         </select>
+        <button type="submit">Go</button>
       </form>
       {results.length === 0 ? (
         <p class="muted">
@@ -4271,8 +4302,9 @@ app.get("/search", async (c) => {
     : [{ results: [] as ShowRow[] }, { results: [] as MovieRow[] }];
 
   c.header("Cache-Control", "public, max-age=300");
+  // infinite ?q= variants must not enter the index (doorway/thin-content risk)
   return c.html(
-    <Layout title={`Search: ${q} | TV Nightly`}>
+    <Layout title={`Search: ${q} | TV Nightly`} noindex>
       <h1>Search{q ? `: ${q}` : ""}</h1>
       {q && results.length === 0 && movieResults.length === 0 ? (
         <p class="muted">Nothing found.</p>

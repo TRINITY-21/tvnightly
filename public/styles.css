@@ -64,7 +64,10 @@ html { scroll-padding-top: 5.5rem; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  /* tungsten ambience: one warm lamp glowing at the top of the room */
+  background:
+    radial-gradient(1000px 540px at 50% -220px, rgba(255, 169, 77, 0.07), transparent 70%),
+    var(--bg);
   color: var(--text);
   font: 15px/1.45 var(--body);
   font-variant-numeric: tabular-nums;
@@ -131,6 +134,17 @@ h3 {
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .site-header { background: var(--surface); }
 }
+/* header & footer ride the same 948px column as main's content box */
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 948px;
+  margin: 0 auto;
+}
+.footer-inner { max-width: 948px; margin: 0 auto; }
 .logo {
   display: inline-flex;
   align-items: center;
@@ -155,7 +169,7 @@ h3 {
   margin-left: 0.13em;
 }
 .logo-mark { display: block; }
-.search { position: relative; }
+.search { position: relative; margin-left: auto; }
 .search input {
   background: var(--bg);
   border: 1px solid var(--line);
@@ -168,8 +182,7 @@ h3 {
 .search input:focus-visible { border-color: var(--accent); outline-offset: 0; }
 .site-header nav {
   display: flex;
-  gap: 0.85rem;
-  margin-left: auto;
+  gap: 0.95rem;
   flex-wrap: wrap;
   font-size: 0.86rem;
 }
@@ -230,6 +243,22 @@ h3 {
   font-size: 0.85rem;
   background: linear-gradient(160deg, #1d1c20, #121114);
   color: var(--muted);
+}
+.card-media { position: relative; }
+/* rating chip lives on the art, streaming-app style */
+.card-rating {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(18, 18, 20, 0.78);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: var(--radius-sm);
+  color: var(--warn);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.14rem 0.42rem;
+  white-space: nowrap;
 }
 .card-body {
   display: flex;
@@ -617,16 +646,32 @@ a.prov-primary:hover { filter: brightness(1.12); text-decoration: none; color: v
 .wo-poster { width: 38px; border-radius: var(--radius-sm); flex: 0 0 auto; }
 
 /* ---- homepage architecture ---- */
-.home-hero {
+/* eyebrow: the chyron voice introducing the spotlight */
+.eyebrow {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  margin: 0 0 0.4rem;
+}
+.spotlight { margin-top: 1.1rem; padding: 1.6rem; }
+.spotlight .spot-poster { width: 150px; }
+.spot-title { font-size: 2.05rem; margin: 0 0 0.55rem; }
+.spot-actions { margin: 0.9rem 0 0; }
+
+.home-grid {
   display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 1.25rem;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1rem;
   align-items: start;
+  margin-top: 1rem;
 }
 @media (max-width: 760px) {
-  .home-hero { grid-template-columns: 1fr; }
+  .home-grid { grid-template-columns: 1fr; }
 }
-.hero-main h1 { margin-top: 0.4rem; }
 .hero-side {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -738,9 +783,18 @@ a.prov-primary:hover { filter: brightness(1.12); text-decoration: none; color: v
   .detail-hero { padding: 1rem; }
   .detail-head { gap: 1rem; }
   .poster { width: 128px; }
-  .search input { min-width: 150px; }
-  .site-header { gap: 0.6rem; }
+  .spotlight .spot-poster { width: 104px; }
+  .spot-title { font-size: 1.5rem; }
+  .search { margin-left: 0; flex: 1 1 100%; }
+  .search input { min-width: 0; width: 100%; }
+  .header-inner { gap: 0.6rem; }
   .site-header nav { gap: 0.7rem; font-size: 0.84rem; }
-  .poster-row { grid-auto-columns: 116px; }
+  /* rails bleed to the screen edge so the next card peeks */
+  .poster-row {
+    grid-auto-columns: 116px;
+    margin-inline: -1rem;
+    padding-inline: 1rem;
+    scroll-padding-inline: 1rem;
+  }
   .hero-side { padding: 0.85rem 1rem; }
 }

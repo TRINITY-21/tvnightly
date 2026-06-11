@@ -291,30 +291,34 @@ const Layout: FC<
     </head>
     <body>
       <header class="site-header">
-        <a class="logo" href="/">
-          <LogoMark />
-          <span class="logo-word">
-            TV NIGHTLY<span class="logo-dot"></span>
-          </span>
-        </a>
-        <form action="/search" method="get" class="search">
-          <input
-            type="search"
-            name="q"
-            placeholder="Search shows & movies…"
-            aria-label="Search shows and movies"
-            required
-          />
-        </form>
-        <nav>
-          <a href="/tonight">Tonight</a>
-          <a href="/what-to-watch">What to watch</a>
-          <a href="/whats-new">News</a>
-          <a href="/lists">Browse</a>
-        </nav>
+        {/* inner rail centers on the same 948px column as main content */}
+        <div class="header-inner">
+          <a class="logo" href="/">
+            <LogoMark />
+            <span class="logo-word">
+              TV NIGHTLY<span class="logo-dot"></span>
+            </span>
+          </a>
+          <nav>
+            <a href="/tonight">Tonight</a>
+            <a href="/what-to-watch">What to watch</a>
+            <a href="/whats-new">News</a>
+            <a href="/lists">Browse</a>
+          </nav>
+          <form action="/search" method="get" class="search">
+            <input
+              type="search"
+              name="q"
+              placeholder="Search shows & movies…"
+              aria-label="Search shows and movies"
+              required
+            />
+          </form>
+        </div>
       </header>
       <main>{props.children}</main>
       <footer class="site-footer">
+        <div class="footer-inner">
         <div class="footer-cols">
           <div>
             <p class="tagline">
@@ -387,6 +391,7 @@ const Layout: FC<
           <a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a> · © 2026 TV
           Nightly. All rights reserved.
         </p>
+        </div>
       </footer>
       {["/js/typeahead.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>
@@ -422,28 +427,32 @@ const StatusBadge: FC<{ status: string | null }> = ({ status }) => {
 
 const ShowCard: FC<{ show: ShowRow }> = ({ show }) => (
   <a class="card" href={`/show/${show.slug}`}>
-    {show.image_url ? (
-      <img src={show.image_url} alt={show.name} loading="lazy" />
-    ) : (
-      <div class="card-fallback">{show.name}</div>
-    )}
+    <div class="card-media">
+      {show.image_url ? (
+        <img src={show.image_url} alt={show.name} loading="lazy" />
+      ) : (
+        <div class="card-fallback">{show.name}</div>
+      )}
+      {show.rating != null ? <span class="card-rating">★ {show.rating.toFixed(1)}</span> : null}
+    </div>
     <div class="card-body">
       <span class="card-title">{show.name}</span>
-      {show.rating != null ? <span class="rating">★ {show.rating.toFixed(1)}</span> : null}
     </div>
   </a>
 );
 
 const MovieCard: FC<{ movie: MovieRow }> = ({ movie }) => (
   <a class="card" href={`/movie/${movie.slug}`}>
-    {movie.poster_url ? (
-      <img src={movie.poster_url} alt={movie.title} loading="lazy" />
-    ) : (
-      <div class="card-fallback">{movie.title}</div>
-    )}
+    <div class="card-media">
+      {movie.poster_url ? (
+        <img src={movie.poster_url} alt={movie.title} loading="lazy" />
+      ) : (
+        <div class="card-fallback">{movie.title}</div>
+      )}
+      {movie.rating != null ? <span class="card-rating">★ {movie.rating.toFixed(1)}</span> : null}
+    </div>
     <div class="card-body">
       <span class="card-title">{movie.title}</span>
-      {movie.rating != null ? <span class="rating">★ {movie.rating.toFixed(1)}</span> : null}
     </div>
   </a>
 );
@@ -523,7 +532,13 @@ const breadcrumbLd = (site: string, show: ShowRow, page: string, path: string) =
 // ---------------------------------------------------------------- home
 
 app.get("/", async (c) => {
-  const [top, topMovies, tonight, premieres] = await Promise.all([
+  type SpotRow = ShowRow & {
+    ep_name: string | null;
+    ep_season: number | null;
+    ep_number: number | null;
+    ep_airdate: string | null;
+  };
+  const [top, topMovies, tonight, premieres, spotTonight, spotPremiere] = await Promise.all([
     // weight-only ORDER BY rides idx_shows_weight; a rating tiebreak would
     // force a full scan + temp sort (weights are near-unique anyway)
     c.env.DB.prepare("SELECT * FROM shows ORDER BY weight DESC LIMIT 18")
@@ -550,7 +565,36 @@ app.get("/", async (c) => {
     )
       .all<{ airdate: string | null; season: number | null; show_name: string; show_slug: string }>()
       .then((r) => r.results),
+    // spotlight: tonight's biggest show by popularity weight
+    c.env.DB.prepare(
+      `SELECT s.*, e.name AS ep_name, e.season AS ep_season, e.number AS ep_number,
+              e.airdate AS ep_airdate
+       FROM episodes e JOIN shows s ON s.id = e.show_id
+       WHERE e.airstamp >= datetime('now','start of day')
+         AND e.airstamp < datetime('now','start of day','+1 day')
+       ORDER BY s.weight DESC LIMIT 1`,
+    ).first<SpotRow>(),
+    // fallback spotlight: the biggest premiere of the next three weeks
+    c.env.DB.prepare(
+      `SELECT s.*, e.name AS ep_name, e.season AS ep_season, e.number AS ep_number,
+              e.airdate AS ep_airdate
+       FROM episodes e JOIN shows s ON s.id = e.show_id
+       WHERE e.number = 1 AND e.airstamp > datetime('now')
+         AND e.airstamp < datetime('now', '+21 days')
+       ORDER BY s.weight DESC LIMIT 1`,
+    ).first<SpotRow>(),
   ]);
+
+  const spot: SpotRow | null =
+    spotTonight ??
+    spotPremiere ??
+    (top[0] ? { ...top[0], ep_name: null, ep_season: null, ep_number: null, ep_airdate: null } : null);
+  const spotEyebrow = spotTonight
+    ? "On tonight"
+    : spotPremiere
+      ? `Premieres ${spotPremiere.ep_airdate ?? "soon"}`
+      : "Tonight's pick";
+  const spotGenres: string[] = spot?.genres ? JSON.parse(spot.genres) : [];
 
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
@@ -559,15 +603,71 @@ app.get("/", async (c) => {
       description="Track the best episodes of every TV show, season release dates, renewal status, and what's airing tonight."
       canonical={canonical(c)}
     >
-      {/* The evening opens here: what's on, then the decision tools. */}
-      <section class="home-hero">
-        <div class="hero-main">
-          <h1>
-            <span class="live-dot"></span>Tonight on TV{" "}
+      {/* The evening opens on a headline, not a list: tonight's biggest show
+          in the cinematic hero treatment. Data-driven, never a marketing banner. */}
+      {spot ? (
+        <section class="detail-hero spotlight">
+          {spot.image_url ? (
+            <div class="hero-backdrop" style={`background-image:url('${spot.image_url}')`}></div>
+          ) : null}
+          <div class="detail-head">
+            {spot.image_url ? (
+              <img class="poster spot-poster" src={spot.image_url} alt={spot.name} />
+            ) : (
+              <div class="poster spot-poster card-fallback">{spot.name}</div>
+            )}
+            <div class="detail-info">
+              <p class="eyebrow">
+                {spotTonight ? <span class="live-dot"></span> : null}
+                {spotEyebrow}
+              </p>
+              <h1 class="spot-title">
+                <a href={`/show/${spot.slug}`}>{spot.name}</a>
+              </h1>
+              <p class="meta-strip">
+                <StatusBadge status={spot.status} />
+                {spot.premiered ? <span>{spot.premiered.slice(0, 4)}</span> : null}
+                {spotGenres.length ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span>{spotGenres.slice(0, 3).join(", ")}</span>
+                  </>
+                ) : null}
+                {spot.rating != null ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span class="rating">★ {spot.rating.toFixed(1)}</span>
+                  </>
+                ) : null}
+              </p>
+              {spot.ep_season != null ? (
+                <p>
+                  S{String(spot.ep_season).padStart(2, "0")}E
+                  {String(spot.ep_number ?? 0).padStart(2, "0")}
+                  {spot.ep_name ? ` — ${spot.ep_name}` : ""}
+                  {spot.network || spot.web_channel ? (
+                    <span class="muted"> · {spot.network ?? spot.web_channel}</span>
+                  ) : null}
+                </p>
+              ) : null}
+              <ProviderLine row={spot} region={visitorRegion(c)} pickerType="tv" />
+              <p class="spot-actions">
+                <a class="btn-ghost" href={`/show/${spot.slug}`}>
+                  Episode guide & ratings →
+                </a>
+              </p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+      <section class="home-grid">
+        <div class="hero-side">
+          <h2>
+            <span class="live-dot"></span>On tonight{" "}
             <a class="more" href="/tonight">
               full schedule →
             </a>
-          </h1>
+          </h2>
           {tonight.length ? (
             <ul class="ep-list">
               {tonight.map((e) => (
@@ -582,7 +682,7 @@ app.get("/", async (c) => {
             <p class="muted">Quiet night in the schedule — a good one to start something.</p>
           )}
         </div>
-        <aside class="hero-side">
+        <div class="hero-side">
           <h2>
             Premiering soon{" "}
             <a class="more" href="/premieres">
@@ -609,7 +709,7 @@ app.get("/", async (c) => {
               Rate one thing, get a personal pick →
             </a>
           </div>
-        </aside>
+        </div>
       </section>
       <section>
         <h2>
@@ -639,26 +739,46 @@ app.get("/", async (c) => {
       </section>
       <section>
         <h2>Go deeper</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="EPS"
+            title="The greatest episodes ever aired"
+            desc="Every show's finest hours, ranked honestly on one all-time list."
+            href="/best-episodes"
+          />
+          <ExploreCard
+            icon="📋"
+            title="Franchise watch orders"
+            desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
+            href="/watch-orders"
+          />
+          <ExploreCard
+            icon="VS"
+            title="Compare two shows"
+            desc="Full episode-rating histories, head to head on one chart."
+            href="/compare"
+          />
+          <ExploreCard
+            icon="♥"
+            title="Loved by this community"
+            desc="What TV Nightly visitors actually rate highest — voted here, not imported."
+            href="/loved"
+          />
+        </div>
         <p class="quick-picks">
           {VERTICALS.map((v) => (
             <a class="chip" href={`/${v.slug}`}>
               {v.name} hub
             </a>
           ))}
-          <a class="chip" href="/watch-orders">
-            Watch orders
-          </a>
-          <a class="chip" href="/best-episodes">
-            All-time top episodes
-          </a>
           <a class="chip" href="/top/seasons">
             Best TV seasons
           </a>
-          <a class="chip" href="/loved">
-            Community loved
+          <a class="chip" href="/top/networks">
+            Top networks
           </a>
-          <a class="chip" href="/compare">
-            Compare shows
+          <a class="chip" href="/lists">
+            Browse everything
           </a>
         </p>
       </section>

@@ -260,73 +260,204 @@ app.get("/show/:slug", async (c) => {
         {seasons.size ? (
           <section>
             <h2>Episodes by season</h2>
-            {(() => {
-              const latest = Math.max(...seasons.keys());
-              // Season shape at a glance: one bar per rated episode in airing
-              // order, the season's peak in gold. Trajectory, not the avg again.
-              const seasonSpark = (rated: EpisodeRow[], bestId: number) => {
-                const W = 3;
-                const G = 2;
-                const H = 16;
-                const bars = rated
-                  .map((e, i) => {
-                    const h = Math.max(2, Math.min(H, Math.round(((e.rating! - 4) / 6) * H)));
-                    const fill = e.id === bestId ? "var(--warn)" : "rgba(163, 158, 151, 0.35)";
-                    return `<rect x="${i * (W + G)}" y="${H - h}" width="${W}" height="${h}" rx="1" fill="${fill}"/>`;
-                  })
-                  .join("");
-                const w = rated.length * (W + G) - G;
-                return raw(
-                  `<svg class="fold-spark" width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" role="img"><title>Episode ratings across the season — the gold bar is its best episode</title>${bars}</svg>`,
+            <div class="lineup-board">
+              {(() => {
+                const latest = Math.max(...seasons.keys());
+                const top3Ids = new Set(
+                  episodes
+                    .filter((e) => e.rating != null)
+                    .sort((a, b) => b.rating! - a.rating!)
+                    .slice(0, 3)
+                    .map((e) => e.id),
                 );
-              };
-              return [...seasons.entries()].map(([season, eps]) => {
-                const rated = eps.filter((e) => e.rating != null);
-                const avg = rated.length
-                  ? rated.reduce((s, e) => s + e.rating!, 0) / rated.length
-                  : null;
-                const year = eps.find((e) => e.airdate)?.airdate?.slice(0, 4);
-                const best =
-                  rated.length >= 3 ? rated.reduce((a, b) => (b.rating! > a.rating! ? b : a)) : null;
-                return (
-                  <details class="season-fold" open={season === latest}>
-                    <summary>
-                      <span class="fold-title">Season {season}</span>
-                      {best ? seasonSpark(rated, best.id) : null}
-                      <span class="fold-stats muted">
-                        {eps.length} episode{eps.length === 1 ? "" : "s"}
-                        {year ? ` · ${year}` : ""}
-                        {avg != null ? ` · avg ★ ${avg.toFixed(1)}` : ""}
-                      </span>
-                    </summary>
-                    <ol class="ep-list">
-                      {eps.map((e) => (
-                        <li class="ep-row">
-                          <span class="ep-code muted">{epCode(e)}</span>
-                          <span class="ep-name">
-                            {e.name}
-                            {best && e.id === best.id ? (
-                              <span class="ep-best">Season's best</span>
-                            ) : null}
+                const seasonAvg = (eps: EpisodeRow[]) => {
+                  const rated = eps.filter((e) => e.rating != null);
+                  return rated.length
+                    ? rated.reduce((s, e) => s + e.rating!, 0) / rated.length
+                    : null;
+                };
+                // "Best season" only when the comparison is honest: two or
+                // more seasons with 5+ rated episodes each.
+                const contenders = [...seasons.entries()]
+                  .map(([n, eps]) => ({
+                    n,
+                    rated: eps.filter((e) => e.rating != null).length,
+                    avg: seasonAvg(eps),
+                  }))
+                  .filter((s) => s.rated >= 5 && s.avg != null);
+                const bestSeason =
+                  contenders.length >= 2
+                    ? contenders.reduce((a, b) => (b.avg! > a.avg! ? b : a)).n
+                    : null;
+                // Season shape at a glance: one bar per rated episode in
+                // airing order on a ground line, the season's peak in gold.
+                const seasonSpark = (rated: EpisodeRow[], bestId: number) => {
+                  const W = 4;
+                  const G = 2;
+                  const H = 16;
+                  const w = rated.length * (W + G) - G;
+                  const bars = rated
+                    .map((e, i) => {
+                      const h = Math.max(2, Math.min(H, Math.round(((e.rating! - 4) / 6) * H)));
+                      const fill = e.id === bestId ? "var(--warn)" : "rgba(163, 158, 151, 0.35)";
+                      return `<rect x="${i * (W + G)}" y="${H - h}" width="${W}" height="${h}" rx="1" fill="${fill}"/>`;
+                    })
+                    .join("");
+                  const base = `<rect x="0" y="${H - 1}" width="${w}" height="1" fill="rgba(163, 158, 151, 0.25)"/>`;
+                  return raw(
+                    `<svg class="fold-spark" width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" role="img"><title>Episode ratings across the season — the gold bar is its best episode</title>${base}${bars}</svg>`,
+                  );
+                };
+                const epRate = (e: EpisodeRow) =>
+                  e.rating != null ? (
+                    <span class="ep-rate rating">
+                      <span class="star">★</span> {e.rating.toFixed(1)}
+                    </span>
+                  ) : (
+                    <span class="ep-rate muted">—</span>
+                  );
+                const twoToneCode = (e: EpisodeRow) => {
+                  const code = epCode(e);
+                  return (
+                    <span class="ep-code">
+                      <span class="s">{code.slice(0, 3)}</span>
+                      {code.slice(3)}
+                    </span>
+                  );
+                };
+                return [...seasons.entries()].map(([season, eps]) => {
+                  const rated = eps.filter((e) => e.rating != null);
+                  const avg = seasonAvg(eps);
+                  const yrs = eps
+                    .map((e) => e.airdate?.slice(0, 4))
+                    .filter((y): y is string => !!y);
+                  const aired = yrs.length
+                    ? yrs[0] === yrs[yrs.length - 1]
+                      ? yrs[0]
+                      : `${yrs[0]}–${yrs[yrs.length - 1].slice(2)}`
+                    : null;
+                  const best =
+                    rated.length >= 3
+                      ? rated.reduce((a, b) => (b.rating! > a.rating! ? b : a))
+                      : null;
+                  return (
+                    <details class="season-fold" open={season === latest}>
+                      <summary>
+                        <span class="fold-slate">
+                          {season === 0 ? (
+                            <span class="fold-eyebrow">Specials</span>
+                          ) : (
+                            <>
+                              <span class="fold-eyebrow">Season</span>
+                              <span class="fold-num">{String(season).padStart(2, "0")}</span>
+                            </>
+                          )}
+                        </span>
+                        {season === bestSeason ? <span class="ep-best">Best season</span> : null}
+                        {best ? seasonSpark(rated, best.id) : null}
+                        <span class="fold-meta">
+                          <span class="m">
+                            <span class="m-val">{eps.length}</span>
+                            <span class="m-label">Episodes</span>
                           </span>
-                          <span class="ep-date muted">
-                            {e.airdate ? longDate(e.airdate) : ""}
+                          {aired ? (
+                            <span class="m m-aired">
+                              <span class="m-val">{aired}</span>
+                              <span class="m-label">Aired</span>
+                            </span>
+                          ) : null}
+                          <span class="m">
+                            <span class="m-val rating">
+                              {avg != null ? (
+                                <>
+                                  <span class="star">★</span> {avg.toFixed(1)}
+                                </>
+                              ) : (
+                                "—"
+                              )}
+                            </span>
+                            <span class="m-label">Season avg</span>
                           </span>
-                          <span class="ep-rate rating">
-                            {e.rating != null ? `★ ${e.rating.toFixed(1)}` : ""}
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
-                    <p>
-                      <a class="chev-after" href={`/show/${show.slug}/season/${season}`}>
-                        Season {season} ranked & reviewed
-                      </a>
-                    </p>
-                  </details>
-                );
-              });
-            })()}
+                        </span>
+                      </summary>
+                      <div class="fold-body">
+                        <ol class="ep-list">
+                          <li class="ep-head" aria-hidden="true">
+                            <span class="ep-code">EP</span>
+                            <span class="ep-name">Title</span>
+                            <span class="ep-leader"></span>
+                            <span class="ep-date">Aired</span>
+                            <span class="ep-rate">★</span>
+                          </li>
+                          {eps.map((e) => {
+                            const isBest = best != null && e.id === best.id;
+                            // The season's best gets the promo slot — still +
+                            // lower-third chyron, kept in airing position —
+                            // unless its frame already headlines the top-3.
+                            if (isBest && e.image_url && !top3Ids.has(e.id)) {
+                              const pitch = stripHtml(e.summary).slice(0, 140);
+                              return (
+                                <li class="ep-row ep-promo">
+                                  {twoToneCode(e)}
+                                  <span class="still-wrap">
+                                    <img
+                                      src={e.image_url}
+                                      width="112"
+                                      height="63"
+                                      alt=""
+                                      loading="lazy"
+                                      decoding="async"
+                                    />
+                                    <span class="still-chyron">Season's best</span>
+                                  </span>
+                                  <span class="ep-lead-main">
+                                    <span class="ep-lead-line">
+                                      <span class="ep-name" title={e.name ?? undefined}>
+                                        {e.name}
+                                      </span>
+                                      <span class="ep-leader"></span>
+                                      <span class="ep-date muted">
+                                        {e.airdate ? longDate(e.airdate) : ""}
+                                      </span>
+                                      {epRate(e)}
+                                    </span>
+                                    {pitch ? (
+                                      <span class="ep-lead-sub">
+                                        {e.runtime ? `${e.runtime} min · ` : ""}
+                                        {pitch}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </li>
+                              );
+                            }
+                            return (
+                              <li class="ep-row">
+                                {twoToneCode(e)}
+                                <span class="ep-name" title={e.name ?? undefined}>
+                                  {e.name}
+                                  {isBest ? <span class="ep-best">Season's best</span> : null}
+                                </span>
+                                <span class="ep-leader"></span>
+                                <span class="ep-date muted">
+                                  {e.airdate ? longDate(e.airdate) : ""}
+                                </span>
+                                {epRate(e)}
+                              </li>
+                            );
+                          })}
+                        </ol>
+                        <p class="fold-foot">
+                          <a class="chev-after" href={`/show/${show.slug}/season/${season}`}>
+                            Season {season} ranked & reviewed
+                          </a>
+                        </p>
+                      </div>
+                    </details>
+                  );
+                });
+              })()}
+            </div>
           </section>
         ) : null}
         {similar.length ? (

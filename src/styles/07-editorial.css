@@ -66,10 +66,44 @@
 
 .ep-list { list-style: none; padding: 0; }
 .ep-list li { padding: 0.32rem 0; border-bottom: 1px solid var(--line); }
-/* episode ledger: fixed columns so codes, dates and stars align down the fold */
-.ep-row { display: flex; align-items: baseline; gap: 0.6rem; }
-.ep-code { flex: 0 0 3.6rem; font-size: 0.84rem; font-variant-numeric: tabular-nums; }
-.ep-name { min-width: 0; }
+/* episode cue sheet: production codes, dot leaders, one shared gold rail */
+.fold-body .ep-list li { padding: 0.42rem 0; }
+.fold-body .ep-list li:last-of-type { border-bottom: none; }
+.ep-row { display: flex; align-items: center; gap: 0.6rem; }
+.ep-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.ep-head span {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ep-head .ep-leader { border-bottom: none; }
+.ep-code {
+  flex: 0 0 3.9rem;
+  font-family: var(--display);
+  font-stretch: 95%;
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* the part that changes is the part you read */
+.ep-code .s { opacity: 0.55; }
+.ep-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
 .ep-best {
   font-family: var(--display);
   font-stretch: 112%;
@@ -84,15 +118,62 @@
   margin-left: 0.45rem;
   white-space: nowrap;
 }
+/* the rundown leader line tying title to airtime */
+.ep-leader {
+  flex: 1;
+  min-width: 1.2rem;
+  height: 0.5em;
+  margin: 0 0.55rem;
+  border-bottom: 1px dotted rgba(163, 158, 151, 0.3);
+}
 .ep-date {
-  margin-left: auto;
   font-size: 0.82rem;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.ep-rate { flex: 0 0 3.2rem; text-align: right; font-weight: 600; white-space: nowrap; }
+.ep-rate { flex: 0 0 3.4rem; text-align: right; font-weight: 600; white-space: nowrap; }
+/* the promo slot: the season's best, in airing position, frame + chyron */
+.ep-promo { gap: 0.8rem; }
+.still-wrap { position: relative; flex: 0 0 112px; }
+.still-wrap img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+}
+.still-chyron {
+  position: absolute;
+  inset: auto 0 0;
+  background: rgba(18, 18, 20, 0.78);
+  color: var(--warn);
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 0.14rem 0.3rem;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+}
+.ep-lead-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.14rem; }
+.ep-lead-line { display: flex; align-items: center; gap: 0.6rem; }
+.ep-lead-sub {
+  font-size: 0.82rem;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (max-width: 700px) {
+  .ep-lead-sub { display: none; }
+}
 @media (max-width: 560px) {
   .ep-date { display: none; }
+  .still-wrap { flex-basis: 88px; }
 }
 .ranked li { margin-bottom: 0.9rem; }
 .ranked p { margin: 0.15rem 0 0; font-size: 0.88rem; max-width: 65ch; }

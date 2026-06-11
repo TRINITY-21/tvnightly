@@ -99,16 +99,28 @@
   outline-offset: 2px;
 }
 
-/* season archive: collapsed digest, latest season open */
+/* season archive: the rundown board — one carded surface, each season a
+   chyron slate with aligned stat cells; the open fold recesses to the page
+   bg like a pulled cue sheet. Solid hairlines only. */
+.lineup-board {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.season-fold + .season-fold { border-top: 1px solid var(--line); }
 .season-fold summary {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.8rem;
   cursor: pointer;
-  padding: 0.55rem 0;
-  border-bottom: 1px solid var(--line);
+  padding: 0.6rem 0.9rem;
+  min-height: 3.3rem;
   list-style: none;
+  transition: background var(--speed) var(--ease);
 }
+.season-fold summary:hover { background: var(--surface-2); }
 .season-fold summary::-webkit-details-marker { display: none; }
 .season-fold summary::before {
   content: "";
@@ -121,18 +133,70 @@
   transition: transform var(--speed) var(--ease);
 }
 .season-fold[open] summary::before { transform: rotate(45deg); }
-.fold-title {
+/* the slate: micro-eyebrow over a zero-padded reel numeral */
+.fold-slate {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.18rem;
+  min-width: 2.9rem;
+  line-height: 1;
+}
+.fold-eyebrow,
+.m-label {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.fold-num {
   font-family: var(--display);
   font-stretch: 112%;
-  font-weight: 600;
-  font-size: 1rem;
+  font-weight: 750;
+  font-size: 1.45rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  transition: color var(--speed) var(--ease);
 }
-.fold-stats { margin-left: auto; font-size: 0.85rem; }
-.season-fold summary:hover .fold-title { color: var(--accent); }
+.season-fold summary:hover .fold-num { color: var(--accent); }
 /* the season's rating shape rides the header; detail, so it yields first */
 .fold-spark { flex-shrink: 0; margin-left: 0.35rem; align-self: center; }
+/* stat cells: value over label, fixed widths so 19 seasons rail vertically */
+.fold-meta { margin-left: auto; display: flex; gap: 1.2rem; }
+.fold-meta .m {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.18rem;
+  line-height: 1;
+  min-width: 3.4rem;
+}
+.m-val { font-size: 0.92rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.m-val .star,
+.ep-rate .star { opacity: 0.55; }
+.fold-body { background: var(--bg); border-top: 1px solid var(--line); padding: 0 0.9rem 0.2rem; }
+.fold-foot { display: flex; justify-content: flex-end; padding: 0.55rem 0; margin: 0; }
+.fold-foot a {
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
 @media (max-width: 700px) {
   .fold-spark { display: none; }
+}
+@media (max-width: 560px) {
+  .fold-num { font-size: 1.15rem; }
+  .m-label { display: none; }
+  .fold-meta { gap: 0.8rem; align-items: center; }
+  .fold-meta .m { min-width: 0; }
+  .fold-meta .m-aired { display: none; }
+  .m-val { font-size: 0.84rem; }
 }
 
 /* hero gets title-sequence scale on detail pages */

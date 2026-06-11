@@ -579,6 +579,11 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 }
 .fold-stats { margin-left: auto; font-size: 0.85rem; }
 .season-fold summary:hover .fold-title { color: var(--accent); }
+/* the season's rating shape rides the header; detail, so it yields first */
+.fold-spark { flex-shrink: 0; margin-left: 0.35rem; align-self: center; }
+@media (max-width: 700px) {
+  .fold-spark { display: none; }
+}
 
 /* hero gets title-sequence scale on detail pages */
 .detail-head h1 { font-size: clamp(1.8rem, 3.2vw, 2.3rem); }
@@ -1014,6 +1019,34 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
 
 .ep-list { list-style: none; padding: 0; }
 .ep-list li { padding: 0.32rem 0; border-bottom: 1px solid var(--line); }
+/* episode ledger: fixed columns so codes, dates and stars align down the fold */
+.ep-row { display: flex; align-items: baseline; gap: 0.6rem; }
+.ep-code { flex: 0 0 3.6rem; font-size: 0.84rem; font-variant-numeric: tabular-nums; }
+.ep-name { min-width: 0; }
+.ep-best {
+  font-family: var(--display);
+  font-stretch: 112%;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--warn);
+  border: 1px solid rgba(234, 197, 79, 0.45);
+  border-radius: 3px;
+  padding: 0.05rem 0.3rem;
+  margin-left: 0.45rem;
+  white-space: nowrap;
+}
+.ep-date {
+  margin-left: auto;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ep-rate { flex: 0 0 3.2rem; text-align: right; font-weight: 600; white-space: nowrap; }
+@media (max-width: 560px) {
+  .ep-date { display: none; }
+}
 .ranked li { margin-bottom: 0.9rem; }
 .ranked p { margin: 0.15rem 0 0; font-size: 0.88rem; max-width: 65ch; }
 

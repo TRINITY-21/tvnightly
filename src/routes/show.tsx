@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { raw } from "hono/html";
 import { Bindings, EpisodeRow } from "../types";
 import { visitorRegion } from "../lib/providers";
-import { stripHtml, epCode, slugifyName, personHref, comparePathFor } from "../lib/format";
+import { stripHtml, epCode, longDate, slugifyName, personHref, comparePathFor } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
@@ -262,16 +262,37 @@ app.get("/show/:slug", async (c) => {
             <h2>Episodes by season</h2>
             {(() => {
               const latest = Math.max(...seasons.keys());
+              // Season shape at a glance: one bar per rated episode in airing
+              // order, the season's peak in gold. Trajectory, not the avg again.
+              const seasonSpark = (rated: EpisodeRow[], bestId: number) => {
+                const W = 3;
+                const G = 2;
+                const H = 16;
+                const bars = rated
+                  .map((e, i) => {
+                    const h = Math.max(2, Math.min(H, Math.round(((e.rating! - 4) / 6) * H)));
+                    const fill = e.id === bestId ? "var(--warn)" : "rgba(163, 158, 151, 0.35)";
+                    return `<rect x="${i * (W + G)}" y="${H - h}" width="${W}" height="${h}" rx="1" fill="${fill}"/>`;
+                  })
+                  .join("");
+                const w = rated.length * (W + G) - G;
+                return raw(
+                  `<svg class="fold-spark" width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" role="img"><title>Episode ratings across the season — the gold bar is its best episode</title>${bars}</svg>`,
+                );
+              };
               return [...seasons.entries()].map(([season, eps]) => {
                 const rated = eps.filter((e) => e.rating != null);
                 const avg = rated.length
                   ? rated.reduce((s, e) => s + e.rating!, 0) / rated.length
                   : null;
                 const year = eps.find((e) => e.airdate)?.airdate?.slice(0, 4);
+                const best =
+                  rated.length >= 3 ? rated.reduce((a, b) => (b.rating! > a.rating! ? b : a)) : null;
                 return (
                   <details class="season-fold" open={season === latest}>
                     <summary>
                       <span class="fold-title">Season {season}</span>
+                      {best ? seasonSpark(rated, best.id) : null}
                       <span class="fold-stats muted">
                         {eps.length} episode{eps.length === 1 ? "" : "s"}
                         {year ? ` · ${year}` : ""}
@@ -280,12 +301,20 @@ app.get("/show/:slug", async (c) => {
                     </summary>
                     <ol class="ep-list">
                       {eps.map((e) => (
-                        <li>
-                          <span class="muted">{epCode(e)}</span> {e.name}
-                          {e.rating != null ? (
-                            <span class="rating"> ★ {e.rating.toFixed(1)}</span>
-                          ) : null}
-                          {e.airdate ? <span class="muted"> · {e.airdate}</span> : null}
+                        <li class="ep-row">
+                          <span class="ep-code muted">{epCode(e)}</span>
+                          <span class="ep-name">
+                            {e.name}
+                            {best && e.id === best.id ? (
+                              <span class="ep-best">Season's best</span>
+                            ) : null}
+                          </span>
+                          <span class="ep-date muted">
+                            {e.airdate ? longDate(e.airdate) : ""}
+                          </span>
+                          <span class="ep-rate rating">
+                            {e.rating != null ? `★ ${e.rating.toFixed(1)}` : ""}
+                          </span>
                         </li>
                       ))}
                     </ol>

@@ -129,6 +129,11 @@
 }
 .fold-stats { margin-left: auto; font-size: 0.85rem; }
 .season-fold summary:hover .fold-title { color: var(--accent); }
+/* the season's rating shape rides the header; detail, so it yields first */
+.fold-spark { flex-shrink: 0; margin-left: 0.35rem; align-self: center; }
+@media (max-width: 700px) {
+  .fold-spark { display: none; }
+}
 
 /* hero gets title-sequence scale on detail pages */
 .detail-head h1 { font-size: clamp(1.8rem, 3.2vw, 2.3rem); }

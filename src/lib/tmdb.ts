@@ -26,6 +26,13 @@ type RawBundle = {
       character?: string | null;
       order?: number;
     }[];
+    crew?: {
+      id: number;
+      name: string;
+      profile_path: string | null;
+      job?: string;
+      department?: string;
+    }[];
   };
 };
 
@@ -152,6 +159,58 @@ export async function tmdbMovieCast(
       profile_path: p.profile_path,
       character: p.character ?? null,
     }));
+}
+
+export type TmdbCrewEntry = {
+  /** TMDB person id — crew backfill stores them as 10M + this */
+  id: number;
+  name: string;
+  profile_path: string | null;
+  /** merged job line, e.g. "Director · Screenplay" */
+  jobs: string;
+};
+
+// the credits a fan recognizes, in masthead order
+const CREW_RANK = [
+  "Director",
+  "Screenplay",
+  "Writer",
+  "Story",
+  "Executive Producer",
+  "Producer",
+  "Original Music Composer",
+  "Director of Photography",
+  "Editor",
+];
+
+/** A movie's key crew from the same cached bundle, one entry per person
+ *  with their jobs merged — Nolan reads "Director · Screenplay", not twice. */
+export async function tmdbMovieCrew(
+  key: string,
+  imdbId: string,
+  limit = 12,
+): Promise<TmdbCrewEntry[]> {
+  const data = await bundle(key, "movie", imdbId);
+  const merged = new Map<
+    number,
+    { name: string; profile_path: string | null; jobs: string[]; rank: number }
+  >();
+  for (const p of data?.credits?.crew ?? []) {
+    const rank = CREW_RANK.indexOf(p.job ?? "");
+    if (rank === -1) continue;
+    const cur = merged.get(p.id);
+    if (cur) {
+      if (!cur.jobs.includes(p.job!)) cur.jobs.push(p.job!);
+      cur.rank = Math.min(cur.rank, rank);
+      cur.profile_path = cur.profile_path ?? p.profile_path;
+    } else {
+      merged.set(p.id, { name: p.name, profile_path: p.profile_path, jobs: [p.job!], rank });
+    }
+  }
+  return [...merged.entries()]
+    .sort(([, a], [, b]) => a.rank - b.rank || a.name.localeCompare(b.name))
+    .slice(0, limit)
+    .map(([id, p]) => ({ id, name: p.name, profile_path: p.profile_path, jobs: p.jobs.join(" · ") }));
 }
 
 /** Movie hero backdrop, same selection rules, keyed on the IMDb id. */

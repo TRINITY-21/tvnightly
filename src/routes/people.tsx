@@ -3,7 +3,7 @@ import { Context } from "hono";
 import { Bindings, ShowRow, MovieRow, PersonRow } from "../types";
 import { stripHtml, slugifyName, retinaSet, longDate, ageOf } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
-import { getShow } from "../lib/queries";
+import { getShow, crewLinkMap } from "../lib/queries";
 import { Layout } from "../components/Layout";
 import { ShowTabs, SeasonTabs } from "../components/nav";
 import { ClampSummary } from "../components/cards";
@@ -18,19 +18,34 @@ interface TmdbSeasonCast {
   roles: { character: string }[];
 }
 
-/** TMDB season aggregate credits, edge-cached for a week. Fails to null. */
-async function tmdbSeasonCredits(
+interface TmdbAggCrew {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  total_episode_count: number;
+  jobs: { job: string; episode_count: number }[];
+}
+
+type TmdbAggCredits = { cast: TmdbSeasonCast[]; crew: TmdbAggCrew[] };
+
+/** TMDB aggregate credits (season- or series-scoped), edge-cached for a
+ *  week. Fails to null. */
+async function tmdbAggCredits(
   key: string,
   tmdbId: number,
-  season: number,
-): Promise<TmdbSeasonCast[] | null> {
-  const cacheKey = new Request(`https://edge-cache.tvnightly.com/season-credits/${tmdbId}/${season}`);
+  season: number | null,
+): Promise<TmdbAggCredits | null> {
+  const cacheKey = new Request(
+    season != null
+      ? `https://edge-cache.tvnightly.com/season-credits/v2/${tmdbId}/${season}`
+      : `https://edge-cache.tvnightly.com/show-credits/${tmdbId}`,
+  );
   const cache = caches.default;
   try {
     let res = await cache.match(cacheKey);
     if (!res) {
       const live = await fetch(
-        `https://api.themoviedb.org/3/tv/${tmdbId}/season/${season}/aggregate_credits?api_key=${key}`,
+        `https://api.themoviedb.org/3/tv/${tmdbId}${season != null ? `/season/${season}` : ""}/aggregate_credits?api_key=${key}`,
         { headers: { accept: "application/json" } },
       );
       if (!live.ok) return null;
@@ -38,12 +53,83 @@ async function tmdbSeasonCredits(
       res.headers.set("Cache-Control", "public, max-age=604800");
       await cache.put(cacheKey, res.clone());
     }
-    const data = (await res.json()) as { cast?: TmdbSeasonCast[] };
-    return data.cast ?? null;
+    const data = (await res.json()) as { cast?: TmdbSeasonCast[]; crew?: TmdbAggCrew[] };
+    return { cast: data.cast ?? [], crew: data.crew ?? [] };
   } catch {
     return null;
   }
 }
+
+// the TV credits a fan recognizes; plain "Producer" is line-producer noise
+const TV_CREW_JOBS = [
+  "Director",
+  "Writer",
+  "Executive Producer",
+  "Original Music Composer",
+  "Director of Photography",
+];
+
+/** Key crew, one tile per person with recognized jobs merged, ordered by
+ *  how much of the run they shaped (episode count). */
+function keyCrew(crew: TmdbAggCrew[], limit: number) {
+  return crew
+    .map((p) => {
+      const jobs = [...new Set((p.jobs ?? []).map((j) => j.job).filter((j) => TV_CREW_JOBS.includes(j)))];
+      return { ...p, jobLine: jobs.join(" · ") };
+    })
+    .filter((p) => p.jobLine)
+    .sort((a, b) => b.total_episode_count - a.total_episode_count)
+    .slice(0, limit);
+}
+
+/** Crew in the guest-stars row grammar: round portrait, name over the
+ *  job line, episode count on the right. Rows link to person pages where
+ *  the crew backfill (or the cast pipeline) gave us one. */
+const CrewGrid = ({
+  crew,
+  links,
+}: {
+  crew: ReturnType<typeof keyCrew>;
+  links?: Map<number, number>;
+}) =>
+  crew.length ? (
+    <section>
+      <h2>Crew</h2>
+      <div class="guest-list">
+        {crew.map((p) => {
+          const img = p.profile_path ? `https://image.tmdb.org/t/p/w185${p.profile_path}` : null;
+          const pid = links?.get(p.id);
+          const inner = (
+            <>
+              {img ? (
+                <img src={img} alt={p.name} loading="lazy" />
+              ) : (
+                <span class="guest-fallback" aria-hidden="true">
+                  {p.name.slice(0, 1)}
+                </span>
+              )}
+              <span class="guest-who">
+                <span class="guest-name">{p.name}</span>
+                <span class="guest-char muted">{p.jobLine}</span>
+              </span>
+              {p.total_episode_count ? (
+                <span class="guest-eps">
+                  {p.total_episode_count} ep{p.total_episode_count === 1 ? "" : "s"}
+                </span>
+              ) : null}
+            </>
+          );
+          return pid != null ? (
+            <a class="guest-row" href={`/person/${slugifyName(p.name)}-${pid}`}>
+              {inner}
+            </a>
+          ) : (
+            <div class="guest-row">{inner}</div>
+          );
+        })}
+      </div>
+    </section>
+  ) : null;
 
 async function seasonCastPage(
   c: Context<{ Bindings: Bindings }>,
@@ -51,10 +137,13 @@ async function seasonCastPage(
   season: number,
   latest: boolean,
 ) {
-  const cast =
+  const agg =
     show.tmdb_id && c.env.TMDB_API_KEY
-      ? ((await tmdbSeasonCredits(c.env.TMDB_API_KEY, show.tmdb_id, season)) ?? []).slice(0, 24)
-      : [];
+      ? await tmdbAggCredits(c.env.TMDB_API_KEY, show.tmdb_id, season)
+      : null;
+  const cast = (agg?.cast ?? []).slice(0, 24);
+  const crew = keyCrew(agg?.crew ?? [], 12);
+  const crewLinks = await crewLinkMap(c.env.DB, crew);
   // link anyone we already track on this show, matched by name
   const linkable = new Map<string, number>();
   if (cast.length) {
@@ -141,6 +230,7 @@ async function seasonCastPage(
           <a href={base}>see the full series cast</a> instead.
         </p>
       )}
+      <CrewGrid crew={crew} links={crewLinks} />
     </Layout>,
   );
 }
@@ -177,6 +267,11 @@ app.get("/show/:slug/cast", async (c) => {
     .all<CreditRow>();
   const main = credits.filter((r) => !r.guest);
   const guests = credits.filter((r) => r.guest);
+  const crew =
+    show.tmdb_id && c.env.TMDB_API_KEY
+      ? keyCrew((await tmdbAggCredits(c.env.TMDB_API_KEY, show.tmdb_id, null))?.crew ?? [], 18)
+      : [];
+  const crewLinks = await crewLinkMap(c.env.DB, crew);
   const site = origin(c);
 
   c.header("Cache-Control", "public, max-age=3600");
@@ -256,6 +351,7 @@ app.get("/show/:slug/cast", async (c) => {
           </div>
         </section>
       ) : null}
+      <CrewGrid crew={crew} links={crewLinks} />
     </Layout>,
   );
 });

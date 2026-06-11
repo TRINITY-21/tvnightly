@@ -4,11 +4,11 @@ import { franchiseOfMovie } from "../lib/franchises";
 import { visitorRegion, providersFor, REGIONS, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
 import { slugifyName, heroBg, stripHtml, movieComparePathFor } from "../lib/format";
 import { VsCard } from "../components/compare";
-import { tmdbMovieBackdrop, tmdbMovieMedia, tmdbMovieCast } from "../lib/tmdb";
+import { tmdbMovieBackdrop, tmdbMovieMedia, tmdbMovieCast, tmdbMovieCrew } from "../lib/tmdb";
 import { MovieTabs } from "../components/nav";
 import { IconPlay } from "../components/icons";
 import { origin, canonical } from "../lib/seo";
-import { similarMovies } from "../lib/queries";
+import { similarMovies, crewLinkMap } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
 import { hubForGenres } from "../lib/verticals";
 import { Layout } from "../components/Layout";
@@ -786,9 +786,12 @@ app.get("/movie/:slug/cast", async (c) => {
     .bind(c.req.param("slug"))
     .first<MovieRow>();
   if (!movie) return c.notFound();
-  const cast = c.env.TMDB_API_KEY
-    ? await tmdbMovieCast(c.env.TMDB_API_KEY, movie.imdb_id, 24)
-    : [];
+  const [cast, crew] = c.env.TMDB_API_KEY
+    ? await Promise.all([
+        tmdbMovieCast(c.env.TMDB_API_KEY, movie.imdb_id, 24),
+        tmdbMovieCrew(c.env.TMDB_API_KEY, movie.imdb_id, 12),
+      ])
+    : [[], []];
   const linkable = new Map<string, number>();
   if (cast.length) {
     const { results } = await c.env.DB.prepare(
@@ -799,6 +802,7 @@ app.get("/movie/:slug/cast", async (c) => {
       .all<{ id: number; name: string }>();
     for (const r of results) linkable.set(r.name.toLowerCase(), r.id);
   }
+  const crewLinks = await crewLinkMap(c.env.DB, crew);
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -859,6 +863,41 @@ app.get("/movie/:slug/cast", async (c) => {
       ) : (
         <p class="muted">Cast data isn't available for this film yet.</p>
       )}
+      {crew.length ? (
+        <section>
+          <h2>Crew</h2>
+          <div class="guest-list">
+            {crew.map((p) => {
+              const img = p.profile_path
+                ? `https://image.tmdb.org/t/p/w185${p.profile_path}`
+                : null;
+              const pid = crewLinks.get(p.id);
+              const inner = (
+                <>
+                  {img ? (
+                    <img src={img} alt={p.name} loading="lazy" />
+                  ) : (
+                    <span class="guest-fallback" aria-hidden="true">
+                      {p.name.slice(0, 1)}
+                    </span>
+                  )}
+                  <span class="guest-who">
+                    <span class="guest-name">{p.name}</span>
+                    <span class="guest-char muted">{p.jobs}</span>
+                  </span>
+                </>
+              );
+              return pid != null ? (
+                <a class="guest-row" href={`/person/${slugifyName(p.name)}-${pid}`}>
+                  {inner}
+                </a>
+              ) : (
+                <div class="guest-row">{inner}</div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
     </Layout>,
   );
 });

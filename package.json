@@ -24,6 +24,8 @@
     "people:enrich:remote": "REMOTE=1 node scripts/backfill-people-tmdb.mjs",
     "credits:tmdb:local": "node scripts/backfill-credits-tmdb.mjs",
     "credits:tmdb:remote": "REMOTE=1 node scripts/backfill-credits-tmdb.mjs",
+    "crew:backfill:local": "node scripts/backfill-crew.mjs",
+    "crew:backfill:remote": "REMOTE=1 node scripts/backfill-crew.mjs",
     "blurbs:load:remote": "wrangler d1 execute tvnightly --remote --file=scripts/blurbs.sql",
     "movies:fetch": "node scripts/seed-movies.mjs",
     "movies:load:local": "wrangler d1 execute tvnightly --local --file=seed/movies.sql",

@@ -55,6 +55,37 @@ export async function similarMovies(
   return results;
 }
 
+/**
+ * Which displayed crew have a person page. Matched two ways: by the crew
+ * backfill's offset id (10M + TMDB id), then by name for people who entered
+ * via the cast pipeline. Returns TMDB person id → people.id.
+ */
+export async function crewLinkMap(
+  db: D1Database,
+  crew: { id: number; name: string }[],
+): Promise<Map<number, number>> {
+  if (!crew.length) return new Map();
+  const offsets = crew.map((p) => 10_000_000 + p.id);
+  const names = crew.map((p) => p.name.toLowerCase());
+  const marks = (n: number) => Array(n).fill("?").join(",");
+  const { results } = await db
+    .prepare(
+      `SELECT id, name FROM people
+       WHERE id IN (${marks(offsets.length)}) OR lower(name) IN (${marks(names.length)})`,
+    )
+    .bind(...offsets, ...names)
+    .all<{ id: number; name: string }>();
+  const byId = new Set(results.map((r) => r.id));
+  const byName = new Map(results.map((r) => [r.name.toLowerCase(), r.id]));
+  const map = new Map<number, number>();
+  for (const p of crew) {
+    const off = 10_000_000 + p.id;
+    const hit = byId.has(off) ? off : byName.get(p.name.toLowerCase());
+    if (hit != null) map.set(p.id, hit);
+  }
+  return map;
+}
+
 export async function networkDirectory(db: D1Database): Promise<{ name: string; slug: string; count: number }[]> {
   const { results } = await db
     .prepare(

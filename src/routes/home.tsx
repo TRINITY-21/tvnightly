@@ -176,10 +176,12 @@ app.get("/", async (c) => {
           </section>
         ) : null}
 
-        <section class="evening-panel">
-          <p class="section-eyebrow">Your evening</p>
+        {/* two cards, and the CTA stack floats centered over their curved
+            bottoms — the evening ends at the question */}
+        <section class="evening">
           <div class="evening-grid">
-            <div class="evening-main">
+            <div class="evening-card evening-main">
+              <p class="section-eyebrow">Your evening</p>
               <div class="evening-head">
                 <h2>
                   {spotTonight ? (
@@ -233,7 +235,7 @@ app.get("/", async (c) => {
                 </p>
               )}
             </div>
-            <div class="evening-aside">
+            <div class="evening-card evening-aside">
               <div class="evening-head">
                 <h2>
                   Coming up{" "}
@@ -268,7 +270,8 @@ app.get("/", async (c) => {
                             <span class="shelf-fallback">{p.show_name}</span>
                           )}
                           <span class="shelf-chip shelf-chip-date">
-                            {month ? `${month} ${day}` : "Soon"}
+                            <span class="chip-soon">Soon</span>
+                            {month ? `${month} ${day}` : null}
                           </span>
                         </a>
                         <span class="shelf-name">{p.show_name}</span>
@@ -285,7 +288,7 @@ app.get("/", async (c) => {
             <a class="verdict-btn" href="/what-to-watch">
               What should I watch tonight?
             </a>
-            <a class="btn-ghost chev-after" href="/recommend">
+            <a class="btn-ghost" href="/recommend">
               Rate one thing, get a personal pick
             </a>
           </div>

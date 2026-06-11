@@ -19,26 +19,77 @@ interface GuestCredit {
   voice?: boolean;
 }
 
-/** TVmaze guest cast, edge-cached for a week. Fails to null, never to 500. */
-async function guestCast(epId: number): Promise<GuestCredit[] | null> {
-  const key = new Request(`https://edge-cache.tvnightly.com/guestcast/${epId}`);
+interface GuestCrewCredit {
+  person: { id: number; name: string; image: { medium: string } | null };
+  guestCrewType: string | null;
+}
+
+/** TVmaze guest cast + episode crew (director, writer…), one edge-cached
+ *  call for a week. Fails to empty, never to 500. */
+async function guestCredits(
+  epId: number,
+): Promise<{ cast: GuestCredit[]; crew: GuestCrewCredit[] }> {
+  // v2: guestcrew joined the embed — new key so cast-only entries age out
+  const key = new Request(`https://edge-cache.tvnightly.com/guestcast/v2/${epId}`);
   const cache = caches.default;
   try {
     let res = await cache.match(key);
     if (!res) {
-      const live = await fetch(`https://api.tvmaze.com/episodes/${epId}?embed=guestcast`, {
-        headers: { accept: "application/json" },
-      });
-      if (!live.ok) return null;
+      const live = await fetch(
+        `https://api.tvmaze.com/episodes/${epId}?embed[]=guestcast&embed[]=guestcrew`,
+        { headers: { accept: "application/json" } },
+      );
+      if (!live.ok) return { cast: [], crew: [] };
       res = new Response(live.body, live);
       res.headers.set("Cache-Control", "public, max-age=604800");
       await cache.put(key, res.clone());
     }
-    const data = (await res.json()) as { _embedded?: { guestcast?: GuestCredit[] } };
-    return data._embedded?.guestcast ?? null;
+    const data = (await res.json()) as {
+      _embedded?: { guestcast?: GuestCredit[]; guestcrew?: GuestCrewCredit[] };
+    };
+    return { cast: data._embedded?.guestcast ?? [], crew: data._embedded?.guestcrew ?? [] };
   } catch {
-    return null;
+    return { cast: [], crew: [] };
   }
+}
+
+// the episode credits a fan recognizes, director first; unknown types rank last
+const EP_CREW_RANK = [
+  "Director",
+  "Writer",
+  "Teleplay",
+  "Story",
+  "Creator",
+  "Executive Producer",
+  "Producer",
+  "Original Music Composer",
+  "Director of Photography",
+  "Editor",
+];
+
+/** One row per person, jobs merged ("Writer · Story"), director first. */
+function keyEpCrew(crew: GuestCrewCredit[], limit = 10) {
+  const merged = new Map<
+    number,
+    { person: GuestCrewCredit["person"]; jobs: string[]; rank: number }
+  >();
+  for (const cr of crew) {
+    const job = cr.guestCrewType?.trim();
+    if (!job) continue;
+    const idx = EP_CREW_RANK.indexOf(job);
+    const rank = idx === -1 ? EP_CREW_RANK.length : idx;
+    const cur = merged.get(cr.person.id);
+    if (cur) {
+      if (!cur.jobs.includes(job)) cur.jobs.push(job);
+      cur.rank = Math.min(cur.rank, rank);
+    } else {
+      merged.set(cr.person.id, { person: cr.person, jobs: [job], rank });
+    }
+  }
+  return [...merged.values()]
+    .sort((a, b) => a.rank - b.rank || a.person.name.localeCompare(b.person.name))
+    .slice(0, limit)
+    .map((x) => ({ person: x.person, jobLine: x.jobs.join(" · ") }));
 }
 
 app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
@@ -82,16 +133,29 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
   const seriesRank = rankIn(episodes);
   const vsAvg = ep.rating != null && seasonAvg != null ? ep.rating - seasonAvg : null;
 
-  const guests = (await guestCast(ep.id))?.slice(0, 14) ?? [];
-  // link guests we already track; everyone else renders unlinked
+  const credits = await guestCredits(ep.id);
+  const guests = credits.cast.slice(0, 14);
+  const crew = keyEpCrew(credits.crew);
+  // link anyone we already track: guests by TVmaze id, crew by id or — for
+  // people who entered via the TMDB crew backfill — by name
   const known = new Set<number>();
-  if (guests.length) {
-    const ids = guests.map((g) => g.person.id).filter((n) => Number.isInteger(n));
-    if (ids.length) {
-      const { results } = await c.env.DB.prepare(
-        `SELECT id FROM people WHERE id IN (${ids.join(",")})`,
-      ).all<{ id: number }>();
-      for (const r of results) known.add(r.id);
+  const crewLink = new Map<number, number>();
+  const ids = [...guests, ...crew].map((x) => x.person.id).filter((n) => Number.isInteger(n));
+  if (ids.length) {
+    const names = crew.map((x) => x.person.name.toLowerCase());
+    const { results } = await c.env.DB.prepare(
+      `SELECT id, name FROM people WHERE id IN (${ids.join(",")})` +
+        (names.length ? ` OR lower(name) IN (${names.map(() => "?").join(",")})` : ""),
+    )
+      .bind(...names)
+      .all<{ id: number; name: string }>();
+    const byName = new Map(results.map((r) => [r.name.toLowerCase(), r.id]));
+    for (const r of results) known.add(r.id);
+    for (const x of crew) {
+      const pid = known.has(x.person.id)
+        ? x.person.id
+        : byName.get(x.person.name.toLowerCase());
+      if (pid != null) crewLink.set(x.person.id, pid);
     }
   }
 
@@ -273,6 +337,39 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
                 );
                 return known.has(g.person.id) ? (
                   <a class="guest-row" href={`/person/${slugifyName(g.person.name)}-${g.person.id}`}>
+                    {inner}
+                  </a>
+                ) : (
+                  <div class="guest-row">{inner}</div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+        {crew.length ? (
+          <section>
+            <h2>Crew</h2>
+            <div class="guest-list">
+              {crew.map((x) => {
+                const img = x.person.image?.medium ?? null;
+                const pid = crewLink.get(x.person.id);
+                const inner = (
+                  <>
+                    {img ? (
+                      <img src={img} alt={x.person.name} loading="lazy" />
+                    ) : (
+                      <span class="guest-fallback" aria-hidden="true">
+                        {x.person.name.slice(0, 1)}
+                      </span>
+                    )}
+                    <span class="guest-who">
+                      <span class="guest-name">{x.person.name}</span>
+                      <span class="guest-char muted">{x.jobLine}</span>
+                    </span>
+                  </>
+                );
+                return pid != null ? (
+                  <a class="guest-row" href={`/person/${slugifyName(x.person.name)}-${pid}`}>
                     {inner}
                   </a>
                 ) : (

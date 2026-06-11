@@ -7,7 +7,7 @@ import { stripHtml, epCode, epHref, longDate, slugifyName } from "../lib/format"
 import { origin, canonical } from "../lib/seo";
 import { getShow } from "../lib/queries";
 import { Layout } from "../components/Layout";
-import { ShowTabs } from "../components/nav";
+import { SeasonTabs } from "../components/nav";
 import { ChevUp, ChevDown } from "../components/icons";
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -196,7 +196,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             </div>
           </div>
         </header>
-        <ShowTabs slug={show.slug} />
+        <SeasonTabs slug={show.slug} season={seasonNo} />
         {ep.rating != null && (seasonRank || seriesRank) ? (
           <section class="stat-band">
             {seasonRank ? (

@@ -27,6 +27,36 @@ export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current
   );
 };
 
+// Inside a season, the rail stays in that season: every tab carries the
+// ?season filter, and "All seasons" is the one exit back to show level.
+// Show-level-only concepts (next episode, release date, cast) don't appear.
+export const SeasonTabs: FC<{ slug: string; season: number; current?: string }> = ({
+  slug,
+  season,
+  current,
+}) => {
+  const q = `?season=${season}`;
+  const tabs: [string, string, string][] = [
+    ["overview", `Season ${season} overview`, `/show/${slug}/season/${season}`],
+    ["best", "Best episodes", `/show/${slug}/best-episodes${q}`],
+    ["worst", "Worst", `/show/${slug}/worst-episodes${q}`],
+    ["essential", "Essential", `/show/${slug}/essential${q}`],
+    ["ratings", "Ratings graph", `/show/${slug}/ratings${q}`],
+  ];
+  return (
+    <nav class="subnav subnav-scroll">
+      {tabs.map(([key, label, href]) => (
+        <a href={href} class={key === current ? "active" : ""}>
+          {label}
+        </a>
+      ))}
+      <a class="chev-after" href={`/show/${slug}`}>
+        All seasons
+      </a>
+    </nav>
+  );
+};
+
 // Sibling pages get tabs, not nav slots.
 export const SubNav: FC<{ items: [string, string][]; current: string }> = ({ items, current }) => (
   <nav class="subnav">

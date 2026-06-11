@@ -8,7 +8,7 @@ import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
 import { hubForGenres } from "../lib/verticals";
 import { Layout } from "../components/Layout";
-import { ShowTabs } from "../components/nav";
+import { ShowTabs, SeasonTabs } from "../components/nav";
 import { StatusBadge, ShowCard, ExploreCard, ClampSummary } from "../components/cards";
 import { ProviderLine } from "../components/providers";
 import { RateInline } from "../components/forms";
@@ -573,13 +573,16 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
       <h1>
         <a href={`/show/${show.slug}`}>{show.name}</a> — Season {n}
       </h1>
-      <ShowTabs slug={show.slug} />
+      <SeasonTabs slug={show.slug} season={n} current="overview" />
       <ol class="ep-list">
         {eps.map((e) => (
           <li>
-            <span class="muted">{epCode(e)}</span> <strong>{e.name}</strong>
+            <span class="muted">{epCode(e)}</span>{" "}
+            <strong>
+              <a href={epHref(show.slug, e)}>{e.name ?? epCode(e)}</a>
+            </strong>
             {e.rating != null ? <span class="rating"> ★ {e.rating.toFixed(1)}</span> : null}
-            {e.airdate ? <span class="muted"> · {e.airdate}</span> : null}
+            {e.airdate ? <span class="muted"> · {longDate(e.airdate)}</span> : null}
             {e.summary ? <p class="muted">{stripHtml(e.summary)}</p> : null}
           </li>
         ))}

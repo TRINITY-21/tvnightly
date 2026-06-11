@@ -113,6 +113,9 @@ app.get("/show/:slug/essential", async (c) => {
     }));
   }
   const seasonLabel = season != null ? ` Season ${season}` : "";
+  const anyStill = picks.some((p) => p.ep.image_url);
+  const similar = await similarShows(c.env.DB, show);
+  const region = visitorRegion(c);
 
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
@@ -132,11 +135,17 @@ app.get("/show/:slug/essential", async (c) => {
             : `${site}${path}?length=${n}`
       }
       ogImage={show.poster_url ?? show.image_url ?? undefined}
+      preloadImage={
+        picks[0]?.ep.image_url
+          ? { x1: picks[0].ep.image_url, x2: largeStill(picks[0].ep.image_url) }
+          : undefined
+      }
       ld={[breadcrumbLd(site, show, `Essential${seasonLabel} episodes`, path)]}
     >
       <article>
-        <h1>
-          The essential episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
+        <h1 class="epreg-h1">
+          The <span class="epreg-kind">essential</span> episodes of{" "}
+          <a href={`/show/${show.slug}`}>{show.name}</a>
           {seasonLabel}
         </h1>
         {season != null ? (
@@ -150,36 +159,110 @@ app.get("/show/:slug/essential", async (c) => {
           </p>
         ) : (
           <>
-            {season != null ? (
-              <p class="muted">
-                Watch these {picks.length} in order and you've got {show.name} Season {season}.
-              </p>
-            ) : (
-              <p class="muted">
-                Watch these {picks.length} in order and you've got {show.name}. How much time do
-                you have? <a href={`${path}?length=10`}>10 episodes</a> ·{" "}
-                <a href={`${path}?length=15`}>15</a> · <a href={`${path}?length=25`}>25</a>
-              </p>
-            )}
-            <ol class="ep-list">
-              {picks.map(({ ep, why }) => (
+            {season == null ? (
+              <nav class="epreg-rail" aria-label="Watch list length">
+                <span class="epreg-rail-label">Length</span>
+                {[10, 15, 25].map((len) => (
+                  <a
+                    class="epreg-all"
+                    href={len === 15 ? path : `${path}?length=${len}`}
+                    aria-current={n === len ? "page" : undefined}
+                  >
+                    {len} episodes
+                  </a>
+                ))}
+              </nav>
+            ) : null}
+            <p class="epreg-method">
+              Watch these {picks.length} in order and you've got {show.name}
+              {seasonLabel} — each pick states its reason.
+            </p>
+            <ol class={anyStill ? "epreg" : "epreg epreg--textonly"}>
+              {picks.map(({ ep, why }, i) => (
                 <li>
-                  <span class="muted">{epCode(ep)}</span>{" "}
-                  <strong>
-                    <a href={epHref(show.slug, ep)}>{ep.name ?? epCode(ep)}</a>
-                  </strong>{" "}
-                  <span class="why-tag">{why}</span>
-                  {ep.rating != null ? <span class="rating"> ★ {ep.rating.toFixed(1)}</span> : null}
-                  {ep.summary ? <p class="muted">{stripHtml(ep.summary)}</p> : null}
+                  <span class="epreg-num">{String(i + 1).padStart(2, "0")}</span>
+                  {anyStill ? (
+                    <a class="epreg-still-link" href={epHref(show.slug, ep)} tabindex={-1} aria-hidden="true">
+                      {ep.image_url ? (
+                        <img
+                          class="epreg-still"
+                          src={ep.image_url}
+                          srcset={`${ep.image_url} 1x, ${largeStill(ep.image_url)} 2x`}
+                          width="168"
+                          height="95"
+                          alt=""
+                          loading={i === 0 ? "eager" : "lazy"}
+                          fetchpriority={i === 0 ? "high" : undefined}
+                          decoding="async"
+                        />
+                      ) : (
+                        <span class="epreg-still--empty">{epCode(ep)}</span>
+                      )}
+                    </a>
+                  ) : null}
+                  <span class="epreg-main">
+                    <p class="epreg-meta">
+                      <span class="epreg-code">{epCode(ep)}</span>
+                      <span class="sep"> · </span>
+                      <span class="epreg-code">{why}</span>
+                      {ep.airdate ? (
+                        <>
+                          <span class="sep"> · </span>
+                          {longDate(ep.airdate)}
+                        </>
+                      ) : null}
+                      {ep.runtime ? (
+                        <>
+                          <span class="sep"> · </span>
+                          <span class="epreg-rt">{ep.runtime} min</span>
+                        </>
+                      ) : null}
+                    </p>
+                    <p class="epreg-line">
+                      <a class="epreg-name" href={epHref(show.slug, ep)}>
+                        {ep.name ?? epCode(ep)}
+                      </a>
+                      <span class="epreg-leader"></span>
+                      {ep.rating != null ? <span class="rating">★ {ep.rating.toFixed(1)}</span> : null}
+                    </p>
+                    {ep.summary ? <p class="epreg-sum">{stripHtml(ep.summary)}</p> : null}
+                  </span>
                 </li>
               ))}
             </ol>
-            <p>
-              Want the full picture? <a href={`/show/${show.slug}/best-episodes`}>Best episodes</a>{" "}
-              · <a href={`/show/${show.slug}/ratings`}>Ratings graph</a>
-            </p>
+            <nav class="epreg-links" aria-label={`More ${show.name} rankings`}>
+              <a href={`/show/${show.slug}/best-episodes${season != null ? `?season=${season}` : ""}`}>
+                Best episodes
+              </a>
+              <a href={`/show/${show.slug}/worst-episodes${season != null ? `?season=${season}` : ""}`}>
+                Worst episodes
+              </a>
+              <a href={`/show/${show.slug}/ratings${season != null ? `?season=${season}` : ""}`}>
+                Ratings graph
+              </a>
+            </nav>
           </>
         )}
+        {similar.length ? (
+          <section>
+            <h2>More like {show.name}</h2>
+            <p class="dossier-method">
+              The closest matches on shared genres, ranked by match strength and popularity.
+            </p>
+            <ol class="dossier-board">
+              {similar.map((s, i) => (
+                <DossierRow
+                  i={i}
+                  href={`/show/${s.slug}/essential`}
+                  name={`The essential episodes of ${s.name}`}
+                  d={buildDossier(show, s, region)}
+                  rating={s.rating}
+                  poster={posterSrc(s)}
+                />
+              ))}
+            </ol>
+          </section>
+        ) : null}
         <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
       </article>
     </Layout>,

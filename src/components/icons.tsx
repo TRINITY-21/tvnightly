@@ -20,6 +20,35 @@ export const IconCal: FC<{ size?: number }> = ({ size = 15 }) => (
   </svg>
 );
 
+/* film reel: the big watermark glyph — a rim, five spool holes, and a strip
+   of sprocketed film running out the side. Drawn, never stock. */
+export const IconReel: FC<{ size?: number }> = ({ size = 120 }) => (
+  <svg
+    class="icon icon-reel"
+    width={size}
+    height={(size * 100) / 132}
+    viewBox="0 0 132 100"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="3"
+    stroke-linecap="round"
+    aria-hidden="true"
+  >
+    <circle cx="46" cy="48" r="40" />
+    <circle cx="46" cy="48" r="6.5" fill="currentColor" stroke="none" />
+    <circle cx="46" cy="25" r="9.5" />
+    <circle cx="68" cy="41" r="9.5" />
+    <circle cx="59.5" cy="67" r="9.5" />
+    <circle cx="32.5" cy="67" r="9.5" />
+    <circle cx="24" cy="41" r="9.5" />
+    <path d="M83 56h45" />
+    <path d="M85 72h43" />
+    <rect x="94" y="61" width="6" height="6" rx="1" />
+    <rect x="108" y="61" width="6" height="6" rx="1" />
+    <rect x="122" y="61" width="6" height="6" rx="1" />
+  </svg>
+);
+
 /* play: the broadcast triangle in a ring, same line weight as the faces */
 export const IconPlay: FC<{ size?: number }> = ({ size = 18 }) => (
   <svg class="icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">

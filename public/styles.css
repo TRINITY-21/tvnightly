@@ -2558,6 +2558,21 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   position: relative;
   z-index: 1;
 }
+/* the reel watermark: drawn in the house line, faded into the tile */
+.tool-tile-mark {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-52%) rotate(-8deg);
+  color: var(--muted);
+  opacity: 0.16;
+  pointer-events: none;
+  transition: opacity var(--speed) var(--ease);
+}
+.tool-tile-lg:hover .tool-tile-mark {
+  opacity: 0.24;
+}
+
 /* the picker's actual services, fanned like a pocketful of apps */
 .tool-tile-provs {
   position: absolute;

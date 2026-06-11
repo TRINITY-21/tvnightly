@@ -3,6 +3,7 @@ import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
 import { visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
 import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml } from "../lib/format";
 import { tmdbBackdrop } from "../lib/tmdb";
+import { IconReel } from "../components/icons";
 import { canonical } from "../lib/seo";
 import { VERTICALS } from "../lib/verticals";
 import { Layout } from "../components/Layout";
@@ -398,6 +399,9 @@ app.get("/", async (c) => {
               <span class="chev-icon" aria-hidden="true"></span>
             </a>
             <a class="tool-tile tool-tile-lg" href="/what-to-watch">
+              <span class="tool-tile-mark" aria-hidden="true">
+                <IconReel size={150} />
+              </span>
               <strong>Tonight's picker</strong>
               <p class="muted">Filter by genre, runtime, and streaming service — then spin.</p>
               <span class="tool-tile-provs" aria-hidden="true">

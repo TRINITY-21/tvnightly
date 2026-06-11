@@ -127,6 +127,7 @@ function providersFor(
  */
 const providerBrand = (name: string) =>
   name
+    .trim() // TMDB data has stray trailing spaces ("Paramount Plus Apple TV Channel ")
     .toLowerCase()
     .replace(/\+/g, " plus")
     .replace(/\s+(?:free\s+)?with ads$/i, "")

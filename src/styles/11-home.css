@@ -51,6 +51,13 @@
   padding: 1.35rem 1.5rem 3.6rem;
   min-width: 0;
 }
+/* the carve: the cards' inner-bottom corners curve away to seat the CTAs */
+.evening-main {
+  border-bottom-right-radius: 48px;
+}
+.evening-aside {
+  border-bottom-left-radius: 48px;
+}
 /* align the aside's h2 with the main card's (which carries the eyebrow) */
 .evening-aside .evening-head { margin-top: 1.55rem; }
 @media (max-width: 760px) {
@@ -58,6 +65,10 @@
   .evening-aside .evening-head { margin-top: 0; }
   .evening-card { padding-bottom: 1.5rem; }
   .evening-aside { padding-bottom: 3.6rem; }
+  /* single column: no seam to carve, both cards keep the normal radius */
+  .evening-main { border-bottom-right-radius: var(--radius-lg); }
+  .evening-aside { border-bottom-left-radius: 48px; border-bottom-right-radius: 48px; }
+  .evening-cta { margin-top: -2.6rem; }
 }
 .evening-head h2 { margin: 0; }
 
@@ -153,23 +164,29 @@
   }
 }
 
-/* the CTA stack floats centered over both cards' curved bottoms */
+/* the CTA stack sits in the carved seat between the two cards */
 .evening-cta {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  width: min(460px, 88%);
-  margin: -3.1rem auto 0;
+  gap: 0.65rem;
+  align-items: center;
+  width: 620px;
+  max-width: 92%;
+  margin: -3.4rem auto 0;
 }
 .evening-cta .verdict-btn,
 .evening-cta .btn-ghost {
-  text-align: center;
+  display: block;
   width: 100%;
+  text-align: center;
+  padding: 0.85rem 1.2rem;
+  border-radius: 14px;
+  font-size: 1.02rem;
 }
 .evening-cta .verdict-btn {
-  box-shadow: 0 6px 30px rgba(255, 169, 77, 0.28);
+  box-shadow: 0 8px 34px rgba(255, 169, 77, 0.3);
 }
 .evening-cta .btn-ghost {
   background: var(--bg);

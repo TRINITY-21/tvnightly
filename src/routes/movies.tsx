@@ -247,7 +247,14 @@ app.get("/movie/:slug", async (c) => {
                 {genres.length ? (
                   <>
                     <span class="sep">·</span>
-                    <span>{genres.slice(0, 3).join(", ")}</span>
+                    <span>
+                      {genres.slice(0, 3).map((g, i) => (
+                        <>
+                          {i > 0 ? ", " : ""}
+                          <a href={`/genre/${slugifyName(g)}`}>{g}</a>
+                        </>
+                      ))}
+                    </span>
                   </>
                 ) : null}
                 {movie.runtime ? (

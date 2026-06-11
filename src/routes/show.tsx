@@ -149,10 +149,12 @@ app.get("/show/:slug", async (c) => {
                     </span>
                   </>
                 ) : null}
-                {show.network || show.web_channel ? (
+                {netName ? (
                   <>
                     <span class="sep">·</span>
-                    <span>{show.network ?? show.web_channel}</span>
+                    <span>
+                      <a href={`/network/${slugifyName(netName)}`}>{netName}</a>
+                    </span>
                   </>
                 ) : null}
                 {(() => {

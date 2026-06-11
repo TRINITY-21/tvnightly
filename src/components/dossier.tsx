@@ -54,20 +54,50 @@ export const DossierRow: FC<{
             {d.metaNet ? (
               <>
                 <span class="sep">·</span>
-                {d.metaNet}
+                <a href={`/network/${slugifyName(d.metaNet)}`}>{d.metaNet}</a>
               </>
             ) : null}
           </span>
         ) : null}
       </span>
-      {d.signals.length ? (
+      {d.signals.length || d.stream ? (
         <span class="dossier-receipt">
-          {d.signals.map((sig, j) => (
+          {d.signals.map((sig, j) => {
+            const net = sig.startsWith("Same network — ")
+              ? sig.slice("Same network — ".length)
+              : null;
+            return (
+              <>
+                {j > 0 ? <span class="sep">·</span> : null}
+                {net ? (
+                  <>
+                    Same network — <a href={`/network/${slugifyName(net)}`}>{net}</a>
+                  </>
+                ) : (
+                  sig
+                )}
+              </>
+            );
+          })}
+          {d.stream ? (
             <>
-              {j > 0 ? <span class="sep">·</span> : null}
-              {sig}
+              {d.signals.length ? <span class="sep">·</span> : null}
+              {d.stream.logo ? (
+                <img
+                  class="prov-mini"
+                  src={d.stream.logo}
+                  width="20"
+                  height="20"
+                  alt={`${d.stream.also ? "Also on" : "Streaming on"} ${d.stream.name}`}
+                  title={`${d.stream.also ? "Also on" : "Streaming on"} ${d.stream.name}`}
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                `${d.stream.also ? "Also on" : "Streaming on"} ${d.stream.name}`
+              )}
             </>
-          ))}
+          ) : null}
         </span>
       ) : null}
       {d.pitch ? (

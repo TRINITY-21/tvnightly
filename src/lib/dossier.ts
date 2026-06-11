@@ -3,7 +3,7 @@
 // signal is a verifiable fact; if we can't back it, we don't say it.
 import { MovieRow, ShowRow } from "../types";
 import { stripHtml } from "./format";
-import { providerBrand } from "./providers";
+import { providerBrand, PROVIDER_LOGOS } from "./providers";
 
 type CastEntry = { n: string; c: string | null; img: string | null };
 
@@ -14,6 +14,8 @@ export type Dossier = {
   /** Network token for the title line — null when a signal already names it. */
   metaNet: string | null;
   signals: string[];
+  /** Streaming receipt: rendered as the provider's logo, label kept for alt text. */
+  stream: { also: boolean; name: string; logo: string | null } | null;
   pitch: string | null;
   isBlurb: boolean;
 };
@@ -50,23 +52,27 @@ const streamingSignal = (
   home: { providers_intl: string | null },
   s: { providers_intl: string | null },
   region: string,
-): string | null => {
+): Dossier["stream"] => {
   const intl: Record<string, string[]> = s.providers_intl ? JSON.parse(s.providers_intl) : {};
   const provs = intl[region] ?? [];
   if (!provs.length) return null;
   // providerBrand() is a lowercase dedupe key — display the shortest raw
   // name of that brand ("Netflix" beats "Netflix Standard with Ads")
   const brand = providerBrand(provs[0]);
-  const name = provs
-    .filter((p) => providerBrand(p) === brand)
+  const brandProvs = provs.filter((p) => providerBrand(p) === brand);
+  const name = brandProvs
     .reduce((a, b) => (b.trim().length < a.trim().length ? b : a))
     .trim();
+  // any sibling of the brand may hold the logo ("Netflix Standard with Ads"
+  // is keyed separately from "Netflix" in the JustWatch seed)
+  const logo =
+    brandProvs.map((p) => PROVIDER_LOGOS[p] ?? PROVIDER_LOGOS[p.trim()]).find(Boolean) ?? null;
   const homeIntl: Record<string, string[]> = home.providers_intl
     ? JSON.parse(home.providers_intl)
     : {};
   const homeBrands = new Set((homeIntl[region] ?? []).map(providerBrand));
-  // "Also on" = you can keep watching where you already are
-  return homeBrands.has(brand) ? `Also on ${name}` : `Streaming on ${name}`;
+  // "also" = you can keep watching where you already are
+  return { also: homeBrands.has(brand), name, logo };
 };
 
 export function buildDossier(home: ShowRow, s: ShowRow, region: string): Dossier {
@@ -82,21 +88,22 @@ export function buildDossier(home: ShowRow, s: ShowRow, region: string): Dossier
 
   if (s.network && s.network === home.network) signals.push(`Same network — ${s.network}`);
 
-  if (signals.length < 2) {
-    const sig = streamingSignal(home, s, region);
-    if (sig) signals.push(sig);
-  }
+  const stream = signals.length < 2 ? streamingSignal(home, s, region) : null;
 
-  // the era cluster names the network only when no signal already does —
-  // a Netflix original must not read "Netflix · Streaming on Netflix"
+  // the era cluster names the network only when a signal doesn't already —
+  // a Netflix original must not read "Netflix · [Netflix logo]"
   const net = s.network ?? s.web_channel;
   const metaNet =
-    net && !signals.some((x) => x.toLowerCase().includes(net.toLowerCase())) ? net : null;
+    net &&
+    !signals.some((x) => x.toLowerCase().includes(net.toLowerCase())) &&
+    !(stream && stream.name.toLowerCase().includes(net.toLowerCase()))
+      ? net
+      : null;
 
   // the pitch fills quiet rows; rows with two receipts already earn the click
   let pitch: string | null = null;
   let isBlurb = false;
-  if (signals.length < 2) {
+  if (signals.length + (stream ? 1 : 0) < 2) {
     if (s.blurb) {
       pitch = s.blurb;
       isBlurb = true;
@@ -111,20 +118,18 @@ export function buildDossier(home: ShowRow, s: ShowRow, region: string): Dossier
       }`
     : null;
 
-  return { genreLine, era, metaNet, signals, pitch, isBlurb };
+  return { genreLine, era, metaNet, signals, stream, pitch, isBlurb };
 }
 
 /** Movie variant: no cast mirror, no networks, no editorial blurbs —
  *  genres, year, the streaming receipt, and the overview's first sentence. */
 export function buildMovieDossier(home: MovieRow, m: MovieRow, region: string): Dossier {
-  const signals: string[] = [];
-  const sig = streamingSignal(home, m, region);
-  if (sig) signals.push(sig);
   return {
     genreLine: genreTokens(home.genres, m.genres),
     era: m.year != null ? String(m.year) : null,
     metaNet: null,
-    signals,
+    signals: [],
+    stream: streamingSignal(home, m, region),
     pitch: m.overview ? firstSentence(stripHtml(m.overview)) : null,
     isBlurb: false,
   };

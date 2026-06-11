@@ -244,7 +244,20 @@ app.get("/top/networks", async (c) => {
 app.get("/network/:slug", async (c) => {
   const db = c.env.DB;
   const dir = await networkDirectory(db);
-  const entry = dir.find((n) => n.slug === c.req.param("slug"));
+  let entry = dir.find((n) => n.slug === c.req.param("slug"));
+  // long-tail fallback: network links now appear on every detail page, so
+  // any network we actually hold shows for must resolve, not just the top 30
+  if (!entry) {
+    const { results: nets } = await db
+      .prepare(
+        `SELECT n, COUNT(*) AS c FROM (
+           SELECT COALESCE(network, web_channel) AS n FROM shows
+         ) WHERE n IS NOT NULL GROUP BY n`,
+      )
+      .all<{ n: string; c: number }>();
+    const hit = nets.find((r) => slugifyName(r.n) === c.req.param("slug"));
+    if (hit) entry = { name: hit.n, slug: slugifyName(hit.n), count: hit.c };
+  }
   if (!entry) return c.notFound();
 
   const { results: best } = await db

@@ -118,6 +118,25 @@ a.dossier-name:hover {
 .dossier-receipt {
   font-size: 0.85rem;
 }
+/* network names are doors into /network/{slug}; quiet until hover, like the
+   genre chyron above */
+.dossier-receipt a,
+.dossier-era a {
+  color: inherit;
+}
+.dossier-receipt a:hover,
+.dossier-era a:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+/* the streaming receipt as the provider's mark, not a sentence */
+.dossier-receipt .prov-mini {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  object-fit: cover;
+  vertical-align: -0.35em;
+}
 .dossier-receipt .sep,
 .dossier-era .sep {
   color: var(--muted);

@@ -618,7 +618,22 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   padding-left: 0.75rem;
   font-style: italic;
   max-width: 65ch;
+  margin: 1rem 0;
 }
+/* labeled editorial voice — distinct from the official synopsis */
+.blurb-label {
+  display: block;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-style: normal;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+}
+.blurb p { margin: 0; }
 
 .ep-list { list-style: none; padding: 0; }
 .ep-list li { padding: 0.32rem 0; border-bottom: 1px solid var(--line); }

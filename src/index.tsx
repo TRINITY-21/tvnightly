@@ -1207,8 +1207,13 @@ app.get("/show/:slug", async (c) => {
                 pickerType="tv"
               />
               
-              {show.blurb ? <p class="blurb">{show.blurb}</p> : null}
               {show.summary ? <div class="summary">{raw(show.summary)}</div> : null}
+              {show.blurb ? (
+                <aside class="blurb">
+                  <span class="blurb-label">The TV Nightly take</span>
+                  <p>{show.blurb}</p>
+                </aside>
+              ) : null}
               <RateInline kind="tv" refId={String(show.id)} stat={stat} />
             </div>
           </div>

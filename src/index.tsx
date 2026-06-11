@@ -3144,12 +3144,12 @@ app.get("/genre/:slug", async (c) => {
       <p>
         {tvGenre ? (
           <a class="verdict-btn" href={`/what-to-watch?genre=${encodeURIComponent(tvGenre)}`}>
-            Pick me a {label.toLowerCase()} show 🎲
+            Pick me a {label.toLowerCase()} show
           </a>
         ) : null}{" "}
         {movieGenre ? (
           <a class="verdict-btn" href={`/what-to-watch?type=movie&genre=${encodeURIComponent(movieGenre)}`}>
-            Pick me a {label.toLowerCase()} movie 🎲
+            Pick me a {label.toLowerCase()} movie
           </a>
         ) : null}
       </p>
@@ -3349,7 +3349,7 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
       <p>{v.intro}</p>
       <p>
         <a class="verdict-btn" href={`/what-to-watch${v.pickerQS}`}>
-          Pick me something {v.name.toLowerCase()} 🎲
+          Pick me something {v.name.toLowerCase()}
         </a>
         {(v.watchOrders ?? []).map((slug) => {
           const fr = FRANCHISE_BY_SLUG.get(slug);
@@ -3654,7 +3654,7 @@ app.get("/movies", async (c) => {
       <h1>Popular movies</h1>
       <p>
         <a href="/movies/best">Best movies, ranked →</a> ·{" "}
-        <a href="/what-to-watch?type=movie">Pick one for me 🎲</a>
+        <a href="/what-to-watch?type=movie">Pick one for me</a>
       </p>
       {results.length === 0 ? (
         <p class="muted">No movies loaded yet — the catalog is on its way.</p>
@@ -3824,7 +3824,7 @@ app.get("/movie/:slug", async (c) => {
                 <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} rel="noopener">
                   IMDb ↗
                 </a>
-                <a href="/what-to-watch?type=movie">Pick me another 🎲</a>
+                <a href="/what-to-watch?type=movie">Pick me another</a>
               </nav>
               {movie.overview ? <div class="summary">{movie.overview}</div> : null}
               <RateInline kind="movie" refId={movie.imdb_id} stat={stat} />
@@ -3872,7 +3872,7 @@ app.get("/movie/:slug", async (c) => {
                 ))}
                 {prov0 ? (
                   <ExploreCard
-                    icon="🎲"
+                    icon="PICK"
                     title={`Spin a ${prov0} movie`}
                     desc="Random great pick from the same service you already pay for."
                     href={`/what-to-watch?type=movie&service=${encodeURIComponent(prov0)}`}
@@ -4206,7 +4206,7 @@ app.get("/what-to-watch", async (c) => {
                 </a>
               ) : null}
               <button type="submit" class="watch-submit">
-                {picks.length ? "Deal again 🎲" : "Deal me two 🎲"}
+                {picks.length ? "Shuffle again" : "Find my picks"}
               </button>
             </div>
           </div>

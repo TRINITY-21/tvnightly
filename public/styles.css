@@ -684,7 +684,6 @@ button, .verdict-btn {
 
 /* ---- what-to-watch page ---- */
 .watch-page {
-  max-width: 1000px;
   margin: 0 auto;
   padding-bottom: 3rem;
 }
@@ -815,12 +814,11 @@ button, .verdict-btn {
   color: var(--muted);
   white-space: nowrap;
 }
-/* stacked landscape contenders: poster left, the decision facts right —
-   both options fit one screen, no scrolling past walls of art */
+/* stacked landscape contenders at full content width: poster left, the
+   decision facts right — both options fit one screen */
 .shortlist-duo {
   display: flex;
   flex-direction: column;
-  max-width: 660px;
   margin: 0 auto;
 }
 .shortlist-or {
@@ -888,10 +886,10 @@ button, .verdict-btn {
 .shortlist-poster {
   display: block;
   position: relative;
-  flex: 0 0 156px;
-  width: 156px;
+  flex: 0 0 184px;
+  width: 184px;
   align-self: stretch;
-  min-height: 215px;
+  min-height: 255px;
   overflow: hidden;
   color: var(--text);
   text-decoration: none;
@@ -922,7 +920,7 @@ button, .verdict-btn {
   gap: 0.5rem;
   flex: 1;
   min-width: 0;
-  padding: 1rem 1.05rem 1.15rem;
+  padding: 1.15rem 1.35rem 1.2rem;
 }
 .shortlist-card h2 {
   margin: 0;
@@ -1013,7 +1011,6 @@ button, .verdict-btn {
 .watch-primer-duo {
   display: flex;
   flex-direction: column;
-  max-width: 660px;
   margin: 0 auto 1.15rem;
 }
 .watch-primer-card {

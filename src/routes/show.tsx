@@ -86,8 +86,8 @@ app.get("/show/:slug", async (c) => {
             <div class="detail-info">
               <h1>{show.name}</h1>
               <p class="meta-strip">
-                <StatusBadge status={show.status} />
-                <span>TV series</span>
+                {/* the year range carries the status: closed = ended, –present = airing */}
+                <span>TV</span>
                 {show.premiered ? (
                   <>
                     <span class="sep">·</span>
@@ -96,7 +96,7 @@ app.get("/show/:slug", async (c) => {
                       {show.ended
                         ? `–${show.ended.slice(0, 4)}`
                         : show.status === "Running"
-                          ? "–"
+                          ? "–present"
                           : ""}
                     </span>
                   </>

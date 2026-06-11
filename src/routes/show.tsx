@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { raw } from "hono/html";
 import { Bindings, EpisodeRow } from "../types";
 import { visitorRegion } from "../lib/providers";
-import { stripHtml, epCode, longDate, slugifyName, personHref, comparePathFor } from "../lib/format";
+import { stripHtml, epCode, epHref, longDate, slugifyName, personHref, comparePathFor } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
@@ -203,7 +203,8 @@ app.get("/show/:slug", async (c) => {
                       ) : null}
                       <span class="top3-main">
                         <span class="top3-name">
-                          {e.name} <span class="muted">{epCode(e)}</span>
+                          <a href={epHref(show.slug, e)}>{e.name}</a>{" "}
+                          <span class="muted">{epCode(e)}</span>
                         </span>
                         {pitch ? <span class="top3-sub">{pitch}</span> : null}
                       </span>
@@ -263,13 +264,6 @@ app.get("/show/:slug", async (c) => {
             <div class="lineup-board">
               {(() => {
                 const latest = Math.max(...seasons.keys());
-                const top3Ids = new Set(
-                  episodes
-                    .filter((e) => e.rating != null)
-                    .sort((a, b) => b.rating! - a.rating!)
-                    .slice(0, 3)
-                    .map((e) => e.id),
-                );
                 const seasonAvg = (eps: EpisodeRow[]) => {
                   const rated = eps.filter((e) => e.rating != null);
                   return rated.length
@@ -382,67 +376,44 @@ app.get("/show/:slug", async (c) => {
                       </summary>
                       <div class="fold-body">
                         <ol class="ep-list">
-                          <li class="ep-head" aria-hidden="true">
-                            <span class="ep-code">EP</span>
-                            <span class="ep-name">Title</span>
-                            <span class="ep-leader"></span>
-                            <span class="ep-date">Aired</span>
-                            <span class="ep-rate">★</span>
-                          </li>
                           {eps.map((e) => {
                             const isBest = best != null && e.id === best.id;
-                            // The season's best gets the promo slot — still +
-                            // lower-third chyron, kept in airing position —
-                            // unless its frame already headlines the top-3.
-                            if (isBest && e.image_url && !top3Ids.has(e.id)) {
-                              const pitch = stripHtml(e.summary).slice(0, 140);
-                              return (
-                                <li class="ep-row ep-promo">
-                                  {twoToneCode(e)}
-                                  <span class="still-wrap">
+                            const pitch = stripHtml(e.summary).slice(0, 140);
+                            return (
+                              <li class="ep-row">
+                                {twoToneCode(e)}
+                                <span class="still-wrap">
+                                  {e.image_url ? (
                                     <img
                                       src={e.image_url}
-                                      width="112"
-                                      height="63"
+                                      width="84"
+                                      height="47"
                                       alt=""
                                       loading="lazy"
                                       decoding="async"
                                     />
-                                    <span class="still-chyron">Season's best</span>
-                                  </span>
-                                  <span class="ep-lead-main">
-                                    <span class="ep-lead-line">
-                                      <span class="ep-name" title={e.name ?? undefined}>
-                                        {e.name}
-                                      </span>
-                                      <span class="ep-leader"></span>
-                                      <span class="ep-date muted">
-                                        {e.airdate ? longDate(e.airdate) : ""}
-                                      </span>
-                                      {epRate(e)}
+                                  ) : (
+                                    <span class="still-empty" aria-hidden="true"></span>
+                                  )}
+                                  {isBest ? <span class="still-chyron">Season's best</span> : null}
+                                </span>
+                                <span class="ep-lead-main">
+                                  <span class="ep-lead-line">
+                                    <a
+                                      class="ep-name"
+                                      href={epHref(show.slug, e)}
+                                      title={e.name ?? undefined}
+                                    >
+                                      {e.name ?? epCode(e)}
+                                    </a>
+                                    <span class="ep-leader"></span>
+                                    <span class="ep-date muted">
+                                      {e.airdate ? longDate(e.airdate) : ""}
                                     </span>
-                                    {pitch ? (
-                                      <span class="ep-lead-sub">
-                                        {e.runtime ? `${e.runtime} min · ` : ""}
-                                        {pitch}
-                                      </span>
-                                    ) : null}
+                                    {epRate(e)}
                                   </span>
-                                </li>
-                              );
-                            }
-                            return (
-                              <li class="ep-row">
-                                {twoToneCode(e)}
-                                <span class="ep-name" title={e.name ?? undefined}>
-                                  {e.name}
-                                  {isBest ? <span class="ep-best">Season's best</span> : null}
+                                  {pitch ? <span class="ep-lead-sub">{pitch}</span> : null}
                                 </span>
-                                <span class="ep-leader"></span>
-                                <span class="ep-date muted">
-                                  {e.airdate ? longDate(e.airdate) : ""}
-                                </span>
-                                {epRate(e)}
                               </li>
                             );
                           })}

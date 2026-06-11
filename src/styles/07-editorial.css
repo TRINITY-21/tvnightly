@@ -69,21 +69,6 @@
 .fold-body .ep-list li { padding: 0.42rem 0; }
 .fold-body .ep-list li:last-of-type { border-bottom: none; }
 .ep-row { display: flex; align-items: center; gap: 0.6rem; }
-.ep-head {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-.ep-head span {
-  font-family: var(--display);
-  font-stretch: 80%;
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.ep-head .ep-leader { border-bottom: none; }
 .ep-code {
   flex: 0 0 3.9rem;
   font-family: var(--display);
@@ -103,6 +88,11 @@
   text-overflow: ellipsis;
   font-weight: 600;
 }
+/* episode titles are doors now — text-colored until you reach for them */
+a.ep-name { color: var(--text); }
+a.ep-name:hover { color: var(--accent); text-decoration: none; }
+.ep-row { transition: background var(--speed) var(--ease); }
+.ep-row:hover { background: rgba(255, 255, 255, 0.02); }
 .ep-best {
   font-family: var(--display);
   font-stretch: 112%;
@@ -131,10 +121,10 @@
   font-variant-numeric: tabular-nums;
 }
 .ep-rate { flex: 0 0 3.4rem; text-align: right; font-weight: 650; white-space: nowrap; }
-/* the promo slot: the season's best, in airing position, frame + chyron */
-.ep-promo { gap: 0.8rem; }
-.still-wrap { position: relative; flex: 0 0 112px; }
-.still-wrap img {
+/* every row carries its frame; the season's best wears the chyron */
+.still-wrap { position: relative; flex: 0 0 84px; }
+.still-wrap img,
+.still-empty {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -142,6 +132,7 @@
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
 }
+.still-empty { background: var(--surface-2); }
 .still-chyron {
   position: absolute;
   inset: auto 0 0;
@@ -172,7 +163,7 @@
 }
 @media (max-width: 560px) {
   .ep-date { display: none; }
-  .still-wrap { flex-basis: 88px; }
+  .still-wrap { flex-basis: 64px; }
 }
 .ranked li { margin-bottom: 0.9rem; }
 .ranked p { margin: 0.15rem 0 0; font-size: 0.88rem; max-width: 65ch; }

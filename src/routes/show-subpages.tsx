@@ -1,7 +1,7 @@
 import { Hono, Context } from "hono";
 import { raw } from "hono/html";
 import { Bindings, EpisodeRow, EventRow } from "../types";
-import { stripHtml, epCode } from "../lib/format";
+import { stripHtml, epCode, epHref } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, similarShows } from "../lib/queries";
 import { Layout, COUNTDOWN_JS } from "../components/Layout";
@@ -323,7 +323,10 @@ const rankedPage =
           <ol class="ranked">
             {eps.map((e) => (
               <li>
-                <strong>{e.name}</strong> <span class="muted">{epCode(e)}</span>
+                <strong>
+                  <a href={epHref(show.slug, e)}>{e.name}</a>
+                </strong>{" "}
+                <span class="muted">{epCode(e)}</span>
                 <span class="rating"> ★ {e.rating!.toFixed(1)}</span>
                 <span class="vote" data-ep-id={String(e.id)}>
                   <button class="vote-btn" data-dir="up" aria-label="Agree with this ranking">

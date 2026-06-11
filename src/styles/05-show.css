@@ -321,3 +321,83 @@ a.cast-tile { display: block; color: var(--text); }
 a.cast-tile:hover { text-decoration: none; }
 .credit-as { font-size: 0.76rem; text-align: center; line-height: 1.3; }
 
+
+/* ---- episode pages: one hour of television, in full ---- */
+.ep-side { flex: 0 0 300px; width: 300px; }
+.ep-still-hero {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: var(--shadow-2);
+}
+.ep-still-hero.still-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--display);
+  font-stretch: 112%;
+  font-weight: 700;
+  color: var(--muted);
+}
+.ep-eyebrow {
+  margin: 0.1rem 0 0.2rem;
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ep-eyebrow a { color: var(--accent); }
+.ep-eyebrow .sep { opacity: 0.45; margin: 0 0.3rem; }
+.ep-vote { display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.9rem; }
+@media (max-width: 600px) {
+  .ep-side { flex-basis: 100%; width: 100%; }
+}
+
+/* prev/next: two doors at the end of the hour */
+.ep-pager {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  margin: 1.8rem 0 0;
+}
+.ep-pager-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  padding: 0.75rem 0.95rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  min-width: 0;
+  transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+.ep-pager-card:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.pager-next { text-align: right; align-items: flex-end; }
+.pager-label {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pager-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.pager-sub { font-size: 0.8rem; }

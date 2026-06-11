@@ -7,6 +7,7 @@ import type { Bindings } from "./types";
 
 import bestEpisodes from "./routes/best-episodes";
 import compare from "./routes/compare";
+import episode from "./routes/episode";
 import directory from "./routes/directory";
 import home from "./routes/home";
 import hubs from "./routes/hubs";
@@ -31,6 +32,7 @@ app.route("/", home);
 app.route("/", bestEpisodes);
 app.route("/", show);
 app.route("/", showSubpages);
+app.route("/", episode);
 app.route("/", people);
 app.route("/", schedule);
 app.route("/", recommend);

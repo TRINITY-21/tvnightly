@@ -50,7 +50,8 @@ export const slugifyName = (name: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-/** Networks + streamers with enough mirrored shows to deserve a page. */
+/** Canonical episode page path: /show/{slug}/s05e01 */
+export const epHref = (slug: string, e: EpisodeRow) => `/show/${slug}/${epCode(e).toLowerCase()}`;
 
 export const comparePathFor = (a: string, b: string) =>
   a.localeCompare(b) <= 0 ? `/compare/${a}-vs-${b}` : `/compare/${b}-vs-${a}`;

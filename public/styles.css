@@ -820,34 +820,27 @@ button, .verdict-btn {
   color: var(--muted);
   white-space: nowrap;
 }
+/* stacked landscape contenders: poster left, the decision facts right —
+   both options fit one screen, no scrolling past walls of art */
 .shortlist-duo {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 0 1.4rem;
-  align-items: start;
-  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  max-width: 660px;
   margin: 0 auto;
-}
-.shortlist-duo--solo {
-  grid-template-columns: minmax(0, 1fr);
-  max-width: 18.5rem;
 }
 .shortlist-or {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  align-self: stretch;
-  gap: 0;
-  padding: 1.5rem 0;
+  padding: 0.45rem 0;
 }
 .shortlist-or::before,
 .shortlist-or::after {
   content: "";
   flex: 1;
-  width: 1px;
-  min-height: 1.5rem;
-  background: linear-gradient(180deg, transparent, var(--line), transparent);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line), transparent);
 }
 /* the decision medallion */
 .or-badge {
@@ -867,18 +860,17 @@ button, .verdict-btn {
   letter-spacing: 0.14em;
   text-indent: 0.14em;
   color: var(--muted);
-  margin: 0.55rem 0;
+  margin: 0 0.7rem;
 }
 .shortlist-card {
   position: relative;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-1);
-  height: 100%;
   transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease),
     box-shadow var(--speed) var(--ease);
 }
@@ -895,9 +887,6 @@ button, .verdict-btn {
 .shortlist-card--b::before {
   background: linear-gradient(90deg, transparent 4%, var(--accent-2), transparent 96%);
 }
-.shortlist-card { transform: rotate(-0.5deg); }
-.shortlist-card--b { transform: rotate(0.5deg); }
-.shortlist-duo--solo .shortlist-card { transform: none; }
 /* the deal: contenders drop onto the table one after the other
    (prefers-reduced-motion guard at the top of this file covers it) */
 @keyframes deal-in {
@@ -908,7 +897,7 @@ button, .verdict-btn {
 .shortlist-duo .shortlist-or { animation: deal-in 0.35s var(--ease) 0.26s backwards; }
 .shortlist-card:hover {
   border-color: rgba(255, 169, 77, 0.38);
-  transform: translateY(-3px) rotate(0deg);
+  transform: translateY(-2px);
   box-shadow: var(--shadow-2);
 }
 .shortlist-card--b:hover {
@@ -917,9 +906,10 @@ button, .verdict-btn {
 .shortlist-poster {
   display: block;
   position: relative;
-  flex: 0 0 auto;
-  width: 100%;
-  aspect-ratio: 2 / 3;
+  flex: 0 0 156px;
+  width: 156px;
+  align-self: stretch;
+  min-height: 215px;
   overflow: hidden;
   color: var(--text);
   text-decoration: none;
@@ -1017,21 +1007,20 @@ button, .verdict-btn {
 }
 .shortlist-foot {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 1rem;
   margin-top: auto;
   padding-top: 0.65rem;
 }
 .shortlist-btn {
-  display: block;
-  width: 100%;
+  display: inline-block;
   text-align: center;
-  padding: 0.5rem 0.85rem;
+  padding: 0.5rem 1.15rem;
   font-size: 0.82rem;
 }
 .shortlist-foot .rate-inline {
   margin: 0;
-  justify-content: center;
   font-size: 0.8rem;
 }
 
@@ -1040,15 +1029,13 @@ button, .verdict-btn {
   padding: 0.25rem 0 1.5rem;
 }
 .watch-primer-duo {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 0 1.5rem;
-  align-items: start;
-  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  max-width: 660px;
   margin: 0 auto 1.15rem;
 }
 .watch-primer-card {
-  aspect-ratio: 2 / 3;
+  height: 8.5rem;
   border-radius: var(--radius-lg);
   border: 1px dashed rgba(255, 255, 255, 0.07);
   background: linear-gradient(
@@ -1088,32 +1075,15 @@ button, .verdict-btn {
   font-size: 0.88rem;
 }
 @media (max-width: 640px) {
-  .shortlist-duo,
-  .watch-primer-duo {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.35rem;
-    max-width: 17.5rem;
+  /* landscape cards survive phones: poster narrows, facts keep the room */
+  .shortlist-poster {
+    flex-basis: 112px;
+    width: 112px;
+    min-height: 168px;
   }
-  .shortlist-duo--solo {
-    max-width: 17.5rem;
-  }
-  /* stacked cards: the medallion turns horizontal between them */
-  .shortlist-or {
-    flex-direction: row;
-    padding: 0.35rem 0;
-    align-self: auto;
-  }
-  .shortlist-or::before,
-  .shortlist-or::after {
-    width: auto;
-    height: 1px;
-    min-height: 0;
-    min-width: 1.5rem;
-    background: linear-gradient(90deg, transparent, var(--line), transparent);
-  }
-  .or-badge { margin: 0 0.55rem; }
-  .shortlist-card,
-  .shortlist-card--b { transform: none; }
+  .shortlist-body { padding: 0.8rem 0.9rem 0.9rem; }
+  .shortlist-blurb { display: none; }
+  .watch-primer-card { height: 7rem; }
 }
 @media (max-width: 560px) {
   .watch-bar-actions {

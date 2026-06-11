@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
-import { visitorRegion } from "../lib/providers";
+import { visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
 import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml } from "../lib/format";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { canonical } from "../lib/seo";
@@ -21,7 +21,7 @@ app.get("/", async (c) => {
     ep_airdate: string | null;
     ep_airstamp: string | null;
   };
-  const [top, topMovies, tonight, premieres, spotTonight, spotPremiere] = await Promise.all([
+  const [top, topMovies, tonight, premieres, spotTonight, spotPremiere, topStill] = await Promise.all([
     // weight-only ORDER BY rides idx_shows_weight; a rating tiebreak would
     // force a full scan + temp sort (weights are near-unique anyway)
     c.env.DB.prepare("SELECT * FROM shows ORDER BY weight DESC LIMIT 18")
@@ -75,6 +75,12 @@ app.get("/", async (c) => {
          AND e.airstamp < datetime('now', '+21 days')
        ORDER BY s.weight DESC LIMIT 1`,
     ).first<SpotRow>(),
+    // the current #1 episode's still — the greatest-episodes tile wears it
+    c.env.DB.prepare(
+      `SELECT image_url FROM episodes
+       WHERE image_url IS NOT NULL AND rating IS NOT NULL
+       ORDER BY rating DESC LIMIT 1`,
+    ).first<{ image_url: string }>(),
   ]);
 
   const spot: SpotRow | null =
@@ -377,7 +383,16 @@ app.get("/", async (c) => {
           <p class="section-eyebrow">Tools</p>
           <h2>Go deeper</h2>
           <div class="tools-bento">
+            {/* the tiles wear their own pages' real content: the current #1
+                episode's still, the picker's actual services — never stock art */}
             <a class="tool-tile tool-tile-lg" href="/best-episodes">
+              {topStill?.image_url ? (
+                <span
+                  class="tool-tile-art"
+                  style={`background-image:url('${topStill.image_url.replace("/medium_landscape/", "/large_landscape/")}')`}
+                  aria-hidden="true"
+                ></span>
+              ) : null}
               <strong>The greatest episodes ever aired</strong>
               <p class="muted">Every show's finest hours, ranked on one honest list.</p>
               <span class="chev-icon" aria-hidden="true"></span>
@@ -385,6 +400,13 @@ app.get("/", async (c) => {
             <a class="tool-tile tool-tile-lg" href="/what-to-watch">
               <strong>Tonight's picker</strong>
               <p class="muted">Filter by genre, runtime, and streaming service — then spin.</p>
+              <span class="tool-tile-provs" aria-hidden="true">
+                {["Netflix", "Amazon Prime Video", "Hulu", "Disney Plus"].map((n) =>
+                  PROVIDER_LOGOS[n] ? (
+                    <img src={PROVIDER_LOGOS[n]} alt="" width="34" height="34" loading="lazy" />
+                  ) : null,
+                )}
+              </span>
               <span class="chev-icon" aria-hidden="true"></span>
             </a>
             <div class="tools-bento-rest">

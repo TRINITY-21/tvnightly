@@ -116,18 +116,36 @@ function providersFor(
   return { names: [], region };
 }
 
-const ProviderLine: FC<{ row: { providers_intl: string | null }; region: string }> = ({
-  row,
-  region,
-}) => {
+// The where-to-watch answer is the conversion moment of every detail page, so
+// the first service gets button weight and an empty result still answers
+// (fallbackHref) instead of leaving a silent gap. Lists pass no fallback and
+// keep the old quiet behavior.
+const ProviderLine: FC<{
+  row: { providers_intl: string | null };
+  region: string;
+  fallbackHref?: string;
+}> = ({ row, region, fallbackHref }) => {
   const prov = providersFor(row, region);
-  if (!prov.names.length) return null;
+  if (!prov.names.length) {
+    return fallbackHref ? (
+      <p class="provs">
+        <span class="muted">Not streaming in your region —</span>{" "}
+        <a href={fallbackHref}>
+          {fallbackHref.startsWith("/what-to-watch")
+            ? "find one that is streaming →"
+            : "check the release date →"}
+        </a>
+      </p>
+    ) : null;
+  }
+  const [first, ...rest] = prov.names;
   return (
     <p class="provs">
       <span class="muted">
         Streaming on{prov.region !== region ? ` (${prov.region} — not on your region's services)` : ` (${prov.region})`}
       </span>{" "}
-      {prov.names.map((p) => (
+      <span class="prov prov-primary">{first}</span>
+      {rest.map((p) => (
         <span class="prov">{p}</span>
       ))}
     </p>
@@ -149,6 +167,26 @@ const LogoMark: FC<{ size?: number }> = ({ size = 26 }) => (
     <circle cx="26.5" cy="16.5" r="3.4" fill="#FFA94D" opacity="0.22" />
     <circle cx="26.5" cy="16.5" r="2.2" fill="#FFA94D" />
   </svg>
+);
+
+// Every /show/:slug/* page renders these so searchers landing on a subpage
+// (release-date, next-episode…) can move laterally without bouncing via the hub.
+const ShowPills: FC<{ slug: string; imdbId?: string | null }> = ({ slug, imdbId }) => (
+  <nav class="pill-nav">
+    <a href={`/show/${slug}`}>Overview</a>
+    <a href={`/show/${slug}/best-episodes`}>Best episodes</a>
+    <a href={`/show/${slug}/worst-episodes`}>Worst</a>
+    <a href={`/show/${slug}/essential`}>Essential</a>
+    <a href={`/show/${slug}/ratings`}>Ratings graph</a>
+    <a href={`/show/${slug}/next-episode`}>Next episode</a>
+    <a href={`/show/${slug}/release-date`}>Release date</a>
+    <a href={`/show/${slug}/calendar.ics`}>📅 Calendar</a>
+    {imdbId ? (
+      <a href={`https://www.imdb.com/title/${imdbId}/`} rel="noopener">
+        IMDb ↗
+      </a>
+    ) : null}
+  </nav>
 );
 
 const stripHtml = (s: string | null) => (s ?? "").replace(/<[^>]*>/g, "").trim();
@@ -248,7 +286,7 @@ const Layout: FC<
           </span>
         </a>
         <form action="/search" method="get" class="search">
-          <input type="search" name="q" placeholder="Search shows…" required />
+          <input type="search" name="q" placeholder="Search shows & movies…" required />
         </form>
         <nav>
           <a href="/tonight">Tonight</a>
@@ -459,7 +497,9 @@ const breadcrumbLd = (site: string, show: ShowRow, page: string, path: string) =
 
 app.get("/", async (c) => {
   const [top, topMovies, tonight, premieres] = await Promise.all([
-    c.env.DB.prepare("SELECT * FROM shows ORDER BY weight DESC, rating DESC LIMIT 18")
+    // weight-only ORDER BY rides idx_shows_weight; a rating tiebreak would
+    // force a full scan + temp sort (weights are near-unique anyway)
+    c.env.DB.prepare("SELECT * FROM shows ORDER BY weight DESC LIMIT 18")
       .all<ShowRow>()
       .then((r) => r.results),
     c.env.DB.prepare("SELECT * FROM movies ORDER BY popularity DESC LIMIT 18")
@@ -468,7 +508,8 @@ app.get("/", async (c) => {
     c.env.DB.prepare(
       `SELECT e.*, s.name AS show_name, s.slug AS show_slug, s.network AS network
        FROM episodes e JOIN shows s ON s.id = e.show_id
-       WHERE date(e.airstamp) = date('now')
+       WHERE e.airstamp >= datetime('now','start of day')
+         AND e.airstamp < datetime('now','start of day','+1 day')
        ORDER BY e.airstamp LIMIT 8`,
     )
       .all<TonightRow>()
@@ -535,10 +576,10 @@ app.get("/", async (c) => {
           )}
           <div class="hero-tools">
             <a class="verdict-btn" href="/what-to-watch">
-              Settle it for us 🎲
+              What should I watch tonight? 🎲
             </a>
             <a class="btn-ghost" href="/recommend">
-              Rate one thing → get a pick
+              Rate one thing, get a personal pick →
             </a>
           </div>
         </aside>
@@ -674,12 +715,21 @@ app.get("/show/:slug", async (c) => {
     if (!seasons.has(s)) seasons.set(s, []);
     seasons.get(s)!.push(e);
   }
-  const similar = await similarShows(c.env.DB, show);
-  const stat = await titleStat(c.env.DB, "tv", String(show.id));
   const netName = show.network ?? show.web_channel;
-  const netEntry = netName
-    ? (await networkDirectory(c.env.DB)).find((n) => n.name === netName)
-    : undefined;
+  // one bound COUNT instead of the full network GROUP-BY scan per pageview
+  const [similar, stat, netCount] = await Promise.all([
+    similarShows(c.env.DB, show),
+    titleStat(c.env.DB, "tv", String(show.id)),
+    netName
+      ? c.env.DB.prepare(
+          "SELECT COUNT(*) AS c FROM shows WHERE (network = ? OR web_channel = ?) AND weight >= 60",
+        )
+          .bind(netName, netName)
+          .first<{ c: number }>()
+      : Promise.resolve(null),
+  ]);
+  const netEntry =
+    netName && (netCount?.c ?? 0) >= 3 ? { name: netName, slug: slugifyName(netName) } : undefined;
 
   const site = origin(c);
   const ld: unknown[] = [
@@ -705,54 +755,154 @@ app.get("/show/:slug", async (c) => {
       ogImage={show.image_url ?? undefined}
     >
       <article class="show-hub">
-        <div class="show-head">
+        <header class="detail-hero">
           {show.image_url ? (
-            <img class="poster" src={show.image_url} alt={show.name} />
-          ) : (
-            <div class="poster card-fallback">{show.name}</div>
-          )}
-          <div>
-            <h1>{show.name}</h1>
-            <p>
-              <StatusBadge status={show.status} />
-              {show.premiered ? <span class="muted"> · {show.premiered.slice(0, 4)}</span> : null}
-              {show.network || show.web_channel ? (
-                <span class="muted"> · {show.network ?? show.web_channel}</span>
-              ) : null}
-              {show.rating != null ? (
-                <span class="rating"> · ★ {show.rating.toFixed(1)}</span>
-              ) : null}
-            </p>
-            <nav class="show-nav">
-              <a href={`/show/${show.slug}/best-episodes`}>Best episodes</a>
-              <a href={`/show/${show.slug}/essential`}>Essential</a>
-              <a href={`/show/${show.slug}/ratings`}>Ratings graph</a>
-              <a href={`/show/${show.slug}/next-episode`}>Next episode</a>
-              <a href={`/show/${show.slug}/release-date`}>Release date</a>
-              <a href={`/show/${show.slug}/calendar.ics`}>📅 Calendar</a>
-            </nav>
-            <ProviderLine row={show} region={visitorRegion(c)} />
-            <RateInline kind="tv" refId={String(show.id)} stat={stat} />
-            {show.blurb ? <p class="blurb">{show.blurb}</p> : null}
-            {show.summary ? <div class="summary">{raw(show.summary)}</div> : null}
+            <div class="hero-backdrop" style={`background-image:url('${show.image_url}')`}></div>
+          ) : null}
+          <div class="detail-head">
+            {show.image_url ? (
+              <img class="poster" src={show.image_url} alt={show.name} />
+            ) : (
+              <div class="poster card-fallback">{show.name}</div>
+            )}
+            <div class="detail-info">
+              <h1>{show.name}</h1>
+              <p class="meta-strip">
+                <StatusBadge status={show.status} />
+                {show.premiered ? (
+                  <span>
+                    {show.premiered.slice(0, 4)}
+                    {show.ended
+                      ? `–${show.ended.slice(0, 4)}`
+                      : show.status === "Running"
+                        ? "–"
+                        : ""}
+                  </span>
+                ) : null}
+                {show.network || show.web_channel ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span>{show.network ?? show.web_channel}</span>
+                  </>
+                ) : null}
+                {(() => {
+                  const g: string[] = show.genres ? JSON.parse(show.genres) : [];
+                  return g.length ? (
+                    <>
+                      <span class="sep">·</span>
+                      <span>
+                        {g.slice(0, 3).map((x, i) => (
+                          <>
+                            {i > 0 ? ", " : ""}
+                            <a href={`/genre/${slugifyName(x)}`}>{x}</a>
+                          </>
+                        ))}
+                      </span>
+                    </>
+                  ) : null;
+                })()}
+                {show.runtime ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span>{show.runtime} min</span>
+                  </>
+                ) : null}
+                {show.rating != null ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span class="rating">★ {show.rating.toFixed(1)}</span>
+                  </>
+                ) : null}
+              </p>
+              <ProviderLine
+                row={show}
+                region={visitorRegion(c)}
+                fallbackHref={`/show/${show.slug}/release-date`}
+              />
+              <ShowPills slug={show.slug} imdbId={show.imdb_id} />
+              {show.blurb ? <p class="blurb">{show.blurb}</p> : null}
+              {show.summary ? <div class="summary">{raw(show.summary)}</div> : null}
+              <RateInline kind="tv" refId={String(show.id)} stat={stat} />
+            </div>
           </div>
-        </div>
-        {[...seasons.entries()].map(([season, eps]) => (
+        </header>
+        {(() => {
+          const nextEp = episodes.find((e) => e.airstamp && new Date(e.airstamp) > new Date());
+          return nextEp ? (
+            <p class="answer">
+              <span class="live-dot"></span>Next episode: <strong>{epCode(nextEp)}</strong>
+              {nextEp.name ? ` — ${nextEp.name}` : ""} · {nextEp.airdate}{" "}
+              <a href={`/show/${show.slug}/next-episode`}>countdown →</a>
+            </p>
+          ) : null;
+        })()}
+        {(() => {
+          const top3 = episodes
+            .filter((e) => e.rating != null)
+            .sort((a, b) => b.rating! - a.rating!)
+            .slice(0, 3);
+          return top3.length ? (
+            <section>
+              <h2>
+                Highest-rated episodes{" "}
+                <a class="more" href={`/show/${show.slug}/best-episodes`}>
+                  all ranked →
+                </a>
+              </h2>
+              <ol class="ep-list">
+                {top3.map((e) => (
+                  <li>
+                    <span class="muted">{epCode(e)}</span> {e.name}
+                    <span class="rating"> ★ {e.rating!.toFixed(1)}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ) : null;
+        })()}
+        {seasons.size ? (
           <section>
-            <h2>
-              <a href={`/show/${show.slug}/season/${season}`}>Season {season}</a>
-            </h2>
-            <ol class="ep-list">
-              {eps.map((e) => (
-                <li>
-                  <span class="muted">{epCode(e)}</span> {e.name}
-                  {e.rating != null ? <span class="rating"> ★ {e.rating.toFixed(1)}</span> : null}
-                  {e.airdate ? <span class="muted"> · {e.airdate}</span> : null}
-                </li>
-              ))}
-            </ol>
+            <h2>Episodes by season</h2>
+            {(() => {
+              const latest = Math.max(...seasons.keys());
+              return [...seasons.entries()].map(([season, eps]) => {
+                const rated = eps.filter((e) => e.rating != null);
+                const avg = rated.length
+                  ? rated.reduce((s, e) => s + e.rating!, 0) / rated.length
+                  : null;
+                const year = eps.find((e) => e.airdate)?.airdate?.slice(0, 4);
+                return (
+                  <details class="season-fold" open={season === latest}>
+                    <summary>
+                      Season {season}{" "}
+                      <span class="muted">
+                        — {eps.length} episode{eps.length === 1 ? "" : "s"}
+                        {year ? ` · ${year}` : ""}
+                        {avg != null ? ` · avg ★ ${avg.toFixed(1)}` : ""}
+                      </span>
+                    </summary>
+                    <ol class="ep-list">
+                      {eps.map((e) => (
+                        <li>
+                          <span class="muted">{epCode(e)}</span> {e.name}
+                          {e.rating != null ? (
+                            <span class="rating"> ★ {e.rating.toFixed(1)}</span>
+                          ) : null}
+                          {e.airdate ? <span class="muted"> · {e.airdate}</span> : null}
+                        </li>
+                      ))}
+                    </ol>
+                    <p>
+                      <a href={`/show/${show.slug}/season/${season}`}>
+                        Season {season} ranked & reviewed →
+                      </a>
+                    </p>
+                  </details>
+                );
+              });
+            })()}
           </section>
-        ))}
+        ) : null}
         {similar.length ? (
           <section>
             <h2>Shows like {show.name}</h2>
@@ -895,6 +1045,7 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
       <h1>
         <a href={`/show/${show.slug}`}>{show.name}</a> — Season {n}
       </h1>
+      <ShowPills slug={show.slug} imdbId={show.imdb_id} />
       <ol class="ep-list">
         {eps.map((e) => (
           <li>
@@ -989,6 +1140,7 @@ app.get("/show/:slug/essential", async (c) => {
         <h1>
           The essential episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
         </h1>
+        <ShowPills slug={show.slug} imdbId={show.imdb_id} />
         {picks.length === 0 ? (
           <p class="muted">
             Not enough rated episodes yet to build a reliable essential list — check back soon.
@@ -1108,6 +1260,7 @@ app.get("/show/:slug/ratings", async (c) => {
       <h1>
         <a href={`/show/${show.slug}`}>{show.name}</a>: episode ratings graph
       </h1>
+      <ShowPills slug={show.slug} imdbId={show.imdb_id} />
       {svg ? (
         <>
           <p class="muted">
@@ -1195,6 +1348,7 @@ const rankedPage =
             The {kind} episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
             {seasonLabel}
           </h1>
+          <ShowPills slug={show.slug} imdbId={show.imdb_id} />
           {show.blurb && kind === "best" ? <p class="blurb">{show.blurb}</p> : null}
           {seasons.length > 1 && seasons.length <= 30 ? (
             <p class="muted">
@@ -1289,6 +1443,7 @@ app.get("/show/:slug/next-episode", async (c) => {
       <h1>
         Next episode of <a href={`/show/${show.slug}`}>{show.name}</a>
       </h1>
+      <ShowPills slug={show.slug} imdbId={show.imdb_id} />
       {next ? (
         <div class="answer">
           <p>
@@ -1407,6 +1562,7 @@ app.get("/show/:slug/release-date", async (c) => {
           </>
         )}
       </h1>
+      <ShowPills slug={show.slug} imdbId={show.imdb_id} />
       <div class="answer">
         <p>
           <StatusBadge status={show.status} /> {answer}
@@ -1473,7 +1629,8 @@ app.get("/tonight", async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT e.*, s.name AS show_name, s.slug AS show_slug, s.network AS network
      FROM episodes e JOIN shows s ON s.id = e.show_id
-     WHERE date(e.airstamp) = date('now')
+     WHERE e.airstamp >= datetime('now','start of day')
+       AND e.airstamp < datetime('now','start of day','+1 day')
      ORDER BY e.airstamp`,
   ).all<TonightRow>();
 
@@ -1928,7 +2085,7 @@ app.get("/recommend", async (c) => {
 
   // Step 1: landing — search box + zero-typing quick picks.
   const [{ results: topShows }, { results: topMovies }] = await Promise.all([
-    db.prepare("SELECT id, name FROM shows ORDER BY weight DESC, rating DESC LIMIT 8").all<{ id: number; name: string }>(),
+    db.prepare("SELECT id, name FROM shows ORDER BY weight DESC LIMIT 8").all<{ id: number; name: string }>(),
     db.prepare("SELECT imdb_id, title FROM movies ORDER BY popularity DESC LIMIT 4").all<{ imdb_id: string; title: string }>(),
   ]);
   c.header("Cache-Control", "public, max-age=3600");
@@ -2055,15 +2212,58 @@ app.get("/lists", async (c) => {
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title="Directory — every chart, network & genre | TV Nightly"
+      title="Browse — every chart, network & genre | TV Nightly"
       description="All of TV Nightly in one place: charts, networks, TV and movie genres, fandom hubs, and watch-order guides."
       canonical={canonical(c)}
     >
-      <h1>Directory</h1>
+      <h1>Browse</h1>
       <section>
-        <h2>Charts</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="TOP"
+            title="Top TV shows"
+            desc="The highest-rated series we track, ranked honestly."
+            href="/top/tv"
+          />
+          <ExploreCard
+            icon="EPS"
+            title="All-time best episodes"
+            desc="The single greatest hours of television, across every show."
+            href="/best-episodes"
+          />
+          <ExploreCard
+            icon="FILM"
+            title="Top movies"
+            desc="The best films of all time, with where to stream them."
+            href="/movies/best"
+          />
+          <ExploreCard
+            icon="♥"
+            title="Most loved (community)"
+            desc="What TV Nightly visitors actually loved — voted here, not imported."
+            href="/loved"
+          />
+          <ExploreCard
+            icon="VS"
+            title="Compare two shows"
+            desc="Episode-by-episode rating history, head to head on one chart."
+            href="/compare"
+          />
+          <ExploreCard
+            icon="📋"
+            title="Watch-order guides"
+            desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
+            href="/watch-orders"
+          />
+        </div>
+      </section>
+      <section>
+        <h2>More charts</h2>
         <p class="quick-picks">
-          {CHARTS.map(([label, href]) => (
+          {CHARTS.filter(
+            ([, href]) =>
+              !["/top/tv", "/movies/best", "/best-episodes", "/loved", "/compare"].includes(href),
+          ).map(([label, href]) => (
             <a class="chip" href={href}>
               {label}
             </a>
@@ -2446,7 +2646,14 @@ app.get("/compare", async (c) => {
       <h1>Compare two shows</h1>
       <form method="get" action="/compare" class="picker-form">
         <label>
-          Show A <input type="search" name="a" value={qa} placeholder="Breaking Bad" required />
+          Show A{" "}
+          <input
+            type="search"
+            name="a"
+            value={showA?.name ?? qa}
+            placeholder="Breaking Bad"
+            required
+          />
         </label>
         <label>
           Show B <input type="search" name="b" value={qb} placeholder="The Wire" required />
@@ -2455,6 +2662,39 @@ app.get("/compare", async (c) => {
       </form>
       {(qa || qb) && (!showA || !showB) ? (
         <p class="muted">Couldn't find one of those shows — try different names.</p>
+      ) : null}
+      {showA && !showB ? (
+        <section>
+          <h2>Compare {showA.name} with…</h2>
+          <p class="quick-picks">
+            {(await similarShows(db, showA)).slice(0, 6).map((s) => (
+              <a class="chip" href={comparePathFor(showA.slug, s.slug)}>
+                {showA.name} vs {s.name}
+              </a>
+            ))}
+          </p>
+        </section>
+      ) : null}
+      {!showA && !showB ? (
+        <section>
+          <h2>Popular matchups</h2>
+          <p class="quick-picks">
+            {await (async () => {
+              const { results: tops } = await db
+                .prepare("SELECT slug, name, genres FROM shows ORDER BY weight DESC LIMIT 8")
+                .all<{ slug: string; name: string; genres: string | null }>();
+              // adjacent pairs by popularity — cheap, always-valid suggestions
+              return tops.slice(0, 6).map((s, i) => {
+                const other = tops[(i + 1) % tops.length];
+                return (
+                  <a class="chip" href={comparePathFor(s.slug, other.slug)}>
+                    {s.name} vs {other.name}
+                  </a>
+                );
+              });
+            })()}
+          </p>
+        </section>
       ) : null}
     </Layout>,
   );
@@ -2906,7 +3146,9 @@ app.get("/watch-order/:slug", async (c) => {
 
   const Row = ({ e, idx }: { e: FranchiseEntry; idx: number }) => {
     const m = movieFor(e);
-    const provs: string[] = m?.providers ? JSON.parse(m.providers) : [];
+    // providers_intl is the patrol-refreshed source; the legacy US-only
+    // movies.providers column freezes at seed time
+    const provs: string[] = m ? providersFor(m, "US").names : [];
     return (
       <li class="wo-row">
         <span class="wo-num">{idx + 1}</span>
@@ -3198,33 +3440,56 @@ app.get("/movie/:slug", async (c) => {
       ld={[ld]}
     >
       <article class="show-hub">
-        <div class="show-head">
+        <header class="detail-hero">
           {movie.poster_url ? (
-            <img class="poster" src={movie.poster_url} alt={movie.title} />
-          ) : (
-            <div class="poster card-fallback">{movie.title}</div>
-          )}
-          <div>
-            <h1>
-              {movie.title} {movie.year ? <span class="muted">({movie.year})</span> : null}
-            </h1>
-            <p>
-              {movie.rating != null ? <span class="rating">★ {movie.rating.toFixed(1)}</span> : null}
-              {movie.votes ? <span class="muted"> ({movie.votes.toLocaleString()} votes)</span> : null}
-              {movie.runtime ? <span class="muted"> · {movie.runtime} min</span> : null}
-              {genres.length ? <span class="muted"> · {genres.join(", ")}</span> : null}
-            </p>
-            <ProviderLine row={movie} region={visitorRegion(c)} />
-            {movie.overview ? <div class="summary">{movie.overview}</div> : null}
-            <RateInline kind="movie" refId={movie.imdb_id} stat={stat} />
-            <p>
-              <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} rel="noopener">
-                IMDb ↗
-              </a>{" "}
-              · <a href="/what-to-watch?type=movie">Pick me another 🎲</a>
-            </p>
+            <div class="hero-backdrop" style={`background-image:url('${movie.poster_url}')`}></div>
+          ) : null}
+          <div class="detail-head">
+            {movie.poster_url ? (
+              <img class="poster" src={movie.poster_url} alt={movie.title} />
+            ) : (
+              <div class="poster card-fallback">{movie.title}</div>
+            )}
+            <div class="detail-info">
+              <h1>{movie.title}</h1>
+              <p class="meta-strip">
+                {movie.year ? <span>{movie.year}</span> : null}
+                {genres.length ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span>{genres.slice(0, 3).join(", ")}</span>
+                  </>
+                ) : null}
+                {movie.runtime ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span>{movie.runtime} min</span>
+                  </>
+                ) : null}
+                {movie.rating != null ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span class="rating">★ {movie.rating.toFixed(1)}</span>
+                    {movie.votes ? <span> ({movie.votes.toLocaleString()})</span> : null}
+                  </>
+                ) : null}
+              </p>
+              <ProviderLine
+                row={movie}
+                region={visitorRegion(c)}
+                fallbackHref="/what-to-watch?type=movie"
+              />
+              <nav class="pill-nav">
+                <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} rel="noopener">
+                  IMDb ↗
+                </a>
+                <a href="/what-to-watch?type=movie">Pick me another 🎲</a>
+              </nav>
+              {movie.overview ? <div class="summary">{movie.overview}</div> : null}
+              <RateInline kind="movie" refId={movie.imdb_id} stat={stat} />
+            </div>
           </div>
-        </div>
+        </header>
         {simMovies.length ? (
           <section>
             <h2>Movies like {movie.title}</h2>
@@ -3770,6 +4035,23 @@ app.get("/whats-new", async (c) => {
         Our patrol re-checks availability around the clock and logs every change. Yesterday's
         catalog shuffle, today's news.
       </p>
+      <form method="get" action="/whats-new" class="sub-form">
+        <label for="region-sel" class="muted" style="flex-basis:auto;font-weight:400">
+          Wrong country?
+        </label>
+        <select
+          id="region-sel"
+          name="region"
+          onchange="this.form.submit()"
+          style="background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:0.35rem 0.5rem"
+        >
+          {REGIONS.map((r) => (
+            <option value={r} selected={r === region}>
+              {r}
+            </option>
+          ))}
+        </select>
+      </form>
       {results.length === 0 ? (
         <p class="muted">
           No changes logged for {region} yet — the patrol cycles the whole catalog every couple of
@@ -3973,21 +4255,22 @@ app.post("/api/vote", async (c) => {
 
 app.get("/search", async (c) => {
   const q = (c.req.query("q") ?? "").trim();
-  const { results } = q
-    ? await c.env.DB.prepare(
-        `SELECT * FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 20`,
-      )
-        .bind(q)
-        .all<ShowRow>()
-    : { results: [] as ShowRow[] };
-  const { results: movieResults } = q
-    ? await c.env.DB.prepare(
-        `SELECT * FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 12`,
-      )
-        .bind(q)
-        .all<MovieRow>()
-    : { results: [] as MovieRow[] };
+  const [{ results }, { results: movieResults }] = q
+    ? await Promise.all([
+        c.env.DB.prepare(
+          `SELECT * FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 20`,
+        )
+          .bind(q)
+          .all<ShowRow>(),
+        c.env.DB.prepare(
+          `SELECT * FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 12`,
+        )
+          .bind(q)
+          .all<MovieRow>(),
+      ])
+    : [{ results: [] as ShowRow[] }, { results: [] as MovieRow[] }];
 
+  c.header("Cache-Control", "public, max-age=300");
   return c.html(
     <Layout title={`Search: ${q} | TV Nightly`}>
       <h1>Search{q ? `: ${q}` : ""}</h1>
@@ -4216,7 +4499,7 @@ app.get("/sitemaps/:file", async (c) => {
 
   const urls = results
     .map((r) =>
-      ["", "/best-episodes", "/essential", "/ratings", "/next-episode", "/release-date"]
+      ["", "/best-episodes", "/worst-episodes", "/essential", "/ratings", "/next-episode", "/release-date"]
         .map((suffix) => `<url><loc>${site}/show/${r.slug}${suffix}</loc></url>`)
         .join(""),
     )
@@ -4281,10 +4564,11 @@ app.get("/privacy", (c) =>
         cookie-less, and not tied to your identity. We do not use tracking cookies and we do not
         sell or share personal data.
       </p>
-      <h2>Watch progress</h2>
+      <h2>Local storage</h2>
       <p>
-        Any "watched" marks are stored only in your browser's local storage — they never leave your
-        device.
+        After you vote on an episode, a small flag is kept in your browser's local storage purely
+        to prevent double-voting. It contains no identity, is never transmitted, and clearing your
+        browser data removes it.
       </p>
       <h2>Advertising</h2>
       <p>

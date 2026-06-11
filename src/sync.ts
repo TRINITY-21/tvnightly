@@ -527,7 +527,9 @@ export async function sendDailyDigest(env: SyncEnv): Promise<{ queued: number }>
       .prepare(
         `SELECT e.name AS ep, e.season, e.number, s.name, s.slug, s.network, s.web_channel
          FROM episodes e JOIN shows s ON s.id = e.show_id
-         WHERE date(e.airstamp) = date('now') ORDER BY s.weight DESC LIMIT 8`,
+         WHERE e.airstamp >= datetime('now','start of day')
+           AND e.airstamp < datetime('now','start of day','+1 day')
+         ORDER BY s.weight DESC LIMIT 8`,
       )
       .all<{ ep: string | null; season: number | null; number: number | null; name: string; slug: string; network: string | null; web_channel: string | null }>()
       .then((r) => r.results),

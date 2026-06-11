@@ -1006,6 +1006,91 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
   );
 });
 
+// The movie compare doorway — same anatomy as /compare for shows: resolve
+// names, redirect to the canonical matchup, help when only one side lands.
+app.get("/movies/compare", async (c) => {
+  const db = c.env.DB;
+  const resolve = async (q: string): Promise<MovieRow | null> => {
+    if (!q) return null;
+    return (
+      (await db.prepare("SELECT * FROM movies WHERE slug = ?").bind(q).first<MovieRow>()) ??
+      (await db
+        .prepare(
+          "SELECT * FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 1",
+        )
+        .bind(q)
+        .first<MovieRow>())
+    );
+  };
+  const qa = (c.req.query("a") ?? "").trim();
+  const qb = (c.req.query("b") ?? "").trim();
+  const [ma, mb] = await Promise.all([resolve(qa), resolve(qb)]);
+  if (ma && mb && ma.slug !== mb.slug)
+    return c.redirect(movieComparePathFor(ma.slug, mb.slug), 301);
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title="Compare two movies — head-to-head | TV Nightly"
+      description="Put two films side by side: ratings, votes, runtime and where to stream."
+      canonical={`${origin(c)}/movies/compare`}
+    >
+      <h1>Compare two movies</h1>
+      <form method="get" action="/movies/compare" class="picker-form">
+        <label>
+          Movie A{" "}
+          <input
+            type="search"
+            name="a"
+            value={ma?.title ?? qa}
+            placeholder="Inception"
+            required
+          />
+        </label>
+        <label>
+          Movie B <input type="search" name="b" value={qb} placeholder="Interstellar" required />
+        </label>
+        <button type="submit">Compare</button>
+      </form>
+      {(qa || qb) && (!ma || !mb) ? (
+        <p class="muted">Couldn't find one of those movies — try different names.</p>
+      ) : null}
+      {ma && !mb ? (
+        <section>
+          <h2>Compare {ma.title} with…</h2>
+          <p class="quick-picks">
+            {(await similarMovies(db, ma)).slice(0, 6).map((m) => (
+              <a class="chip" href={movieComparePathFor(ma.slug, m.slug)}>
+                {ma.title} vs {m.title}
+              </a>
+            ))}
+          </p>
+        </section>
+      ) : null}
+      {!ma && !mb ? (
+        <section>
+          <h2>Popular matchups</h2>
+          <p class="quick-picks">
+            {await (async () => {
+              const { results: tops } = await db
+                .prepare("SELECT slug, title FROM movies ORDER BY popularity DESC LIMIT 8")
+                .all<{ slug: string; title: string }>();
+              return tops.slice(0, 6).map((m, i) => {
+                const other = tops[(i + 1) % tops.length];
+                return (
+                  <a class="chip" href={movieComparePathFor(m.slug, other.slug)}>
+                    {m.title} vs {other.title}
+                  </a>
+                );
+              });
+            })()}
+          </p>
+        </section>
+      ) : null}
+    </Layout>,
+  );
+});
+
 // The matchup hub: every rival as a versus card, the tab's stable home.
 app.get("/movie/:slug/compare", async (c) => {
   const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
@@ -1133,6 +1218,20 @@ app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
     },
   ];
 
+  // The same mesh the show duel earns: each side's closest matches become
+  // the next matchup, deduped so shared rivals appear once.
+  const [simA, simB] = await Promise.all([
+    similarMovies(c.env.DB, a, 5),
+    similarMovies(c.env.DB, b, 5),
+  ]);
+  const seen = new Set([a.slug, b.slug]);
+  const moreFor = (anchor: MovieRow, sims: MovieRow[]) =>
+    sims
+      .filter((m) => !seen.has(m.slug) && seen.add(m.slug))
+      .slice(0, 4)
+      .map((m) => ({ anchor, other: m }));
+  const more = [...moreFor(a, simA), ...moreFor(b, simB)];
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
@@ -1153,8 +1252,18 @@ app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
       ]}
     >
       <h1>
-        {a.title} <span class="vs-v">vs</span> {b.title}
+        <a href={`/movie/${a.slug}`}>{a.title}</a> <span class="vs-v">vs</span>{" "}
+        <a href={`/movie/${b.slug}`}>{b.title}</a>
       </h1>
+      <form method="get" action="/movies/compare" class="picker-form">
+        <label>
+          Movie A <input type="search" name="a" value={a.title} required />
+        </label>
+        <label>
+          Movie B <input type="search" name="b" value={b.title} required />
+        </label>
+        <button type="submit">Compare</button>
+      </form>
       <div class="duel-board">
         <div class="duel-head">
           <a class="duel-side" href={`/movie/${a.slug}`}>
@@ -1183,6 +1292,18 @@ app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
           ))}
         </dl>
       </div>
+      {more.length > 0 ? (
+        <section>
+          <h2>More comparisons</h2>
+          <p class="quick-picks">
+            {more.map(({ anchor, other }) => (
+              <a class="chip" href={movieComparePathFor(anchor.slug, other.slug)}>
+                {anchor.title} vs {other.title}
+              </a>
+            ))}
+          </p>
+        </section>
+      ) : null}
       <section>
         <h2>Keep going</h2>
         <nav class="pill-nav">

@@ -3,6 +3,7 @@ import { Bindings, ShowRow, MovieRow } from "../types";
 import { slugifyName } from "../lib/format";
 import { canonical } from "../lib/seo";
 import { networkDirectory, genreDirectory } from "../lib/queries";
+import { visitorRegion, providerBrand } from "../lib/providers";
 import { VERTICALS } from "../lib/verticals";
 import { Layout } from "../components/Layout";
 import { ShowCard, MovieCard, ExploreCard } from "../components/cards";
@@ -274,23 +275,56 @@ app.get("/network/:slug", async (c) => {
     )
     .bind(entry.name, entry.name)
     .all<ShowRow>();
+  // streaming brands double as movie catalogs — surface their top films the
+  // way genre pages do; broadcast networks simply match nothing and skip it.
+  // LIKE is the coarse pass over the whole intl JSON; the visitor's region
+  // decides for real, so we never claim a catalog they don't have.
+  const region = visitorRegion(c);
+  const netBrand = providerBrand(entry.name);
+  const { results: filmPool } = await db
+    .prepare(
+      `SELECT * FROM movies WHERE providers_intl LIKE ? AND rating IS NOT NULL AND votes >= 1000
+       ORDER BY rating DESC, votes DESC LIMIT 60`,
+    )
+    .bind(`%"${entry.name}%`)
+    .all<MovieRow>();
+  const films = filmPool
+    .filter((m) => {
+      const intl: Record<string, string[]> = m.providers_intl ? JSON.parse(m.providers_intl) : {};
+      return (intl[region] ?? []).some((p) => providerBrand(p) === netBrand);
+    })
+    .slice(0, 12);
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title={`The best ${entry.name} shows — ranked | TV Nightly`}
-      description={`Every ${entry.name} show worth watching, ranked by rating, plus what's currently airing.`}
+      title={
+        films.length
+          ? `The best ${entry.name} shows & movies — ranked | TV Nightly`
+          : `The best ${entry.name} shows — ranked | TV Nightly`
+      }
+      description={`Every ${entry.name} ${films.length ? "show and movie" : "show"} worth watching, ranked by rating, plus what's currently airing.`}
       canonical={canonical(c)}
     >
       <h1>The best of {entry.name}</h1>
       <section>
-        <h2>Top-rated {entry.name} shows</h2>
+        <h2>Top {entry.name} shows</h2>
         <div class="grid">
           {best.map((s) => (
             <ShowCard show={s} />
           ))}
         </div>
       </section>
+      {films.length ? (
+        <section>
+          <h2>Top {entry.name} movies</h2>
+          <div class="grid">
+            {films.map((m) => (
+              <MovieCard movie={m} />
+            ))}
+          </div>
+        </section>
+      ) : null}
       {airing.length ? (
         <section>
           <h2>Currently running</h2>

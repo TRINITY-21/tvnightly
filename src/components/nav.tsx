@@ -12,7 +12,11 @@ export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current
     ["media", "Media", `/show/${slug}/media`],
     ["best", "Best episodes", `/show/${slug}/best-episodes`],
     ["ratings", "Ratings graph", `/show/${slug}/ratings`],
-    ["compare", "Compare", `/compare?a=${slug}`],
+    // Compare is a doorway, not a place you're "on" — it only shows from
+    // the main details page
+    ...(current === "overview"
+      ? ([["compare", "Compare", `/compare?a=${slug}`]] as [string, string, string][])
+      : []),
     ["release", "Release date", `/show/${slug}/release-date`],
     ["cast", "Cast", `/show/${slug}/cast`],
   ];
@@ -32,7 +36,11 @@ export const MovieTabs: FC<{ slug: string; current?: string }> = ({ slug, curren
   const tabs: [string, string, string][] = [
     ["overview", "Overview", `/movie/${slug}`],
     ["similar", "Similar movies", `/movie/${slug}/similar`],
-    ["compare", "Compare", `/movie/${slug}/compare`],
+    // same rule as shows: Compare only from the main details page — and on
+    // the compare doorway itself, where it's the active tab
+    ...(current === "overview" || current === "compare"
+      ? ([["compare", "Compare", `/movie/${slug}/compare`]] as [string, string, string][])
+      : []),
     ["media", "Media", `/movie/${slug}/media`],
     ["cast", "Cast", `/movie/${slug}/cast`],
   ];
@@ -48,8 +56,9 @@ export const MovieTabs: FC<{ slug: string; current?: string }> = ({ slug, curren
 };
 
 // Inside a season, the rail stays in that season: every tab carries the
-// ?season filter, and "All seasons" is the one exit back to show level.
-// Show-level-only concepts (next episode, release date, cast) don't appear.
+// ?season filter. "All seasons" drops the filter, not the page — it lands
+// on the unfiltered variant of wherever you stand. Only the overview exits
+// to the show page, because no all-seasons overview page exists.
 export const SeasonTabs: FC<{
   slug: string;
   season: number;
@@ -57,6 +66,13 @@ export const SeasonTabs: FC<{
   latest?: boolean;
 }> = ({ slug, season, current, latest }) => {
   const q = `?season=${season}`;
+  const allSeasons: Record<string, string> = {
+    best: `/show/${slug}/best-episodes`,
+    worst: `/show/${slug}/worst-episodes`,
+    essential: `/show/${slug}/essential`,
+    ratings: `/show/${slug}/ratings`,
+    cast: `/show/${slug}/cast`,
+  };
   const tabs: [string, string, string][] = [
     ["overview", `Season ${season} overview`, `/show/${slug}/season/${season}`],
     ["best", "Best episodes", `/show/${slug}/best-episodes${q}`],
@@ -80,7 +96,7 @@ export const SeasonTabs: FC<{
           {label}
         </a>
       ))}
-      <a class="chev-after" href={`/show/${slug}`}>
+      <a class="chev-after" href={allSeasons[current ?? ""] ?? `/show/${slug}`}>
         All seasons
       </a>
     </nav>

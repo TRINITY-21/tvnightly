@@ -288,6 +288,16 @@ const ShowTabs: FC<{ slug: string; imdbId?: string | null; current?: string }> =
 };
 
 const stripHtml = (s: string | null) => (s ?? "").replace(/<[^>]*>/g, "").trim();
+
+// Long synopses clamp to 3 lines with a pure-CSS show more/less toggle
+// (hidden checkbox — no JS; the label is the control).
+const ClampSummary: FC<PropsWithChildren<{ id: string }>> = ({ id, children }) => (
+  <div class="summary clampable">
+    <input type="checkbox" id={id} class="clamp-toggle" />
+    <div class="summary-text">{children}</div>
+    <label for={id} class="clamp-label" aria-label="Toggle full synopsis"></label>
+  </div>
+);
 const epCode = (e: EpisodeRow) =>
   `S${String(e.season ?? 0).padStart(2, "0")}E${String(e.number ?? 0).padStart(2, "0")}`;
 const airTime = (airstamp: string | null) =>
@@ -1209,7 +1219,13 @@ app.get("/show/:slug", async (c) => {
                 pickerType="tv"
               />
               
-              {show.summary ? <div class="summary">{raw(show.summary)}</div> : null}
+              {show.summary ? (
+                stripHtml(show.summary).length > 280 ? (
+                  <ClampSummary id="synopsis-clamp">{raw(show.summary)}</ClampSummary>
+                ) : (
+                  <div class="summary">{raw(show.summary)}</div>
+                )
+              ) : null}
               {show.blurb ? (
                 <aside class="blurb">
                   <span class="blurb-label">The TV Nightly take</span>
@@ -3907,7 +3923,13 @@ app.get("/movie/:slug", async (c) => {
                 </a>
                 <a href="/what-to-watch?type=movie">Pick me another</a>
               </nav>
-              {movie.overview ? <div class="summary">{movie.overview}</div> : null}
+              {movie.overview ? (
+                movie.overview.length > 280 ? (
+                  <ClampSummary id="synopsis-clamp">{movie.overview}</ClampSummary>
+                ) : (
+                  <div class="summary">{movie.overview}</div>
+                )
+              ) : null}
               <RateInline kind="movie" refId={movie.imdb_id} stat={stat} />
             </div>
           </div>

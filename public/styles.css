@@ -513,6 +513,39 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 
 .poster { width: 180px; border-radius: var(--radius-lg); box-shadow: var(--shadow-2); }
 .summary { max-width: 62ch; }
+/* 3-line synopsis clamp, pure CSS (checkbox toggle) */
+.clampable .summary-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.clampable .summary-text p { margin: 0 0 0.55em; }
+.clamp-toggle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.clamp-toggle:checked ~ .summary-text {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+.clamp-label {
+  display: inline-block;
+  margin-top: 0.3rem;
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.clamp-label::after { content: "Show more"; }
+.clamp-toggle:checked ~ .clamp-label::after { content: "Show less"; }
+.clamp-label:hover { text-decoration: underline; }
+.clamp-toggle:focus-visible ~ .clamp-label {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* season archive: collapsed digest, latest season open */
 .season-fold summary {

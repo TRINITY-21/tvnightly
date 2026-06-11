@@ -490,6 +490,55 @@ app.get("/show/:slug", async (c) => {
             </ol>
           </section>
         ) : null}
+        {similar.length ? (
+          <section id="head-to-head">
+            <h2>
+              Head-to-head{" "}
+              <a class="more" href={`/compare?a=${show.slug}`}>
+                pick any opponent
+              </a>
+            </h2>
+            <p class="dossier-method">
+              Stack {show.name}'s full episode-rating history against a rival, on one chart.
+            </p>
+            <div class="vs-grid">
+              {similar.slice(0, 3).map((s) => {
+                const a = posterSrc(show);
+                const b = posterSrc(s);
+                return (
+                  <a class="vs-card" href={comparePathFor(show.slug, s.slug)}>
+                    <span class="vs-posters" aria-hidden="true">
+                      {a ? (
+                        <img class="vs-p vs-p-a" src={a.src} alt="" width="64" height="96" loading="lazy" />
+                      ) : null}
+                      <span class="vs-badge">VS</span>
+                      {b ? (
+                        <img class="vs-p vs-p-b" src={b.src} alt="" width="64" height="96" loading="lazy" />
+                      ) : null}
+                    </span>
+                    <span class="vs-names">
+                      {show.name} <span class="vs-v">vs</span> {s.name}
+                    </span>
+                    <span class="vs-ratings">
+                      {show.rating != null ? (
+                        <span class="rating">★ {show.rating.toFixed(1)}</span>
+                      ) : (
+                        <span class="muted">—</span>
+                      )}
+                      <span class="muted">·</span>
+                      {s.rating != null ? (
+                        <span class="rating">★ {s.rating.toFixed(1)}</span>
+                      ) : (
+                        <span class="muted">—</span>
+                      )}
+                    </span>
+                    <span class="vs-cta chev-after">Full episode chart</span>
+                  </a>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
         {(() => {
           const genres: string[] = show.genres ? JSON.parse(show.genres) : [];
           const hub = hubForGenres(genres, null);
@@ -502,12 +551,6 @@ app.get("/show/:slug", async (c) => {
                 </a>
               </h2>
               <div class="explore-grid">
-                <ExploreCard
-                  icon="Matchup"
-                  title={`Compare ${show.name}`}
-                  desc="Stack its full episode-rating history against any other show, on one chart."
-                  href={`/compare?a=${show.slug}`}
-                />
                 <ExploreCard
                   icon="Shortcut"
                   title="The essential episodes"

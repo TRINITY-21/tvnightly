@@ -155,7 +155,7 @@ app.get("/show/:slug", async (c) => {
             </div>
           </div>
         </header>
-        <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="overview" />
+        <ShowTabs slug={show.slug} current="overview" />
         {(() => {
           const nextEp = episodes.find((e) => e.airstamp && new Date(e.airstamp) > new Date());
           return nextEp ? (
@@ -418,7 +418,7 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
       <h1>
         <a href={`/show/${show.slug}`}>{show.name}</a> — Season {n}
       </h1>
-      <ShowTabs slug={show.slug} imdbId={show.imdb_id} />
+      <ShowTabs slug={show.slug} />
       <ol class="ep-list">
         {eps.map((e) => (
           <li>

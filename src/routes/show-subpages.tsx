@@ -91,7 +91,7 @@ app.get("/show/:slug/essential", async (c) => {
         <h1>
           The essential episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
         </h1>
-        <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="essential" />
+        <ShowTabs slug={show.slug} current="essential" />
         {picks.length === 0 ? (
           <p class="muted">
             Not enough rated episodes yet to build a reliable essential list — check back soon.
@@ -211,7 +211,7 @@ app.get("/show/:slug/ratings", async (c) => {
       <h1>
         <a href={`/show/${show.slug}`}>{show.name}</a>: episode ratings graph
       </h1>
-      <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="ratings" />
+      <ShowTabs slug={show.slug} current="ratings" />
       {svg ? (
         <>
           <p class="muted">
@@ -299,7 +299,7 @@ const rankedPage =
             The {kind} episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
             {seasonLabel}
           </h1>
-          <ShowTabs slug={show.slug} imdbId={show.imdb_id} current={kind === "best" ? "best" : "worst"} />
+          <ShowTabs slug={show.slug} current={kind === "best" ? "best" : "worst"} />
           {show.blurb && kind === "best" ? <p class="blurb">{show.blurb}</p> : null}
           {seasons.length > 1 && seasons.length <= 30 ? (
             <p class="muted">
@@ -394,7 +394,7 @@ app.get("/show/:slug/next-episode", async (c) => {
       <h1>
         Next episode of <a href={`/show/${show.slug}`}>{show.name}</a>
       </h1>
-      <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="next" />
+      <ShowTabs slug={show.slug} current="next" />
       {next ? (
         <div class="answer">
           <p>
@@ -513,7 +513,7 @@ app.get("/show/:slug/release-date", async (c) => {
           </>
         )}
       </h1>
-      <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="release" />
+      <ShowTabs slug={show.slug} current="release" />
       <div class="answer">
         <p>
           <StatusBadge status={show.status} /> {answer}

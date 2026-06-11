@@ -1,11 +1,7 @@
 // Lateral navigation: show tab rail and sibling-page sub-nav.
 import { FC } from "hono/jsx";
 
-export const ShowTabs: FC<{ slug: string; imdbId?: string | null; current?: string }> = ({
-  slug,
-  imdbId,
-  current,
-}) => {
+export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current }) => {
   const tabs: [string, string, string][] = [
     ["overview", "Overview", `/show/${slug}`],
     ["best", "Best episodes", `/show/${slug}/best-episodes`],
@@ -24,11 +20,6 @@ export const ShowTabs: FC<{ slug: string; imdbId?: string | null; current?: stri
         </a>
       ))}
       <a href={`/show/${slug}/calendar.ics`}>📅 Calendar</a>
-      {imdbId ? (
-        <a class="chev-after" href={`https://www.imdb.com/title/${imdbId}/`} rel="noopener">
-          IMDb
-        </a>
-      ) : null}
     </nav>
   );
 };

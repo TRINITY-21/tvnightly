@@ -49,7 +49,7 @@ app.get("/show/:slug/cast", async (c) => {
       <h1>
         Cast of <a href={`/show/${show.slug}`}>{show.name}</a>
       </h1>
-      <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="cast" />
+      <ShowTabs slug={show.slug} current="cast" />
       {main.length ? (
         <>
           <h2>Main cast</h2>

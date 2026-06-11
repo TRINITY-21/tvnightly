@@ -516,16 +516,70 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 
 /* season archive: collapsed digest, latest season open */
 .season-fold summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   cursor: pointer;
-  padding: 0.5rem 0;
+  padding: 0.55rem 0;
   border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+.season-fold summary::-webkit-details-marker { display: none; }
+.season-fold summary::before {
+  content: "";
+  flex-shrink: 0;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform var(--speed) var(--ease);
+}
+.season-fold[open] summary::before { transform: rotate(45deg); }
+.fold-title {
   font-family: var(--display);
   font-stretch: 112%;
   font-weight: 600;
   font-size: 1rem;
 }
-.season-fold summary:hover { color: var(--accent); }
-.season-fold summary .muted { font-family: var(--body); font-weight: 400; font-size: 0.86rem; }
+.fold-stats { margin-left: auto; font-size: 0.85rem; }
+.season-fold summary:hover .fold-title { color: var(--accent); }
+
+/* hero gets title-sequence scale on detail pages */
+.detail-head h1 { font-size: clamp(1.8rem, 3.2vw, 2.3rem); }
+.detail-head .poster { width: 200px; }
+
+/* show tab rail: scrolls instead of wrapping, ride below the hero */
+.subnav-scroll {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  margin-top: 1rem;
+  scrollbar-width: none;
+}
+.subnav-scroll::-webkit-scrollbar { display: none; }
+.subnav-scroll a { white-space: nowrap; flex-shrink: 0; }
+
+/* top-3 episodes: editorial ranking numerals */
+.top3 { list-style: none; padding: 0; margin: 0; }
+.top3 li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.85rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.top3-num {
+  font-family: var(--display);
+  font-stretch: 110%;
+  font-weight: 750;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--accent);
+  opacity: 0.85;
+  min-width: 2.1rem;
+}
+.top3-name { flex: 1; min-width: 0; }
+.top3 .rating { font-weight: 600; }
 .blurb {
   border-left: 3px solid var(--accent);
   padding-left: 0.75rem;

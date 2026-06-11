@@ -254,23 +254,36 @@ const LogoMark: FC<{ size?: number }> = ({ size = 26 }) => (
 
 // Every /show/:slug/* page renders these so searchers landing on a subpage
 // (release-date, next-episode…) can move laterally without bouncing via the hub.
-const ShowPills: FC<{ slug: string; imdbId?: string | null }> = ({ slug, imdbId }) => (
-  <nav class="pill-nav">
-    <a href={`/show/${slug}`}>Overview</a>
-    <a href={`/show/${slug}/best-episodes`}>Best episodes</a>
-    <a href={`/show/${slug}/worst-episodes`}>Worst</a>
-    <a href={`/show/${slug}/essential`}>Essential</a>
-    <a href={`/show/${slug}/ratings`}>Ratings graph</a>
-    <a href={`/show/${slug}/next-episode`}>Next episode</a>
-    <a href={`/show/${slug}/release-date`}>Release date</a>
-    <a href={`/show/${slug}/calendar.ics`}>📅 Calendar</a>
-    {imdbId ? (
-      <a href={`https://www.imdb.com/title/${imdbId}/`} rel="noopener">
-        IMDb ↗
-      </a>
-    ) : null}
-  </nav>
-);
+const ShowTabs: FC<{ slug: string; imdbId?: string | null; current?: string }> = ({
+  slug,
+  imdbId,
+  current,
+}) => {
+  const tabs: [string, string, string][] = [
+    ["overview", "Overview", `/show/${slug}`],
+    ["best", "Best episodes", `/show/${slug}/best-episodes`],
+    ["worst", "Worst", `/show/${slug}/worst-episodes`],
+    ["essential", "Essential", `/show/${slug}/essential`],
+    ["ratings", "Ratings graph", `/show/${slug}/ratings`],
+    ["next", "Next episode", `/show/${slug}/next-episode`],
+    ["release", "Release date", `/show/${slug}/release-date`],
+  ];
+  return (
+    <nav class="subnav subnav-scroll">
+      {tabs.map(([key, label, href]) => (
+        <a href={href} class={key === current ? "active" : ""}>
+          {label}
+        </a>
+      ))}
+      <a href={`/show/${slug}/calendar.ics`}>📅 Calendar</a>
+      {imdbId ? (
+        <a href={`https://www.imdb.com/title/${imdbId}/`} rel="noopener">
+          IMDb ↗
+        </a>
+      ) : null}
+    </nav>
+  );
+};
 
 const stripHtml = (s: string | null) => (s ?? "").replace(/<[^>]*>/g, "").trim();
 const epCode = (e: EpisodeRow) =>
@@ -1193,13 +1206,14 @@ app.get("/show/:slug", async (c) => {
                 fallbackHref={`/show/${show.slug}/release-date`}
                 pickerType="tv"
               />
-              <ShowPills slug={show.slug} imdbId={show.imdb_id} />
+              
               {show.blurb ? <p class="blurb">{show.blurb}</p> : null}
               {show.summary ? <div class="summary">{raw(show.summary)}</div> : null}
               <RateInline kind="tv" refId={String(show.id)} stat={stat} />
             </div>
           </div>
         </header>
+        <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="overview" />
         {(() => {
           const nextEp = episodes.find((e) => e.airstamp && new Date(e.airstamp) > new Date());
           return nextEp ? (
@@ -1223,11 +1237,14 @@ app.get("/show/:slug", async (c) => {
                   all ranked →
                 </a>
               </h2>
-              <ol class="ep-list">
-                {top3.map((e) => (
+              <ol class="top3">
+                {top3.map((e, i) => (
                   <li>
-                    <span class="muted">{epCode(e)}</span> {e.name}
-                    <span class="rating"> ★ {e.rating!.toFixed(1)}</span>
+                    <span class="top3-num">{String(i + 1).padStart(2, "0")}</span>
+                    <span class="top3-name">
+                      {e.name} <span class="muted">{epCode(e)}</span>
+                    </span>
+                    <span class="rating">★ {e.rating!.toFixed(1)}</span>
                   </li>
                 ))}
               </ol>
@@ -1248,9 +1265,9 @@ app.get("/show/:slug", async (c) => {
                 return (
                   <details class="season-fold" open={season === latest}>
                     <summary>
-                      Season {season}{" "}
-                      <span class="muted">
-                        — {eps.length} episode{eps.length === 1 ? "" : "s"}
+                      <span class="fold-title">Season {season}</span>
+                      <span class="fold-stats muted">
+                        {eps.length} episode{eps.length === 1 ? "" : "s"}
                         {year ? ` · ${year}` : ""}
                         {avg != null ? ` · avg ★ ${avg.toFixed(1)}` : ""}
                       </span>
@@ -1419,7 +1436,7 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
       <h1>
         <a href={`/show/${show.slug}`}>{show.name}</a> — Season {n}
       </h1>
-      <ShowPills slug={show.slug} imdbId={show.imdb_id} />
+      <ShowTabs slug={show.slug} imdbId={show.imdb_id} />
       <ol class="ep-list">
         {eps.map((e) => (
           <li>
@@ -1514,7 +1531,7 @@ app.get("/show/:slug/essential", async (c) => {
         <h1>
           The essential episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
         </h1>
-        <ShowPills slug={show.slug} imdbId={show.imdb_id} />
+        <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="essential" />
         {picks.length === 0 ? (
           <p class="muted">
             Not enough rated episodes yet to build a reliable essential list — check back soon.
@@ -1634,7 +1651,7 @@ app.get("/show/:slug/ratings", async (c) => {
       <h1>
         <a href={`/show/${show.slug}`}>{show.name}</a>: episode ratings graph
       </h1>
-      <ShowPills slug={show.slug} imdbId={show.imdb_id} />
+      <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="ratings" />
       {svg ? (
         <>
           <p class="muted">
@@ -1722,7 +1739,7 @@ const rankedPage =
             The {kind} episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
             {seasonLabel}
           </h1>
-          <ShowPills slug={show.slug} imdbId={show.imdb_id} />
+          <ShowTabs slug={show.slug} imdbId={show.imdb_id} current={kind === "best" ? "best" : "worst"} />
           {show.blurb && kind === "best" ? <p class="blurb">{show.blurb}</p> : null}
           {seasons.length > 1 && seasons.length <= 30 ? (
             <p class="muted">
@@ -1817,7 +1834,7 @@ app.get("/show/:slug/next-episode", async (c) => {
       <h1>
         Next episode of <a href={`/show/${show.slug}`}>{show.name}</a>
       </h1>
-      <ShowPills slug={show.slug} imdbId={show.imdb_id} />
+      <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="next" />
       {next ? (
         <div class="answer">
           <p>
@@ -1936,7 +1953,7 @@ app.get("/show/:slug/release-date", async (c) => {
           </>
         )}
       </h1>
-      <ShowPills slug={show.slug} imdbId={show.imdb_id} />
+      <ShowTabs slug={show.slug} imdbId={show.imdb_id} current="release" />
       <div class="answer">
         <p>
           <StatusBadge status={show.status} /> {answer}

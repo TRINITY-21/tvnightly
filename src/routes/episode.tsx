@@ -7,7 +7,6 @@ import { stripHtml, epCode, epHref, longDate, slugifyName } from "../lib/format"
 import { origin, canonical } from "../lib/seo";
 import { getShow } from "../lib/queries";
 import { Layout } from "../components/Layout";
-import { SeasonTabs } from "../components/nav";
 import { ChevUp, ChevDown } from "../components/icons";
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -150,8 +149,9 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             <div class="detail-info">
               <p class="ep-eyebrow">
                 <a href={`/show/${show.slug}`}>{show.name}</a>
-                <span class="sep">·</span> Season {seasonNo} <span class="sep">·</span> Episode{" "}
-                {epNo}
+                <span class="sep">·</span>{" "}
+                <a href={`/show/${show.slug}/season/${seasonNo}`}>Season {seasonNo}</a>{" "}
+                <span class="sep">·</span> Episode {epNo}
               </p>
               <h1>{ep.name ?? code}</h1>
               <p class="meta-strip">
@@ -196,7 +196,6 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             </div>
           </div>
         </header>
-        <SeasonTabs slug={show.slug} season={seasonNo} latest={seasonNo === Math.max(...episodes.map((e) => e.season ?? 0))} />
         {ep.rating != null && (seasonRank || seriesRank) ? (
           <section class="stat-band">
             {seasonRank ? (

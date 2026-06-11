@@ -989,7 +989,7 @@ app.get("/show/:slug/media", async (c) => {
         {backdrops.length ? (
           <section>
             <h2>Backdrops</h2>
-            <div class="media-backdrops">
+            <div class="media-backdrops" data-gallery-title={show.name} data-gallery-kind="Backdrop">
               {backdrops.map((p, i) => (
                 <a
                   class="media-art"
@@ -1017,7 +1017,7 @@ app.get("/show/:slug/media", async (c) => {
         {posters.length ? (
           <section>
             <h2>Posters</h2>
-            <div class="media-posters">
+            <div class="media-posters" data-gallery-title={show.name} data-gallery-kind="Poster">
               {posters.map((p, i) => (
                 <a
                   class="media-art"

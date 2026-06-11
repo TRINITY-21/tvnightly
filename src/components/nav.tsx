@@ -1,18 +1,17 @@
 // Lateral navigation: show tab rail and sibling-page sub-nav.
 import { FC } from "hono/jsx";
-import { IconCal } from "./icons";
 
+// One line, no horizontal scrolling: every cut tab kept a door elsewhere —
+// where-to-watch via the hero's "See all", next-episode via the overview
+// answer card, worst/essential via Best-episodes cross-links and the
+// Shortcut slate, the calendar via next-episode/release-date pages.
 export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current }) => {
   const tabs: [string, string, string][] = [
     ["overview", "Overview", `/show/${slug}`],
-    ["watch", "Where to watch", `/show/${slug}/where-to-watch`],
     ["similar", "Similar shows", `/show/${slug}/similar`],
     ["media", "Media", `/show/${slug}/media`],
     ["best", "Best episodes", `/show/${slug}/best-episodes`],
-    ["worst", "Worst", `/show/${slug}/worst-episodes`],
-    ["essential", "Essential", `/show/${slug}/essential`],
     ["ratings", "Ratings graph", `/show/${slug}/ratings`],
-    ["next", "Next episode", `/show/${slug}/next-episode`],
     ["release", "Release date", `/show/${slug}/release-date`],
     ["cast", "Cast", `/show/${slug}/cast`],
   ];
@@ -23,9 +22,6 @@ export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current
           {label}
         </a>
       ))}
-      <a href={`/show/${slug}/calendar.ics`}>
-        <IconCal /> Calendar
-      </a>
     </nav>
   );
 };

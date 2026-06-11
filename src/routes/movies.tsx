@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { Bindings, MovieRow } from "../types";
 import { franchiseOfMovie } from "../lib/franchises";
-import { visitorRegion, providersFor } from "../lib/providers";
+import { visitorRegion, providersFor, REGIONS, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
 import { slugifyName, heroBg, stripHtml } from "../lib/format";
-import { tmdbMovieBackdrop, tmdbMovieMedia } from "../lib/tmdb";
+import { tmdbMovieBackdrop, tmdbMovieMedia, tmdbMovieCast } from "../lib/tmdb";
 import { MovieTabs } from "../components/nav";
 import { IconPlay } from "../components/icons";
 import { origin, canonical } from "../lib/seo";
@@ -181,12 +181,26 @@ app.get("/movie/:slug", async (c) => {
     ...(movie.release_date ? { datePublished: movie.release_date } : {}),
   };
 
-  // the movie's real designed backdrop (TMDB takes the IMDb id directly);
-  // the blurred poster stays as ambient fallback
-  const backdrop = c.env.TMDB_API_KEY
-    ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id)
-    : null;
+  // the movie's real designed backdrop + billed cast (TMDB takes the IMDb id
+  // directly; both ride one edge-cached bundle). Blurred poster = fallback.
+  const [backdrop, cast] = c.env.TMDB_API_KEY
+    ? await Promise.all([
+        tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id),
+        tmdbMovieCast(c.env.TMDB_API_KEY, movie.imdb_id, 8),
+      ])
+    : [null, []];
   const heroFrame = backdrop ? heroBg(backdrop.x1, backdrop.x2) : null;
+  // link the actors we already track (scoped to this movie's enriched credits)
+  const linkable = new Map<string, number>();
+  if (cast.length) {
+    const { results } = await c.env.DB.prepare(
+      `SELECT p.id, p.name FROM movie_credits mc JOIN people p ON p.id = mc.person_id
+       WHERE mc.movie_id = ?`,
+    )
+      .bind(movie.imdb_id)
+      .all<{ id: number; name: string }>();
+    for (const r of results) linkable.set(r.name.toLowerCase(), r.id);
+  }
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -245,9 +259,10 @@ app.get("/movie/:slug", async (c) => {
               </p>
               <ProviderLine
                 row={movie}
-                region={visitorRegion(c)}
+                region={region}
                 fallbackHref="/what-to-watch?type=movie"
                 pickerType="movie"
+                allHref={`/movie/${movie.slug}/where-to-watch`}
               />
               {movie.overview ? (
                 movie.overview.length > 280 ? (
@@ -260,6 +275,43 @@ app.get("/movie/:slug", async (c) => {
           </div>
         </header>
         <MovieTabs slug={movie.slug} current="overview" />
+        {cast.length ? (
+          <section id="cast">
+            <h2>
+              Cast
+              <a class="more" href={`/movie/${movie.slug}/cast`}>
+                full cast & details
+              </a>
+            </h2>
+            <div class="cast-row">
+              {cast.map((p) => {
+                const id = linkable.get(p.name.toLowerCase());
+                const inner = (
+                  <>
+                    {p.profile_path ? (
+                      <img
+                        src={`https://image.tmdb.org/t/p/w342${p.profile_path}`}
+                        alt={p.name}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div class="cast-fallback">{p.name}</div>
+                    )}
+                    <span class="cast-name">{p.name}</span>
+                    {p.character ? <span class="cast-char muted">{p.character}</span> : null}
+                  </>
+                );
+                return id ? (
+                  <a class="cast-card" href={`/person/${slugifyName(p.name)}-${id}`}>
+                    {inner}
+                  </a>
+                ) : (
+                  <div class="cast-card">{inner}</div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
         {simMovies.length ? (
           <section id="similar">
             <h2>
@@ -669,6 +721,241 @@ app.get("/movie/:slug/media", async (c) => {
             </a>
             <a class="chev-after" href="/movies/best">
               Best movies
+            </a>
+          </nav>
+        </section>
+      </article>
+    </Layout>,
+  );
+});
+
+// Full billed cast, linked into our person pages where we track the actor.
+app.get("/movie/:slug/cast", async (c) => {
+  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
+    .bind(c.req.param("slug"))
+    .first<MovieRow>();
+  if (!movie) return c.notFound();
+  const cast = c.env.TMDB_API_KEY
+    ? await tmdbMovieCast(c.env.TMDB_API_KEY, movie.imdb_id, 24)
+    : [];
+  const linkable = new Map<string, number>();
+  if (cast.length) {
+    const { results } = await c.env.DB.prepare(
+      `SELECT p.id, p.name FROM movie_credits mc JOIN people p ON p.id = mc.person_id
+       WHERE mc.movie_id = ?`,
+    )
+      .bind(movie.imdb_id)
+      .all<{ id: number; name: string }>();
+    for (const r of results) linkable.set(r.name.toLowerCase(), r.id);
+  }
+  const site = origin(c);
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${movie.title} cast — who's in it | TV Nightly`}
+      description={
+        cast.length
+          ? `The cast of ${movie.title}: ${cast
+              .slice(0, 5)
+              .map((p) => p.name)
+              .join(", ")} — with roles.`
+          : `The cast of ${movie.title}.`
+      }
+      canonical={`${site}/movie/${movie.slug}/cast`}
+      ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+    >
+      <h1>
+        Cast of <a href={`/movie/${movie.slug}`}>{movie.title}</a>
+      </h1>
+      <MovieTabs slug={movie.slug} current="cast" />
+      {cast.length ? (
+        <>
+          <p class="muted">{cast.length} credited, in billing order.</p>
+          <div class="cast-grid">
+            {cast.map((p) => {
+              const id = linkable.get(p.name.toLowerCase());
+              const img = p.profile_path
+                ? `https://image.tmdb.org/t/p/w342${p.profile_path}`
+                : null;
+              const inner = (
+                <>
+                  {img ? (
+                    <img
+                      src={img}
+                      srcset={`${img} 1x, https://image.tmdb.org/t/p/w500${p.profile_path} 2x`}
+                      alt={p.name}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div class="cast-fallback">{p.name}</div>
+                  )}
+                  <div class="cast-tile-body">
+                    <strong>{p.name}</strong>
+                    {p.character ? <span class="cast-char">as {p.character}</span> : null}
+                  </div>
+                </>
+              );
+              return id ? (
+                <a class="cast-tile" href={`/person/${slugifyName(p.name)}-${id}`}>
+                  {inner}
+                </a>
+              ) : (
+                <div class="cast-tile">{inner}</div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <p class="muted">Cast data isn't available for this film yet.</p>
+      )}
+    </Layout>,
+  );
+});
+
+// Where to watch, region by region — the movie counterpart of the show page.
+app.get("/movie/:slug/where-to-watch", async (c) => {
+  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
+    .bind(c.req.param("slug"))
+    .first<MovieRow>();
+  if (!movie) return c.notFound();
+  const base = `/movie/${movie.slug}/where-to-watch`;
+  const reqRegion = (c.req.query("region") ?? "").trim().toUpperCase();
+  if (reqRegion && !REGIONS.includes(reqRegion)) return c.redirect(base, 301);
+  const region = reqRegion || visitorRegion(c);
+  const intl: Record<string, string[]> = movie.providers_intl
+    ? JSON.parse(movie.providers_intl)
+    : {};
+  const names = intl[region] ?? [];
+  const elsewhere = REGIONS.filter((r) => r !== region && intl[r]?.length);
+
+  const backdrop = c.env.TMDB_API_KEY
+    ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id)
+    : null;
+  const heroFrame = backdrop ? heroBg(backdrop.x1, backdrop.x2) : null;
+  const site = origin(c);
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`Where to watch ${movie.title} — streaming options | TV Nightly`}
+      description={
+        names.length
+          ? `${movie.title} is streaming on ${names.slice(0, 4).join(", ")} in ${region}. Every service and region.`
+          : `Where ${movie.title} is streaming, region by region.`
+      }
+      canonical={`${site}${base}`}
+      ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+    >
+      <article class="show-hub">
+        <header class={heroFrame ? "detail-hero frame-hero" : "detail-hero"}>
+          {heroFrame ? (
+            <div class="hero-backdrop" style={heroFrame}></div>
+          ) : movie.poster_url ? (
+            <div class="hero-backdrop" style={`background-image:url('${movie.poster_url}')`}></div>
+          ) : null}
+          <div class="detail-head">
+            {movie.poster_url ? (
+              <img
+                class="poster"
+                src={movie.poster_url}
+                srcset={`${movie.poster_url} 1x, ${movie.poster_url.replace("/w342/", "/w780/")} 2x`}
+                alt={movie.title}
+              />
+            ) : (
+              <div class="poster card-fallback">{movie.title}</div>
+            )}
+            <div class="detail-info">
+              <p class="ep-eyebrow">
+                <a href={`/movie/${movie.slug}`}>{movie.title}</a>
+                <span class="sep">·</span> Streaming guide
+              </p>
+              <h1>Where to watch {movie.title}</h1>
+              <p class="summary">{stripHtml(movie.overview ?? "").slice(0, 180)}</p>
+              {/* explicit submit, no onchange (WCAG 3.2.2); works without JS */}
+              <form method="get" action={base} class="sub-form watch-region">
+                <label for="wr-region" class="muted" style="flex-basis:auto;font-weight:400">
+                  Showing options for
+                </label>
+                <select
+                  id="wr-region"
+                  name="region"
+                  style="background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:0.35rem 0.5rem"
+                >
+                  {REGIONS.map((r) => (
+                    <option value={r} selected={r === region}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit">Go</button>
+              </form>
+            </div>
+          </div>
+        </header>
+        <MovieTabs slug={movie.slug} current="watch" />
+        <section>
+          <h2>Streaming in {region}</h2>
+          {names.length ? (
+            <ul class="watch-list">
+              {names.map((n) => (
+                <li class="watch-row">
+                  {PROVIDER_LOGOS[n] ? (
+                    <img
+                      class="watch-logo"
+                      src={PROVIDER_LOGOS[n]}
+                      alt=""
+                      width="44"
+                      height="44"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span class="watch-logo watch-logo-fallback" aria-hidden="true">
+                      {n.slice(0, 1)}
+                    </span>
+                  )}
+                  <span class="watch-name">{n}</span>
+                  <a
+                    class="chev-after watch-more"
+                    href={`/what-to-watch?type=movie&service=${encodeURIComponent(providerBrand(n))}`}
+                  >
+                    More on {providerBrand(n)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="muted">
+              Not on a subscription service in {region} right now.{" "}
+              <a class="chev-after" href="/what-to-watch?type=movie">
+                Find one that is streaming
+              </a>
+            </p>
+          )}
+          {elsewhere.length ? (
+            <p class="watch-elsewhere">
+              <span class="muted">Also streaming in:</span>{" "}
+              {elsewhere.map((r, i) => (
+                <>
+                  {i > 0 ? " · " : ""}
+                  <a href={`${base}?region=${r}`}>{r}</a>
+                </>
+              ))}
+            </p>
+          ) : null}
+          <p class="muted watch-src">
+            Streaming data via JustWatch/TMDB, refreshed with the monthly catalog seeds.
+          </p>
+        </section>
+        <section>
+          <h2>Keep going</h2>
+          <nav class="pill-nav">
+            <a class="chev-after" href={`/movie/${movie.slug}`}>
+              {movie.title} overview
+            </a>
+            <a class="chev-after" href={`/movie/${movie.slug}/similar`}>
+              Movies like {movie.title}
+            </a>
+            <a class="chev-after" href="/what-to-watch?type=movie">
+              What should I watch tonight?
             </a>
           </nav>
         </section>

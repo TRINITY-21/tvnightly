@@ -18,6 +18,15 @@ type RawBundle = {
       published_at?: string;
     }[];
   };
+  credits?: {
+    cast?: {
+      id: number;
+      name: string;
+      profile_path: string | null;
+      character?: string | null;
+      order?: number;
+    }[];
+  };
 };
 
 /** One call serves every TMDB presentation need for a title (base record +
@@ -28,13 +37,14 @@ async function bundle(
   kind: "tv" | "movie",
   id: number | string,
 ): Promise<RawBundle | null> {
-  const cacheKey = new Request(`https://edge-cache.tvnightly.com/media/${kind}/${id}`);
+  // v2: credits joined the bundle — new key so stale credit-less entries age out
+  const cacheKey = new Request(`https://edge-cache.tvnightly.com/media/v2/${kind}/${id}`);
   const cache = caches.default;
   try {
     let res = await cache.match(cacheKey);
     if (!res) {
       const live = await fetch(
-        `https://api.themoviedb.org/3/${kind}/${id}?api_key=${key}&append_to_response=images,videos&include_image_language=en,null`,
+        `https://api.themoviedb.org/3/${kind}/${id}?api_key=${key}&append_to_response=images,videos,credits&include_image_language=en,null`,
         { headers: { accept: "application/json" } },
       );
       if (!live.ok) return null;
@@ -118,6 +128,30 @@ export async function tmdbBackdrop(
 ): Promise<{ x1: string; x2: string } | null> {
   const data = await showBundle(key, tmdbId);
   return data ? pickBackdrop(data) : null;
+}
+
+export type TmdbCastEntry = {
+  name: string;
+  profile_path: string | null;
+  character: string | null;
+};
+
+/** The movie's billed cast, in billing order — same cached bundle. */
+export async function tmdbMovieCast(
+  key: string,
+  imdbId: string,
+  limit = 24,
+): Promise<TmdbCastEntry[]> {
+  const data = await bundle(key, "movie", imdbId);
+  return (data?.credits?.cast ?? [])
+    .slice()
+    .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+    .slice(0, limit)
+    .map((p) => ({
+      name: p.name,
+      profile_path: p.profile_path,
+      character: p.character ?? null,
+    }));
 }
 
 /** Movie hero backdrop, same selection rules, keyed on the IMDb id. */

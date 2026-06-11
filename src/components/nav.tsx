@@ -32,6 +32,7 @@ export const MovieTabs: FC<{ slug: string; current?: string }> = ({ slug, curren
     ["overview", "Overview", `/movie/${slug}`],
     ["similar", "Similar movies", `/movie/${slug}/similar`],
     ["media", "Media", `/movie/${slug}/media`],
+    ["cast", "Cast", `/movie/${slug}/cast`],
   ];
   return (
     <nav class="subnav subnav-scroll">

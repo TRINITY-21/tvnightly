@@ -354,7 +354,18 @@ const Layout: FC<
     scripts?: string[];
     noindex?: boolean;
   }>
-> = (props) => (
+> = (props) => {
+  // active nav section, derived from the canonical URL every page already sets
+  const path = (() => {
+    try {
+      return props.canonical ? new URL(props.canonical).pathname : "";
+    } catch {
+      return "";
+    }
+  })();
+  const navClass = (prefixes: string[]) =>
+    prefixes.some((p) => path === p || path.startsWith(p + "/")) ? "active" : "";
+  return (
   <html lang="en">
     <head>
       <meta charset="utf-8" />
@@ -387,10 +398,32 @@ const Layout: FC<
             </span>
           </a>
           <nav>
-            <a href="/tonight">Tonight</a>
-            <a href="/what-to-watch">What to watch</a>
-            <a href="/whats-new">News</a>
-            <a href="/lists">Browse</a>
+            <a href="/tonight" class={navClass(["/tonight", "/calendar", "/premieres"])}>
+              Tonight
+            </a>
+            <a href="/what-to-watch" class={navClass(["/what-to-watch", "/recommend"])}>
+              What to watch
+            </a>
+            <a href="/whats-new" class={navClass(["/whats-new", "/renewals"])}>
+              News
+            </a>
+            <a
+              href="/lists"
+              class={navClass([
+                "/lists",
+                "/top",
+                "/movies",
+                "/best-episodes",
+                "/loved",
+                "/watch-orders",
+                "/watch-order",
+                "/compare",
+                "/network",
+                "/genre",
+              ])}
+            >
+              Browse
+            </a>
           </nav>
           <form action="/search" method="get" class="search" role="search">
             <input
@@ -489,7 +522,8 @@ const Layout: FC<
       ))}
     </body>
   </html>
-);
+  );
+};
 
 // Sibling pages get tabs, not nav slots.
 const SubNav: FC<{ items: [string, string][]; current: string }> = ({ items, current }) => (
@@ -3919,6 +3953,27 @@ const COMPANY: Record<
   },
 };
 
+// Short filters are segmented radio pills, not dropdowns: every option visible,
+// one tap, zero JS, native keyboard semantics. Only long lists get a <select>.
+const FilterSeg: FC<{
+  label: string;
+  name: string;
+  current: string;
+  options: { value: string; text: string }[];
+}> = ({ label, name, current, options }) => (
+  <div class="watch-field">
+    <span class="watch-field-label">{label}</span>
+    <div class="seg">
+      {options.map((o) => (
+        <label class="seg-opt">
+          <input type="radio" name={name} value={o.value} checked={o.value === current} />
+          <span>{o.text}</span>
+        </label>
+      ))}
+    </div>
+  </div>
+);
+
 app.get("/what-to-watch", async (c) => {
   const db = c.env.DB;
   const type = c.req.query("type") === "movie" ? "movie" : "tv";
@@ -4109,6 +4164,7 @@ app.get("/what-to-watch", async (c) => {
       title="What should I watch tonight? — TV show picker | TV Nightly"
       description="Can't decide what to watch? Spin the picker: a great TV show matching your genre, rating, and episode-length filters."
       canonical={origin(c) + "/what-to-watch"}
+      scripts={["/js/dropdown.js"]}
     >
       <div class="watch-page">
         <header class="watch-head">
@@ -4119,84 +4175,75 @@ app.get("/what-to-watch", async (c) => {
         <form method="get" action="/what-to-watch" class="watch-bar">
           <div class="watch-bar-row">
             <div class="watch-bar-fields">
-            <label>
-              Format
-              {/* Filters are per-medium (movies: service; TV: status) to keep the
-                  form lean — auto-submit so switching reveals them immediately. */}
-              <select name="type" onchange="this.form.submit()">
-                <option value="tv" selected={type === "tv"}>
-                  TV show
-                </option>
-                <option value="movie" selected={type === "movie"}>
-                  Movie
-                </option>
-              </select>
-            </label>
-            <label>
-              Who's watching
-              <select name="who">
-                <option value="" selected={!who}>
-                  Anyone
-                </option>
-                {Object.entries(COMPANY).map(([key, cfg]) => (
-                  <option value={key} selected={who === key}>
-                    {cfg.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Genre
-              <select name="genre">
-                <option value="">Any</option>
-                {genreRows.map((r) => (
-                  <option value={r.g} selected={r.g === genre}>
-                    {r.g}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Rating
-              <select name="min">
-                <option value="" selected={!minRating}>
-                  Any
-                </option>
-                <option value="7" selected={minRating === 7}>
-                  7+
-                </option>
-                <option value="8" selected={minRating === 8}>
-                  8+
-                </option>
-              </select>
-            </label>
-            <label>
-              {type === "movie" ? "Length" : "Ep. length"}
-              <select name="runtime">
-                <option value="" selected={!runtimeBand}>
-                  Any
-                </option>
-                <option value="short" selected={runtimeBand === "short"}>
-                  ≤ {RUNTIME_CAPS[type].short}m
-                </option>
-                <option value="long" selected={runtimeBand === "long"}>
-                  ≤ {RUNTIME_CAPS[type].long}m
-                </option>
-              </select>
-            </label>
-            {serviceRows.length ? (
-              <label>
-                Streaming on ({region})
-                <select name="service">
+              <FilterSeg
+                label="Format"
+                name="type"
+                current={type}
+                options={[
+                  { value: "tv", text: "TV show" },
+                  { value: "movie", text: "Movie" },
+                ]}
+              />
+              <FilterSeg
+                label="Who's watching"
+                name="who"
+                current={who}
+                options={[
+                  { value: "", text: "Anyone" },
+                  ...Object.entries(COMPANY).map(([key, cfg]) => ({
+                    value: key,
+                    text: cfg.label,
+                  })),
+                ]}
+              />
+              <FilterSeg
+                label="Rating"
+                name="min"
+                current={minRating ? String(minRating) : ""}
+                options={[
+                  { value: "", text: "Any" },
+                  { value: "7", text: "7+" },
+                  { value: "8", text: "8+" },
+                ]}
+              />
+              <FilterSeg
+                label={type === "movie" ? "Length" : "Ep. length"}
+                name="runtime"
+                current={runtimeBand === "short" || runtimeBand === "long" ? runtimeBand : ""}
+                options={[
+                  { value: "", text: "Any" },
+                  { value: "short", text: `≤ ${RUNTIME_CAPS[type].short}m` },
+                  { value: "long", text: `≤ ${RUNTIME_CAPS[type].long}m` },
+                ]}
+              />
+              <div class="watch-field">
+                <span class="watch-field-label" id="genre-label">
+                  Genre
+                </span>
+                <select name="genre" data-fancy aria-labelledby="genre-label">
                   <option value="">Any</option>
-                  {serviceRows.map((r) => (
-                    <option value={r.p} selected={r.p === service}>
-                      {r.p}
+                  {genreRows.map((r) => (
+                    <option value={r.g} selected={r.g === genre}>
+                      {r.g}
                     </option>
                   ))}
                 </select>
-              </label>
-            ) : null}
+              </div>
+              {serviceRows.length ? (
+                <div class="watch-field">
+                  <span class="watch-field-label" id="service-label">
+                    Streaming on ({region})
+                  </span>
+                  <select name="service" data-fancy aria-labelledby="service-label">
+                    <option value="">Any</option>
+                    {serviceRows.map((r) => (
+                      <option value={r.p} selected={r.p === service}>
+                        {r.p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
             </div>
             {skipNext ? <input type="hidden" name="skip" value={skipNext} /> : null}
             <div class="watch-bar-actions">

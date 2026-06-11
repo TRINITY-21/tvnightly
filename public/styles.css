@@ -280,14 +280,41 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   -webkit-appearance: none;
   appearance: none;
 }
+/* nav speaks the display voice; the active section gets the standby LED */
 .site-header nav {
   display: flex;
-  gap: 0.95rem;
+  gap: 1.35rem;
   flex-wrap: wrap;
-  font-size: 0.86rem;
 }
-.site-header nav a { color: var(--muted); }
+.site-header nav a {
+  position: relative;
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  padding: 0.3rem 0;
+}
+.site-header nav a::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateX(-50%) scale(0);
+  transition: transform var(--speed) var(--ease);
+}
 .site-header nav a:hover { color: var(--text); text-decoration: none; }
+.site-header nav a.active { color: var(--text); }
+.site-header nav a.active::after {
+  transform: translateX(-50%) scale(1);
+  box-shadow: var(--glow);
+}
 
 .search .ta-box {
   position: absolute;
@@ -727,16 +754,17 @@ button, .verdict-btn {
   gap: 0.9rem;
   padding: 1.05rem 1.2rem 1.1rem;
 }
-/* aligned columns, equal heights — no ragged holes */
 .watch-bar-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.25rem, 1fr));
-  gap: 0.65rem 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.95rem 1.5rem;
+  align-items: flex-end;
 }
-.watch-bar label {
+.watch-bar label,
+.watch-field {
   display: flex;
   flex-direction: column;
-  gap: 0.28rem;
+  gap: 0.3rem;
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -744,10 +772,56 @@ button, .verdict-btn {
   color: var(--muted);
   min-width: 0;
 }
+.watch-field-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* segmented pills: every option visible, one tap, no dropdown */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.seg-opt { position: relative; display: inline-flex; }
+.seg-opt input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.seg-opt span {
+  display: inline-block;
+  padding: 0.34rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.83rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--speed) var(--ease), background-color var(--speed) var(--ease);
+}
+.seg-opt:hover span { color: var(--text); }
+.seg-opt input:checked + span {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 650;
+}
+.seg-opt input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .watch-bar select {
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
+  min-width: 11rem;
   background:
     var(--bg)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23a39e97' d='M1 1l4 4 4-4'/%3E%3C/svg%3E")
@@ -766,6 +840,90 @@ button, .verdict-btn {
   border-color: rgba(255, 169, 77, 0.45);
   background-color: rgba(18, 18, 20, 0.85);
   outline: none;
+}
+
+/* ---- custom dropdown (enhanced <select data-fancy>, see js/dropdown.js) ---- */
+.dd { position: relative; }
+.dd > select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.dd-btn {
+  appearance: none;
+  width: 100%;
+  min-width: 11rem;
+  text-align: left;
+  background:
+    var(--bg)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23a39e97' d='M1 1l4 4 4-4'/%3E%3C/svg%3E")
+    no-repeat right 0.55rem center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 0.48rem 1.65rem 0.48rem 0.6rem;
+  font: inherit;
+  font-size: 0.85rem;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
+}
+.dd-btn:hover,
+.dd.open .dd-btn {
+  border-color: rgba(255, 169, 77, 0.45);
+  background-color: rgba(18, 18, 20, 0.85);
+}
+.dd-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 100%;
+  max-height: 16rem;
+  overflow: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  z-index: 30;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.dd.open .dd-list {
+  display: block;
+  animation: dd-pop 0.14s var(--ease);
+}
+@keyframes dd-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.dd-list li {
+  padding: 0.42rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
+  white-space: nowrap;
+}
+.dd-list li.dd-active {
+  background: rgba(255, 169, 77, 0.14);
+}
+.dd-list li[aria-selected="true"] {
+  color: var(--accent);
+  font-weight: 600;
 }
 .watch-bar-actions {
   display: flex;

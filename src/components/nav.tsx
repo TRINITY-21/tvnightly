@@ -17,6 +17,11 @@ export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current
     ...(current === "overview"
       ? ([["compare", "Compare", `/compare?a=${slug}`]] as [string, string, string][])
       : []),
+    // next-episode is reached through the overview answer card; when you're
+    // there, the rail shows where you are
+    ...(current === "next"
+      ? ([["next", "Next episode", `/show/${slug}/next-episode`]] as [string, string, string][])
+      : []),
     ["release", "Release date", `/show/${slug}/release-date`],
     ["cast", "Cast", `/show/${slug}/cast`],
   ];

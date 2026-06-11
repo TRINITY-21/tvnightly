@@ -1,0 +1,135 @@
+/* ============================================================
+   The schedule slates — next-episode and release-date answers.
+   One question per page; the slate answers it in the broadcast
+   voice: chyron qualifies, the title IS the answer, the count
+   band makes it live.
+   ============================================================ */
+
+.slate {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+  margin: 1.1rem 0 1.4rem;
+}
+.slate.has-media {
+  display: grid;
+  grid-template-columns: minmax(240px, 384px) 1fr;
+}
+.slate-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  aspect-ratio: 16 / 9;
+}
+/* poster variant: a one-sheet column instead of a wide still. The image
+   fills the row, so anchor the crop to the top — key art carries its faces
+   in the upper half; never decapitate them. */
+.slate.has-media.is-poster { grid-template-columns: 190px 1fr; }
+.slate.is-poster .slate-media img { aspect-ratio: auto; object-position: top center; }
+.slate-body {
+  padding: 1.15rem 1.4rem 1.25rem;
+  min-width: 0;
+}
+
+.slate-chyron {
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+.slate-chyron strong { color: var(--text); font-weight: 700; }
+
+/* the answer itself — a date or an episode name in the display voice */
+.slate-title {
+  margin: 0.4rem 0 0.45rem;
+  font-family: var(--display);
+  font-stretch: 116%;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  font-size: clamp(1.5rem, 4.2vw, 2.3rem);
+  line-height: 1.05;
+}
+.slate-sub {
+  margin: 0;
+  color: var(--muted);
+  max-width: 62ch;
+}
+.slate-sub strong { color: var(--text); }
+.slate-sub .badge { vertical-align: 0.08em; margin-right: 0.15rem; }
+
+/* ---- the live count band: stat-band grammar, ticking ---- */
+.count-band {
+  display: flex;
+  gap: 2.4rem;
+  border-top: 1px solid var(--line);
+  margin-top: 1.05rem;
+  padding-top: 0.9rem;
+}
+.count { display: flex; flex-direction: column; gap: 0.12rem; }
+.count-num {
+  font-family: var(--display);
+  font-stretch: 110%;
+  font-weight: 750;
+  font-size: 2.1rem;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.count-label {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.count-band.count-live { border-top: none; padding-top: 0.2rem; }
+.count-now {
+  font-family: var(--display);
+  font-stretch: 112%;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 1.3rem;
+  color: var(--accent);
+}
+
+/* ---- season premiere ledger: the receipts ---- */
+.premiere-ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.premiere-ledger li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.5rem 0.1rem;
+  border-bottom: 1px solid var(--line);
+}
+.premiere-ledger a { color: inherit; font-weight: 600; }
+.premiere-ledger a:hover { color: var(--accent); text-decoration: none; }
+.pl-leader {
+  flex: 1;
+  border-bottom: 1px dotted var(--line);
+  transform: translateY(-0.22em);
+}
+.pl-date {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .slate.has-media { grid-template-columns: 1fr; }
+  .slate-media img { max-height: 220px; }
+  .count-band { gap: 1.4rem; }
+  .count-num { font-size: 1.7rem; }
+}

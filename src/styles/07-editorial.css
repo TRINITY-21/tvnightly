@@ -176,14 +176,6 @@ a.ep-name:hover { color: var(--accent); text-decoration: none; }
   padding: 1rem 1.25rem;
   font-size: 1.05rem;
 }
-.countdown {
-  font-family: var(--display);
-  font-stretch: 110%;
-  font-size: 1.7rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--accent);
-}
 
 /* the standby LED, alive */
 .live-dot {

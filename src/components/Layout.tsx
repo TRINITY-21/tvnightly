@@ -3,7 +3,9 @@ import { FC, PropsWithChildren } from "hono/jsx";
 import { canonical, jsonLd } from "../lib/seo";
 import { VERTICALS } from "../lib/verticals";
 
-export const COUNTDOWN_JS = `<script>(function(){var el=document.getElementById('countdown');if(!el||!el.dataset.ts)return;var t=new Date(el.dataset.ts).getTime();function tick(){var d=t-Date.now();if(d<=0){el.textContent='Airing now';return}var s=Math.floor(d/1000);el.textContent=Math.floor(s/86400)+'d '+Math.floor(s%86400/3600)+'h '+Math.floor(s%3600/60)+'m '+(s%60)+'s';setTimeout(tick,1000)}tick()})();</script>`;
+// Live countdown band: four stat blocks ticking once a second. Renders "—"
+// placeholders until JS lands; flips to "Airing now" past zero.
+export const COUNTDOWN_JS = `<script>(function(){var b=document.querySelector('.count-band');if(!b||!b.dataset.ts)return;var t=new Date(b.dataset.ts).getTime();function q(u){return b.querySelector('[data-u="'+u+'"]')}function pad(v){return ('0'+v).slice(-2)}function tick(){var d=Math.floor((t-Date.now())/1000);if(d<=0){b.classList.add('count-live');b.innerHTML='<span class="count-now">Airing now</span>';return}q('d').textContent=Math.floor(d/86400);q('h').textContent=pad(Math.floor(d%86400/3600));q('m').textContent=pad(Math.floor(d%3600/60));q('s').textContent=pad(d%60);setTimeout(tick,1000)}tick()})();</script>`;
 
 // "Standby Glow" mark: a TV on standby — thin 16:9 frame, one crisp LED.
 // No blur filters: at header sizes they render as smear; a real standby

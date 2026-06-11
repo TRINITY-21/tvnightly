@@ -8,6 +8,7 @@ import { visitorRegion } from "../lib/providers";
 import { buildDossier } from "../lib/dossier";
 import { DossierRow } from "../components/dossier";
 import { Layout, COUNTDOWN_JS } from "../components/Layout";
+import { tmdbBackdrop } from "../lib/tmdb";
 import { ShowTabs, SeasonTabs } from "../components/nav";
 import { StatusBadge } from "../components/cards";
 import { SubscribeForm } from "../components/forms";
@@ -651,15 +652,87 @@ app.get("/show/:slug/worst-episodes", rankedPage("ASC"));
 
 // ---------------------------------------------------------- next episode
 
+// ---- the schedule slates: shared pieces for next-episode + release-date ----
+
+/** Four-block live countdown in the stat-band voice; COUNTDOWN_JS drives it. */
+const CountBand = ({ ts }: { ts: string }) => (
+  <div class="count-band" data-ts={ts}>
+    {(["Days", "Hours", "Minutes", "Seconds"] as const).map((u) => (
+      <div class="count">
+        <span class="count-num" data-u={u[0].toLowerCase()}>
+          —
+        </span>
+        <span class="count-label">{u}</span>
+      </div>
+    ))}
+  </div>
+);
+
+type SeasonFirst = { s: number; first: string };
+
+const seasonPremieres = async (db: D1Database, showId: number): Promise<SeasonFirst[]> => {
+  const { results } = await db
+    .prepare(
+      `SELECT season AS s, MIN(airdate) AS first FROM episodes
+       WHERE show_id = ? AND season IS NOT NULL AND airdate IS NOT NULL
+       GROUP BY season ORDER BY season DESC`,
+    )
+    .bind(showId)
+    .all<SeasonFirst>();
+  return results;
+};
+
+/** "9 of 13 seasons premiered in September" — only when the pattern is real
+ *  (3+ seasons sharing the mode month, and it covers half the run). */
+function premierePattern(firsts: SeasonFirst[]): { month: string; n: number; total: number } | null {
+  const months = firsts.map((f) => Number(f.first.slice(5, 7))).filter((m) => m >= 1 && m <= 12);
+  if (months.length < 3) return null;
+  const counts = new Map<number, number>();
+  for (const m of months) counts.set(m, (counts.get(m) ?? 0) + 1);
+  const [mode, n] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (n < 3 || n * 2 < months.length) return null;
+  const month = new Date(Date.UTC(2000, mode - 1, 1)).toLocaleString("en-US", { month: "long" });
+  return { month, n, total: months.length };
+}
+
 app.get("/show/:slug/next-episode", async (c) => {
   const show = await getShow(c.env.DB, c.req.param("slug"));
   if (!show) return c.notFound();
-  const next = await c.env.DB.prepare(
-    `SELECT * FROM episodes WHERE show_id = ? AND airstamp > datetime('now')
-     ORDER BY airstamp LIMIT 1`,
-  )
-    .bind(show.id)
-    .first<EpisodeRow>();
+  const [next, recentRes, similar] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT * FROM episodes WHERE show_id = ? AND airstamp > datetime('now')
+       ORDER BY airstamp LIMIT 1`,
+    )
+      .bind(show.id)
+      .first<EpisodeRow>(),
+    c.env.DB.prepare(
+      `SELECT * FROM episodes WHERE show_id = ? AND airstamp <= datetime('now')
+       ORDER BY airstamp DESC LIMIT 3`,
+    )
+      .bind(show.id)
+      .all<EpisodeRow>(),
+    similarShows(c.env.DB, show),
+  ]);
+  const recent = recentRes.results;
+  const lastAired = recent[0] ?? null;
+  const region = visitorRegion(c);
+
+  // the slate leads with the episode we can show: the scheduled one, or —
+  // while the schedule is empty — the last one that aired. No episode still
+  // yet (premieres rarely have one) -> the show's backdrop, then its poster.
+  const slateEp = next ?? lastAired;
+  const pitch = slateEp ? stripHtml(slateEp.summary).trim() : "";
+  let media: { src: string; srcset?: string; poster?: boolean } | null = slateEp?.image_url
+    ? { src: slateEp.image_url, srcset: `${slateEp.image_url} 1x, ${largeStill(slateEp.image_url)} 2x` }
+    : null;
+  if (!media && show.tmdb_id && c.env.TMDB_API_KEY) {
+    const bd = await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id);
+    if (bd) media = { src: bd.x1, srcset: `${bd.x1} 1x, ${bd.x2} 2x` };
+  }
+  if (!media) {
+    const p = posterSrc(show);
+    if (p) media = { ...p, poster: true };
+  }
 
   const site = origin(c);
   const path = new URL(c.req.url).pathname;
@@ -680,32 +753,131 @@ app.get("/show/:slug/next-episode", async (c) => {
         Next episode of <a href={`/show/${show.slug}`}>{show.name}</a>
       </h1>
       <ShowTabs slug={show.slug} current="next" />
-      {next ? (
-        <div class="answer">
-          <p>
-            <strong>{next.name ?? epCode(next)}</strong> <span class="muted">{epCode(next)}</span>{" "}
-            airs <strong>{next.airdate}</strong>
-            {show.network ? <span class="muted"> on {show.network}</span> : null}.
-          </p>
-          <p class="countdown" id="countdown" data-ts={next.airstamp ?? ""}></p>
-          {raw(COUNTDOWN_JS)}
+      <section class={`slate${media ? ` has-media${media.poster ? " is-poster" : ""}` : ""}`}>
+        {media ? (
+          <div class="slate-media">
+            <img
+              src={media.src}
+              srcset={media.srcset}
+              alt={slateEp?.name ?? show.name}
+              width={media.poster ? 190 : 384}
+              height={media.poster ? 285 : 216}
+            />
+          </div>
+        ) : null}
+        <div class="slate-body">
+          {next ? (
+            <>
+              <p class="slate-chyron">
+                Up next · <strong>{epCode(next)}</strong>
+                {show.network ? ` · ${show.network}` : ""}
+              </p>
+              <p class="slate-title">{next.name ?? epCode(next)}</p>
+              <p class="slate-sub">
+                Airs <strong>{next.airdate ? longDate(next.airdate) : "soon"}</strong>
+                {show.network ? ` on ${show.network}` : ""}.{pitch ? ` ${pitch}` : ""}
+              </p>
+              {next.airstamp ? <CountBand ts={next.airstamp} /> : null}
+              {raw(COUNTDOWN_JS)}
+            </>
+          ) : (
+            <>
+              <p class="slate-chyron">
+                Last aired{lastAired ? <> · <strong>{epCode(lastAired)}</strong></> : null}
+                {lastAired?.airdate ? ` · ${longDate(lastAired.airdate)}` : ""}
+              </p>
+              <p class="slate-title">{lastAired?.name ?? "No episode scheduled"}</p>
+              <p class="slate-sub">
+                No next episode is scheduled yet. <StatusBadge status={show.status} />
+                {show.status === "Ended" && show.ended ? (
+                  <> The show ended on {longDate(show.ended)}.</>
+                ) : show.status === "To Be Determined" ? (
+                  <> Awaiting renewal news — we track the schedule hourly.</>
+                ) : show.status === "Running" ? (
+                  <> The network hasn't dated the next one — we check hourly.</>
+                ) : null}
+              </p>
+            </>
+          )}
         </div>
-      ) : (
-        <div class="answer">
-          <p>
-            No next episode is scheduled. <StatusBadge status={show.status} />
-            {show.status === "Ended" && show.ended ? (
-              <span class="muted"> The show ended on {show.ended}.</span>
-            ) : show.status === "To Be Determined" ? (
-              <span class="muted"> Awaiting renewal news — check back soon.</span>
-            ) : null}
-          </p>
-        </div>
-      )}
+      </section>
       <p>
         <a href={`/show/${show.slug}/calendar.ics`}><IconCal /> Add {show.name} to your calendar</a>
       </p>
       <SubscribeForm showId={show.id} label={`Email me when ${show.name} gets schedule news:`} />
+      {recent.length ? (
+        <section>
+          <h2>Catch up</h2>
+          <p class="epreg-method">
+            The last {recent.length === 1 ? "episode" : `${recent.length} episodes`} to air,
+            newest first{next ? ` — be caught up before ${epCode(next)} lands` : ""}.
+          </p>
+          <ol class={recent.some((e) => e.image_url) ? "epreg" : "epreg epreg--textonly"}>
+            {recent.map((e) => (
+              <li>
+                <span class="epreg-num">{String(e.number ?? 0).padStart(2, "0")}</span>
+                {recent.some((x) => x.image_url) ? (
+                  <a class="epreg-still-link" href={epHref(show.slug, e)} tabindex={-1} aria-hidden="true">
+                    {e.image_url ? (
+                      <img
+                        class="epreg-still"
+                        src={e.image_url}
+                        srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
+                        width="168"
+                        height="95"
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <span class="epreg-still--empty">{epCode(e)}</span>
+                    )}
+                  </a>
+                ) : null}
+                <span class="epreg-main">
+                  <p class="epreg-meta">
+                    <span class="epreg-code">{epCode(e)}</span>
+                    {e.airdate ? (
+                      <>
+                        <span class="sep"> · </span>
+                        {longDate(e.airdate)}
+                      </>
+                    ) : null}
+                  </p>
+                  <p class="epreg-line">
+                    <a class="epreg-name" href={epHref(show.slug, e)}>
+                      {e.name ?? epCode(e)}
+                    </a>
+                    <span class="epreg-leader"></span>
+                    {e.rating != null ? <span class="rating">★ {e.rating.toFixed(1)}</span> : null}
+                  </p>
+                  {e.summary ? <p class="epreg-sum">{stripHtml(e.summary)}</p> : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+      {similar.length ? (
+        <section>
+          <h2>Shows like {show.name}</h2>
+          <p class="dossier-method">
+            The closest matches on shared genres, ranked by match strength and popularity.
+          </p>
+          <ol class="dossier-board">
+            {similar.map((s, i) => (
+              <DossierRow
+                i={i}
+                href={`/show/${s.slug}`}
+                name={s.name}
+                d={buildDossier(show, s, region)}
+                rating={s.rating}
+                poster={posterSrc(s)}
+              />
+            ))}
+          </ol>
+        </section>
+      ) : null}
     </Layout>,
   );
 });
@@ -739,6 +911,19 @@ app.get("/show/:slug/release-date", async (c) => {
     .bind(show.id)
     .all<Omit<EventRow, "name" | "slug">>();
 
+  const firsts = await seasonPremieres(db, show.id);
+  const pattern = premierePattern(firsts);
+
+  // the one-sheet next to the date reads like a premiere announcement;
+  // backdrop only if the mirror has no poster yet
+  let media: { src: string; srcset?: string; poster?: boolean } | null = posterSrc(show)
+    ? { ...posterSrc(show)!, poster: true }
+    : null;
+  if (!media && show.tmdb_id && c.env.TMDB_API_KEY) {
+    const bd = await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id);
+    if (bd) media = { src: bd.x1, srcset: `${bd.x1} 1x, ${bd.x2} 2x` };
+  }
+
   const maxAired = lastAired?.season ?? 0;
   // People search for the NEXT season ("X season 3 release date") — name it,
   // announced or not.
@@ -750,22 +935,38 @@ app.get("/show/:slug/release-date", async (c) => {
         : null;
   let answer: string;
   let showCountdown = false;
+  // the slate: chyron qualifies, the title is THE answer (a date when we
+  // have one, the honest pattern when we don't)
+  let chyron: string;
+  let slateTitle: string;
   if (next && (next.season ?? 0) > maxAired) {
-    answer = `Season ${next.season} of ${show.name} premieres on ${next.airdate}.`;
+    answer = `Season ${next.season} of ${show.name} premieres on ${next.airdate ? longDate(next.airdate) : "a date TBA"}.`;
+    chyron = `Season ${next.season} premiere${show.network ? ` · ${show.network}` : ""}`;
+    slateTitle = next.airdate ? longDate(next.airdate) : `Season ${next.season}`;
     showCountdown = true;
   } else if (next) {
     answer = `Season ${next.season} of ${show.name} is currently airing — the next episode (${epCode(
       next,
-    )}) airs ${next.airdate}.`;
+    )}) airs ${next.airdate ? longDate(next.airdate) : "soon"}.`;
+    chyron = `Season ${next.season} · now airing · next: ${epCode(next)}`;
+    slateTitle = next.airdate ? longDate(next.airdate) : "Now airing";
     showCountdown = true;
   } else if (show.status === "Ended") {
-    answer = `${show.name} has ended${show.ended ? ` (final episode: ${show.ended})` : ""} — no new season is coming.`;
+    answer = `${show.name} has ended${show.ended ? ` (final episode: ${longDate(show.ended)})` : ""} — no new season is coming.`;
+    chyron = "Series ended";
+    slateTitle = show.ended ? longDate(show.ended) : "Ended";
   } else if (show.status === "To Be Determined") {
     answer = `${show.name} has not yet been renewed for Season ${maxAired + 1}. Its status is officially "To Be Determined."`;
+    chyron = `Season ${maxAired + 1} · awaiting renewal`;
+    slateTitle = "Not renewed yet";
   } else if (show.status === "In Development") {
     answer = `${show.name} is in development — no premiere date has been announced yet.`;
+    chyron = "In development";
+    slateTitle = "Date not announced";
   } else {
     answer = `${show.name} is ${show.status ?? "of unknown status"}, but no next air date has been announced yet.`;
+    chyron = `Season ${maxAired + 1} · not scheduled yet`;
+    slateTitle = pattern ? `Historically ${pattern.month}` : "Date not announced";
   }
 
   const site = origin(c);
@@ -799,22 +1000,46 @@ app.get("/show/:slug/release-date", async (c) => {
         )}
       </h1>
       <ShowTabs slug={show.slug} current="release" />
-      <div class="answer">
-        <p>
-          <StatusBadge status={show.status} /> {answer}
-        </p>
-        {showCountdown ? (
-          <>
-            <p class="countdown" id="countdown" data-ts={next?.airstamp ?? ""}></p>
-            {raw(COUNTDOWN_JS)}
-          </>
+      <section class={`slate${media ? ` has-media${media.poster ? " is-poster" : ""}` : ""}`}>
+        {media ? (
+          <div class="slate-media">
+            <img
+              src={media.src}
+              srcset={media.srcset}
+              alt={`${show.name} poster`}
+              width={media.poster ? 190 : 384}
+              height={media.poster ? 285 : 216}
+            />
+          </div>
         ) : null}
-        {lastAired ? (
-          <p class="muted">
-            Last aired episode: {lastAired.name} ({epCode(lastAired)}) on {lastAired.airdate}.
+        <div class="slate-body">
+          <p class="slate-chyron">{chyron}</p>
+          <p class="slate-title">{slateTitle}</p>
+          <p class="slate-sub">
+            <StatusBadge status={show.status} /> {answer}
+            {!showCountdown && pattern ? (
+              <>
+                {" "}
+                {pattern.n} of {pattern.total} seasons premiered in {pattern.month} — we'll have
+                the date the moment it's set.
+              </>
+            ) : null}
+            {lastAired ? (
+              <>
+                {" "}
+                Last aired: {lastAired.name} ({epCode(lastAired)}) on{" "}
+                {lastAired.airdate ? longDate(lastAired.airdate) : "—"}.
+              </>
+            ) : null}
           </p>
-        ) : null}
-      </div>
+          {showCountdown && next?.airstamp ? (
+            <>
+              <CountBand ts={next.airstamp} />
+              {raw(COUNTDOWN_JS)}
+            </>
+          ) : null}
+        </div>
+      </section>
       <SubscribeForm
         showId={show.id}
         label={`Email me when ${show.name} renewal or premiere news lands:`}
@@ -823,6 +1048,20 @@ app.get("/show/:slug/release-date", async (c) => {
         <a href={`/show/${show.slug}/calendar.ics`}><IconCal /> Add {show.name} to your calendar</a>{" "}
         <span class="muted">— subscribe in Google/Apple Calendar and never miss an episode</span>
       </p>
+      {firsts.length > 1 ? (
+        <section>
+          <h2>Season premiere dates</h2>
+          <ol class="premiere-ledger">
+            {firsts.map((f) => (
+              <li>
+                <a href={`/show/${show.slug}/season/${f.s}`}>Season {f.s}</a>
+                <span class="pl-leader" aria-hidden="true"></span>
+                <span class="pl-date">{longDate(f.first)}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
       {history.length ? (
         <section>
           <h2>News history</h2>

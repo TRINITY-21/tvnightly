@@ -645,14 +645,22 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 /* cast rail: headshot cards, same edge-fade language as poster rails */
 .cast-row {
   display: grid;
-  grid-auto-flow: column;
-  /* 8 across the 948 column: 8x102 + 7x12 = 900 */
-  grid-auto-columns: 102px;
+  /* eight equal shares of the full column — 8 cast fill it edge to edge,
+     fewer keep the same card size (empty tracks, no giant stretch) */
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 0.75rem;
-  overflow-x: auto;
   padding: 4px 4px 0.6rem;
-  scrollbar-width: thin;
-  scrollbar-color: var(--surface-2) transparent;
+}
+@media (max-width: 700px) {
+  /* phones: back to a scroll rail */
+  .cast-row {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 102px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface-2) transparent;
+  }
 }
 .cast-card {
   display: flex;

@@ -3,10 +3,12 @@
 // the edge cache so the D1 mirror stays lean.
 import { Hono } from "hono";
 import { Bindings, EpisodeRow } from "../types";
-import { stripHtml, epCode, epHref, longDate, slugifyName } from "../lib/format";
+import { stripHtml, epCode, epHref, hiRes, retinaSet, longDate, slugifyName } from "../lib/format";
 import { origin, canonical } from "../lib/seo";
 import { getShow } from "../lib/queries";
+import { visitorRegion } from "../lib/providers";
 import { Layout } from "../components/Layout";
+import { ProviderLine } from "../components/providers";
 import { ChevUp, ChevDown } from "../components/icons";
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -105,7 +107,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
       episodeNumber: epNo,
       partOfSeason: { "@type": "TVSeason", seasonNumber: seasonNo },
       partOfSeries: { "@type": "TVSeries", name: show.name, url: `${site}/show/${show.slug}` },
-      ...(ep.image_url ? { image: ep.image_url } : {}),
+      ...(ep.image_url ? { image: hiRes(ep.image_url) } : {}),
       ...(ep.airdate ? { datePublished: ep.airdate } : {}),
       ...(pitch ? { description: pitch.slice(0, 300) } : {}),
     },
@@ -127,24 +129,37 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
       description={`${show.name} ${code}${ep.name ? ` "${ep.name}"` : ""}${ep.rating != null ? ` — rated ★ ${ep.rating.toFixed(1)}` : ""}${ep.airdate ? `, aired ${longDate(ep.airdate)}` : ""}. ${pitch.slice(0, 110)}`}
       canonical={canonical(c)}
       ld={ld}
-      ogImage={ep.image_url ?? show.image_url ?? undefined}
+      ogImage={hiRes(ep.image_url ?? show.image_url) ?? undefined}
       scripts={["/js/votes.js"]}
     >
       <article class="show-hub">
-        <header class="detail-hero">
+        {/* Serializd-style hero: the episode's own frame, sharp and full-bleed,
+            with a legibility scrim; the show's poster anchors the facts. */}
+        <header class="detail-hero ep-hero">
           {(ep.image_url ?? show.image_url) ? (
             <div
               class="hero-backdrop"
-              style={`background-image:url('${ep.image_url ?? show.image_url}')`}
+              style={`background-image:url('${hiRes(ep.image_url ?? show.image_url)}')`}
             ></div>
           ) : null}
           <div class="detail-head">
-            <div class="detail-side ep-side">
-              {ep.image_url ? (
-                <img class="ep-still-hero" src={ep.image_url} alt={ep.name ?? code} />
+            <div class="detail-side">
+              {show.image_url ? (
+                <img class="poster" src={show.image_url} srcset={retinaSet(show.image_url)} alt={show.name} />
               ) : (
-                <div class="ep-still-hero still-empty">{code}</div>
+                <div class="poster card-fallback">{show.name}</div>
               )}
+              {ep.rating != null ? (
+                <span class="vote ep-vote" data-ep-id={String(ep.id)}>
+                  <span class="muted">Fair rating?</span>
+                  <button class="vote-btn" data-dir="up" aria-label="Agree with this rating">
+                    <ChevUp /> <span class="vote-count">{ep.up ?? 0}</span>
+                  </button>
+                  <button class="vote-btn" data-dir="down" aria-label="Disagree with this rating">
+                    <ChevDown /> <span class="vote-count">{ep.down ?? 0}</span>
+                  </button>
+                </span>
+              ) : null}
             </div>
             <div class="detail-info">
               <p class="ep-eyebrow">
@@ -182,17 +197,12 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
                 ) : null}
               </p>
               {pitch ? <div class="summary">{pitch}</div> : null}
-              {ep.rating != null ? (
-                <span class="vote ep-vote" data-ep-id={String(ep.id)}>
-                  <span class="muted">Fair rating?</span>
-                  <button class="vote-btn" data-dir="up" aria-label="Agree with this rating">
-                    <ChevUp /> <span class="vote-count">{ep.up ?? 0}</span>
-                  </button>
-                  <button class="vote-btn" data-dir="down" aria-label="Disagree with this rating">
-                    <ChevDown /> <span class="vote-count">{ep.down ?? 0}</span>
-                  </button>
-                </span>
-              ) : null}
+              <ProviderLine
+                row={show}
+                region={visitorRegion(c)}
+                fallbackHref={`/show/${show.slug}/release-date`}
+                pickerType="tv"
+              />
             </div>
           </div>
         </header>

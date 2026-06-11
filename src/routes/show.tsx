@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { raw } from "hono/html";
 import { Bindings, EpisodeRow } from "../types";
 import { visitorRegion } from "../lib/providers";
-import { stripHtml, epCode, epHref, longDate, slugifyName, personHref, comparePathFor } from "../lib/format";
+import { stripHtml, epCode, epHref, hiRes, retinaSet, longDate, slugifyName, personHref, comparePathFor } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
@@ -77,7 +77,7 @@ app.get("/show/:slug", async (c) => {
           <div class="detail-head">
             <div class="detail-side">
               {show.image_url ? (
-                <img class="poster" src={show.image_url} alt={show.name} />
+                <img class="poster" src={show.image_url} srcset={retinaSet(show.image_url)} alt={show.name} />
               ) : (
                 <div class="poster card-fallback">{show.name}</div>
               )}

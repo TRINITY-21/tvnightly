@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
 import { visitorRegion } from "../lib/providers";
-import { epCode, airTime, premiereDateParts, homeDateline } from "../lib/format";
+import { epCode, airTime, premiereDateParts, homeDateline, retinaSet } from "../lib/format";
 import { canonical } from "../lib/seo";
 import { VERTICALS } from "../lib/verticals";
 import { Layout } from "../components/Layout";
@@ -107,7 +107,7 @@ app.get("/", async (c) => {
             ) : null}
             <div class="detail-head">
               {spot.image_url ? (
-                <img class="poster spot-poster" src={spot.image_url} alt={spot.name} />
+                <img class="poster spot-poster" src={spot.image_url} srcset={retinaSet(spot.image_url)} alt={spot.name} />
               ) : (
                 <div class="poster spot-poster card-fallback">{spot.name}</div>
               )}

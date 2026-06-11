@@ -323,24 +323,35 @@ a.cast-tile:hover { text-decoration: none; }
 
 
 /* ---- episode pages: one hour of television, in full ---- */
-.ep-side { flex: 0 0 300px; width: 300px; }
-.ep-still-hero {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: var(--shadow-2);
+/* The hero IS the episode's frame: sharp, full-bleed, scrimmed for
+   legibility (gradient painted over a still — content, never an edge).
+   Content sits low so the frame gets a clean viewing band above it. */
+.show-hub .ep-hero { padding-top: 9rem; }
+.show-hub .ep-hero .hero-backdrop {
+  filter: none;
+  opacity: 0.55;
+  inset: 0;
+  background-position: center 22%;
 }
-.ep-still-hero.still-empty {
+.show-hub .ep-hero::after {
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 18, 20, 0.3) 0%,
+    rgba(18, 18, 20, 0.82) 58%,
+    var(--bg) 100%
+  );
+}
+/* the verdict lives with the poster, like rating does on show pages */
+.detail-side .ep-vote {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--display);
-  font-stretch: 112%;
-  font-weight: 700;
-  color: var(--muted);
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.8rem;
+}
+@media (max-width: 600px) {
+  .show-hub .ep-hero { padding-top: 5rem; }
 }
 .ep-eyebrow {
   margin: 0.1rem 0 0.2rem;
@@ -354,7 +365,6 @@ a.cast-tile:hover { text-decoration: none; }
 }
 .ep-eyebrow a { color: var(--accent); }
 .ep-eyebrow .sep { opacity: 0.45; margin: 0 0.3rem; }
-.ep-vote { display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.9rem; }
 @media (max-width: 600px) {
   .ep-side { flex-basis: 100%; width: 100%; }
 }

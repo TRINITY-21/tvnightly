@@ -191,7 +191,7 @@ app.get("/movie/:slug", async (c) => {
           ) : null}
           <div class="detail-head">
             {movie.poster_url ? (
-              <img class="poster" src={movie.poster_url} alt={movie.title} />
+              <img class="poster" src={movie.poster_url} srcset={movie.poster_url ? `${movie.poster_url} 1x, ${movie.poster_url.replace("/w342/", "/w780/")} 2x` : undefined} alt={movie.title} />
             ) : (
               <div class="poster card-fallback">{movie.title}</div>
             )}

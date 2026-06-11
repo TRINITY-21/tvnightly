@@ -53,6 +53,18 @@ export const slugifyName = (name: string) =>
 /** Canonical episode page path: /show/{slug}/s05e01 */
 export const epHref = (slug: string, e: EpisodeRow) => `/show/${slug}/${epCode(e).toLowerCase()}`;
 
+/* The mirror stores TVmaze's medium renditions (210x295 posters, 250x140
+   stills) — fine for thumbnails, mush at hero scale. TVmaze serves the full
+   original at a predictable sibling URL, so we derive instead of re-seeding. */
+export const hiRes = (url: string | null): string | null =>
+  url ? url.replace(/\/medium_(portrait|landscape)\//, "/original_untouched/") : null;
+
+/** 1x/2x srcset: medium for standard screens, the original only for dense ones. */
+export const retinaSet = (url: string | null): string | undefined =>
+  url && /\/medium_(portrait|landscape)\//.test(url)
+    ? `${url} 1x, ${url.replace(/\/medium_(portrait|landscape)\//, "/original_untouched/")} 2x`
+    : undefined;
+
 export const comparePathFor = (a: string, b: string) =>
   a.localeCompare(b) <= 0 ? `/compare/${a}-vs-${b}` : `/compare/${b}-vs-${a}`;
 

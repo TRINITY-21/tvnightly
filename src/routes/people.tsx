@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { Context } from "hono";
 import { Bindings, ShowRow, MovieRow, PersonRow } from "../types";
-import { stripHtml, slugifyName, longDate, ageOf } from "../lib/format";
+import { stripHtml, slugifyName, retinaSet, longDate, ageOf } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow } from "../lib/queries";
 import { Layout } from "../components/Layout";
@@ -98,7 +98,7 @@ async function seasonCastPage(
             {cast.map((p) => {
               const id = linkable.get(p.name.toLowerCase());
               const img = p.profile_path
-                ? `https://image.tmdb.org/t/p/w185${p.profile_path}`
+                ? `https://image.tmdb.org/t/p/w342${p.profile_path}`
                 : null;
               const inner = (
                 <>
@@ -202,7 +202,7 @@ app.get("/show/:slug/cast", async (c) => {
               return (
                 <a class="cast-tile" href={`/person/${slugifyName(p.name)}-${p.id}`}>
                   {p.image_url ? (
-                    <img src={p.image_url} alt={p.name} loading="lazy" />
+                    <img src={p.image_url} srcset={retinaSet(p.image_url)} alt={p.name} loading="lazy" />
                   ) : (
                     <div class="cast-fallback">{p.name}</div>
                   )}
@@ -351,7 +351,7 @@ app.get("/person/:slug", async (c) => {
           <div class="detail-head">
             <div class="detail-side">
               {person.image_url ? (
-                <img class="poster" src={person.image_url} alt={person.name} />
+                <img class="poster" src={person.image_url} srcset={retinaSet(person.image_url)} alt={person.name} />
               ) : (
                 <div class="poster card-fallback">{person.name}</div>
               )}

@@ -60,6 +60,16 @@ app.get("/show/:slug", async (c) => {
     },
   ];
 
+  // The hero frame: the show's own cinematography — its best-rated episode's
+  // still — sharp behind the facts. Poster is the fallback for unmirrored eps.
+  const heroFrame = hiRes(
+    episodes
+      .filter((e) => e.image_url && e.rating != null)
+      .sort((a, b) => b.rating! - a.rating!)[0]?.image_url ??
+      episodes.find((e) => e.image_url)?.image_url ??
+      show.image_url,
+  );
+
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
     <Layout
@@ -70,9 +80,9 @@ app.get("/show/:slug", async (c) => {
       ogImage={show.image_url ?? undefined}
     >
       <article class="show-hub">
-        <header class="detail-hero">
-          {show.image_url ? (
-            <div class="hero-backdrop" style={`background-image:url('${show.image_url}')`}></div>
+        <header class="detail-hero frame-hero">
+          {heroFrame ? (
+            <div class="hero-backdrop" style={`background-image:url('${heroFrame}')`}></div>
           ) : null}
           <div class="detail-head">
             <div class="detail-side">

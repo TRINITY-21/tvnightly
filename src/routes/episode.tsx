@@ -135,7 +135,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
       <article class="show-hub">
         {/* Serializd-style hero: the episode's own frame, sharp and full-bleed,
             with a legibility scrim; the show's poster anchors the facts. */}
-        <header class="detail-hero ep-hero">
+        <header class="detail-hero frame-hero">
           {(ep.image_url ?? show.image_url) ? (
             <div
               class="hero-backdrop"
@@ -308,17 +308,17 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
         ) : null}
         <section>
           <h2>Keep going</h2>
-          <p>
+          <nav class="pill-nav">
             <a class="chev-after" href={`/show/${show.slug}/season/${seasonNo}`}>
               Season {seasonNo} ranked & reviewed
-            </a>{" "}
+            </a>
             <a class="chev-after" href={`/show/${show.slug}/best-episodes`}>
               Best of {show.name}
-            </a>{" "}
+            </a>
             <a class="chev-after" href={`/show/${show.slug}/ratings`}>
               Ratings graph
             </a>
-          </p>
+          </nav>
         </section>
       </article>
     </Layout>,

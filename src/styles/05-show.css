@@ -326,14 +326,21 @@ a.cast-tile:hover { text-decoration: none; }
 /* The hero IS the episode's frame: sharp, full-bleed, scrimmed for
    legibility (gradient painted over a still — content, never an edge).
    Content sits low so the frame gets a clean viewing band above it. */
-.show-hub .ep-hero { padding-top: 9rem; }
-.show-hub .ep-hero .hero-backdrop {
+.show-hub .frame-hero { padding-top: 9rem; }
+.show-hub .frame-hero .hero-backdrop {
   filter: none;
   opacity: 0.55;
   inset: 0;
   background-position: center 22%;
+  /* the frame is a centered band — the page's dark owns the margins;
+     edges dissolve laterally so the still never touches the viewport edge */
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, 1280px);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
 }
-.show-hub .ep-hero::after {
+.show-hub .frame-hero::after {
   background: linear-gradient(
     to bottom,
     rgba(18, 18, 20, 0.3) 0%,
@@ -351,7 +358,7 @@ a.cast-tile:hover { text-decoration: none; }
   font-size: 0.8rem;
 }
 @media (max-width: 600px) {
-  .show-hub .ep-hero { padding-top: 5rem; }
+  .show-hub .frame-hero { padding-top: 5rem; }
 }
 .ep-eyebrow {
   margin: 0.1rem 0 0.2rem;

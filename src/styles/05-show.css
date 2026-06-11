@@ -45,10 +45,12 @@
   gap: 0.55rem;
   flex-wrap: wrap;
   margin: 0 0 0.8rem;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--muted);
 }
 .meta-strip .sep { opacity: 0.45; }
+/* the headline score is the answer the page exists to give — let it lead */
+.meta-strip .rating { font-size: 1.1rem; font-weight: 700; }
 
 /* money-page links as pills, not bare links */
 .pill-nav { display: flex; gap: 0.45rem; margin: 0.8rem 0; flex-wrap: wrap; }
@@ -146,7 +148,7 @@
 .m-label {
   font-family: var(--display);
   font-stretch: 80%;
-  font-size: 0.58rem;
+  font-size: 0.64rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -287,7 +289,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.28rem;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   line-height: 1.25;
 }
 .cast-card img,

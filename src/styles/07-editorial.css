@@ -14,7 +14,6 @@
   font-size: 1.3rem;
   line-height: 1;
   color: var(--accent);
-  opacity: 0.85;
   min-width: 2.1rem;
 }
 /* the episode still: a frame from the hour itself, not chrome */
@@ -27,7 +26,7 @@
   flex: 0 0 auto;
 }
 .top3-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.12rem; }
-.top3-name { min-width: 0; }
+.top3-name { min-width: 0; font-weight: 600; }
 .top3-sub {
   font-size: 0.84rem;
   line-height: 1.45;
@@ -37,7 +36,7 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.top3 .rating { font-weight: 600; }
+.top3 .rating { font-weight: 650; font-size: 1.05rem; }
 @media (max-width: 560px) {
   .top3-still { width: 64px; }
   .top3-sub { display: none; }
@@ -102,7 +101,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 500;
+  font-weight: 600;
 }
 .ep-best {
   font-family: var(--display);
@@ -124,14 +123,14 @@
   min-width: 1.2rem;
   height: 0.5em;
   margin: 0 0.55rem;
-  border-bottom: 1px dotted rgba(163, 158, 151, 0.3);
+  border-bottom: 1px dotted rgba(182, 177, 169, 0.35);
 }
 .ep-date {
   font-size: 0.82rem;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.ep-rate { flex: 0 0 3.4rem; text-align: right; font-weight: 600; white-space: nowrap; }
+.ep-rate { flex: 0 0 3.4rem; text-align: right; font-weight: 650; white-space: nowrap; }
 /* the promo slot: the season's best, in airing position, frame + chyron */
 .ep-promo { gap: 0.8rem; }
 .still-wrap { position: relative; flex: 0 0 112px; }
@@ -150,7 +149,7 @@
   color: var(--warn);
   font-family: var(--display);
   font-stretch: 90%;
-  font-size: 0.5rem;
+  font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;

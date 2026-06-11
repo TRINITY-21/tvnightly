@@ -9,10 +9,11 @@
   padding: 0.45rem 0.9rem;
   color: var(--muted);
   border-bottom: 2px solid transparent;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 .subnav a:hover { color: var(--text); text-decoration: none; }
-.subnav a.active { color: var(--text); border-bottom-color: var(--accent); }
+.subnav a.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 700; }
 
 /* ---- footer ---- */
 .site-footer {

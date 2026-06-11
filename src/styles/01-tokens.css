@@ -20,8 +20,8 @@
   --surface: #1a1a1e;
   --surface-2: #232328;
   --line: #2b2b32;
-  --text: #f5f3ef;
-  --muted: #a39e97;
+  --text: #f8f6f2;
+  --muted: #b6b1a9; /* secondary text must still READ — dim is not premium */
   --accent: #ffa94d;       /* tungsten amber — interactivity only */
   --accent-2: #ff5c8a;     /* marquee pink — live / fandom / chart B */
   --ok: #3cdf8e;
@@ -60,7 +60,13 @@
 
 /* sticky glass header must never hide a focused element (WCAG 2.4.11);
    5.5rem clears the ~76px desktop header + outline offset */
-html { scroll-padding-top: 5.5rem; }
+html {
+  scroll-padding-top: 5.5rem;
+  /* the volume knob: rem resolves against the ROOT, so this is the one
+     line every size in the app rides. 15px-era type read "quiet" — the
+     room is dark, so the type carries the energy. */
+  font-size: 16.5px;
+}
 
 body {
   margin: 0;
@@ -69,7 +75,7 @@ body {
     radial-gradient(1000px 540px at 50% -220px, rgba(255, 169, 77, 0.07), transparent 70%),
     var(--bg);
   color: var(--text);
-  font: 15px/1.45 var(--body);
+  font: 1rem/1.5 var(--body);
   font-variant-numeric: tabular-nums;
 }
 
@@ -91,25 +97,42 @@ h1 {
 h1 a { color: var(--text); }
 h2 {
   font-family: var(--display);
-  font-stretch: 112%;
-  font-weight: 600;
-  font-size: 1.15rem;
+  font-stretch: 114%;
+  font-weight: 700;
+  font-size: 1.3rem;
   line-height: 1.25;
-  margin: 2rem 0 0.7rem;
+  margin: 2.1rem 0 0.8rem;
+}
+/* section marker: a solid amber tick under every section heading — the
+   accent spent confidently, the same voice as the nav LED underline */
+main h2::after {
+  content: "";
+  display: block;
+  width: 2rem;
+  height: 3px;
+  margin-top: 0.4rem;
+  border-radius: 2px;
+  background: var(--accent);
+}
+/* the tick is a section voice — never under card titles or panel heads */
+.evening-head h2::after,
+.shortlist-card h2::after,
+.pick-card h2::after {
+  content: none;
 }
 h3 {
   font-family: var(--display);
   font-stretch: 110%;
-  font-weight: 600;
-  font-size: 0.95rem;
+  font-weight: 650;
+  font-size: 1.05rem;
   margin: 1.2rem 0 0.4rem;
 }
 .muted { color: var(--muted); }
-.rating { color: var(--warn); white-space: nowrap; }
+.rating { color: var(--warn); white-space: nowrap; font-weight: 650; }
 .more {
   font-family: var(--body);
-  font-weight: 500;
-  font-size: 0.8rem;
+  font-weight: 600;
+  font-size: 0.85rem;
   text-transform: none;
   letter-spacing: 0;
   font-stretch: 100%;

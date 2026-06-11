@@ -52,7 +52,7 @@
 @media (max-width: 760px) {
   .evening-grid { grid-template-columns: 1fr; gap: 1.35rem; }
 }
-.evening-head h2 { margin: 0; font-size: 1.22rem; }
+.evening-head h2 { margin: 0; }
 .evening-main { min-width: 0; }
 
 .tonight-timeline {
@@ -151,7 +151,7 @@
 .evening-cta .btn-ghost { flex: 1 1 12rem; text-align: center; }
 
 /* discover: tabbed poster rails */
-.home-discover h2 { margin: 0; font-size: 1.35rem; }
+.home-discover h2 { margin: 0; }
 .discover-head { margin-bottom: 0.85rem; }
 .discover-input {
   position: absolute;
@@ -190,7 +190,7 @@
 #discover-movies:checked ~ .panel-movies { display: block; }
 
 /* tools: unified bento grid — no settings-menu list */
-.home-tools h2 { margin: 0 0 1rem; font-size: 1.35rem; }
+.home-tools h2 { margin: 0 0 1rem; }
 .tools-bento {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -249,7 +249,7 @@
   gap: 0.6rem;
   padding: 0.78rem 0.95rem;
   font-size: 0.88rem;
-  color: var(--muted);
+  color: var(--text);
 }
 .tool-tile-sm:hover { color: var(--text); }
 .tool-tile-sm span:first-child { line-height: 1.3; }
@@ -420,8 +420,8 @@
   background: transparent;
 }
 .poster-row .card-title {
-  font-size: 0.82rem;
-  font-weight: 500;
+  font-size: 0.88rem;
+  font-weight: 600;
   line-height: 1.35;
   white-space: normal;
   display: -webkit-box;

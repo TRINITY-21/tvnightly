@@ -6,6 +6,10 @@ import { runSync, providerPatrol, sendDailyDigest, type SyncEnv } from "./sync";
 import { sendEmails } from "./email";
 import { signToken, verifyToken } from "./tokens";
 import franchisesData from "../data/franchises.json";
+import providerLogosData from "../data/provider-logos.json";
+
+// provider_name -> TMDB logo URL; regenerate with scripts/fetch-provider-logos.mjs
+const PROVIDER_LOGOS: Record<string, string> = providerLogosData;
 
 interface FranchiseEntry {
   title: string;
@@ -116,10 +120,24 @@ function providersFor(
   return { names: [], region };
 }
 
-// The where-to-watch answer is the conversion moment of every detail page, so
-// the first service gets button weight and an empty result still answers
-// (fallbackHref) instead of leaving a silent gap. Lists pass no fallback and
-// keep the old quiet behavior.
+/**
+ * Collapse provider tier/channel variants to one brand key, so "Paramount+",
+ * "Paramount Plus Premium", and "Paramount+ Roku Premium Channel" render as
+ * a single tile. First occurrence (TMDB display priority) wins.
+ */
+const providerBrand = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/\+/g, " plus")
+    .replace(/\s+(?:free\s+)?with ads$/i, "")
+    .replace(/\s+(apple tv|amazon|roku premium|roku)\s+channel$/i, "")
+    .replace(/\s+(premium|essential|standard|basic)$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// The where-to-watch answer is the conversion moment of every detail page:
+// recognizable platform logos instead of a wall of text chips, deduped by
+// brand. An empty result still answers (fallbackHref) instead of a silent gap.
 const ProviderLine: FC<{
   row: { providers_intl: string | null };
   region: string;
@@ -139,27 +157,46 @@ const ProviderLine: FC<{
       </p>
     ) : null;
   }
-  const [first, ...rest] = prov.names;
+  const seen = new Set<string>();
+  const entries: { name: string; logo?: string }[] = [];
+  for (const name of prov.names) {
+    const brand = providerBrand(name);
+    if (seen.has(brand)) continue;
+    seen.add(brand);
+    entries.push({ name, logo: PROVIDER_LOGOS[name] });
+  }
+  const shown = entries.slice(0, 8);
+  const extra = entries.length - shown.length;
   return (
     <p class="provs">
       <span class="muted">
         Streaming on{prov.region !== region ? ` (${prov.region} — not on your region's services)` : ` (${prov.region})`}
       </span>{" "}
-      {pickerType ? (
-        // button-weight CTA must be a real control: it opens the picker
-        // pre-filtered to this service ("more like this, same subscription")
-        <a
-          class="prov prov-primary"
-          href={`/what-to-watch?type=${pickerType}&service=${encodeURIComponent(first)}`}
-        >
-          {first}
-        </a>
-      ) : (
-        <span class="prov">{first}</span>
-      )}
-      {rest.map((p) => (
-        <span class="prov">{p}</span>
-      ))}
+      {shown.map(({ name, logo }) => {
+        const inner = logo ? (
+          <img src={logo} alt={name} width="34" height="34" loading="lazy" />
+        ) : null;
+        // tiles are real controls on detail pages: each opens the picker
+        // pre-filtered to that service ("more like this, same subscription")
+        return logo ? (
+          pickerType ? (
+            <a
+              class="prov-tile"
+              href={`/what-to-watch?type=${pickerType}&service=${encodeURIComponent(name)}`}
+              title={`${name} — more on this service`}
+            >
+              {inner}
+            </a>
+          ) : (
+            <span class="prov-tile" title={name}>
+              {inner}
+            </span>
+          )
+        ) : (
+          <span class="prov">{name}</span>
+        );
+      })}
+      {extra > 0 ? <span class="muted">+{extra} more</span> : null}
     </p>
   );
 };

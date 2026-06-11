@@ -245,7 +245,7 @@ app.get("/show/:slug/essential", async (c) => {
         )}
         {similar.length ? (
           <section>
-            <h2>More like {show.name}</h2>
+            <h2>Shows like {show.name}</h2>
             <p class="dossier-method">
               The closest matches on shared genres, ranked by match strength and popularity.
             </p>
@@ -622,7 +622,7 @@ const rankedPage =
           </nav>
           {similar.length ? (
             <section>
-              <h2>More like {show.name}</h2>
+              <h2>Shows like {show.name}</h2>
               <p class="dossier-method">
                 The closest matches on shared genres, ranked by match strength and popularity.
               </p>

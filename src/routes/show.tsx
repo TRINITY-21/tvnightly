@@ -1095,15 +1095,17 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
   const show = await getShow(c.env.DB, c.req.param("slug"));
   if (!show) return c.notFound();
   const n = Number(c.req.param("n"));
-  const [{ results: eps }, maxRow] = await Promise.all([
+  const [{ results: eps }, maxRow, similar] = await Promise.all([
     c.env.DB.prepare("SELECT * FROM episodes WHERE show_id = ? AND season = ? ORDER BY number")
       .bind(show.id, n)
       .all<EpisodeRow>(),
     c.env.DB.prepare("SELECT MAX(season) AS m FROM episodes WHERE show_id = ?")
       .bind(show.id)
       .first<{ m: number | null }>(),
+    similarShows(c.env.DB, show),
   ]);
   if (eps.length === 0) return c.notFound();
+  const region = visitorRegion(c);
 
   const site = origin(c);
   const path = new URL(c.req.url).pathname;
@@ -1173,6 +1175,26 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
           </ol>
         );
       })()}
+      {similar.length ? (
+        <section>
+          <h2>Shows like {show.name}</h2>
+          <p class="dossier-method">
+            The closest matches on shared genres, ranked by match strength and popularity.
+          </p>
+          <ol class="dossier-board">
+            {similar.map((s, i) => (
+              <DossierRow
+                i={i}
+                href={`/show/${s.slug}`}
+                name={s.name}
+                d={buildDossier(show, s, region)}
+                rating={s.rating}
+                poster={posterSrc(s)}
+              />
+            ))}
+          </ol>
+        </section>
+      ) : null}
     </Layout>,
   );
 });

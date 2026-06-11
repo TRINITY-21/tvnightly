@@ -1560,14 +1560,6 @@ button, .verdict-btn {
   flex-wrap: wrap;
   margin: 0.1rem 0 0;
 }
-.shortlist-provs .prov-tile {
-  width: 28px;
-  height: 28px;
-}
-.shortlist-provs .prov-tile img {
-  width: 28px;
-  height: 28px;
-}
 .shortlist-more {
   font-size: 0.72rem;
 }
@@ -1685,12 +1677,13 @@ button, .verdict-btn {
 }
 
 .provs { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; }
-/* platform logo tiles: recognizable at a glance, name in title/alt */
+/* platform logo tiles: recognizable at a glance, name in title/alt.
+   Sized to ride the text line they accompany, not dominate it. */
 .prov-tile {
   display: inline-flex;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--line);
   box-shadow: var(--shadow-1);

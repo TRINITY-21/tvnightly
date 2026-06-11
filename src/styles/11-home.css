@@ -398,10 +398,12 @@
 .tool-tile-lg {
   flex-direction: column;
   align-items: flex-start;
+  justify-content: center;
   gap: 0.35rem;
-  padding: 1.2rem 1.25rem 1.15rem;
+  padding: 1.35rem 2.5rem 1.3rem 1.25rem;
   position: relative;
-  padding-right: 2.5rem;
+  overflow: hidden;
+  min-height: 8rem;
 }
 .tool-tile-lg strong {
   font-family: var(--display);
@@ -418,17 +420,17 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 60%;
+  width: 62%;
   background-size: cover;
   background-position: center;
-  opacity: 0.4;
-  -webkit-mask-image: linear-gradient(to left, #000 22%, transparent 96%);
-  mask-image: linear-gradient(to left, #000 22%, transparent 96%);
+  opacity: 0.75;
+  -webkit-mask-image: linear-gradient(to left, #000 35%, transparent 95%);
+  mask-image: linear-gradient(to left, #000 35%, transparent 95%);
   pointer-events: none;
   transition: opacity var(--speed) var(--ease);
 }
 .tool-tile-lg:hover .tool-tile-art {
-  opacity: 0.55;
+  opacity: 0.9;
 }
 .tool-tile-lg strong,
 .tool-tile-lg p {
@@ -438,19 +440,27 @@
 /* the picker's actual services, fanned like a pocketful of apps */
 .tool-tile-provs {
   position: absolute;
-  right: 2.6rem;
-  bottom: 0.85rem;
+  right: 1.1rem;
+  bottom: 0.95rem;
   display: flex;
   z-index: 1;
 }
 .tool-tile-provs img {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--surface-2);
-  margin-left: -7px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  margin-left: -9px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.55);
+}
+/* the large tiles park the chevron top-right so the art owns the lower band */
+.tool-tile-lg .chev-icon {
+  top: 1.15rem;
+  transform: none;
+}
+.tool-tile-lg:hover .chev-icon {
+  transform: translateX(2px);
 }
 .tool-tile-lg .chev-icon {
   position: absolute;

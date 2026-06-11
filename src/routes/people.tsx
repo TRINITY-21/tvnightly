@@ -361,9 +361,6 @@ app.get("/person/:slug", async (c) => {
                   </span>
                   {r.rating != null ? (
                     <span class="rank-score">
-                      <span class="rank-bar" aria-hidden="true">
-                        <span style={`width:${Math.round(r.rating * 10)}%`}></span>
-                      </span>
                       <span class="rating">★ {r.rating.toFixed(1)}</span>
                     </span>
                   ) : null}
@@ -394,9 +391,6 @@ app.get("/person/:slug", async (c) => {
                   </span>
                   {m.rating != null ? (
                     <span class="rank-score">
-                      <span class="rank-bar" aria-hidden="true">
-                        <span style={`width:${Math.round(m.rating * 10)}%`}></span>
-                      </span>
                       <span class="rating">★ {m.rating.toFixed(1)}</span>
                     </span>
                   ) : null}

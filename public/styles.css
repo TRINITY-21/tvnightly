@@ -940,23 +940,9 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.rank-score { display: flex; align-items: center; gap: 0.6rem; flex: 0 0 auto; }
-.rank-bar {
-  width: 64px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--surface-2);
-  overflow: hidden;
-}
-.rank-bar span {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  background: linear-gradient(90deg, rgba(255, 169, 77, 0.55), var(--accent));
-}
+.rank-score { display: flex; align-items: center; flex: 0 0 auto; }
 .rank-score .rating { font-size: 0.84rem; font-weight: 600; min-width: 3.1rem; text-align: right; }
 @media (max-width: 560px) {
-  .rank-bar { display: none; }
   .stat-num { font-size: 1.4rem; }
 }
 

@@ -208,9 +208,6 @@ app.get("/show/:slug", async (c) => {
                         {pitch ? <span class="top3-sub">{pitch}</span> : null}
                       </span>
                       <span class="rank-score">
-                        <span class="rank-bar">
-                          <span style={`width:${Math.round(e.rating! * 10)}%`}></span>
-                        </span>
                         <span class="rating">★ {e.rating!.toFixed(1)}</span>
                       </span>
                     </li>

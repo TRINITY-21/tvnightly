@@ -437,7 +437,6 @@ const rankedPage =
           ) : (
             <ShowTabs slug={show.slug} current={kind === "best" ? "best" : "worst"} />
           )}
-          {show.blurb && kind === "best" ? <p class="blurb">{show.blurb}</p> : null}
           {seasons.length > 1 && seasons.length <= 30 ? (
             <nav class="epreg-rail" aria-label="Filter by season">
               <span class="epreg-rail-label">Filter</span>

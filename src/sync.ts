@@ -118,8 +118,19 @@ export async function upsertShow(
     stmts.push(
       db
         .prepare(
-          `INSERT OR REPLACE INTO people (id, name, birthday, deathday, country, image_url, updated_at)
-           VALUES (?,?,?,?,?,?,unixepoch())`,
+          // subselects preserve the TMDB-enriched columns (bio, links…)
+          // across hourly refreshes, same pattern as shows.blurb
+          `INSERT OR REPLACE INTO people
+           (id, name, birthday, deathday, country, image_url, updated_at,
+            bio, birthplace, known_dept, tmdb_id, imdb_id, homepage, socials)
+           VALUES (?,?,?,?,?,?,unixepoch(),
+                   (SELECT bio FROM people WHERE id = ?),
+                   (SELECT birthplace FROM people WHERE id = ?),
+                   (SELECT known_dept FROM people WHERE id = ?),
+                   (SELECT tmdb_id FROM people WHERE id = ?),
+                   (SELECT imdb_id FROM people WHERE id = ?),
+                   (SELECT homepage FROM people WHERE id = ?),
+                   (SELECT socials FROM people WHERE id = ?))`,
         )
         .bind(
           p.id,
@@ -128,6 +139,13 @@ export async function upsertShow(
           p.deathday ?? null,
           p.country?.name ?? null,
           p.image?.medium ?? null,
+          p.id,
+          p.id,
+          p.id,
+          p.id,
+          p.id,
+          p.id,
+          p.id,
         ),
       db
         .prepare(

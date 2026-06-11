@@ -1700,6 +1700,13 @@ interface PersonRow {
   deathday: string | null;
   country: string | null;
   image_url: string | null;
+  bio: string | null;
+  birthplace: string | null;
+  known_dept: string | null;
+  tmdb_id: number | null;
+  imdb_id: string | null;
+  homepage: string | null;
+  socials: string | null; // JSON {ig, tw}
 }
 
 app.get("/person/:slug", async (c) => {
@@ -1714,12 +1721,22 @@ app.get("/person/:slug", async (c) => {
   const canonicalSlug = `${slugifyName(person.name)}-${person.id}`;
   if (slug !== canonicalSlug) return c.redirect(`/person/${canonicalSlug}`, 301);
 
-  const { results: roles } = await c.env.DB.prepare(
-    `SELECT cr.character, cr.voice, s.* FROM credits cr JOIN shows s ON s.id = cr.show_id
-     WHERE cr.person_id = ? ORDER BY s.weight DESC LIMIT 24`,
-  )
-    .bind(person.id)
-    .all<ShowRow & { character: string | null; voice: number }>();
+  const [{ results: roles }, { results: films }] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT cr.character, cr.voice, cr.episodes, s.*
+       FROM credits cr JOIN shows s ON s.id = cr.show_id
+       WHERE cr.person_id = ? ORDER BY cr.episodes DESC, s.weight DESC LIMIT 24`,
+    )
+      .bind(person.id)
+      .all<ShowRow & { character: string | null; voice: number; episodes: number | null }>(),
+    c.env.DB.prepare(
+      `SELECT mc.character, m.* FROM movie_credits mc JOIN movies m ON m.imdb_id = mc.movie_id
+       WHERE mc.person_id = ? ORDER BY m.popularity DESC LIMIT 18`,
+    )
+      .bind(person.id)
+      .all<MovieRow & { character: string | null }>(),
+  ]);
+  const socials: { ig?: string; tw?: string } = person.socials ? JSON.parse(person.socials) : {};
 
   const age = ageOf(person.birthday ?? undefined, person.deathday ?? undefined);
   const years =
@@ -1765,27 +1782,47 @@ app.get("/person/:slug", async (c) => {
             <div class="detail-info">
               <h1>{person.name}</h1>
               <p class="meta-strip">
-                {years ? (
-                  <span>{years}</span>
-                ) : age != null ? (
-                  <span>Age {age}</span>
+                {person.known_dept && person.known_dept !== "Acting" ? (
+                  <>
+                    <span>{person.known_dept}</span>
+                    <span class="sep">·</span>
+                  </>
                 ) : null}
-                {person.country ? (
+                {years ? (
+                  <span>
+                    {years}
+                    {age != null ? ` (aged ${age})` : ""}
+                  </span>
+                ) : age != null ? (
+                  <span>
+                    Age {age}
+                    {person.birthday ? ` — born ${person.birthday}` : ""}
+                  </span>
+                ) : null}
+                {person.birthplace || person.country ? (
                   <>
                     {age != null || years ? <span class="sep">·</span> : null}
-                    <span>{person.country}</span>
+                    <span>{person.birthplace ?? person.country}</span>
                   </>
                 ) : null}
                 {roles.length ? (
                   <>
-                    {age != null || years || person.country ? <span class="sep">·</span> : null}
+                    <span class="sep">·</span>
                     <span>
-                      {roles.length} show{roles.length === 1 ? "" : "s"} on TV Nightly
+                      {roles.length} show{roles.length === 1 ? "" : "s"}
+                      {films.length ? ` & ${films.length} film${films.length === 1 ? "" : "s"}` : ""}{" "}
+                      on TV Nightly
                     </span>
                   </>
                 ) : null}
               </p>
-              {roles.length ? (
+              {person.bio ? (
+                stripHtml(person.bio).length > 280 ? (
+                  <ClampSummary id="bio-clamp">{person.bio}</ClampSummary>
+                ) : (
+                  <div class="summary">{person.bio}</div>
+                )
+              ) : roles.length ? (
                 <p class="summary">
                   Best known around here for{" "}
                   {roles.slice(0, 2).map((r, i) => (
@@ -1798,22 +1835,56 @@ app.get("/person/:slug", async (c) => {
                   .
                 </p>
               ) : null}
+              <nav class="pill-nav">
+                {person.imdb_id ? (
+                  <a
+                    class="chev-after"
+                    href={`https://www.imdb.com/name/${person.imdb_id}/`}
+                    rel="noopener"
+                  >
+                    IMDb
+                  </a>
+                ) : null}
+                {socials.ig ? (
+                  <a
+                    class="chev-after"
+                    href={`https://www.instagram.com/${socials.ig}/`}
+                    rel="noopener"
+                  >
+                    Instagram
+                  </a>
+                ) : null}
+                {socials.tw ? (
+                  <a class="chev-after" href={`https://x.com/${socials.tw}`} rel="noopener">
+                    X
+                  </a>
+                ) : null}
+                {person.homepage ? (
+                  <a class="chev-after" href={person.homepage} rel="noopener">
+                    Website
+                  </a>
+                ) : null}
+              </nav>
             </div>
           </div>
         </header>
         {roles.length ? (
           <section>
-            <h2>Known for</h2>
+            <h2>TV shows</h2>
             <div class="grid">
               {roles.map((r) => (
                 <div class="card-stack">
                   <ShowCard show={r} />
-                  {r.character ? (
-                    <span class="credit-as muted">
-                      as {r.character}
-                      {r.voice ? " (voice)" : ""}
-                    </span>
-                  ) : null}
+                  <span class="credit-as muted">
+                    {r.character ? `as ${r.character}${r.voice ? " (voice)" : ""}` : ""}
+                    {r.character && (r.episodes || r.premiered) ? <br /> : null}
+                    {[
+                      r.episodes ? `${r.episodes} eps` : null,
+                      r.premiered ? r.premiered.slice(0, 4) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
                 </div>
               ))}
             </div>
@@ -1821,6 +1892,22 @@ app.get("/person/:slug", async (c) => {
         ) : (
           <p class="muted">No tracked roles yet — the sync adds shows hourly.</p>
         )}
+        {films.length ? (
+          <section>
+            <h2>Movies</h2>
+            <div class="grid">
+              {films.map((m) => (
+                <div class="card-stack">
+                  <MovieCard movie={m} />
+                  <span class="credit-as muted">
+                    {m.character ? `as ${m.character}` : ""}
+                    {m.character && m.year ? ` · ${m.year}` : (m.year ?? "")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </article>
     </Layout>,
   );

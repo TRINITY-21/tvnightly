@@ -31,7 +31,27 @@ export interface TvmShow {
   summary: string | null;
   externals: { imdb: string | null; thetvdb: number | null } | null;
   updated: number;
-  _embedded?: { episodes?: TvmEpisode[] };
+  _embedded?: { episodes?: TvmEpisode[]; cast?: TvmCastCredit[] };
+}
+
+export interface TvmCastCredit {
+  person: { name: string; image: { medium?: string } | null } | null;
+  character: { name: string | null } | null;
+}
+
+/** Top-billed cast as the compact JSON stored in shows.cast_json. */
+export function castJson(show: TvmShow): string | null {
+  const credits = show._embedded?.cast ?? [];
+  const seen = new Set<string>();
+  const cast = [];
+  for (const cr of credits) {
+    const n = cr.person?.name;
+    if (!n || seen.has(n)) continue; // actors repeat per character credit
+    seen.add(n);
+    cast.push({ n, c: cr.character?.name ?? null, img: cr.person?.image?.medium ?? null });
+    if (cast.length >= 10) break;
+  }
+  return cast.length ? JSON.stringify(cast) : null;
 }
 
 async function getJson<T>(path: string): Promise<T | null> {
@@ -42,7 +62,7 @@ async function getJson<T>(path: string): Promise<T | null> {
 }
 
 export const fetchShowWithEpisodes = (id: number) =>
-  getJson<TvmShow>(`/shows/${id}?embed=episodes`);
+  getJson<TvmShow>(`/shows/${id}?embed[]=episodes&embed[]=cast`);
 
 /** Map of TVmaze show id -> last-updated epoch, for shows touched in the window. */
 export const fetchUpdates = (since: "day" | "week" | "month" = "day") =>

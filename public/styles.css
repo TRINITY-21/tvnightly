@@ -592,6 +592,49 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 .subnav-scroll::-webkit-scrollbar { display: none; }
 .subnav-scroll a { white-space: nowrap; flex-shrink: 0; }
 
+/* cast rail: headshot cards, same edge-fade language as poster rails */
+.cast-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 108px;
+  gap: 0.8rem;
+  overflow-x: auto;
+  padding: 4px 32px 0.6rem 4px;
+  scroll-padding-right: 32px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-2) transparent;
+  mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 32px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 32px), transparent);
+}
+.cast-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+.cast-card img,
+.cast-fallback {
+  width: 100%;
+  aspect-ratio: 5 / 6;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+}
+.cast-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.4rem;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.cast-name { font-weight: 600; }
+.cast-char { font-size: 0.72rem; }
+
 /* top-3 episodes: editorial ranking numerals */
 .top3 { list-style: none; padding: 0; margin: 0; }
 .top3 li {

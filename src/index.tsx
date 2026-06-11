@@ -62,6 +62,7 @@ interface ShowRow {
   blurb: string | null;
   genres: string | null; // JSON string array, e.g. '["Drama","Crime"]'
   runtime: number | null;
+  cast_json: string | null; // JSON array: {n: name, c: character, img: headshot}
   providers_intl: string | null; // JSON object: country code -> service names
 }
 
@@ -267,6 +268,7 @@ const ShowTabs: FC<{ slug: string; imdbId?: string | null; current?: string }> =
     ["ratings", "Ratings graph", `/show/${slug}/ratings`],
     ["next", "Next episode", `/show/${slug}/next-episode`],
     ["release", "Release date", `/show/${slug}/release-date`],
+    ["cast", "Cast", `/show/${slug}#cast`],
   ];
   return (
     <nav class="subnav subnav-scroll">
@@ -1253,6 +1255,29 @@ app.get("/show/:slug", async (c) => {
                   </li>
                 ))}
               </ol>
+            </section>
+          ) : null;
+        })()}
+        {(() => {
+          const cast: { n: string; c: string | null; img: string | null }[] = show.cast_json
+            ? JSON.parse(show.cast_json)
+            : [];
+          return cast.length ? (
+            <section id="cast">
+              <h2>Cast</h2>
+              <div class="cast-row">
+                {cast.map((p) => (
+                  <div class="cast-card">
+                    {p.img ? (
+                      <img src={p.img} alt={p.n} loading="lazy" />
+                    ) : (
+                      <div class="cast-fallback">{p.n}</div>
+                    )}
+                    <span class="cast-name">{p.n}</span>
+                    {p.c ? <span class="cast-char muted">{p.c}</span> : null}
+                  </div>
+                ))}
+              </div>
             </section>
           ) : null;
         })()}

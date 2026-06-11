@@ -12,6 +12,8 @@
     "seed:load:local": "wrangler d1 execute tvnightly --local --file=seed/seed.sql",
     "seed:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/seed.sql",
     "blurbs:load:local": "wrangler d1 execute tvnightly --local --file=scripts/blurbs.sql",
+    "cast:backfill:local": "node scripts/backfill-cast.mjs",
+    "cast:backfill:remote": "REMOTE=1 node scripts/backfill-cast.mjs",
     "blurbs:load:remote": "wrangler d1 execute tvnightly --remote --file=scripts/blurbs.sql",
     "movies:fetch": "node scripts/seed-movies.mjs",
     "movies:load:local": "wrangler d1 execute tvnightly --local --file=seed/movies.sql",

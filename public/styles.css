@@ -549,6 +549,39 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 .detail-head h1 { font-size: clamp(1.8rem, 3.2vw, 2.3rem); }
 .detail-head .poster { width: 200px; }
 
+/* ---- detail pages: full-bleed cinematic hero (no card chrome) ----
+   The show's own art, blurred to ambient light, runs edge to edge and
+   melts into the page background. Content stays on the 948px column. */
+.show-hub .detail-hero {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  margin: -1rem calc(50% - 50vw) 0;
+  padding: 2.6rem 0 1.7rem;
+}
+.show-hub .hero-backdrop {
+  filter: blur(64px) saturate(1.15);
+  opacity: 0.35;
+}
+.show-hub .detail-hero::after {
+  /* darken for AA up top, dissolve into --bg at the bottom — no hard edge */
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 18, 20, 0.6) 0%,
+    rgba(18, 18, 20, 0.74) 55%,
+    var(--bg) 100%
+  );
+}
+.show-hub .detail-head {
+  max-width: 948px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+.show-hub .detail-head .poster {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
 /* show tab rail: scrolls instead of wrapping, ride below the hero */
 .subnav-scroll {
   overflow-x: auto;

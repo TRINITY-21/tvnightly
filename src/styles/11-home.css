@@ -47,8 +47,8 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-1);
-  /* deep bottom padding: the CTA stack floats over this curve */
-  padding: 1.35rem 1.5rem 3.6rem;
+  /* deep bottom padding: the CTA seat punches into this band */
+  padding: 1.35rem 1.5rem 4.4rem;
   min-width: 0;
 }
 /* the carve: the cards' inner-bottom corners curve away to seat the CTAs */
@@ -164,7 +164,8 @@
   }
 }
 
-/* the CTA stack sits in the carved seat between the two cards */
+/* the CTA seat: a page-dark moat punched through the cards' bottom band —
+   the moat's rounded edge is what makes the cards "curve around" the pill */
 .evening-cta {
   position: relative;
   z-index: 1;
@@ -172,18 +173,21 @@
   flex-direction: column;
   gap: 0.65rem;
   align-items: center;
-  width: 620px;
-  max-width: 92%;
-  margin: -3.4rem auto 0;
+  width: 440px;
+  max-width: 88%;
+  margin: -4.6rem auto 0;
+  background: var(--bg);
+  padding: 0.65rem;
+  border-radius: 26px;
 }
 .evening-cta .verdict-btn,
 .evening-cta .btn-ghost {
   display: block;
   width: 100%;
   text-align: center;
-  padding: 0.85rem 1.2rem;
-  border-radius: 14px;
-  font-size: 1.02rem;
+  padding: 0.75rem 1.1rem;
+  border-radius: 13px;
+  font-size: 0.98rem;
 }
 .evening-cta .verdict-btn {
   box-shadow: 0 8px 34px rgba(255, 169, 77, 0.3);

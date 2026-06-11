@@ -137,6 +137,46 @@ const providerBrand = (name: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+// Brand catalog for the /recommend services step: dedupe the 800+ TMDB provider
+// names down to one entry per brand (drop ad/channel reseller variants), display
+// name = first clean variant seen. Built once at module load.
+type ProviderEntry = { brand: string; name: string; logo: string };
+const PROVIDER_CATALOG: ProviderEntry[] = (() => {
+  const seen = new Map<string, ProviderEntry>();
+  for (const [name, logo] of Object.entries(PROVIDER_LOGOS)) {
+    if (!logo) continue;
+    if (/amazon channel|apple tv channel|with ads|roku premium channel/i.test(name)) continue;
+    const brand = providerBrand(name);
+    if (!brand || seen.has(brand)) continue;
+    seen.set(brand, { brand, name: name.trim(), logo });
+  }
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+})();
+const providerByBrand = (b: string) => PROVIDER_CATALOG.find((p) => p.brand === b);
+// Curated "Popular" tab (order matters); each canonical name resolves to its
+// catalog brand so spelling drift (Max↔HBO Max, Apple TV+↔Apple TV Plus) is tolerated.
+const resolveProviders = (names: string[], cap: number): ProviderEntry[] =>
+  names
+    .map((n) => providerByBrand(providerBrand(n)))
+    .filter((p, i, a): p is ProviderEntry => !!p && a.findIndex((x) => x?.brand === p.brand) === i)
+    .slice(0, cap);
+const POPULAR_PROVIDERS: ProviderEntry[] = resolveProviders(
+  ["Netflix", "Amazon Prime Video", "Hulu", "Disney Plus", "HBO Max", "Max",
+   "Paramount Plus", "Peacock Premium", "Apple TV Plus", "Apple TV", "Showtime", "MGM Plus"],
+  10,
+);
+// "All Services" tab: curated major streamers (resolved against the catalog, so
+// only ones we actually have logos for show up) — recognizable, not all 800.
+const MAJOR_PROVIDERS: ProviderEntry[] = resolveProviders(
+  ["Netflix", "Amazon Prime Video", "Hulu", "Disney Plus", "HBO Max", "Max", "Paramount Plus",
+   "Peacock Premium", "Apple TV Plus", "Apple TV", "Showtime", "MGM Plus", "Starz", "MUBI",
+   "Crunchyroll", "BritBox", "Criterion Channel", "Shudder", "AMC Plus", "Discovery Plus",
+   "Pluto TV", "Tubi", "Crackle", "Amazon Freevee", "Freevee", "fuboTV", "Hayu", "Stan",
+   "BINGE", "Sky Go", "The Roku Channel", "Acorn TV", "ESPN Plus", "Hotstar", "BBC iPlayer",
+   "ITVX", "Now TV", "Curiosity Stream"],
+  40,
+);
+
 // The where-to-watch answer is the conversion moment of every detail page:
 // recognizable platform logos instead of a wall of text chips, deduped by
 // brand. An empty result still answers (fallbackHref) instead of a silent gap.
@@ -1644,15 +1684,15 @@ app.get("/show/:slug/cast", async (c) => {
                   ) : (
                     <div class="cast-fallback">{p.name}</div>
                   )}
+                  {p.episodes ? (
+                    <span class="cast-eps">
+                      {p.episodes} ep{p.episodes === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                  {p.voice ? <span class="badge">Voice</span> : null}
                   <div class="cast-tile-body">
                     <strong>{p.name}</strong>
-                    {p.character ? <span class="cast-char muted">as {p.character}</span> : null}
-                    {p.episodes ? (
-                      <span class="cast-eps">
-                        {p.episodes} episode{p.episodes === 1 ? "" : "s"}
-                      </span>
-                    ) : null}
-                    {p.voice ? <span class="badge">Voice</span> : null}
+                    {p.character ? <span class="cast-char">as {p.character}</span> : null}
                   </div>
                 </a>
               );
@@ -1725,18 +1765,49 @@ app.get("/person/:slug", async (c) => {
     c.env.DB.prepare(
       `SELECT cr.character, cr.voice, cr.episodes, s.*
        FROM credits cr JOIN shows s ON s.id = cr.show_id
-       WHERE cr.person_id = ? ORDER BY cr.episodes DESC, s.weight DESC LIMIT 24`,
+       WHERE cr.person_id = ?
+       ORDER BY s.rating IS NULL, s.rating DESC, cr.episodes DESC LIMIT 24`,
     )
       .bind(person.id)
       .all<ShowRow & { character: string | null; voice: number; episodes: number | null }>(),
     c.env.DB.prepare(
       `SELECT mc.character, m.* FROM movie_credits mc JOIN movies m ON m.imdb_id = mc.movie_id
-       WHERE mc.person_id = ? ORDER BY m.popularity DESC LIMIT 18`,
+       WHERE mc.person_id = ?
+       ORDER BY m.rating IS NULL, m.rating DESC, m.popularity DESC LIMIT 18`,
     )
       .bind(person.id)
       .all<MovieRow & { character: string | null }>(),
   ]);
   const socials: { ig?: string; tw?: string } = person.socials ? JSON.parse(person.socials) : {};
+
+  // the stat band — everything from our own mirror
+  const nowYear = new Date().getFullYear();
+  const spanYears: number[] = [];
+  for (const r of roles) {
+    if (r.premiered) spanYears.push(Number(r.premiered.slice(0, 4)));
+    if (r.ended) spanYears.push(Number(r.ended.slice(0, 4)));
+    else if (r.status === "Running") spanYears.push(nowYear);
+  }
+  for (const m of films) if (m.year) spanYears.push(m.year);
+  const yearsActive = spanYears.length
+    ? `${Math.min(...spanYears)}–${Math.max(...spanYears)}`
+    : null;
+  const ratedCredits = [
+    ...roles.map((r) => ({ name: r.name, rating: r.rating })),
+    ...films.map((m) => ({ name: m.title, rating: m.rating })),
+  ].filter((x): x is { name: string; rating: number } => x.rating != null);
+  const topRated = ratedCredits.length
+    ? ratedCredits.reduce((a, b) => (b.rating > a.rating ? b : a))
+    : null;
+  const avgRating = ratedCredits.length
+    ? (ratedCredits.reduce((s, x) => s + x.rating, 0) / ratedCredits.length).toFixed(1)
+    : null;
+  const showYears = (r: ShowRow) =>
+    r.premiered
+      ? `${r.premiered.slice(0, 4)}${
+          r.ended ? `–${r.ended.slice(0, 4)}` : r.status === "Running" ? "–present" : ""
+        }`
+      : null;
 
   const age = ageOf(person.birthday ?? undefined, person.deathday ?? undefined);
   const years =
@@ -1868,44 +1939,108 @@ app.get("/person/:slug", async (c) => {
             </div>
           </div>
         </header>
+        {roles.length || films.length ? (
+          <section class="stat-band">
+            <div class="stat">
+              <span class="stat-num">{roles.length + films.length}</span>
+              <span class="stat-label">Tracked credits</span>
+              <span class="stat-sub muted">TV & film on TV Nightly</span>
+            </div>
+            {yearsActive ? (
+              <div class="stat">
+                <span class="stat-num">{yearsActive}</span>
+                <span class="stat-label">Years active</span>
+                <span class="stat-sub muted">across tracked work</span>
+              </div>
+            ) : null}
+            {topRated ? (
+              <div class="stat">
+                <span class="stat-num">
+                  {topRated.rating.toFixed(1)} <span class="rating">★</span>
+                </span>
+                <span class="stat-label">Top-rated</span>
+                <span class="stat-sub muted">{topRated.name}</span>
+              </div>
+            ) : null}
+            {avgRating && ratedCredits.length > 1 ? (
+              <div class="stat">
+                <span class="stat-num">
+                  {avgRating} <span class="rating">★</span>
+                </span>
+                <span class="stat-label">Avg rating</span>
+                <span class="stat-sub muted">across {ratedCredits.length} rated</span>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
         {roles.length ? (
           <section>
-            <h2>TV shows</h2>
-            <div class="grid">
-              {roles.map((r) => (
-                <div class="card-stack">
-                  <ShowCard show={r} />
-                  <span class="credit-as muted">
-                    {r.character ? `as ${r.character}${r.voice ? " (voice)" : ""}` : ""}
-                    {r.character && (r.episodes || r.premiered) ? <br /> : null}
-                    {[
-                      r.episodes ? `${r.episodes} eps` : null,
-                      r.premiered ? r.premiered.slice(0, 4) : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+            <h2>Top TV shows</h2>
+            <ol class="rank-list">
+              {roles.map((r, i) => (
+                <li class="rank-row">
+                  <span class="rank-num">{i + 1}</span>
+                  {r.image_url ? (
+                    <img class="rank-thumb" src={r.image_url} alt="" loading="lazy" />
+                  ) : (
+                    <span class="rank-thumb rank-thumb-empty" aria-hidden="true"></span>
+                  )}
+                  <span class="rank-main">
+                    <a href={`/show/${r.slug}`}>{r.name}</a>
+                    <span class="rank-sub muted">
+                      {[
+                        r.character ? `${r.character}${r.voice ? " (voice)" : ""}` : null,
+                        r.episodes ? `${r.episodes} ep${r.episodes === 1 ? "" : "s"}` : null,
+                        showYears(r),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
                   </span>
-                </div>
+                  {r.rating != null ? (
+                    <span class="rank-score">
+                      <span class="rank-bar" aria-hidden="true">
+                        <span style={`width:${Math.round(r.rating * 10)}%`}></span>
+                      </span>
+                      <span class="rating">★ {r.rating.toFixed(1)}</span>
+                    </span>
+                  ) : null}
+                </li>
               ))}
-            </div>
+            </ol>
           </section>
         ) : (
           <p class="muted">No tracked roles yet — the sync adds shows hourly.</p>
         )}
         {films.length ? (
           <section>
-            <h2>Movies</h2>
-            <div class="grid">
-              {films.map((m) => (
-                <div class="card-stack">
-                  <MovieCard movie={m} />
-                  <span class="credit-as muted">
-                    {m.character ? `as ${m.character}` : ""}
-                    {m.character && m.year ? ` · ${m.year}` : (m.year ?? "")}
+            <h2>Top movies</h2>
+            <ol class="rank-list">
+              {films.map((m, i) => (
+                <li class="rank-row">
+                  <span class="rank-num">{i + 1}</span>
+                  {m.poster_url ? (
+                    <img class="rank-thumb" src={m.poster_url} alt="" loading="lazy" />
+                  ) : (
+                    <span class="rank-thumb rank-thumb-empty" aria-hidden="true"></span>
+                  )}
+                  <span class="rank-main">
+                    <a href={`/movie/${m.slug}`}>{m.title}</a>
+                    <span class="rank-sub muted">
+                      {[m.character, m.year ? String(m.year) : null].filter(Boolean).join(" · ")}
+                    </span>
                   </span>
-                </div>
+                  {m.rating != null ? (
+                    <span class="rank-score">
+                      <span class="rank-bar" aria-hidden="true">
+                        <span style={`width:${Math.round(m.rating * 10)}%`}></span>
+                      </span>
+                      <span class="rating">★ {m.rating.toFixed(1)}</span>
+                    </span>
+                  ) : null}
+                </li>
               ))}
-            </div>
+            </ol>
           </section>
         ) : null}
       </article>
@@ -2515,11 +2650,57 @@ app.get("/calendar", async (c) => {
 // one." Only the anonymous verdict is saved (title_ratings/rate_log) — no
 // accounts, no client-side storage of user data.
 
-const VERDICTS: Record<string, "loved" | "liked" | "meh"> = {
+const VERDICTS: Record<string, "loved" | "liked" | "meh" | "awful"> = {
   love: "loved",
   like: "liked",
   meh: "meh",
+  awful: "awful", // deck-only strong negative; rate_log keeps the raw word
 };
+
+/**
+ * Save one anonymous verdict (dedup per hashed IP + title). Shared by the
+ * single-title POST /recommend path and the deck batch in POST /api/taste so
+ * the dedupe + aggregate-increment rule lives in exactly one place.
+ * Returns true if a NEW verdict was written (false = already rated before).
+ */
+async function saveVerdict(
+  db: D1Database,
+  hash: string,
+  kind: "tv" | "movie",
+  ref: string,
+  verdict: string,
+): Promise<boolean> {
+  const col = VERDICTS[verdict];
+  if (!col) return false;
+  const dup = await db
+    .prepare("SELECT 1 AS x FROM rate_log WHERE ip_hash = ? AND kind = ? AND ref = ?")
+    .bind(hash, kind, ref)
+    .first();
+  if (dup) return false;
+  await db.batch([
+    db
+      .prepare(
+        "INSERT OR IGNORE INTO rate_log (ip_hash, kind, ref, created_at, verdict) VALUES (?,?,?,unixepoch(),?)",
+      )
+      .bind(hash, kind, ref, verdict),
+    db
+      .prepare(
+        `INSERT INTO title_ratings (kind, ref, loved, liked, meh, awful) VALUES (?,?,?,?,?,?)
+         ON CONFLICT(kind, ref) DO UPDATE SET
+           loved = loved + excluded.loved, liked = liked + excluded.liked,
+           meh = meh + excluded.meh, awful = awful + excluded.awful`,
+      )
+      .bind(
+        kind,
+        ref,
+        col === "loved" ? 1 : 0,
+        col === "liked" ? 1 : 0,
+        col === "meh" ? 1 : 0,
+        col === "awful" ? 1 : 0,
+      ),
+  ]);
+  return true;
+}
 
 async function getRatedTitle(
   db: D1Database,
@@ -2887,43 +3068,91 @@ app.get("/recommend", async (c) => {
     );
   }
 
-  // Step 1: landing — search box + zero-typing quick picks.
-  const [{ results: topShows }, { results: topMovies }] = await Promise.all([
-    db.prepare("SELECT id, name FROM shows ORDER BY weight DESC LIMIT 8").all<{ id: number; name: string }>(),
-    db.prepare("SELECT imdb_id, title FROM movies ORDER BY popularity DESC LIMIT 4").all<{ imdb_id: string; title: string }>(),
-  ]);
-  c.header("Cache-Control", "public, max-age=3600");
+  // Step 1: landing — the guided taste flow (recommend.js) with the search box +
+  // quick picks as the no-JS / crawler fallback. Account-free: the deck below is
+  // generic (same for everyone → denser collaborative-filtering overlap), and
+  // every verdict is deduped + saved server-side, never client-side.
+  const region = visitorRegion(c);
+  const [{ results: topShows }, { results: topMovies }, { results: deckShows }, { results: deckMovies }] =
+    await Promise.all([
+      db.prepare("SELECT id, name FROM shows ORDER BY weight DESC LIMIT 8").all<{ id: number; name: string }>(),
+      db.prepare("SELECT imdb_id, title FROM movies ORDER BY popularity DESC LIMIT 4").all<{ imdb_id: string; title: string }>(),
+      db
+        .prepare(
+          "SELECT id, name, premiered, image_url FROM shows WHERE image_url IS NOT NULL AND weight >= 90 ORDER BY weight DESC LIMIT 22",
+        )
+        .all<{ id: number; name: string; premiered: string | null; image_url: string }>(),
+      db
+        .prepare(
+          "SELECT imdb_id, title, year, poster_url FROM movies WHERE poster_url IS NOT NULL ORDER BY popularity DESC LIMIT 22",
+        )
+        .all<{ imdb_id: string; title: string; year: number | null; poster_url: string }>(),
+    ]);
+
+  // Interleave shows and movies so the deck alternates medium + era; cap at 18.
+  const deck: { kind: "tv" | "movie"; ref: string; name: string; year: string | null; poster: string }[] = [];
+  for (let i = 0; i < Math.max(deckShows.length, deckMovies.length) && deck.length < 18; i++) {
+    const s = deckShows[i];
+    const m = deckMovies[i];
+    if (s) deck.push({ kind: "tv", ref: String(s.id), name: s.name, year: s.premiered?.slice(0, 4) ?? null, poster: s.image_url });
+    if (m) deck.push({ kind: "movie", ref: m.imdb_id, name: m.title, year: m.year ? String(m.year) : null, poster: m.poster_url });
+  }
+
+  const tasteData = {
+    region,
+    regions: REGIONS,
+    deck,
+    providers: {
+      popular: POPULAR_PROVIDERS.map((p) => ({ name: p.name, logo: p.logo })),
+      all: MAJOR_PROVIDERS.map((p) => ({ name: p.name, logo: p.logo })),
+    },
+  };
+
+  c.header("Cache-Control", "public, max-age=600");
   return c.html(
     <Layout
-      title="What should I watch next? Rate one thing, get your pick | TV Nightly"
-      description="Tell us the last show or movie you watched and how it landed — we'll pick your next watch. No account needed."
+      title="What should I watch next? Rate a few, get your matches | TV Nightly"
+      description="Rate a few films and shows, tell us your streaming services, and get personalized picks with a Match% — from raters who share your taste. No account needed."
       canonical={canonical(c)}
+      scripts={["/js/recommend.js"]}
     >
-      <h1>What should I watch next?</h1>
-      <p>Tell us the last thing you finished, and how it landed. We'll take it from there.</p>
-      <form method="get" action="/recommend" class="search">
-        <input type="search" name="q" placeholder="The last show or movie you watched…" required />
-        {ratedQS ? (
-          <input type="hidden" name="rated" value={fmtRated(parseRated(c.req.query("rated")))} />
-        ) : null}
-        <button type="submit" class="verdict-btn">Find it</button>
-      </form>
-      <h2>Or tap one you've seen</h2>
-      <p class="quick-picks">
-        {topShows.map((s) => (
-          <a class="chip" href={`/recommend?kind=tv&ref=${s.id}${ratedQS}`}>
-            {s.name}
-          </a>
-        ))}
-        {topMovies.map((m) => (
-          <a class="chip" href={`/recommend?kind=movie&ref=${m.imdb_id}${ratedQS}`}>
-            {m.title}
-          </a>
-        ))}
-      </p>
-      <p>
-        <a class="chev-after" href="/loved">See what the community loves</a>
-      </p>
+      <div id="taste" class="taste" data-region={region}>
+        {/* recommend.js replaces #taste-mount with the deck → services → reveal flow.
+            Without JS this stays: the original search + quick-pick fallback. */}
+        <div id="taste-mount" class="taste-fallback">
+          <h1>What should I watch next?</h1>
+          <p>Tell us the last thing you finished, and how it landed. We'll take it from there.</p>
+          <form method="get" action="/recommend" class="search">
+            <input type="search" name="q" placeholder="The last show or movie you watched…" required />
+            {ratedQS ? (
+              <input type="hidden" name="rated" value={fmtRated(parseRated(c.req.query("rated")))} />
+            ) : null}
+            <button type="submit" class="verdict-btn">Find it</button>
+          </form>
+          <h2>Or tap one you've seen</h2>
+          <p class="quick-picks">
+            {topShows.map((s) => (
+              <a class="chip" href={`/recommend?kind=tv&ref=${s.id}${ratedQS}`}>
+                {s.name}
+              </a>
+            ))}
+            {topMovies.map((m) => (
+              <a class="chip" href={`/recommend?kind=movie&ref=${m.imdb_id}${ratedQS}`}>
+                {m.title}
+              </a>
+            ))}
+          </p>
+          <p>
+            <a class="chev-after" href="/loved">See what the community loves</a>
+          </p>
+        </div>
+        {raw(
+          `<script type="application/json" id="taste-data">${JSON.stringify(tasteData).replaceAll(
+            "<",
+            "\\u003c",
+          )}</script>`,
+        )}
+      </div>
     </Layout>,
   );
 });
@@ -2962,6 +3191,187 @@ app.post("/recommend", async (c) => {
     `/recommend?kind=${kind}&ref=${encodeURIComponent(ref)}&v=${verdict}${prior ? `&rated=${encodeURIComponent(prior)}` : ""}`,
     303,
   );
+});
+
+// The deck flow posts its whole batch here: every verdict is saved anonymously
+// (dedup per hashed IP), an anonymous taste profile is upserted, and we return
+// personalized picks each with a Match%. Account-free — no name, nothing stored
+// client-side. Cold-start note: until rate_log fills, picks lean on genre
+// triangulation and Match% is honestly modest; it climbs as the community rates.
+interface TasteBody {
+  ratings?: { kind?: unknown; ref?: unknown; verdict?: unknown }[];
+  services?: unknown;
+  gender?: unknown;
+  age?: unknown;
+  region?: unknown;
+}
+const AGE_BUCKETS = ["u18", "18-24", "25-34", "35-44", "45-54", "55+"];
+
+app.post("/api/taste", async (c) => {
+  const db = c.env.DB;
+  let body: TasteBody;
+  try {
+    body = await c.req.json<TasteBody>();
+  } catch {
+    return c.json({ error: "bad json" }, 400);
+  }
+
+  // Validate the batch with the same rules parseRated enforces on the URL trail.
+  const seen = new Set<string>();
+  const ratings: { kind: "tv" | "movie"; ref: string; verdict: string }[] = [];
+  for (const r of Array.isArray(body.ratings) ? body.ratings.slice(0, 40) : []) {
+    const kind = r?.kind === "tv" || r?.kind === "movie" ? r.kind : null;
+    const ref = typeof r?.ref === "string" ? r.ref : "";
+    const verdict = typeof r?.verdict === "string" ? r.verdict : "";
+    if (!kind || !VERDICTS[verdict]) continue;
+    if (kind === "tv" && !/^\d+$/.test(ref)) continue;
+    if (kind === "movie" && !/^tt\d+$/.test(ref)) continue;
+    const key = `${kind}:${ref}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    ratings.push({ kind, ref, verdict });
+  }
+
+  const region =
+    typeof body.region === "string" && REGIONS.includes(body.region.toUpperCase())
+      ? body.region.toUpperCase()
+      : visitorRegion(c);
+  const services = Array.isArray(body.services)
+    ? body.services.filter((s): s is string => typeof s === "string").slice(0, 40)
+    : [];
+  const serviceBrands = new Set(services.map(providerBrand));
+  const gender = ["female", "male", "nonbinary"].includes(String(body.gender)) ? String(body.gender) : null;
+  const ageBucket = AGE_BUCKETS.includes(String(body.age)) ? String(body.age) : null;
+
+  const ip = c.req.header("cf-connecting-ip") ?? "0.0.0.0";
+  const hash = await ipHash(c.env.SECRET ?? "anon-salt", ip);
+
+  // Persist anonymous verdicts + the anonymous profile.
+  for (const r of ratings) await saveVerdict(db, hash, r.kind, r.ref, r.verdict);
+  if (gender || ageBucket || services.length) {
+    await db
+      .prepare(
+        `INSERT INTO taste_profiles (ip_hash, gender, age_bucket, services, region, updated_at)
+         VALUES (?,?,?,?,?,unixepoch())
+         ON CONFLICT(ip_hash) DO UPDATE SET gender = excluded.gender, age_bucket = excluded.age_bucket,
+           services = excluded.services, region = excluded.region, updated_at = excluded.updated_at`,
+      )
+      .bind(hash, gender, ageBucket, services.length ? JSON.stringify(services) : null, region)
+      .run();
+  }
+
+  // Exclude everything rated now or before from the picks.
+  const positives = ratings.filter((r) => r.verdict === "love" || r.verdict === "like");
+  const exclude = new Set(ratings.map((r) => `${r.kind}:${r.ref}`));
+  const { results: prior } = await db
+    .prepare("SELECT kind, ref FROM rate_log WHERE ip_hash = ? LIMIT 300")
+    .bind(hash)
+    .all<{ kind: string; ref: string }>();
+  for (const p of prior) exclude.add(`${p.kind}:${p.ref}`);
+
+  type Pick = { kind: "tv" | "movie"; ref: string; row: ShowRow | MovieRow; n: number; cf: boolean };
+  const picks = new Map<string, Pick>();
+
+  if (positives.length) {
+    // Collaborative filtering: raters who loved your loves also loved…
+    const pairCond = positives.map(() => "(r1.kind = ? AND r1.ref = ?)").join(" OR ");
+    const { results: cfRows } = await db
+      .prepare(
+        `SELECT r2.kind AS kind, r2.ref AS ref, COUNT(DISTINCT r2.ip_hash) AS n
+         FROM rate_log r1 JOIN rate_log r2 ON r2.ip_hash = r1.ip_hash
+         WHERE r1.verdict IN ('love','like') AND (${pairCond})
+           AND r2.verdict IN ('love','like') AND r2.ip_hash != ?
+           AND NOT (r2.kind = r1.kind AND r2.ref = r1.ref)
+         GROUP BY r2.kind, r2.ref ORDER BY n DESC LIMIT 30`,
+      )
+      .bind(...positives.flatMap((e) => [e.kind, e.ref]), hash)
+      .all<{ kind: string; ref: string; n: number }>();
+    const cfShowIds = cfRows.filter((r) => r.kind === "tv" && r.n >= 2 && !exclude.has(`tv:${r.ref}`)).slice(0, 12);
+    const cfMovieIds = cfRows.filter((r) => r.kind === "movie" && r.n >= 2 && !exclude.has(`movie:${r.ref}`)).slice(0, 12);
+    if (cfShowIds.length) {
+      const ph = cfShowIds.map(() => "?").join(",");
+      const { results } = await db.prepare(`SELECT * FROM shows WHERE id IN (${ph})`).bind(...cfShowIds.map((r) => Number(r.ref))).all<ShowRow>();
+      for (const s of results) picks.set(`tv:${s.id}`, { kind: "tv", ref: String(s.id), row: s, n: cfShowIds.find((r) => Number(r.ref) === s.id)!.n, cf: true });
+    }
+    if (cfMovieIds.length) {
+      const ph = cfMovieIds.map(() => "?").join(",");
+      const { results } = await db.prepare(`SELECT * FROM movies WHERE imdb_id IN (${ph})`).bind(...cfMovieIds.map((r) => r.ref)).all<MovieRow>();
+      for (const m of results) picks.set(`movie:${m.imdb_id}`, { kind: "movie", ref: m.imdb_id, row: m, n: cfMovieIds.find((r) => r.ref === m.imdb_id)!.n, cf: true });
+    }
+    // Genre triangulation fills out (and carries cold-start before CF has data).
+    for (const e of positives) {
+      const t = await getRatedTitle(db, e.kind, e.ref);
+      if (!t) continue;
+      if (t.show)
+        for (const s of await similarShows(db, t.show)) {
+          const key = `tv:${s.id}`;
+          if (exclude.has(key)) continue;
+          const cur = picks.get(key);
+          if (cur) cur.n += 1;
+          else picks.set(key, { kind: "tv", ref: String(s.id), row: s, n: 1, cf: false });
+        }
+      if (t.movie)
+        for (const m of await similarMovies(db, t.movie)) {
+          const key = `movie:${m.imdb_id}`;
+          if (exclude.has(key)) continue;
+          const cur = picks.get(key);
+          if (cur) cur.n += 1;
+          else picks.set(key, { kind: "movie", ref: m.imdb_id, row: m, n: 1, cf: false });
+        }
+    }
+  }
+
+  const shape = (p: Pick) => {
+    const prov = providersFor(p.row, region);
+    const provBrands = [...new Set(prov.names.map(providerBrand))];
+    const onService = serviceBrands.size > 0 && provBrands.some((b) => serviceBrands.has(b));
+    const rating = p.row.rating ?? 0;
+    let match = p.cf ? 58 + p.n * 8 : 48 + p.n * 6 + Math.max(0, rating - 7) * 6;
+    if (onService) match += 6;
+    match = Math.max(40, Math.min(97, Math.round(match)));
+    const isShow = p.kind === "tv";
+    const show = p.row as ShowRow;
+    const movie = p.row as MovieRow;
+    return {
+      kind: p.kind,
+      ref: p.ref,
+      name: isShow ? show.name : movie.title,
+      year: isShow ? show.premiered?.slice(0, 4) ?? null : movie.year ? String(movie.year) : null,
+      poster: isShow ? show.image_url : movie.poster_url,
+      href: isShow ? `/show/${show.slug}` : `/movie/${movie.slug}`,
+      rating: rating || null,
+      match,
+      cf: p.cf,
+      providerNames: prov.names.slice(0, 4),
+      onService,
+    };
+  };
+
+  let out = [...picks.values()].map(shape);
+
+  // Always land on something: if the engine is empty (all meh/awful, or cold
+  // start with no positives), reveal community-loved, highly-rated titles.
+  if (!out.length) {
+    const [{ results: fbShows }, { results: fbMovies }] = await Promise.all([
+      db.prepare("SELECT * FROM shows WHERE image_url IS NOT NULL AND rating >= 7.8 ORDER BY weight DESC LIMIT 10").all<ShowRow>(),
+      db.prepare("SELECT * FROM movies WHERE poster_url IS NOT NULL AND rating >= 7.8 ORDER BY popularity DESC LIMIT 10").all<MovieRow>(),
+    ]);
+    const fb: Pick[] = [
+      ...fbShows.map((s) => ({ kind: "tv" as const, ref: String(s.id), row: s as ShowRow | MovieRow, n: 0, cf: false })),
+      ...fbMovies.map((m) => ({ kind: "movie" as const, ref: m.imdb_id, row: m as ShowRow | MovieRow, n: 0, cf: false })),
+    ].filter((p) => !exclude.has(`${p.kind}:${p.ref}`));
+    out = fb.map(shape);
+  }
+
+  // Streamable-on-your-services first, then by Match%.
+  out.sort((a, b) => Number(b.onService) - Number(a.onService) || b.match - a.match);
+  const top = out.slice(0, 12);
+  const profileMatch = top.length
+    ? Math.round(top.slice(0, 6).reduce((s, p) => s + p.match, 0) / Math.min(6, top.length))
+    : 0;
+
+  c.header("Cache-Control", "no-store");
+  return c.json({ profileMatch, picks: top, region, savedRatings: ratings.length });
 });
 
 // --------------------------------------------------- directory & charts

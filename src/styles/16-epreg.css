@@ -1,0 +1,382 @@
+/* ---- the episode register: best/worst episodes as an archival record ----
+   Open hairline rows in the dossier bloodline: rank numeral spine, episode
+   still, chyron meta, dotted leader into the gold rating, clamped summary,
+   vote pills. Two tiers only — the top plates and the register; the size
+   shift between rank 03 and 04 is the entire announcement. No gradients,
+   no transforms: archive photos don't perform. */
+
+/* the masthead title drops the all-caps voice; the verdict word and the
+   show name carry the weight — "The BEST episodes of THE FLASH" */
+.epreg-h1 {
+  text-transform: none;
+}
+.epreg-h1 .epreg-kind,
+.epreg-h1 a {
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+/* season filter band: chyron tokens, optionally with the run spectrum */
+.epreg-rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.55rem 0 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+.epreg-rail-label {
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.epreg-all,
+.epreg-seg-label {
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+a.epreg-all,
+.epreg-seg {
+  color: var(--muted);
+  padding: 0.5rem 0.2rem;
+  margin: -0.35rem 0;
+  text-decoration: none;
+}
+a.epreg-all:hover,
+.epreg-seg:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+a.epreg-all[aria-current],
+.epreg-seg[aria-current] {
+  color: var(--text);
+}
+a.epreg-all[aria-current],
+.epreg-seg[aria-current] .epreg-seg-label {
+  box-shadow: 0 2px 0 var(--accent);
+}
+.epreg-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.epreg-cells {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+/* one cell per episode slot; lit = that slot made the listed 25 — top-list
+   membership is a fact printed nowhere else, so the spectrum earns its ink */
+.epreg-cell {
+  width: 3px;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--surface-2);
+}
+.epreg-cell.is-lit {
+  background: var(--text);
+  opacity: 0.85;
+}
+
+.epreg-method {
+  margin: 0.8rem 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* the register */
+ol.epreg {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+}
+.epreg li {
+  display: grid;
+  grid-template-columns: 3.4rem auto 1fr;
+  column-gap: 1rem;
+  padding: 0.85rem 0.35rem;
+  border-top: 1px solid var(--line);
+  align-items: start;
+  transition: background-color var(--speed) var(--ease);
+}
+.epreg li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.epreg li:hover {
+  background: rgba(248, 246, 242, 0.03);
+}
+.epreg--textonly li {
+  grid-template-columns: 3.4rem 1fr;
+}
+.epreg-num {
+  font-family: var(--display);
+  font-stretch: 62%;
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1.1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  opacity: 0.55;
+  transition: color var(--speed) var(--ease), opacity var(--speed) var(--ease);
+}
+.epreg li:hover .epreg-num {
+  color: var(--text);
+  opacity: 1;
+}
+li.epreg-plate .epreg-num {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--text);
+  opacity: 1;
+}
+.epreg-still-link {
+  display: block;
+  line-height: 0;
+}
+.epreg-still {
+  display: block;
+  width: 168px;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  transition: border-color var(--speed) var(--ease);
+}
+.epreg-still-link:hover .epreg-still,
+.epreg-still-link:focus-visible .epreg-still {
+  border-color: var(--accent);
+}
+li.epreg-plate .epreg-still {
+  width: 256px;
+}
+/* missing still: the episode code typeset on the slate — data, not apology */
+.epreg-still--empty {
+  display: grid;
+  place-items: center;
+  width: 168px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-family: var(--display);
+  font-stretch: 88%;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+li.epreg-plate .epreg-still--empty {
+  width: 256px;
+  font-size: 1.05rem;
+}
+.epreg-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+.epreg-meta {
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.epreg-meta .epreg-code {
+  color: var(--text);
+}
+.epreg-meta .sep {
+  opacity: 0.5;
+}
+.epreg-line {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+a.epreg-name {
+  color: var(--text);
+  font-weight: 650;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+a.epreg-name:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+li.epreg-plate a.epreg-name {
+  font-size: 1.15rem;
+}
+.epreg-leader {
+  flex: 1;
+  min-width: 1.5rem;
+  border-bottom: 1px dotted rgba(182, 177, 169, 0.35);
+  transform: translateY(-0.22em);
+}
+.epreg .rating {
+  font-size: 1.02rem;
+}
+li.epreg-plate .rating {
+  font-size: 1.15rem;
+}
+.epreg-sum {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  max-width: 65ch;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+/* the plate answers "best episode of X" in full — never clamp rank 01 */
+li.epreg-plate .epreg-sum {
+  display: block;
+  -webkit-line-clamp: none;
+}
+.epreg-verdict {
+  margin-top: 0.35rem;
+}
+/* reset 08-forms' inline-flow margin; the pills sit in their own band here */
+.epreg-verdict .vote {
+  margin-left: 0;
+  vertical-align: baseline;
+}
+.epreg-verdict .vote-btn {
+  padding: 0.4rem 0.85rem;
+}
+
+/* cross-ranking rail: chyron doors, no preamble */
+.epreg-links {
+  margin: 1.1rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 1.1rem;
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.epreg-links a {
+  color: var(--accent);
+  padding: 0.45rem 0.15rem;
+  margin: -0.3rem 0;
+}
+.epreg-links a:hover {
+  text-decoration: none;
+}
+
+@media (max-width: 700px) {
+  .epreg li {
+    column-gap: 0.7rem;
+    padding: 0.8rem 0.1rem;
+  }
+  .epreg-still,
+  .epreg-still--empty {
+    width: 136px;
+  }
+  li.epreg-plate .epreg-still,
+  li.epreg-plate .epreg-still--empty {
+    width: 224px;
+  }
+}
+@media (max-width: 560px) {
+  .epreg-rail {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .epreg-rail::-webkit-scrollbar {
+    display: none;
+  }
+  .epreg-cell {
+    width: 2px;
+    height: 12px;
+  }
+  .epreg-cells {
+    gap: 1px;
+  }
+  .epreg li {
+    grid-template-columns: 1.9rem auto 1fr;
+    column-gap: 0.6rem;
+  }
+  .epreg--textonly li {
+    grid-template-columns: 1.9rem 1fr;
+  }
+  .epreg-num {
+    font-size: 1.05rem;
+  }
+  .epreg-still,
+  .epreg-still--empty {
+    width: 104px;
+  }
+  .epreg-leader,
+  .epreg-rt {
+    display: none;
+  }
+  a.epreg-name {
+    white-space: normal;
+  }
+  .epreg .rating {
+    margin-left: auto;
+  }
+  .epreg-sum {
+    -webkit-line-clamp: 2;
+  }
+  /* the plate reflows: full-width still, numeral spine beside the text */
+  li.epreg-plate {
+    grid-template-columns: 1.9rem 1fr;
+    grid-template-areas:
+      "still still"
+      "num main";
+    row-gap: 0.5rem;
+  }
+  li.epreg-plate .epreg-still-link {
+    grid-area: still;
+  }
+  li.epreg-plate .epreg-still,
+  li.epreg-plate .epreg-still--empty {
+    width: 100%;
+  }
+  li.epreg-plate .epreg-num {
+    grid-area: num;
+    font-size: 1.3rem;
+    align-self: start;
+  }
+  li.epreg-plate .epreg-main {
+    grid-area: main;
+  }
+  li.epreg-plate .epreg-sum {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+  }
+  .epreg-verdict .vote-btn {
+    padding: 0.5rem 0.95rem;
+  }
+}

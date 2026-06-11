@@ -66,9 +66,11 @@
   flex-wrap: wrap;
   gap: 0 0.4rem;
 }
-/* genre tokens are doors into /genre/{slug} — chyron-quiet until hover */
+/* genre tokens are doors into /genre/{slug} — set in the same quiet voice
+   as the register's date line so they inform without distracting; shared
+   genres keep only a faint lift over the flavor tokens */
 .dossier-genres a {
-  color: var(--text);
+  color: var(--muted);
 }
 .dossier-genres a:hover {
   color: var(--accent);
@@ -76,7 +78,7 @@
 }
 .dossier-genres .g-dim {
   color: var(--muted);
-  opacity: 0.75;
+  opacity: 0.7;
 }
 .dossier-genres a.g-dim:hover {
   color: var(--accent);

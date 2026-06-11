@@ -1,9 +1,12 @@
 import { Hono, Context } from "hono";
 import { raw } from "hono/html";
 import { Bindings, EpisodeRow, EventRow } from "../types";
-import { stripHtml, epCode, epHref } from "../lib/format";
+import { stripHtml, epCode, epHref, posterSrc, longDate, largeStill } from "../lib/format";
 import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, similarShows } from "../lib/queries";
+import { visitorRegion } from "../lib/providers";
+import { buildDossier } from "../lib/dossier";
+import { DossierRow } from "../components/dossier";
 import { Layout, COUNTDOWN_JS } from "../components/Layout";
 import { ShowTabs, SeasonTabs } from "../components/nav";
 import { StatusBadge } from "../components/cards";
@@ -339,12 +342,15 @@ const rankedPage =
     const kind = order === "DESC" ? "best" : "worst";
     const base = `/show/${show.slug}/${kind}-episodes`;
 
-    // Optional per-season filter, validated against the show's real seasons.
+    // One grouped pass: validates the ?season filter and sizes the run
+    // spectrum (one cell per episode slot).
     const { results: seasonRows } = await c.env.DB.prepare(
-      "SELECT DISTINCT season AS s FROM episodes WHERE show_id = ? AND season IS NOT NULL ORDER BY season",
+      `SELECT season AS s, MAX(number) AS maxn
+       FROM episodes WHERE show_id = ? AND season IS NOT NULL
+       GROUP BY season ORDER BY season`,
     )
       .bind(show.id)
-      .all<{ s: number }>();
+      .all<{ s: number; maxn: number | null }>();
     const seasons = seasonRows.map((r) => r.s);
     const rawSeason = (c.req.query("season") ?? "").trim();
     let season: number | null = null;
@@ -363,7 +369,18 @@ const rankedPage =
       .bind(...(season != null ? [show.id, season] : [show.id]))
       .all<EpisodeRow & { up: number | null; down: number | null }>();
 
+    // the run spectrum: one cell per episode slot, the listed 25 lit —
+    // top-list membership is printed nowhere else on the page
+    const totalCells = seasonRows.reduce((n, r) => n + (r.maxn ?? 0), 0);
+    const spectrum = seasons.length >= 2 && seasons.length <= 12 && totalCells <= 120;
+    const lit = new Set(eps.map((e) => `${e.season}:${e.number}`));
+
+    const anyStill = eps.some((e) => e.image_url);
+    const plates = eps.length >= 10 ? 3 : eps.length >= 4 ? 1 : 0;
+    const q = season != null ? `?season=${season}` : "";
+
     const similar = kind === "best" ? await similarShows(c.env.DB, show) : [];
+    const region = visitorRegion(c);
     const site = origin(c);
     const path = new URL(c.req.url).pathname;
     const seasonLabel = season != null ? ` Season ${season}` : "";
@@ -381,6 +398,17 @@ const rankedPage =
       },
     ];
 
+    const method = [
+      season != null
+        ? `Season ${season} only — ranked by viewer rating, ${kind === "best" ? "highs" : "lows"} first.`
+        : `Ranked by viewer rating, ${kind === "best" ? "highs" : "lows"} first.`,
+      spectrum ? "Lit marks on the season rail place this list across the run." : null,
+      "Vote on a placement to back it or contest it.",
+      eps.length < 10 ? "Fewer than 10 rated episodes — treat this ranking as provisional." : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     c.header("Cache-Control", "public, max-age=3600");
     return c.html(
       <Layout
@@ -391,11 +419,17 @@ const rankedPage =
         canonical={season != null ? `${site}${base}?season=${season}` : `${site}${base}`}
         ogImage={show.poster_url ?? show.image_url ?? undefined}
         scripts={["/js/votes.js"]}
+        preloadImage={
+          eps[0]?.image_url
+            ? { x1: eps[0].image_url, x2: largeStill(eps[0].image_url) }
+            : undefined
+        }
         ld={ld}
       >
         <article data-show-id={String(show.id)}>
-          <h1>
-            The {kind} episodes of <a href={`/show/${show.slug}`}>{show.name}</a>
+          <h1 class="epreg-h1">
+            The <span class="epreg-kind">{kind}</span> episodes of{" "}
+            <a href={`/show/${show.slug}`}>{show.name}</a>
             {seasonLabel}
           </h1>
           {season != null ? (
@@ -405,70 +439,123 @@ const rankedPage =
           )}
           {show.blurb && kind === "best" ? <p class="blurb">{show.blurb}</p> : null}
           {seasons.length > 1 && seasons.length <= 30 ? (
-            <p class="muted">
-              Filter: <a href={base}>{season == null ? <strong>All</strong> : "All"}</a>
+            <nav class="epreg-rail" aria-label="Filter by season">
+              <span class="epreg-rail-label">Filter</span>
+              <a class="epreg-all" href={base} aria-current={season == null ? "page" : undefined}>
+                All
+              </a>
               {seasons.map((s) => (
-                <>
-                  {" · "}
-                  <a href={`${base}?season=${s}`}>
-                    {season === s ? <strong>S{s}</strong> : `S${s}`}
-                  </a>
-                </>
+                <a
+                  class="epreg-seg"
+                  href={`${base}?season=${s}`}
+                  aria-current={season === s ? "page" : undefined}
+                >
+                  <span class="epreg-seg-label">S{s}</span>
+                  {spectrum ? (
+                    <span class="epreg-cells">
+                      {Array.from({ length: seasonRows.find((r) => r.s === s)?.maxn ?? 0 }, (_, i) => (
+                        <i class={lit.has(`${s}:${i + 1}`) ? "epreg-cell is-lit" : "epreg-cell"}></i>
+                      ))}
+                    </span>
+                  ) : null}
+                </a>
               ))}
-            </p>
+            </nav>
           ) : null}
-          {eps.length < 10 ? (
-            <p class="muted">
-              Not enough rated episodes yet for a reliable ranking — check back as ratings come in.
-            </p>
-          ) : null}
-          <ol class="ranked">
-            {eps.map((e) => (
-              <li>
-                <strong>
-                  <a href={epHref(show.slug, e)}>{e.name}</a>
-                </strong>{" "}
-                <span class="muted">{epCode(e)}</span>
-                <span class="rating"> ★ {e.rating!.toFixed(1)}</span>
-                <span class="vote" data-ep-id={String(e.id)}>
-                  <button class="vote-btn" data-dir="up" aria-label="Agree with this ranking">
-                    <ChevUp /> <span class="vote-count">{e.up ?? 0}</span>
-                  </button>
-                  <button class="vote-btn" data-dir="down" aria-label="Disagree with this ranking">
-                    <ChevDown /> <span class="vote-count">{e.down ?? 0}</span>
-                  </button>
+          <p class="epreg-method">{method}</p>
+          <ol class={anyStill ? "epreg" : "epreg epreg--textonly"}>
+            {eps.map((e, i) => (
+              <li class={i < plates ? "epreg-plate" : undefined}>
+                <span class="epreg-num">{String(i + 1).padStart(2, "0")}</span>
+                {anyStill ? (
+                  <a class="epreg-still-link" href={epHref(show.slug, e)} tabindex={-1} aria-hidden="true">
+                    {e.image_url ? (
+                      <img
+                        class="epreg-still"
+                        src={e.image_url}
+                        srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
+                        width={i < plates ? "256" : "168"}
+                        height={i < plates ? "144" : "95"}
+                        alt=""
+                        loading={i === 0 ? "eager" : "lazy"}
+                        fetchpriority={i === 0 ? "high" : undefined}
+                        decoding="async"
+                      />
+                    ) : (
+                      <span class="epreg-still--empty">{epCode(e)}</span>
+                    )}
+                  </a>
+                ) : null}
+                <span class="epreg-main">
+                  <p class="epreg-meta">
+                    <span class="epreg-code">{epCode(e)}</span>
+                    {e.airdate ? (
+                      <>
+                        <span class="sep"> · </span>
+                        {longDate(e.airdate)}
+                      </>
+                    ) : null}
+                    {e.runtime ? (
+                      <>
+                        <span class="sep"> · </span>
+                        <span class="epreg-rt">{e.runtime} min</span>
+                      </>
+                    ) : null}
+                  </p>
+                  <p class="epreg-line">
+                    <a class="epreg-name" href={epHref(show.slug, e)}>
+                      {e.name ?? epCode(e)}
+                    </a>
+                    <span class="epreg-leader"></span>
+                    <span class="rating">★ {e.rating!.toFixed(1)}</span>
+                  </p>
+                  {e.summary ? <p class="epreg-sum">{stripHtml(e.summary)}</p> : null}
+                  <div class="epreg-verdict">
+                    <span class="vote" data-ep-id={String(e.id)}>
+                      <button class="vote-btn" data-dir="up" aria-label="Agree with this ranking">
+                        <ChevUp /> <span class="vote-count">{e.up ?? 0}</span>
+                      </button>
+                      <button class="vote-btn" data-dir="down" aria-label="Disagree with this ranking">
+                        <ChevDown /> <span class="vote-count">{e.down ?? 0}</span>
+                      </button>
+                    </span>
+                  </div>
                 </span>
-                {e.summary ? <p class="muted">{stripHtml(e.summary)}</p> : null}
               </li>
             ))}
           </ol>
-          {kind === "best" ? (
-            <p>
-              Short on time?{" "}
-              <a href={`/show/${show.slug}/essential${season != null ? `?season=${season}` : ""}`}>
-                The essential watch list
-              </a>{" "}
-              ·{" "}
-              <a href={`/show/${show.slug}/worst-episodes${season != null ? `?season=${season}` : ""}`}>
-                Worst episodes
-              </a>{" "}
-              ·{" "}
-              <a href={`/show/${show.slug}/ratings${season != null ? `?season=${season}` : ""}`}>
-                Ratings graph
-              </a>{" "}
-              · <a href="/best-episodes">All-time top 100</a>
-            </p>
-          ) : null}
+          <nav class="epreg-links" aria-label={`More ${show.name} rankings`}>
+            {kind === "best" ? (
+              <a href={`/show/${show.slug}/essential${q}`}>Essential watch list</a>
+            ) : (
+              <a href={`/show/${show.slug}/best-episodes${q}`}>Best episodes</a>
+            )}
+            {kind === "best" ? (
+              <a href={`/show/${show.slug}/worst-episodes${q}`}>Worst episodes</a>
+            ) : (
+              <a href={`/show/${show.slug}/essential${q}`}>Essential watch list</a>
+            )}
+            <a href={`/show/${show.slug}/ratings${q}`}>Ratings graph</a>
+            <a href="/best-episodes">All-time top 100</a>
+          </nav>
           {similar.length ? (
             <section>
               <h2>More like {show.name}</h2>
-              <ul class="ep-list">
-                {similar.map((s) => (
-                  <li>
-                    <a href={`/show/${s.slug}/best-episodes`}>The best episodes of {s.name}</a>
-                  </li>
+              <p class="dossier-method">
+                The closest matches on shared genres, ranked by match strength and popularity.
+              </p>
+              <ol class="dossier-board">
+                {similar.map((s, i) => (
+                  <DossierRow
+                    i={i}
+                    href={`/show/${s.slug}/best-episodes`}
+                    name={`The best episodes of ${s.name}`}
+                    d={buildDossier(show, s, region)}
+                    rating={s.rating}
+                    poster={posterSrc(s)}
+                  />
                 ))}
-              </ul>
+              </ol>
             </section>
           ) : null}
           <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />

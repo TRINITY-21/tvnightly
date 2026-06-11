@@ -65,6 +65,11 @@ export const retinaSet = (url: string | null): string | undefined =>
     ? `${url} 1x, ${url.replace(/\/medium_(portrait|landscape)\//, "/original_untouched/")} 2x`
     : undefined;
 
+/** Bounded retina still for register slots (~400w): a 168–256px slot wants
+ *  large_landscape, never the unbounded original_untouched. */
+export const largeStill = (url: string): string =>
+  url.replace("/medium_landscape/", "/large_landscape/");
+
 /** ONE poster per show, everywhere: the backfilled TMDB one-sheet when the
  *  bridge exists, the TVmaze poster otherwise — same art on cards, heroes,
  *  and ledger rows. */

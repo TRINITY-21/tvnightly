@@ -74,7 +74,7 @@ export const SeasonTabs: FC<{
     ["ratings", "Ratings graph", `/show/${slug}/ratings${q}`],
     ["similar", "Similar shows", `/show/${slug}/similar`],
     ["cast", "Cast", `/show/${slug}/cast${q}`],
-    ["media", "Media", `/show/${slug}/media`],
+    // Media rides the main show rail only
   ];
   return (
     <nav class="subnav subnav-scroll">

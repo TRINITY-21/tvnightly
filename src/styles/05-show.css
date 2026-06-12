@@ -395,7 +395,10 @@ a.cast-tile:hover { text-decoration: none; }
   text-transform: uppercase;
   color: var(--muted);
 }
-.ep-eyebrow a { color: var(--accent); }
+/* quiet until interaction — the crumb is wayfinding, not a callout */
+.ep-eyebrow a { color: var(--muted); transition: color var(--speed) var(--ease); }
+.ep-eyebrow a:hover,
+.ep-eyebrow a:focus-visible { color: var(--accent); text-decoration: none; }
 .ep-eyebrow .sep { opacity: 0.45; margin: 0 0.3rem; }
 @media (max-width: 600px) {
   .ep-side { flex-basis: 100%; width: 100%; }

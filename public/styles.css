@@ -884,7 +884,10 @@ a.cast-tile:hover { text-decoration: none; }
   text-transform: uppercase;
   color: var(--muted);
 }
-.ep-eyebrow a { color: var(--accent); }
+/* quiet until interaction — the crumb is wayfinding, not a callout */
+.ep-eyebrow a { color: var(--muted); transition: color var(--speed) var(--ease); }
+.ep-eyebrow a:hover,
+.ep-eyebrow a:focus-visible { color: var(--accent); text-decoration: none; }
 .ep-eyebrow .sep { opacity: 0.45; margin: 0 0.3rem; }
 @media (max-width: 600px) {
   .ep-side { flex-basis: 100%; width: 100%; }
@@ -1990,6 +1993,44 @@ button, .verdict-btn {
   margin: 0;
   font-size: 0.8rem;
 }
+
+/* ---- the contender as a mini hero: its world behind the lockup, a
+   smaller one-sheet in hand. Scrim over imagery — frame grammar, not chrome */
+.shortlist-hero { background: var(--plate); }
+.shortlist-frame {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 22%;
+}
+.shortlist-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    rgba(14, 14, 17, 0.96) 0%,
+    rgba(14, 14, 17, 0.87) 38%,
+    rgba(14, 14, 17, 0.6) 70%,
+    rgba(14, 14, 17, 0.32) 100%
+  );
+}
+.shortlist-hero .shortlist-poster,
+.shortlist-hero .shortlist-body { position: relative; }
+.shortlist-hero .shortlist-poster {
+  flex: 0 0 124px;
+  width: 124px;
+  min-height: 0;
+  align-self: center;
+  margin: 1.15rem 0 1.15rem 1.15rem;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+}
+
+/* the floor under the picker */
+.watch-doors { margin-top: 2.6rem; }
+.watch-doors h2 { margin: 0 0 1rem; }
 
 .watch-primer {
   text-align: center;

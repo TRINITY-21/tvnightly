@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import { Bindings, ShowRow, MovieRow } from "../types";
 import { visitorRegion } from "../lib/providers";
-import { stripHtml, posterSrc } from "../lib/format";
+import { stripHtml, posterSrc, heroBg } from "../lib/format";
+import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { origin, canonical } from "../lib/seo";
 import { PICKER_MIN_WEIGHT } from "../lib/queries";
 import { Layout } from "../components/Layout";
-import { StatusBadge } from "../components/cards";
+import { StatusBadge, ExploreCard } from "../components/cards";
 import { ProviderChips } from "../components/providers";
 import { RateInline, FilterSelect } from "../components/forms";
 
@@ -19,6 +20,12 @@ const COMPANY: Record<
   string,
   { label: string; include: string[]; exclude?: string[]; min?: number }
 > = {
+  solo: {
+    label: "Solo night",
+    // alone you can afford the demanding stuff — slow burns, heavy plots
+    include: ["Drama", "Thriller", "Mystery", "Crime", "Science-Fiction", "Science Fiction", "Horror"],
+    min: 7,
+  },
   date: { label: "Date night", include: ["Romance", "Comedy", "Music"], min: 7 },
   family: {
     label: "Family night",
@@ -170,6 +177,8 @@ app.get("/what-to-watch", async (c) => {
     status: string | null; // TV only
     slug: string;
     refId: string; // shows.id / movies.imdb_id — for skip trail + rating
+    tmdbId: number | null; // TV only — movies ride refId (imdb) for TMDB
+    bd?: { x1: string; x2: string } | null;
   }
   const PICK_LIMIT = 2;
   const picks: PickView[] = [];
@@ -192,6 +201,7 @@ app.get("/what-to-watch", async (c) => {
           status: null,
           slug: m.slug,
           refId: m.imdb_id,
+          tmdbId: null,
         });
       }
     } else {
@@ -212,8 +222,23 @@ app.get("/what-to-watch", async (c) => {
           status: s.status,
           slug: s.slug,
           refId: String(s.id),
+          tmdbId: s.tmdb_id,
         });
       }
+    }
+    // each contender wears its own world: backdrop behind, scrim, small
+    // one-sheet in hand (two edge-cached calls at most)
+    if (c.env.TMDB_API_KEY) {
+      const bds = await Promise.all(
+        picks.map((p) =>
+          type === "movie"
+            ? tmdbMovieBackdrop(c.env.TMDB_API_KEY!, p.refId)
+            : p.tmdbId
+              ? tmdbBackdrop(c.env.TMDB_API_KEY!, p.tmdbId)
+              : Promise.resolve(null),
+        ),
+      );
+      picks.forEach((p, i) => (p.bd = bds[i]));
     }
   }
   const skipNext = picks.length
@@ -332,7 +357,16 @@ app.get("/what-to-watch", async (c) => {
               <div class={`shortlist-duo${picks.length < 2 ? " shortlist-duo--solo" : ""}`}>
                 {picks.flatMap((pick, i) => {
                   const card = (
-                    <article class={`shortlist-card${i === 1 ? " shortlist-card--b" : ""}`}>
+                    <article
+                      class={`shortlist-card${i === 1 ? " shortlist-card--b" : ""}${pick.bd ? " shortlist-hero" : ""}`}
+                    >
+                      {pick.bd ? (
+                        <div
+                          class="shortlist-frame"
+                          style={heroBg(pick.bd.x1, pick.bd.x2)}
+                          aria-hidden="true"
+                        ></div>
+                      ) : null}
                       <a class="shortlist-poster" href={pick.href}>
                         {pick.image ? (
                           <img src={pick.image} alt={pick.name} loading="lazy" />
@@ -415,6 +449,31 @@ app.get("/what-to-watch", async (c) => {
               </p>
             </div>
           )}
+        </section>
+
+        {/* the floor under the picker — doors out instead of a bare end */}
+        <section class="watch-doors">
+          <h2>Keep exploring</h2>
+          <div class="explore-grid">
+            <ExploreCard
+              icon="Tonight"
+              title="What's actually on tonight"
+              desc="Every episode airing today, in air-time order."
+              href="/tonight"
+            />
+            <ExploreCard
+              icon="Tailored"
+              title="Rate one thing, get a pick"
+              desc="Tell us one show you love — we'll hand you your next watch."
+              href="/recommend"
+            />
+            <ExploreCard
+              icon="Canon"
+              title="The greatest episodes ever aired"
+              desc="Every show's finest hours, ranked on one honest list."
+              href="/best-episodes"
+            />
+          </div>
         </section>
       </div>
     </Layout>,

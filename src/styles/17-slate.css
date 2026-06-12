@@ -38,6 +38,47 @@
   justify-content: center;
 }
 
+/* ---- the hero slate: the answer over the episode's own frame ----
+   The still fills the card; the legibility scrim grounds the text on the
+   left and resolves into the imagery (house frame grammar, not chrome). */
+.slate-hero {
+  position: relative;
+  background: var(--plate);
+}
+.slate-hero .slate-frame {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 25%;
+}
+.slate-hero .slate-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      to right,
+      rgba(14, 14, 17, 0.96) 0%,
+      rgba(14, 14, 17, 0.84) 34%,
+      rgba(14, 14, 17, 0.42) 64%,
+      rgba(14, 14, 17, 0.1) 100%
+    ),
+    linear-gradient(to top, rgba(14, 14, 17, 0.88) 0%, rgba(14, 14, 17, 0.2) 42%, rgba(14, 14, 17, 0) 62%);
+}
+.slate-hero .slate-body {
+  position: relative;
+  max-width: 46rem;
+  min-height: 264px;
+  padding: 1.55rem 1.75rem 1.4rem;
+}
+.slate-hero .count-band { border-top-color: rgba(248, 246, 242, 0.14); }
+/* no landscape art — the poster feeds ambient light, never shown as art */
+.slate-ambient .slate-frame {
+  inset: -48px;
+  filter: blur(64px) saturate(1.15);
+  opacity: 0.45;
+}
+
 .slate-chyron {
   margin: 0;
   font-family: var(--display);
@@ -160,4 +201,6 @@
   .slate-media img { max-height: 220px; }
   .count-band { gap: 1.4rem; }
   .count-num { font-size: 1.7rem; }
+  /* phones: a clean viewing band up top, the text settles low on the scrim */
+  .slate-hero .slate-body { min-height: 0; padding-top: 4.6rem; justify-content: flex-end; }
 }

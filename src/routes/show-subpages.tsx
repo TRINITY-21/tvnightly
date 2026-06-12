@@ -7,7 +7,7 @@ import { SubscribeForm } from "../components/forms";
 import { ChevDown, ChevUp, IconCal } from "../components/icons";
 import { SeasonTabs, ShowTabs } from "../components/nav";
 import { buildDossier } from "../lib/dossier";
-import { epCode, epHref, largeStill, longDate, posterSrc, stripHtml } from "../lib/format";
+import { epCode, epHref, heroBg, largeStill, longDate, posterSrc, stripHtml } from "../lib/format";
 import { visitorRegion } from "../lib/providers";
 import { getShow, similarShows } from "../lib/queries";
 import { breadcrumbLd, canonical, origin } from "../lib/seo";
@@ -762,20 +762,21 @@ app.get("/show/:slug/next-episode", async (c) => {
   const region = visitorRegion(c);
 
   // the slate leads with the episode we can show: the scheduled one, or —
-  // while the schedule is empty — the last one that aired. No episode still
-  // yet (premieres rarely have one) -> the show's backdrop, then its poster.
+  // while the schedule is empty — the last one that aired. The card wears the
+  // episode's own frame (still, then the show's backdrop) as a mini hero; a
+  // poster is never shown as art — it only feeds the ambient-light fallback.
   const slateEp = next ?? lastAired;
   const pitch = slateEp ? stripHtml(slateEp.summary).trim() : "";
-  let media: { src: string; srcset?: string; poster?: boolean } | null = slateEp?.image_url
-    ? { src: slateEp.image_url, srcset: `${slateEp.image_url} 1x, ${largeStill(slateEp.image_url)} 2x` }
+  let media: { x1: string; x2?: string; ambient?: boolean } | null = slateEp?.image_url
+    ? { x1: slateEp.image_url, x2: largeStill(slateEp.image_url) }
     : null;
   if (!media && show.tmdb_id && c.env.TMDB_API_KEY) {
     const bd = await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id);
-    if (bd) media = { src: bd.x1, srcset: `${bd.x1} 1x, ${bd.x2} 2x` };
+    if (bd) media = { x1: bd.x1, x2: bd.x2 };
   }
   if (!media) {
     const p = posterSrc(show);
-    if (p) media = { ...p, poster: true };
+    if (p) media = { x1: p.src, ambient: true };
   }
 
   const site = origin(c);
@@ -797,17 +798,9 @@ app.get("/show/:slug/next-episode", async (c) => {
         Next episode of <a href={`/show/${show.slug}`}>{show.name}</a>
       </h1>
       <ShowTabs slug={show.slug} current="next" />
-      <section class={`slate${media ? ` has-media${media.poster ? " is-poster" : ""}` : ""}`}>
+      <section class={media ? `slate slate-hero${media.ambient ? " slate-ambient" : ""}` : "slate"}>
         {media ? (
-          <div class="slate-media">
-            <img
-              src={media.src}
-              srcset={media.srcset}
-              alt={slateEp?.name ?? show.name}
-              width={media.poster ? 190 : 384}
-              height={media.poster ? 285 : 216}
-            />
-          </div>
+          <div class="slate-frame" style={heroBg(media.x1, media.x2)} aria-hidden="true"></div>
         ) : null}
         <div class="slate-body">
           {next ? (

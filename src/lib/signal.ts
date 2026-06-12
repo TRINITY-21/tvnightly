@@ -472,7 +472,7 @@ export function buildSignalSvg(
     const markScale = 26 / 24;
     const markW = 36 * markScale;
     const wordX = m + markW + 14;
-    const wordW = "TV NIGHTLY".length * wfs * 0.68;
+    const wordW = "TV NIGHTLY".length * wfs * 0.6;
     parts.push(
       `<line x1="${m}" y1="${r2(hairY)}" x2="${W - m}" y2="${r2(hairY)}" stroke="${LINE}" stroke-width="1"/>`,
       `<g transform="translate(${m}, ${r2(baseY - 22)}) scale(${r2(markScale)})">` +
@@ -481,7 +481,7 @@ export function buildSignalSvg(
         `<circle cx="26.5" cy="16.5" r="2.2" fill="${AMBER}"/>` +
         `</g>`,
       txt(wordX, baseY, "TV NIGHTLY", { size: wfs, wght: 800, wdth: 120, fill: TEXT, ls: wfs * 0.02 }),
-      `<circle cx="${r2(wordX + wordW + 0.3 * wfs)}" cy="${r2(baseY - 0.08 * wfs)}" r="${r2(0.085 * wfs)}" fill="${AMBER}"/>`,
+      `<circle cx="${r2(wordX + wordW + 0.14 * wfs)}" cy="${r2(baseY - 0.08 * wfs)}" r="${r2(0.085 * wfs)}" fill="${AMBER}"/>`,
       txt(W - m, baseY - 4, "TVNIGHTLY.COM", { size: 16, wdth: 105, ls: 2.2, anchor: "end" }),
     );
   }

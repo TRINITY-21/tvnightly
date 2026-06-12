@@ -60,15 +60,17 @@ export const SeasonTabs: FC<{
   latest?: boolean;
 }> = ({ slug, season, current }) => {
   const q = `?season=${season}`;
+  // the show rail's main set, season-scoped where a season variant exists;
+  // Worst/Essential live on as cross-links under Best episodes, not tabs
   const tabs: [string, string, string][] = [
     ["overview", `Season ${season} overview`, `/show/${slug}/season/${season}`],
     ["next", "Next episode", `/show/${slug}/next-episode`],
     ["release", "Release date", `/show/${slug}/release-date`],
     ["best", "Best episodes", `/show/${slug}/best-episodes${q}`],
-    ["worst", "Worst", `/show/${slug}/worst-episodes${q}`],
-    ["essential", "Essential", `/show/${slug}/essential${q}`],
     ["ratings", "Ratings graph", `/show/${slug}/ratings${q}`],
+    ["similar", "Similar shows", `/show/${slug}/similar`],
     ["cast", "Cast", `/show/${slug}/cast${q}`],
+    ["media", "Media", `/show/${slug}/media`],
   ];
   return (
     <nav class="subnav subnav-scroll">

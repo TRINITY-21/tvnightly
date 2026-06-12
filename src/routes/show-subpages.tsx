@@ -1,18 +1,19 @@
-import { Hono, Context } from "hono";
+import { Context, Hono } from "hono";
 import { raw } from "hono/html";
-import { Bindings, EpisodeRow, EventRow } from "../types";
-import { stripHtml, epCode, epHref, posterSrc, longDate, largeStill } from "../lib/format";
-import { origin, canonical, breadcrumbLd } from "../lib/seo";
-import { getShow, similarShows } from "../lib/queries";
-import { visitorRegion } from "../lib/providers";
-import { buildDossier } from "../lib/dossier";
-import { DossierRow } from "../components/dossier";
-import { Layout, COUNTDOWN_JS } from "../components/Layout";
-import { tmdbBackdrop } from "../lib/tmdb";
-import { ShowTabs, SeasonTabs } from "../components/nav";
+import { COUNTDOWN_JS, Layout } from "../components/Layout";
 import { StatusBadge } from "../components/cards";
+import { DossierRow } from "../components/dossier";
 import { SubscribeForm } from "../components/forms";
-import { ChevUp, ChevDown, IconCal } from "../components/icons";
+import { ChevDown, ChevUp, IconCal } from "../components/icons";
+import { SeasonTabs, ShowTabs } from "../components/nav";
+import { buildDossier } from "../lib/dossier";
+import { epCode, epHref, largeStill, longDate, posterSrc, stripHtml } from "../lib/format";
+import { visitorRegion } from "../lib/providers";
+import { getShow, similarShows } from "../lib/queries";
+import { breadcrumbLd, canonical, origin } from "../lib/seo";
+import { archivoFontCss, buildSignalSvg } from "../lib/signal";
+import { tmdbBackdrop } from "../lib/tmdb";
+import { Bindings, EpisodeRow, EventRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -271,89 +272,61 @@ app.get("/show/:slug/essential", async (c) => {
 });
 
 // ------------------------------------------------- episode ratings graph
+// "Signal": the run as a phosphor trace — built in lib/signal.ts, one
+// builder for the page chart and every saved frame.
 
-function ratingsSvg(eps: EpisodeRow[]): string {
-  const rated = eps.filter((e) => e.rating != null);
-  if (rated.length === 0) return "";
-  const PAD = 34;
-  const STEP = 9;
-  const W = Math.max(420, rated.length * STEP + PAD * 2);
-  const H = 240;
-  const yFor = (r: number) => {
-    const clamped = Math.max(5, Math.min(10, r));
-    return PAD + (10 - clamped) * ((H - PAD * 2) / 5);
-  };
-  const colorFor = (r: number) => {
-    const t = Math.max(0, Math.min(1, (r - 6) / 3.5)); // 6 -> red, 9.5+ -> green
-    return `hsl(${Math.round(t * 120)},70%,50%)`;
-  };
-  const parts: string[] = [
-    `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Episode ratings by season">`,
-  ];
-  // season bands
-  let x = PAD;
-  let season = rated[0].season ?? 0;
-  let bandStart = x;
-  let bandIdx = 0;
-  const flushBand = (endX: number) => {
-    parts.push(
-      `<rect x="${bandStart}" y="${PAD}" width="${endX - bandStart}" height="${H - PAD * 2}" fill="${bandIdx % 2 ? "#19191d" : "#111113"}"/>`,
-      `<text x="${(bandStart + endX) / 2}" y="${H - 10}" fill="#a39e97" font-size="10" text-anchor="middle">S${season}</text>`,
-    );
-    bandIdx++;
-  };
-  for (const e of rated) {
-    if ((e.season ?? 0) !== season) {
-      flushBand(x);
-      season = e.season ?? 0;
-      bandStart = x;
-    }
-    x += STEP;
-  }
-  flushBand(x);
-  // gridlines
-  for (const r of [5, 6, 7, 8, 9, 10]) {
-    parts.push(
-      `<line x1="${PAD}" y1="${yFor(r)}" x2="${x}" y2="${yFor(r)}" stroke="#26262c" stroke-width="0.5"/>`,
-      `<text x="${PAD - 6}" y="${yFor(r) + 3}" fill="#a39e97" font-size="10" text-anchor="end">${r}</text>`,
-    );
-  }
-  // points
-  let px = PAD;
-  for (const e of rated) {
-    const title = `${epCode(e)} ${e.name ?? ""} — ${e.rating!.toFixed(1)}`.replaceAll("&", "&amp;").replaceAll("<", "&lt;");
-    parts.push(
-      `<circle cx="${px + STEP / 2}" cy="${yFor(e.rating!)}" r="3" fill="${colorFor(e.rating!)}"><title>${title}</title></circle>`,
-    );
-    px += STEP;
-  }
-  parts.push("</svg>");
-  return parts.join("");
-}
-
-app.get("/show/:slug/ratings", async (c) => {
+/** Loads a show + scoped episodes with the shared ?season validation. */
+async function ratingsScope(c: Context<{ Bindings: Bindings }, "/show/:slug">, redirectTo: string) {
   const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
+  if (!show) return null;
   const { results: allEps } = await c.env.DB.prepare(
     "SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number",
   )
     .bind(show.id)
     .all<EpisodeRow>();
-
-  // Optional per-season scope, validated against the show's real seasons.
-  const base = `/show/${show.slug}/ratings`;
   const seasons = [...new Set(allEps.map((e) => e.season).filter((s): s is number => s != null))];
   const rawSeason = (c.req.query("season") ?? "").trim();
   let season: number | null = null;
+  let redirect = false;
   if (rawSeason !== "") {
     const n = Number(rawSeason);
-    if (!Number.isInteger(n) || !seasons.includes(n)) return c.redirect(base, 301);
-    season = n;
+    if (!Number.isInteger(n) || !seasons.includes(n)) redirect = true;
+    else season = n;
   }
+  return { show, allEps, seasons, season, redirect, redirectTo };
+}
+
+app.get("/show/:slug/ratings.svg", async (c) => {
+  const scope = await ratingsScope(c, "");
+  if (!scope) return c.notFound();
+  if (scope.redirect) return c.redirect(`/show/${scope.show.slug}/ratings.svg`, 301);
+  const frame = c.req.query("frame") ?? "wide";
+  if (frame !== "wide" && frame !== "square" && frame !== "story") return c.text("bad frame", 400);
+  const eps =
+    scope.season != null ? scope.allEps.filter((e) => e.season === scope.season) : scope.allEps;
+  const fontCss = (await archivoFontCss(c.env.ASSETS)) ?? undefined;
+  const sig = buildSignalSvg(eps, scope.show, {
+    frame,
+    season: scope.season,
+    slug: scope.show.slug,
+    fontCss,
+  });
+  if (!sig) return c.notFound();
+  c.header("Content-Type", "image/svg+xml; charset=utf-8");
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.body(sig.svg);
+});
+
+app.get("/show/:slug/ratings", async (c) => {
+  const scope = await ratingsScope(c, "");
+  if (!scope) return c.notFound();
+  const { show, allEps, seasons, season } = scope;
+  const base = `/show/${show.slug}/ratings`;
+  if (scope.redirect) return c.redirect(base, 301);
   const eps = season != null ? allEps.filter((e) => e.season === season) : allEps;
-  const svg = ratingsSvg(eps);
-  const rated = eps.filter((e) => e.rating != null);
+  const sig = buildSignalSvg(eps, show, { frame: "page", season, slug: show.slug });
   const seasonLabel = season != null ? ` Season ${season}` : "";
+  const q = season != null ? `?season=${season}` : "";
 
   const site = origin(c);
   const path = new URL(c.req.url).pathname;
@@ -369,6 +342,7 @@ app.get("/show/:slug/ratings", async (c) => {
       canonical={season != null ? `${site}${base}?season=${season}` : `${site}${base}`}
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, `${seasonLabel || "Episode"} ratings graph`.trim(), path)]}
+      scripts={["/js/signal.js"]}
     >
       <h1>
         <a href={`/show/${show.slug}`}>{show.name}</a>
@@ -379,36 +353,51 @@ app.get("/show/:slug/ratings", async (c) => {
       ) : (
         <ShowTabs slug={show.slug} current="ratings" />
       )}
-      {seasons.length > 1 && seasons.length <= 30 ? (
-        <p class="muted">
-          Filter: <a href={base}>{season == null ? <strong>All</strong> : "All"}</a>
+      {seasons.length > 1 ? (
+        <nav class="epreg-rail" aria-label="Filter by season">
+          <span class="epreg-rail-label">Filter</span>
+          <a class="epreg-all" href={base} aria-current={season == null ? "page" : undefined}>
+            All
+          </a>
           {seasons.map((s) => (
-            <>
-              {" · "}
-              <a href={`${base}?season=${s}`}>{season === s ? <strong>S{s}</strong> : `S${s}`}</a>
-            </>
-          ))}
-        </p>
-      ) : null}
-      {svg ? (
-        <>
-          <p class="muted">
-            {rated.length} rated episodes, hover any dot for details. Higher and greener is better.
-          </p>
-          <div class="graph-wrap">{raw(svg)}</div>
-          <p>
-            <a href={`/show/${show.slug}/best-episodes${season != null ? `?season=${season}` : ""}`}>
-              Best episodes
-            </a>{" "}
-            ·{" "}
-            <a href={`/show/${show.slug}/worst-episodes${season != null ? `?season=${season}` : ""}`}>
-              Worst episodes
-            </a>{" "}
-            ·{" "}
-            <a href={`/show/${show.slug}/essential${season != null ? `?season=${season}` : ""}`}>
-              Essential watch list
+            <a
+              class="epreg-seg"
+              href={`${base}?season=${s}`}
+              aria-current={season === s ? "page" : undefined}
+            >
+              {s === 0 ? "SP" : `S${s}`}
             </a>
-          </p>
+          ))}
+        </nav>
+      ) : null}
+      {sig ? (
+        <>
+          <figure
+            class="sig"
+            tabindex={0}
+            role="group"
+            aria-roledescription="interactive chart"
+            aria-label={`${sig.summary} Use arrow keys to step through episodes.`}
+          >
+            <div class="sig-screen">{raw(sig.svg)}</div>
+            <figcaption class="sr-only">{sig.summary}</figcaption>
+            <div class="sr-only" aria-live="polite" id="sig-live"></div>
+          </figure>
+          <div class="sig-strip" data-slug={show.slug} data-season={season ?? ""} hidden>
+            <div class="sig-read" id="sig-read"></div>
+            <div class="sig-save">
+              <span class="sig-save-label">Save</span>
+              <button data-frame="story">9:16</button>
+              <button data-frame="square">1:1</button>
+              <button data-frame="wide">16:9</button>
+            </div>
+          </div>
+          {raw(`<script type="application/json" id="sig-data">${sig.island}</script>`)}
+          <nav class="epreg-links" aria-label={`More ${show.name} rankings`}>
+            <a href={`/show/${show.slug}/best-episodes${q}`}>Best episodes</a>
+            <a href={`/show/${show.slug}/worst-episodes${q}`}>Worst episodes</a>
+            <a href={`/show/${show.slug}/essential${q}`}>Essential episodes</a>
+          </nav>
         </>
       ) : (
         <p class="muted">No rated episodes yet for {show.name}.</p>
@@ -1057,7 +1046,6 @@ app.get("/show/:slug/release-date", async (c) => {
       </section>
       <p>
         <a href={`/show/${show.slug}/calendar.ics`}><IconCal /> Add {show.name} to your calendar</a>{" "}
-        <span class="muted">— subscribe in Google/Apple Calendar and never miss an episode</span>
       </p>
       <SubscribeForm
         showId={show.id}

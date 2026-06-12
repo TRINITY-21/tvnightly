@@ -23,6 +23,9 @@
   --text: #f8f6f2;
   --muted: #b6b1a9; /* secondary text must still READ — dim is not premium */
   --accent: #ffa94d;       /* tungsten amber — interactivity only */
+  /* the unlit tube — chart plates sit two steps under --bg; SVG builders
+     emit the literal for export parity (lib/signal.ts) */
+  --plate: #0e0e11;
   --accent-2: #ff5c8a;     /* marquee pink — live / fandom / chart B */
   --ok: #3cdf8e;
   --warn: #eac54f;
@@ -128,6 +131,18 @@ h3 {
   margin: 1.2rem 0 0.4rem;
 }
 .muted { color: var(--muted); }
+/* visually hidden, read by assistive tech */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 /* drawn glyphs (components/icons.tsx) sit on the text line, not above it */
 .icon { vertical-align: -0.16em; }
 .rating { color: var(--warn); white-space: nowrap; font-weight: 650; }

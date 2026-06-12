@@ -1,0 +1,92 @@
+/* ============================================================
+   Signal — the episode ratings graph. The plate and frame live
+   inside the SVG; the page supplies the screen housing, the
+   readout strip and the save controls.
+   ============================================================ */
+
+figure.sig { margin: 1.1rem 0 0; }
+.sig-screen {
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+  box-shadow: var(--shadow-1);
+  -webkit-overflow-scrolling: touch;
+}
+.sig-screen svg {
+  display: block;
+  width: 100%;
+  min-width: 720px;
+  height: auto;
+}
+
+/* season-rail links inside the SVG: quiet until interaction */
+.sig svg a text,
+.sig svg a rect { transition: fill var(--speed) var(--ease); }
+.sig svg a:hover text,
+.sig svg a:focus-visible text,
+.sig svg a:hover rect { fill: var(--accent); }
+
+/* ---- the shared strip: readout left, save controls right ---- */
+.sig-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.1rem 0;
+  border-top: 1px solid var(--line);
+}
+.sig-read {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.55rem;
+  min-height: 1.35em;
+  font-variant-numeric: tabular-nums;
+}
+.sig-read-code {
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+a.sig-read-name { color: var(--muted); font-weight: 650; font-size: 0.95rem; }
+a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
+.sig-read-date { color: var(--muted); font-size: 0.8rem; }
+
+.sig-save { display: flex; align-items: baseline; gap: 1rem; }
+.sig-save-label {
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sig-save button {
+  background: none;
+  border: 0;
+  padding: 0.45rem 0.15rem;
+  margin: -0.3rem 0;
+  color: var(--muted);
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--speed) var(--ease);
+}
+.sig-save button:hover,
+.sig-save button:focus-visible { color: var(--accent); }
+.sig-save button[aria-busy="true"] { color: var(--text); cursor: progress; }
+
+@media (max-width: 560px) {
+  .sig-strip { flex-direction: column; align-items: stretch; }
+  .sig-save { justify-content: flex-end; }
+}

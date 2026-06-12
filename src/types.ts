@@ -2,7 +2,9 @@
 import type { Context } from "hono";
 import type { SyncEnv } from "./sync";
 
-export type Bindings = SyncEnv;
+// ASSETS: the static-assets fetcher — the chart export embeds the Archivo
+// woff2 from it so saved SVGs are standalone documents
+export type Bindings = SyncEnv & { ASSETS: Fetcher };
 export type AppContext = Context<{ Bindings: Bindings }>;
 
 export interface ShowRow {

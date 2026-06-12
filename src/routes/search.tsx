@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { Bindings, ShowRow, MovieRow } from "../types";
 import { Layout } from "../components/Layout";
-import { ShowCard, MovieCard } from "../components/cards";
+import { ShowCard, MovieCard, ExploreCard, StatusBadge } from "../components/cards";
+import { heroBg, hiRes, stripHtml } from "../lib/format";
+import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -15,17 +17,21 @@ app.get("/api/search", async (c) => {
   const includeMovies = q.length >= 3;
   const [shows, movies] = await Promise.all([
     c.env.DB.prepare(
-      "SELECT name, slug, premiered FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 6",
+      `SELECT name, slug, premiered, rating, COALESCE(poster_url, image_url) AS poster
+       FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 6`,
     )
       .bind(q)
-      .all<{ name: string; slug: string; premiered: string | null }>(),
+      .all<{ name: string; slug: string; premiered: string | null; rating: number | null; poster: string | null }>(),
     includeMovies
       ? c.env.DB.prepare(
-          "SELECT title, slug, year FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 4",
+          `SELECT title, slug, year, rating, poster_url AS poster
+           FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 4`,
         )
           .bind(q)
-          .all<{ title: string; slug: string; year: number | null }>()
-      : Promise.resolve({ results: [] as { title: string; slug: string; year: number | null }[] }),
+          .all<{ title: string; slug: string; year: number | null; rating: number | null; poster: string | null }>()
+      : Promise.resolve({
+          results: [] as { title: string; slug: string; year: number | null; rating: number | null; poster: string | null }[],
+        }),
   ]);
   c.header("Cache-Control", "public, max-age=300");
   return c.json(
@@ -35,12 +41,16 @@ app.get("/api/search", async (c) => {
         slug: r.slug,
         year: r.premiered?.slice(0, 4) ?? null,
         kind: "tv",
+        rating: r.rating,
+        poster: r.poster,
       })),
       ...movies.results.map((r) => ({
         name: r.title,
         slug: r.slug,
         year: r.year ? String(r.year) : null,
         kind: "movie",
+        rating: r.rating,
+        poster: r.poster,
       })),
     ].slice(0, 8),
   );
@@ -63,34 +73,228 @@ app.get("/search", async (c) => {
       ])
     : [{ results: [] as ShowRow[] }, { results: [] as MovieRow[] }];
 
+  // the strongest hit takes the hero: an exact title match outranks the
+  // weight order; otherwise TV (the house specialty) leads
+  type Best = { kind: "tv"; show: ShowRow } | { kind: "movie"; movie: MovieRow };
+  const ql = q.toLowerCase();
+  const exactShow = results.find((s) => s.name.toLowerCase() === ql);
+  const exactMovie = movieResults.find((m) => m.title.toLowerCase() === ql);
+  const best: Best | null = exactShow
+    ? { kind: "tv", show: exactShow }
+    : exactMovie
+      ? { kind: "movie", movie: exactMovie }
+      : results[0]
+        ? { kind: "tv", show: results[0] }
+        : movieResults[0]
+          ? { kind: "movie", movie: movieResults[0] }
+          : null;
+
+  // hero art: the match's real designed backdrop, else its poster as
+  // ambient light — same chain the show pages ride
+  let art: { x1: string; x2?: string } | null = null;
+  let ambient = false;
+  if (best && c.env.TMDB_API_KEY) {
+    art =
+      best.kind === "tv"
+        ? best.show.tmdb_id
+          ? await tmdbBackdrop(c.env.TMDB_API_KEY, best.show.tmdb_id)
+          : null
+        : await tmdbMovieBackdrop(c.env.TMDB_API_KEY, best.movie.imdb_id);
+  }
+  if (!art && best) {
+    const p = best.kind === "tv" ? hiRes(best.show.image_url) : best.movie.poster_url;
+    if (p) {
+      art = { x1: p };
+      ambient = true;
+    }
+  }
+
+  const restShows = best?.kind === "tv" ? results.filter((s) => s !== best.show) : results;
+  const restMovies = best?.kind === "movie" ? movieResults.filter((m) => m !== best.movie) : movieResults;
+  const total = results.length + movieResults.length;
+  const nothing = Boolean(q) && total === 0;
+
+  // a launch pad instead of a dead end: the bare page and the zero-result
+  // page both get the catalog's most-returned-to shelf
+  const popular =
+    !q || nothing
+      ? await c.env.DB.prepare(
+          `SELECT name, slug, COALESCE(poster_url, image_url) AS poster
+           FROM shows WHERE poster_url IS NOT NULL OR image_url IS NOT NULL
+           ORDER BY weight DESC LIMIT 12`,
+        )
+          .all<{ name: string; slug: string; poster: string | null }>()
+          .then((r) => r.results)
+      : [];
+
+  const bestGenres: string[] = best
+    ? JSON.parse((best.kind === "tv" ? best.show.genres : best.movie.genres) ?? "[]")
+    : [];
+  const bestRating = best ? (best.kind === "tv" ? best.show.rating : best.movie.rating) : null;
+  const bestYear = best
+    ? best.kind === "tv"
+      ? (best.show.premiered?.slice(0, 4) ?? null)
+      : best.movie.year
+        ? String(best.movie.year)
+        : null
+    : null;
+  const bestDek = best
+    ? stripHtml((best.kind === "tv" ? best.show.summary : best.movie.overview) ?? "")
+    : "";
+  const bestHref = best
+    ? best.kind === "tv"
+      ? `/show/${best.show.slug}`
+      : `/movie/${best.movie.slug}`
+    : "#";
+
   c.header("Cache-Control", "public, max-age=300");
   // infinite ?q= variants must not enter the index (doorway/thin-content risk)
   return c.html(
-    <Layout title={`Search: ${q} | TV Nightly`} noindex>
-      <h1>Search{q ? `: ${q}` : ""}</h1>
-      {q && results.length === 0 && movieResults.length === 0 ? (
-        <p class="muted">Nothing found.</p>
-      ) : null}
-      {results.length ? (
-        <section>
-          <h2>TV shows</h2>
-          <div class="grid">
-            {results.map((s) => (
-              <ShowCard show={s} />
-            ))}
+    <Layout title={`Search${q ? `: ${q}` : ""} | TV Nightly`} noindex>
+      <div class="srch">
+        <p class="section-eyebrow">Search</p>
+        <h1>{q ? "Results" : "Find anything we track"}</h1>
+        <form method="get" action="/search" class="srch-form" role="search">
+          <input
+            type="search"
+            name="q"
+            value={q}
+            placeholder="A show, a movie…"
+            aria-label="Search shows and movies"
+            autofocus={!q}
+          />
+          <button type="submit">Search</button>
+        </form>
+        {q && total > 0 ? (
+          <p class="srch-sum">
+            <strong>{total}</strong> {total === 1 ? "match" : "matches"} for “{q}”
+            <span class="srch-sum-split">
+              {[
+                results.length ? `${results.length} TV ${results.length === 1 ? "show" : "shows"}` : null,
+                movieResults.length
+                  ? `${movieResults.length} ${movieResults.length === 1 ? "movie" : "movies"}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          </p>
+        ) : null}
+
+        {best ? (
+          <article class={`srch-hero${ambient ? " srch-ambient" : ""}`}>
+            {art ? (
+              <div class="srch-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div>
+            ) : null}
+            <div class="srch-hero-body">
+              <p class="srch-kicker">
+                Top match · {best.kind === "tv" ? "TV show" : "Movie"}
+              </p>
+              <h2 class="srch-hero-title">
+                <a href={bestHref}>{best.kind === "tv" ? best.show.name : best.movie.title}</a>
+              </h2>
+              <p class="meta-strip">
+                {best.kind === "tv" ? <StatusBadge status={best.show.status} /> : null}
+                {bestYear ? <span>{bestYear}</span> : null}
+                {bestGenres.length ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span>{bestGenres.slice(0, 3).join(", ")}</span>
+                  </>
+                ) : null}
+                {bestRating != null ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span class="rating">★ {bestRating.toFixed(1)}</span>
+                  </>
+                ) : null}
+              </p>
+              {bestDek ? <p class="srch-dek">{bestDek}</p> : null}
+              <p class="srch-hero-actions">
+                <a class="btn-ghost chev-after" href={bestHref}>
+                  {best.kind === "tv" ? "Episode guide & ratings" : "Where to watch & details"}
+                </a>
+              </p>
+            </div>
+          </article>
+        ) : null}
+
+        {nothing ? (
+          <p class="srch-empty">
+            Nothing matched “{q}”. Check the spelling, or try fewer words — we match titles, not
+            descriptions.
+          </p>
+        ) : null}
+
+        {restShows.length ? (
+          <section class="srch-section">
+            <h2>
+              TV shows <span class="srch-count">{restShows.length}</span>
+            </h2>
+            <div class="grid">
+              {restShows.map((s) => (
+                <ShowCard show={s} />
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {restMovies.length ? (
+          <section class="srch-section">
+            <h2>
+              Movies <span class="srch-count">{restMovies.length}</span>
+            </h2>
+            <div class="grid">
+              {restMovies.map((m) => (
+                <MovieCard movie={m} />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {popular.length ? (
+          <section class="srch-section">
+            <h2>{nothing ? "Popular right now instead" : "People keep coming back to these"}</h2>
+            <ul class="poster-shelf">
+              {popular.map((s) => (
+                <li>
+                  <a class="shelf-tile" href={`/show/${s.slug}`} title={s.name}>
+                    {s.poster ? (
+                      <img src={s.poster} alt="" width="92" height="138" loading="lazy" decoding="async" />
+                    ) : (
+                      <span class="shelf-fallback">{s.name}</span>
+                    )}
+                  </a>
+                  <span class="shelf-name">{s.name}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        <section class="srch-doors">
+          <h2>Keep exploring</h2>
+          <div class="explore-grid">
+            <ExploreCard
+              icon="Browse"
+              title="Every chart & list"
+              desc="Networks, genres, hubs, and the full canon — one directory."
+              href="/lists"
+            />
+            <ExploreCard
+              icon="Tonight"
+              title="What's actually on"
+              desc="Tonight's schedule, in air-time order."
+              href="/tonight"
+            />
+            <ExploreCard
+              icon="Tailored"
+              title="Rate one thing, get a pick"
+              desc="The recommender finds your next show from one rating."
+              href="/recommend"
+            />
           </div>
         </section>
-      ) : null}
-      {movieResults.length ? (
-        <section>
-          <h2>Movies</h2>
-          <div class="grid">
-            {movieResults.map((m) => (
-              <MovieCard movie={m} />
-            ))}
-          </div>
-        </section>
-      ) : null}
+      </div>
     </Layout>,
   );
 });

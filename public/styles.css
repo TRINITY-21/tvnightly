@@ -5036,3 +5036,162 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   border-color: var(--line);
   cursor: progress;
 }
+/* ---- search results: workbench bar, top-match hero, doors out ----------
+   The page is a launch pad, not a list: the strongest hit gets the house
+   mini-hero frame, everything else stays in the card grid, and the bare
+   or zero-result page hands the reader somewhere real to go. */
+
+.srch h1 { margin-bottom: 0.4rem; }
+
+.srch-form {
+  display: flex;
+  gap: 0.6rem;
+  max-width: 40rem;
+  margin-top: 0.9rem;
+}
+.srch-form input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 1.02rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.62rem 0.95rem;
+  transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
+}
+.srch-form input:hover { border-color: rgba(255, 255, 255, 0.18); }
+.srch-form input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.srch-form input::placeholder { color: var(--muted); opacity: 0.7; }
+.srch-form input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
+.srch-form button {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.5rem 1.05rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--speed) var(--ease);
+}
+.srch-form button:hover { background: rgba(255, 169, 77, 0.1); }
+
+.srch-sum {
+  margin: 1rem 0 0;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+.srch-sum strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.srch-sum-split { margin-left: 0.85rem; font-variant-numeric: tabular-nums; }
+
+/* the top match in the house frame grammar */
+.srch-hero {
+  position: relative;
+  overflow: hidden;
+  margin-top: 1.3rem;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+.srch-frame {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 22%;
+}
+.srch-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, rgba(14, 14, 17, 0.96), rgba(14, 14, 17, 0.84) 34%, rgba(14, 14, 17, 0.42) 64%, rgba(14, 14, 17, 0.1)),
+    linear-gradient(to top, rgba(14, 14, 17, 0.88), rgba(14, 14, 17, 0.2) 42%, rgba(14, 14, 17, 0) 62%);
+}
+.srch-ambient .srch-frame {
+  inset: -48px;
+  filter: blur(64px) saturate(1.15);
+  opacity: 0.45;
+}
+.srch-hero-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.4rem;
+  max-width: 46rem;
+  min-height: 232px;
+  padding: 1.55rem 1.75rem 1.45rem;
+}
+.srch-kicker {
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+.srch-hero-title {
+  margin: 0;
+  font-size: 1.85rem;
+  line-height: 1.08;
+}
+.srch-hero-title a { color: var(--text); }
+.srch-hero-title a:hover,
+.srch-hero-title a:focus-visible { color: var(--accent); text-decoration: none; }
+.srch-dek {
+  margin: 0;
+  max-width: 58ch;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.srch-hero-actions { margin: 0.45rem 0 0; }
+
+.srch-section { margin-top: 2.3rem; }
+.srch-section h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.srch-count {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.srch-empty {
+  margin-top: 1.3rem;
+  color: var(--muted);
+  max-width: 52ch;
+}
+.srch-doors { margin-top: 2.8rem; }
+.srch-doors h2 { margin-bottom: 1rem; }
+
+@media (max-width: 700px) {
+  .srch-hero-body { min-height: 0; padding-top: 4.2rem; justify-content: flex-end; }
+  .srch-hero-title { font-size: 1.5rem; }
+}

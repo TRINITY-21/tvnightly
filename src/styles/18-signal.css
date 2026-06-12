@@ -14,16 +14,16 @@ figure.sig { margin: 1.1rem 0 0; }
 .sig-screen svg {
   display: block;
   width: 100%;
-  min-width: 720px;
+  /* the phone pans an 880px instrument — type stays legible at 0.81x */
+  min-width: 880px;
   height: auto;
 }
 
-/* season-rail links inside the SVG: quiet until interaction */
-.sig svg a text,
-.sig svg a rect { transition: fill var(--speed) var(--ease); }
+/* season-head links inside the SVG: quiet until interaction (text only —
+   the anchors carry invisible hit rects that must stay invisible) */
+.sig svg a text { transition: fill var(--speed) var(--ease); }
 .sig svg a:hover text,
-.sig svg a:focus-visible text,
-.sig svg a:hover rect { fill: var(--accent); }
+.sig svg a:focus-visible text { fill: var(--accent); }
 
 /* ---- the shared strip: readout left, save controls right ---- */
 .sig-strip {

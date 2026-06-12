@@ -14,6 +14,7 @@
 //   register carries names only, season averages print only in the AVG
 //   row, the series average prints only in the poster band, the scale
 //   chips are scale, not data
+import { longDate } from "./format";
 import { EpisodeRow, ShowRow } from "../types";
 
 export type SignalFrame = "page" | "card";
@@ -49,13 +50,18 @@ function rampColor(r: number): string {
   return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 // numerals flip dark once the filament is bright enough to carry them
-const inkFor = (r: number) => ((r - 5.5) / 4 > 0.62 ? "#1f1708" : TEXT);
+// (0.56 ≈ rating 7.74: above it, dark ink wins the contrast contest)
+const inkFor = (r: number) => ((r - 5.5) / 4 > 0.56 ? "#1f1708" : TEXT);
 
 const esc = (s: string) =>
   s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 const code = (e: EpisodeRow) =>
   `S${String(e.season ?? 0).padStart(2, "0")}E${String(e.number ?? 0).padStart(2, "0")}`;
-const trunc = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+// truncate by code points — splitting a surrogate pair emits invalid XML
+const trunc = (s: string, n: number) => {
+  const a = [...s];
+  return a.length > n ? `${a.slice(0, n - 1).join("")}…` : s;
+};
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Archivo text node with Safari-proof variation settings. */
@@ -99,10 +105,11 @@ export async function archivoFontCss(assets: Fetcher | undefined): Promise<strin
   if (!assets) return (archivoCss = null);
   try {
     const res = await assets.fetch(new Request("https://assets.invalid/fonts/archivo-var.woff2"));
-    if (!res.ok) return (archivoCss = null);
+    // transient failures are NOT memoized — the next render retries
+    if (!res.ok) return null;
     archivoCss = `@font-face{font-family:'Archivo';src:url(${await dataUri(res, "font/woff2")}) format('woff2');font-weight:100 900;font-stretch:62% 125%;font-display:block}`;
   } catch {
-    archivoCss = null;
+    return null;
   }
   return archivoCss;
 }
@@ -193,14 +200,19 @@ export function buildSignalSvg(
   const labelGutter = 44;
   const colHeadH = 30;
   const avgRowH = 44;
+  // single-season scope: the column average IS the band's SEASON AVG — the
+  // AVG row would print the same number twice, so it leaves
+  const solo = S === 1;
 
-  // masthead (card only)
-  const mastH = isCard ? 190 : 0;
+  // masthead (card only) — sized before the band so a wrapped title pushes
+  // everything down instead of painting over the poster
+  const mastFit = fitName(show.name.toUpperCase(), 64, 36, W - m * 2);
+  const mastH = isCard ? (mastFit.lines[1] ? 190 + Math.round(mastFit.size * 0.95) : 190) : 0;
   // the poster band: art left, the register right
   const posterW = isCard ? 168 : 132;
   const posterH = Math.round(posterW * 1.5);
   const bandPad = isCard ? 26 : 18;
-  const bandTop = mastH + (isCard ? 8 : 16);
+  const bandTop = mastH + (isCard ? 8 : 26);
   // the band always sizes to the poster slot — the top-five list needs the
   // same room whether or not the art arrived
   const bandH = posterH + bandPad;
@@ -218,7 +230,8 @@ export function buildSignalSvg(
   const gridTop = bandTop + bandH + colHeadH;
   const scaleRowH = 104; // the full-width rating-scale band, both frames
   const footH = isCard ? 110 : 0;
-  const H = gridTop + R * (cellH + GAP) + avgRowH + scaleRowH + footH + (isCard ? 8 : 16);
+  const H =
+    gridTop + R * (cellH + GAP) + (solo ? 0 : avgRowH) + scaleRowH + footH + (isCard ? 8 : 16);
   const cx = (col: number) => gridLeft + xOff + col * (cellW + GAP);
   const cy = (row: number) => gridTop + row * (cellH + GAP);
 
@@ -271,21 +284,32 @@ export function buildSignalSvg(
       "EPISODE RATINGS",
       show.network?.toUpperCase() ?? null,
       years,
-      opts.season != null ? `SEASON ${opts.season}` : null,
+      opts.season != null ? (opts.season === 0 ? "SPECIALS" : `SEASON ${opts.season}`) : null,
     ]
       .filter(Boolean)
       .join(" · ");
-    const fit = fitName(show.name.toUpperCase(), 64, 36, W - m * 2);
     parts.push(
       txt(m, 84, chyron, { size: 19, wdth: 105, ls: 2.7 }),
-      txt(m, 152, fit.lines[0], { size: fit.size, wght: 800, wdth: 110, fill: TEXT, ls: fit.size * 0.01 }),
+      txt(m, 152, mastFit.lines[0], { size: mastFit.size, wght: 800, wdth: 110, fill: TEXT, ls: mastFit.size * 0.01 }),
     );
-    if (fit.lines[1]) parts.push(txt(m, 152 + fit.size * 0.95, fit.lines[1], { size: fit.size, wght: 800, wdth: 110, fill: TEXT }));
+    if (mastFit.lines[1])
+      parts.push(
+        txt(m, 152 + mastFit.size * 0.95, mastFit.lines[1], {
+          size: mastFit.size,
+          wght: 800,
+          wdth: 110,
+          fill: TEXT,
+          ls: mastFit.size * 0.01,
+        }),
+      );
   } else {
-    parts.push(
-      `<rect x="0.5" y="0.5" width="${W - 1}" height="${r2(H - 1)}" rx="14" fill="${PLATE}" stroke="${LINE}" stroke-width="1"/>`,
-    );
+    // fill first, art over it, hairline frame LAST so the border survives
+    // wherever the backdrop sits
+    parts.push(`<rect x="0.5" y="0.5" width="${W - 1}" height="${r2(H - 1)}" rx="14" fill="${PLATE}"/>`);
     parts.push(backdropBlock());
+    parts.push(
+      `<rect x="0.5" y="0.5" width="${W - 1}" height="${r2(H - 1)}" rx="14" fill="none" stroke="${LINE}" stroke-width="1"/>`,
+    );
   }
 
   // ---- the poster band: the art, then THE TOP FIVE — the index a stranger
@@ -316,16 +340,16 @@ export function buildSignalSvg(
   const rowsY0 = headY + (isCard ? 30 : 26);
   const rowH = (posterH - (rowsY0 - bandTop) - 26) / 5;
   parts.push(
-    txt(regX, headY, "THE TOP FIVE", { size: listFs * 0.78, wdth: 105, ls: listFs * 0.13, opacity: 0.8 }),
+    txt(regX, headY, "THE TOP FIVE", { size: listFs * 0.78, wdth: 105, ls: listFs * 0.109, opacity: 0.8 }),
   );
   top5.forEach((ep, i) => {
     const y = rowsY0 + rowH * i + rowH / 2;
     parts.push(
       `<text x="${r2(regX)}" y="${r2(y)}">` +
         `<tspan font-size="${r2(listFs * 1.15)}" font-weight="800" style="font-variation-settings:'wdth' 62,'wght' 800" fill="${TEXT}" opacity="0.3">${String(i + 1).padStart(2, "0")}</tspan>` +
-        `<tspan font-size="${listFs}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="0.8" fill="${TEXT}">  ${esc(trunc((ep.name ?? code(ep)).toUpperCase(), isCard ? 26 : 30))}</tspan>` +
-        `<tspan font-size="${r2(listFs * 0.82)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="1" fill="${MUTED}">  ${code(ep)} · </tspan>` +
-        `<tspan font-size="${r2(listFs * 1.1)}" font-family="${SYS}" font-weight="700" fill="${GOLD}" style="font-variant-numeric:tabular-nums">${ep.rating!.toFixed(1)}</tspan>` +
+        `<tspan dx="0.6em" font-size="${listFs}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="0.8" fill="${TEXT}">${esc(trunc((ep.name ?? code(ep)).toUpperCase(), isCard ? 26 : 30))}</tspan>` +
+        `<tspan dx="0.55em" font-size="${r2(listFs * 0.82)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="1" fill="${MUTED}">${code(ep)} ·</tspan>` +
+        `<tspan dx="0.45em" font-size="${r2(listFs * 1.1)}" font-family="${SYS}" font-weight="700" fill="${GOLD}" style="font-variant-numeric:tabular-nums">${ep.rating!.toFixed(1)}</tspan>` +
         `</text>`,
     );
   });
@@ -333,16 +357,16 @@ export function buildSignalSvg(
   {
     const statRow = (y: number, label: string, body: string, bodyFill: string, bodySys = false) =>
       `<text x="${r2(gridRight)}" y="${r2(y)}" text-anchor="end">` +
-      `<tspan font-size="${r2(listFs * 0.78)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="${r2(listFs * 0.13)}" fill="${MUTED}" opacity="0.55">${label}</tspan>` +
+      `<tspan font-size="${r2(listFs * 0.78)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="${r2(listFs * 0.109)}" fill="${MUTED}" opacity="0.55">${label}</tspan>` +
       (bodySys
-        ? `<tspan font-size="${r2(listFs * 1.1)}" font-family="${SYS}" font-weight="700" fill="${bodyFill}" style="font-variant-numeric:tabular-nums">  ${esc(body)}</tspan>`
-        : `<tspan font-size="${r2(listFs * 0.95)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="1" fill="${bodyFill}">  ${esc(body)}</tspan>`) +
+        ? `<tspan dx="0.6em" font-size="${r2(listFs * 1.1)}" font-family="${SYS}" font-weight="700" fill="${bodyFill}" style="font-variant-numeric:tabular-nums">${esc(body)}</tspan>`
+        : `<tspan dx="0.6em" font-size="${r2(listFs * 0.95)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="1" fill="${bodyFill}">${esc(body)}</tspan>`) +
       `</text>`;
     const stats: [string, string, string, boolean][] = [];
     if (!lowSuppressed)
-      stats.push(["THE LOW", `${trunc((lowEp.name ?? code(lowEp)).toUpperCase(), 18)} · ${code(lowEp)}`, MUTED, false]);
-    stats.push(["SERIES AVG", seriesAvg.toFixed(1), GOLD, true]);
-    if (bestSeason != null)
+      stats.push(["THE LOW", `${trunc((lowEp.name ?? code(lowEp)).toUpperCase(), 22)} · ${code(lowEp)}`, MUTED, false]);
+    stats.push([opts.season != null ? "SEASON AVG" : "SERIES AVG", seriesAvg.toFixed(1), GOLD, true]);
+    if (S > 1 && bestSeason != null)
       stats.push(["BEST SEASON", bestSeason === 0 ? "SP" : `S${bestSeason}`, TEXT, false]);
     if (S > 1) stats.push(["SEASONS", String(S), TEXT, false]);
     stats.forEach(([label, body, fill, sys], i) =>
@@ -350,7 +374,8 @@ export function buildSignalSvg(
     );
   }
 
-  // ---- column heads (page links them into the season filter)
+  // ---- column heads (page links them into the season filter; tabindex -1
+  // because the SVG is aria-hidden — the rail above is the accessible path)
   seasonList.forEach((s, col) => {
     const label = s === 0 ? "SP" : `S${s}`;
     const t = txt(cx(col) + cellW / 2, gridTop - 10, label, {
@@ -359,7 +384,9 @@ export function buildSignalSvg(
       ls: 1.6,
       anchor: "middle",
     });
-    parts.push(!isCard ? `<a href="?season=${s}">${t}</a>` : t);
+    // the invisible rect gives the head a full-column hit area
+    const hit = `<rect x="${r2(cx(col))}" y="${gridTop - colHeadH}" width="${r2(cellW)}" height="${colHeadH - 2}" fill="#000" fill-opacity="0"/>`;
+    parts.push(!isCard ? `<a href="?season=${s}" tabindex="-1">${hit}${t}</a>` : t);
   });
 
   // ---- row labels: E1.. every row while they fit, every 5th when they don't
@@ -392,7 +419,8 @@ export function buildSignalSvg(
     );
     if (rt != null && showVal) {
       const ink = inkFor(rt);
-      if (showCode)
+      // unnumbered episodes have no honest code — the rating stands alone
+      if (showCode && ep.number != null)
         parts.push(
           txt(x + cellW / 2, y + cellH * 0.36, code(ep), {
             size: codeSize,
@@ -400,7 +428,7 @@ export function buildSignalSvg(
             ls: 0.6,
             fill: ink,
             anchor: "middle",
-            opacity: 0.72,
+            opacity: 0.8,
           }),
         );
       parts.push(
@@ -423,25 +451,28 @@ export function buildSignalSvg(
   parts.push(ring(peakEp, TEXT, 2));
   if (!lowSuppressed) parts.push(ring(lowEp, MUTED, 1.2, "3 3"));
 
-  // ---- season averages: printed once, gold, under each column
-  const avgY = cy(R - 1) + cellH + 30;
-  parts.push(
-    txt(gridLeft + xOff - 12, avgY, "AVG", { size: 9, wdth: 105, ls: 1.2, anchor: "end", opacity: 0.6 }),
-  );
-  seasonList.forEach((s, col) => {
-    const colRated = cells.filter((x) => x.col === col && x.ep.rating != null);
-    if (colRated.length < 2) return;
-    const avg = colRated.reduce((t, x) => t + x.ep.rating!, 0) / colRated.length;
+  // ---- season averages: printed once, gold, under each column. A solo
+  // season skips the row — its average already prints in the band.
+  const avgY = cy(R - 1) + cellH + (solo ? 0 : 30);
+  if (!solo) {
     parts.push(
-      txt(cx(col) + cellW / 2, avgY, avg.toFixed(1), {
-        size: Math.min(15, Math.max(10, cellW * 0.2)),
-        sys: true,
-        wght: 700,
-        fill: GOLD,
-        anchor: "middle",
-      }),
+      txt(gridLeft + xOff - 12, avgY, "AVG", { size: 9, wdth: 105, ls: 1.2, anchor: "end", opacity: 0.6 }),
     );
-  });
+    seasonList.forEach((s, col) => {
+      const colRated = cells.filter((x) => x.col === col && x.ep.rating != null);
+      if (colRated.length < 2) return;
+      const avg = colRated.reduce((t, x) => t + x.ep.rating!, 0) / colRated.length;
+      parts.push(
+        txt(cx(col) + cellW / 2, avgY, avg.toFixed(1), {
+          size: Math.min(15, Math.max(10, cellW * 0.2)),
+          sys: true,
+          wght: 700,
+          fill: GOLD,
+          anchor: "middle",
+        }),
+      );
+    });
+  }
 
   // ---- the rating scale: a full-width discrete band — twelve filament
   // steps, never a gradient. Values above are scale anchors, not data.
@@ -474,8 +505,8 @@ export function buildSignalSvg(
   if (isCard) {
     // lockup: the navbar lockup verbatim, card-scaled — mark height = text
     // size, weight 650 / stretch 120 / 0.02em, the drawn period dot
-    const hairY = H - 86;
-    const baseY = H - 42;
+    const hairY = H - 96;
+    const baseY = H - 52;
     const wfs = 22;
     const markScale = wfs / 24;
     const markW = 36 * markScale;
@@ -503,13 +534,18 @@ export function buildSignalSvg(
         c: code(cell.ep),
         n: cell.ep.name ?? code(cell.ep),
         r: cell.ep.rating,
-        d: cell.ep.airdate,
-        h: `/show/${opts.slug}/s${String(cell.ep.season ?? 0).padStart(2, "0")}e${String(cell.ep.number ?? 0).padStart(2, "0")}`,
+        d: cell.ep.airdate ? longDate(cell.ep.airdate) : null,
+        // unnumbered episodes have no permalink — JS renders them unlinked
+        h:
+          cell.ep.number != null
+            ? `/show/${opts.slug}/s${String(cell.ep.season ?? 0).padStart(2, "0")}e${String(cell.ep.number).padStart(2, "0")}`
+            : null,
       })),
       x: cells.map((cell) => r2(cx(cell.col) + cellW / 2)),
       y: cells.map((cell) => r2(cy(cell.row) + cellH / 2)),
       cw: r2(cellW),
       ch: r2(cellH),
+      rx: r2(Math.min(9, cellH * 0.2)),
       peak: cells.findIndex((x) => x.ep.id === peakEp.id),
       low: lowSuppressed ? null : cells.findIndex((x) => x.ep.id === lowEp.id),
     }).replaceAll("<", "\\u003C");

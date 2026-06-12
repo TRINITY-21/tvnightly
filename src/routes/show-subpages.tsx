@@ -284,7 +284,10 @@ async function ratingsScope(c: Context<{ Bindings: Bindings }, "/show/:slug">, r
   )
     .bind(show.id)
     .all<EpisodeRow>();
-  const seasons = [...new Set(allEps.map((e) => e.season).filter((s): s is number => s != null))];
+  // null seasons ride the specials bucket (0), matching the grid builder;
+  // specials sort last, like the grid's SP column
+  const raw0 = [...new Set(allEps.map((e) => e.season ?? 0))].sort((a, b) => a - b);
+  const seasons = [...raw0.filter((s) => s !== 0), ...(raw0.includes(0) ? [0] : [])];
   const rawSeason = (c.req.query("season") ?? "").trim();
   let season: number | null = null;
   let redirect = false;
@@ -296,12 +299,15 @@ async function ratingsScope(c: Context<{ Bindings: Bindings }, "/show/:slug">, r
   return { show, allEps, seasons, season, redirect, redirectTo };
 }
 
+/** Season scope filter — specials (0) include null-season rows. */
+const inSeason = (e: EpisodeRow, season: number) => (e.season ?? 0) === season;
+
 app.get("/show/:slug/ratings.svg", async (c) => {
   const scope = await ratingsScope(c, "");
   if (!scope) return c.notFound();
   if (scope.redirect) return c.redirect(`/show/${scope.show.slug}/ratings.svg`, 301);
   const eps =
-    scope.season != null ? scope.allEps.filter((e) => e.season === scope.season) : scope.allEps;
+    scope.season != null ? scope.allEps.filter((e) => inSeason(e, scope.season!)) : scope.allEps;
   const bd =
     scope.show.tmdb_id && c.env.TMDB_API_KEY
       ? await tmdbBackdrop(c.env.TMDB_API_KEY, scope.show.tmdb_id)
@@ -331,7 +337,7 @@ app.get("/show/:slug/ratings", async (c) => {
   const { show, allEps, seasons, season } = scope;
   const base = `/show/${show.slug}/ratings`;
   if (scope.redirect) return c.redirect(base, 301);
-  const eps = season != null ? allEps.filter((e) => e.season === season) : allEps;
+  const eps = season != null ? allEps.filter((e) => inSeason(e, season)) : allEps;
   // the page chart wears the same band as the saved card — what you see is
   // what you download (inline SVG may reference URLs directly)
   const pageBd =
@@ -345,7 +351,7 @@ app.get("/show/:slug/ratings", async (c) => {
   });
   const similar = await similarShows(c.env.DB, show);
   const region = visitorRegion(c);
-  const seasonLabel = season != null ? ` Season ${season}` : "";
+  const seasonLabel = season != null ? (season === 0 ? " Specials" : ` Season ${season}`) : "";
   const q = season != null ? `?season=${season}` : "";
 
   const site = origin(c);
@@ -395,9 +401,9 @@ app.get("/show/:slug/ratings", async (c) => {
           <figure
             class="sig"
             tabindex={0}
-            role="group"
+            role="application"
             aria-roledescription="interactive chart"
-            aria-label={`${sig.summary} Use arrow keys to step through episodes.`}
+            aria-label={sig.summary}
           >
             <div class="sig-screen">{raw(sig.svg)}</div>
             <figcaption class="sr-only">{sig.summary}</figcaption>
@@ -438,7 +444,11 @@ app.get("/show/:slug/ratings", async (c) => {
           ) : null}
         </>
       ) : (
-        <p class="muted">No rated episodes yet for {show.name}.</p>
+        <p class="muted">
+          No rated episodes yet for {show.name}
+          {seasonLabel}.{" "}
+          {season != null ? <a href={base}>View all seasons</a> : null}
+        </p>
       )}
     </Layout>,
   );

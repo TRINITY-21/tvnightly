@@ -1,4 +1,4 @@
-// Signal chart interaction: crosshair + readout on hover/keys, and the
+// Episode Grid interaction: cell ring + readout on hover/keys, and the
 // save-as-image pipeline (server-rendered SVG -> canvas -> PNG/share sheet).
 // The server ships the computed layout in #sig-data; this file computes
 // no geometry of its own.
@@ -19,8 +19,36 @@
   var live = document.getElementById("sig-live");
   if (!svg || !cursor || !strip || !read) return;
   strip.hidden = false;
+  // arrow keys only exist with JS — promise them only now
+  fig.setAttribute(
+    "aria-label",
+    fig.getAttribute("aria-label") + " Use arrow keys to move through the grid.",
+  );
+
+  // season columns: start index of each column, derived from the codes
+  var colStart = [];
+  (function () {
+    var prev = null;
+    for (var i = 0; i < data.rows.length; i++) {
+      var s = data.rows[i].c.slice(1, 3);
+      if (s !== prev) {
+        colStart.push(i);
+        prev = s;
+      }
+    }
+  })();
+  function colOf(i) {
+    var c = 0;
+    while (c + 1 < colStart.length && colStart[c + 1] <= i) c++;
+    return c;
+  }
+  function colLen(c) {
+    return (c + 1 < colStart.length ? colStart[c + 1] : data.rows.length) - colStart[c];
+  }
 
   var cur = -1;
+  // snap radius: just past one cell — dead plate is dead
+  var RAD = Math.pow(data.cw / 2 + 4, 2) + Math.pow(data.ch / 2 + 4, 2);
 
   function vbPt(ev) {
     var r = svg.getBoundingClientRect();
@@ -42,10 +70,10 @@
         best = i;
       }
     }
-    return best;
+    return { i: best, d: bd };
   }
-  function seasonOf(i) {
-    return parseInt(data.rows[i].c.slice(1, 3), 10);
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
   }
   function show(i) {
     cur = i;
@@ -55,14 +83,16 @@
     cursor.innerHTML =
       '<rect x="' + (x - data.cw / 2 - 1.5) + '" y="' + (y - data.ch / 2 - 1.5) +
       '" width="' + (data.cw + 3) + '" height="' + (data.ch + 3) +
-      '" rx="8" fill="none" stroke="#FFA94D" stroke-width="1.5"/>';
+      '" rx="' + (data.rx || 8) + '" fill="none" stroke="#FFA94D" stroke-width="1.5"/>';
     read.innerHTML =
       '<span class="sig-read-code">' + row.c + "</span>" +
-      '<a class="sig-read-name" href="' + row.h + '">' + esc(row.n) + "</a>" +
+      (row.h
+        ? '<a class="sig-read-name" href="' + row.h + '">' + esc(row.n) + "</a>"
+        : '<span class="sig-read-name">' + esc(row.n) + "</span>") +
       (row.r != null
         ? '<span class="rating">★ ' + row.r.toFixed(1) + "</span>"
         : '<span class="sig-read-code" style="opacity:.6">Unrated</span>') +
-      (row.d ? '<span class="sig-read-date">' + row.d + "</span>" : "");
+      (row.d ? '<span class="sig-read-date">' + esc(row.d) + "</span>" : "");
     if (live)
       live.textContent =
         row.c + " " + row.n + (row.r != null ? ", rated " + row.r.toFixed(1) : ", unrated") +
@@ -73,53 +103,76 @@
     cursor.innerHTML = "";
     read.innerHTML = "";
   }
-  function esc(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  // keyboard only: keep the focused cell inside the panned viewport
+  function reveal(i) {
+    var sc = fig.querySelector(".sig-screen");
+    if (!sc) return;
+    var r = svg.getBoundingClientRect();
+    var px = (data.x[i] / svg.viewBox.baseVal.width) * r.width;
+    if (px - data.cw < sc.scrollLeft) sc.scrollLeft = px - data.cw;
+    else if (px + data.cw > sc.scrollLeft + sc.clientWidth)
+      sc.scrollLeft = px + data.cw - sc.clientWidth;
   }
 
   var downAt = null;
   svg.addEventListener("pointermove", function (ev) {
-    show(nearest(vbPt(ev)));
+    if (ev.pointerType !== "mouse") return;
+    var hit = nearest(vbPt(ev));
+    if (hit.d <= RAD) show(hit.i);
+    else clear();
   });
-  svg.addEventListener("pointerleave", clear);
+  svg.addEventListener("pointerleave", function (ev) {
+    if (ev.pointerType === "mouse") clear();
+  });
   svg.addEventListener("pointerdown", function (ev) {
     downAt = { x: ev.clientX, y: ev.clientY, t: ev.pointerType };
+    // a tap scrubs; the readout's name link is the touch navigation
+    if (ev.pointerType !== "mouse") {
+      var hit = nearest(vbPt(ev));
+      if (hit.d <= RAD) show(hit.i);
+    }
   });
-  // navigate on a true mouse click only; touch taps scrub, and the readout's
-  // name link is the touch navigation affordance
+  // navigate on a true mouse click on a cell only
   svg.addEventListener("pointerup", function (ev) {
     if (!downAt || downAt.t !== "mouse") return;
     if (Math.abs(ev.clientX - downAt.x) > 4 || Math.abs(ev.clientY - downAt.y) > 4) return;
-    var i = nearest(vbPt(ev));
-    if (data.rows[i]) window.location.href = data.rows[i].h;
+    var hit = nearest(vbPt(ev));
+    if (hit.d > RAD) return;
+    var row = data.rows[hit.i];
+    if (row && row.h) window.location.href = row.h;
   });
 
+  // the grid is season-major: Down/Up walk a season, Left/Right hop columns
   fig.addEventListener("keydown", function (ev) {
     var n = data.rows.length;
     var i = cur < 0 ? data.peak : cur;
-    if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
-      var dir = ev.key === "ArrowRight" ? 1 : -1;
-      if (ev.shiftKey) {
-        var s0 = seasonOf(i);
-        var j = i;
-        while (j + dir >= 0 && j + dir < n && seasonOf(j + dir) === s0) j += dir;
-        if (j + dir >= 0 && j + dir < n) {
-          j += dir;
-          var s1 = seasonOf(j);
-          while (j - 1 >= 0 && seasonOf(j - 1) === s1) j--;
-        }
-        i = j;
-      } else i = Math.min(n - 1, Math.max(0, i + dir));
+    var c, ord, t;
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      i = Math.min(n - 1, Math.max(0, i + (ev.key === "ArrowDown" ? 1 : -1)));
       show(i);
+      reveal(i);
+      ev.preventDefault();
+    } else if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
+      var dir = ev.key === "ArrowRight" ? 1 : -1;
+      c = colOf(i);
+      t = c + dir;
+      if (t >= 0 && t < colStart.length) {
+        ord = ev.shiftKey ? 0 : Math.min(i - colStart[c], colLen(t) - 1);
+        i = colStart[t] + ord;
+      }
+      show(i);
+      reveal(i);
       ev.preventDefault();
     } else if (ev.key === "Home") {
       show(0);
+      reveal(0);
       ev.preventDefault();
     } else if (ev.key === "End") {
       show(n - 1);
+      reveal(n - 1);
       ev.preventDefault();
     } else if (ev.key === "Enter") {
-      if (cur >= 0) window.location.href = data.rows[cur].h;
+      if (cur >= 0 && data.rows[cur].h) window.location.href = data.rows[cur].h;
     } else if (ev.key === "Escape") {
       clear();
     }
@@ -130,15 +183,13 @@
   var season = strip.getAttribute("data-season");
   strip.querySelectorAll(".sig-save button").forEach(function (btn) {
     btn.addEventListener("click", function () {
+      if (btn.hasAttribute("aria-busy")) return; // already rendering
       var label = btn.textContent;
+      var failed = false;
       btn.textContent = "RENDERING…";
       btn.setAttribute("aria-busy", "true");
       var url = "/show/" + slug + "/ratings.svg" + (season ? "?season=" + season : "");
       var name = slug + "-episode-ratings" + (season ? "-s" + season : "") + "-tvnightly";
-      var restore = function () {
-        btn.textContent = label;
-        btn.removeAttribute("aria-busy");
-      };
       // no-cache: a save must always render the current card, never an
       // hour-old browser-cached SVG
       fetch(url, { cache: "no-cache" })
@@ -193,8 +244,17 @@
           }
           download(png, name + ".png");
         })
-        .catch(function () {})
-        .then(restore);
+        .catch(function () {
+          failed = true;
+        })
+        .then(function () {
+          btn.removeAttribute("aria-busy");
+          btn.textContent = failed ? "Couldn't render — try again" : label;
+          if (failed)
+            setTimeout(function () {
+              btn.textContent = label;
+            }, 2500);
+        });
     });
   });
   function download(blob, filename) {

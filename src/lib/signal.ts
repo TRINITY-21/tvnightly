@@ -216,7 +216,7 @@ export function buildSignalSvg(
   const cellH = Math.min(50, Math.max(isCard ? 22 : 26, cellW * 0.62));
 
   const gridTop = bandTop + bandH + colHeadH;
-  const scaleRowH = isCard ? 64 : 0;
+  const scaleRowH = 104; // the full-width rating-scale band, both frames
   const footH = isCard ? 110 : 0;
   const H = gridTop + R * (cellH + GAP) + avgRowH + scaleRowH + footH + (isCard ? 8 : 16);
   const cx = (col: number) => gridLeft + xOff + col * (cellW + GAP);
@@ -443,28 +443,35 @@ export function buildSignalSvg(
     );
   });
 
+  // ---- the rating scale: a full-width discrete band — twelve filament
+  // steps, never a gradient. Values above are scale anchors, not data.
+  {
+    const y0 = avgY + 30;
+    const segN = 12;
+    const segGap = 3;
+    const bandW = W - m * 2;
+    const segW = (bandW - segGap * (segN - 1)) / segN;
+    const bandY = y0 + 24;
+    parts.push(txt(m, y0, "RATING SCALE", { size: 11, wdth: 105, ls: 1.6, opacity: 0.65 }));
+    parts.push(
+      txt(m, bandY - 8, "5.5", { size: 12, sys: true, wght: 700, opacity: 0.8 }),
+      txt(W / 2, bandY - 8, "7.5", { size: 12, sys: true, wght: 700, anchor: "middle", opacity: 0.8 }),
+      txt(W - m, bandY - 8, "9.5", { size: 12, sys: true, wght: 700, anchor: "end", opacity: 0.8 }),
+    );
+    for (let i = 0; i < segN; i++) {
+      const v = 5.5 + (4 * (i + 0.5)) / segN;
+      parts.push(
+        `<rect x="${r2(m + i * (segW + segGap))}" y="${bandY}" width="${r2(segW)}" height="14" rx="3" fill="${rampColor(v)}"/>`,
+      );
+    }
+    parts.push(
+      txt(m, bandY + 36, "LOWEST RATED", { size: 10, wdth: 105, ls: 1.4, opacity: 0.6 }),
+      txt(W - m, bandY + 36, "HIGHEST RATED", { size: 10, wdth: 105, ls: 1.4, anchor: "end", opacity: 0.6 }),
+    );
+  }
+
   if (!isCard) parts.push(`<g id="sig-cursor"></g>`);
   if (isCard) {
-    // the scale, as discrete chips — a legend is scale, not data (and never
-    // a gradient bar)
-    const chips = [6.0, 7.0, 8.0, 9.0, 9.5];
-    const chipW = 52;
-    const chipH = 24;
-    const legendY = avgY + 26;
-    parts.push(txt(m, legendY + chipH / 2 + 3.5, "SCALE", { size: 10, wdth: 105, ls: 1.4, opacity: 0.6 }));
-    chips.forEach((v, i) => {
-      const x = m + 64 + i * (chipW + 6);
-      parts.push(
-        `<rect x="${x}" y="${legendY}" width="${chipW}" height="${chipH}" rx="5" fill="${rampColor(v)}"/>`,
-        txt(x + chipW / 2, legendY + chipH / 2 + 4, v.toFixed(1), {
-          size: 12,
-          sys: true,
-          wght: 700,
-          fill: inkFor(v),
-          anchor: "middle",
-        }),
-      );
-    });
     // lockup: the standby mark (header geometry, 36x24), wordmark, LED dot
     const hairY = H - 86;
     const baseY = H - 40;

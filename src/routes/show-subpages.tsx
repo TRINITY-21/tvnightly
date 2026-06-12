@@ -958,14 +958,18 @@ app.get("/show/:slug/release-date", async (c) => {
   const firsts = await seasonPremieres(db, show.id);
   const pattern = premierePattern(firsts);
 
-  // the one-sheet next to the date reads like a premiere announcement;
-  // backdrop only if the mirror has no poster yet
-  let media: { src: string; srcset?: string; poster?: boolean } | null = posterSrc(show)
-    ? { ...posterSrc(show)!, poster: true }
+  // the date over the show's own frame: the dated episode's still when one
+  // exists, else the show's backdrop; a poster only ever feeds ambient light
+  let media: { x1: string; x2?: string; ambient?: boolean } | null = next?.image_url
+    ? { x1: next.image_url, x2: largeStill(next.image_url) }
     : null;
   if (!media && show.tmdb_id && c.env.TMDB_API_KEY) {
     const bd = await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id);
-    if (bd) media = { src: bd.x1, srcset: `${bd.x1} 1x, ${bd.x2} 2x` };
+    if (bd) media = { x1: bd.x1, x2: bd.x2 };
+  }
+  if (!media) {
+    const p = posterSrc(show);
+    if (p) media = { x1: p.src, ambient: true };
   }
 
   const maxAired = lastAired?.season ?? 0;
@@ -1051,17 +1055,9 @@ app.get("/show/:slug/release-date", async (c) => {
         )}
       </h1>
       <ShowTabs slug={show.slug} current="release" />
-      <section class={`slate${media ? ` has-media${media.poster ? " is-poster" : ""}` : ""}`}>
+      <section class={media ? `slate slate-hero${media.ambient ? " slate-ambient" : ""}` : "slate"}>
         {media ? (
-          <div class="slate-media">
-            <img
-              src={media.src}
-              srcset={media.srcset}
-              alt={`${show.name} poster`}
-              width={media.poster ? 150 : 384}
-              height={media.poster ? 225 : 216}
-            />
-          </div>
+          <div class="slate-frame" style={heroBg(media.x1, media.x2)} aria-hidden="true"></div>
         ) : null}
         <div class="slate-body">
           <p class="slate-chyron">{chyron}</p>

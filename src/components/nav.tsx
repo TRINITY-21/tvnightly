@@ -16,7 +16,11 @@ export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current
     ["ratings", "Ratings graph", `/show/${slug}/ratings`],
     ["similar", "Similar shows", `/show/${slug}/similar`],
     ["cast", "Cast", `/show/${slug}/cast`],
-    ["media", "Media", `/show/${slug}/media`],
+    // Media rides the rail on the main details page only — and on itself,
+    // so the page you're on never vanishes from its own rail
+    ...(current === "overview" || current === "media"
+      ? ([["media", "Media", `/show/${slug}/media`]] as [string, string, string][])
+      : []),
     // Compare lives in Keep exploring, not the rail
   ];
   return (

@@ -472,24 +472,25 @@ export function buildSignalSvg(
 
   if (!isCard) parts.push(`<g id="sig-cursor"></g>`);
   if (isCard) {
-    // lockup: the standby mark (header geometry, 36x24), wordmark, LED dot
+    // lockup: the navbar lockup verbatim, card-scaled — mark height = text
+    // size, weight 650 / stretch 120 / 0.02em, the drawn period dot
     const hairY = H - 86;
-    const baseY = H - 40;
-    const wfs = 28;
-    const markScale = 26 / 24;
+    const baseY = H - 42;
+    const wfs = 22;
+    const markScale = wfs / 24;
     const markW = 36 * markScale;
-    const wordX = m + markW + 14;
-    const wordW = "TV NIGHTLY".length * wfs * 0.6;
+    const wordX = m + markW + 12;
+    const wordW = "TV NIGHTLY".length * wfs * 0.58;
     parts.push(
       `<line x1="${m}" y1="${r2(hairY)}" x2="${W - m}" y2="${r2(hairY)}" stroke="${LINE}" stroke-width="1"/>`,
-      `<g transform="translate(${m}, ${r2(baseY - 22)}) scale(${r2(markScale)})">` +
+      `<g transform="translate(${m}, ${r2(baseY - 19)}) scale(${r2(markScale)})">` +
         `<rect x="1.25" y="1.25" width="33.5" height="21.5" rx="5.5" fill="none" stroke="#F2F5FA" stroke-width="2.5"/>` +
         `<circle cx="26.5" cy="16.5" r="3.4" fill="${AMBER}" opacity="0.22"/>` +
         `<circle cx="26.5" cy="16.5" r="2.2" fill="${AMBER}"/>` +
         `</g>`,
-      txt(wordX, baseY, "TV NIGHTLY", { size: wfs, wght: 800, wdth: 120, fill: TEXT, ls: wfs * 0.02 }),
-      `<circle cx="${r2(wordX + wordW + 0.14 * wfs)}" cy="${r2(baseY - 0.08 * wfs)}" r="${r2(0.085 * wfs)}" fill="${AMBER}"/>`,
-      txt(W - m, baseY - 4, "TVNIGHTLY.COM", { size: 16, wdth: 105, ls: 2.2, anchor: "end" }),
+      txt(wordX, baseY, "TV NIGHTLY", { size: wfs, wght: 650, wdth: 120, fill: TEXT, ls: wfs * 0.02 }),
+      `<circle cx="${r2(wordX + wordW + 0.13 * wfs)}" cy="${r2(baseY - 0.085 * wfs)}" r="${r2(0.085 * wfs)}" fill="${AMBER}"/>`,
+      txt(W - m, baseY - 4, "TVNIGHTLY.COM", { size: 13, wdth: 105, ls: 1.8, anchor: "end" }),
     );
   }
   parts.push("</svg>");

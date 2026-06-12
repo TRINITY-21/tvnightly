@@ -172,15 +172,70 @@
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .search .ta-box { background: var(--surface-2); }
 }
+/* rows: poster thumb, name over kind·year, rating at the right edge.
+   Pointer and arrow keys share .ta-active — :hover alone would leave two
+   highlights when the mouse rests while the keyboard drives. */
 .search .ta-box a {
-  padding: 0.52rem 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.42rem 0.7rem;
   color: var(--text);
   font-size: 0.86rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 .search .ta-box a:last-child { border-bottom: 0; }
-.search .ta-box a:hover {
-  background: rgba(255, 169, 77, 0.08);
-  text-decoration: none;
+.search .ta-box a:hover { text-decoration: none; }
+.search .ta-box a.ta-active { background: rgba(255, 169, 77, 0.08); }
+.ta-thumb {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.ta-thumb-blank { display: block; }
+.ta-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+.ta-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.ta-meta {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+.ta-rating {
+  flex: 0 0 auto;
+  color: var(--warn);
+  font-size: 0.78rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.search .ta-box .ta-all {
+  justify-content: center;
+  padding: 0.55rem 0.7rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  border-top: 1px solid var(--line);
 }
 

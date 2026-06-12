@@ -122,8 +122,8 @@ export const Layout: FC<
             <input
               type="search"
               name="q"
-              placeholder="Search shows & movies"
-              aria-label="Search shows and movies"
+              placeholder="Shows, movies, people"
+              aria-label="Search shows, movies and people"
               autocomplete="off"
               spellcheck={false}
               required

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { Bindings, ShowRow, MovieRow } from "../types";
 import { Layout } from "../components/Layout";
 import { ShowCard, MovieCard, ExploreCard, StatusBadge } from "../components/cards";
-import { heroBg, hiRes, stripHtml } from "../lib/format";
+import { heroBg, hiRes, stripHtml, slugifyName, retinaSet } from "../lib/format";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -12,10 +12,11 @@ const app = new Hono<{ Bindings: Bindings }>();
 app.get("/api/search", async (c) => {
   const q = (c.req.query("q") ?? "").trim();
   if (q.length < 2) return c.json([]);
-  // Leading-wildcard LIKE can't use an index; skip the movies scan for very
-  // short queries to keep per-keystroke rows-read inside the D1 free budget.
+  // Leading-wildcard LIKE can't use an index; skip the movie and people
+  // scans for very short queries to keep per-keystroke rows-read inside
+  // the D1 free budget.
   const includeMovies = q.length >= 3;
-  const [shows, movies] = await Promise.all([
+  const [shows, movies, people] = await Promise.all([
     c.env.DB.prepare(
       `SELECT name, slug, premiered, rating, COALESCE(poster_url, image_url) AS poster
        FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 6`,
@@ -32,6 +33,15 @@ app.get("/api/search", async (c) => {
       : Promise.resolve({
           results: [] as { title: string; slug: string; year: number | null; rating: number | null; poster: string | null }[],
         }),
+    includeMovies
+      ? c.env.DB.prepare(
+          `SELECT id, name, image_url FROM people WHERE name LIKE '%' || ? || '%'
+           ORDER BY (SELECT COUNT(*) FROM credits cr WHERE cr.person_id = people.id) DESC
+           LIMIT 3`,
+        )
+          .bind(q)
+          .all<{ id: number; name: string; image_url: string | null }>()
+      : Promise.resolve({ results: [] as { id: number; name: string; image_url: string | null }[] }),
   ]);
   c.header("Cache-Control", "public, max-age=300");
   return c.json(
@@ -52,13 +62,22 @@ app.get("/api/search", async (c) => {
         rating: r.rating,
         poster: r.poster,
       })),
-    ].slice(0, 8),
+      ...people.results.map((r) => ({
+        name: r.name,
+        slug: `${slugifyName(r.name)}-${r.id}`,
+        year: null,
+        kind: "person",
+        rating: null,
+        poster: r.image_url,
+      })),
+    ].slice(0, 9),
   );
 });
 
 app.get("/search", async (c) => {
   const q = (c.req.query("q") ?? "").trim();
-  const [{ results }, { results: movieResults }] = q
+  type PersonHit = { id: number; name: string; image_url: string | null; known_dept: string | null; roles: number };
+  const [{ results }, { results: movieResults }, { results: personResults }] = q
     ? await Promise.all([
         c.env.DB.prepare(
           `SELECT * FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 20`,
@@ -70,8 +89,18 @@ app.get("/search", async (c) => {
         )
           .bind(q)
           .all<MovieRow>(),
+        // ranked by body of work — both screens count
+        c.env.DB.prepare(
+          `SELECT id, name, image_url, known_dept,
+                  (SELECT COUNT(*) FROM credits cr WHERE cr.person_id = people.id) +
+                  (SELECT COUNT(*) FROM movie_credits mc WHERE mc.person_id = people.id) AS roles
+           FROM people WHERE name LIKE '%' || ? || '%'
+           ORDER BY roles DESC LIMIT 8`,
+        )
+          .bind(q)
+          .all<PersonHit>(),
       ])
-    : [{ results: [] as ShowRow[] }, { results: [] as MovieRow[] }];
+    : [{ results: [] as ShowRow[] }, { results: [] as MovieRow[] }, { results: [] as PersonHit[] }];
 
   // the strongest hit takes the hero: an exact title match outranks the
   // weight order; otherwise TV (the house specialty) leads
@@ -111,7 +140,7 @@ app.get("/search", async (c) => {
 
   const restShows = best?.kind === "tv" ? results.filter((s) => s !== best.show) : results;
   const restMovies = best?.kind === "movie" ? movieResults.filter((m) => m !== best.movie) : movieResults;
-  const total = results.length + movieResults.length;
+  const total = results.length + movieResults.length + personResults.length;
   const nothing = Boolean(q) && total === 0;
 
   // a launch pad instead of a dead end: the bare page and the zero-result
@@ -159,7 +188,7 @@ app.get("/search", async (c) => {
             type="search"
             name="q"
             value={q}
-            placeholder="A show, a movie…"
+            placeholder="A show, a movie, a person…"
             aria-label="Search shows and movies"
             autofocus={!q}
           />
@@ -173,6 +202,9 @@ app.get("/search", async (c) => {
                 results.length ? `${results.length} TV ${results.length === 1 ? "show" : "shows"}` : null,
                 movieResults.length
                   ? `${movieResults.length} ${movieResults.length === 1 ? "movie" : "movies"}`
+                  : null,
+                personResults.length
+                  ? `${personResults.length} ${personResults.length === 1 ? "person" : "people"}`
                   : null,
               ]
                 .filter(Boolean)
@@ -221,8 +253,8 @@ app.get("/search", async (c) => {
 
         {nothing ? (
           <p class="srch-empty">
-            Nothing matched “{q}”. Check the spelling, or try fewer words — we match titles, not
-            descriptions.
+            Nothing matched “{q}”. Check the spelling, or try fewer words — we match titles and
+            names, not descriptions.
           </p>
         ) : null}
 
@@ -246,6 +278,32 @@ app.get("/search", async (c) => {
             <div class="grid">
               {restMovies.map((m) => (
                 <MovieCard movie={m} />
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {personResults.length ? (
+          <section class="srch-section">
+            <h2>
+              People <span class="srch-count">{personResults.length}</span>
+            </h2>
+            <div class="cast-grid">
+              {personResults.map((p) => (
+                <a class="cast-tile" href={`/person/${slugifyName(p.name)}-${p.id}`}>
+                  {p.image_url ? (
+                    <img src={p.image_url} srcset={retinaSet(p.image_url)} alt={p.name} loading="lazy" />
+                  ) : (
+                    <div class="cast-fallback">{p.name}</div>
+                  )}
+                  <div class="cast-tile-body">
+                    <strong>{p.name}</strong>
+                    {p.roles ? (
+                      <span class="cast-char">
+                        {p.roles} {p.roles === 1 ? "credit" : "credits"}
+                      </span>
+                    ) : null}
+                  </div>
+                </a>
               ))}
             </div>
           </section>

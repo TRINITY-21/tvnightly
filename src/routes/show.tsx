@@ -563,6 +563,12 @@ app.get("/show/:slug", async (c) => {
                   desc="Short on time? The pilot-to-finale shortcut, only the episodes that matter."
                   href={`/show/${show.slug}/essential`}
                 />
+                <ExploreCard
+                  icon="Matchup"
+                  title="Compare with another show"
+                  desc="Two shows' episode ratings on one chart — settle it."
+                  href={`/compare?a=${show.slug}`}
+                />
                 {netEntry ? (
                   <ExploreCard
                     icon="Network"

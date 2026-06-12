@@ -416,6 +416,12 @@ app.get("/movie/:slug", async (c) => {
                     href={`/watch-order/${fr.slug}`}
                   />
                 ) : null}
+                <ExploreCard
+                  icon="Matchup"
+                  title="Compare with another movie"
+                  desc="Two films' ratings, runtimes and streaming, side by side."
+                  href={`/movie/${movie.slug}/compare`}
+                />
                 {genres.slice(0, 2).map((g) => (
                   <ExploreCard
                     icon="Genre"

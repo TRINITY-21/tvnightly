@@ -70,16 +70,150 @@
 }
 .graph-wrap svg { display: block; min-width: 420px; }
 
-/* ---- watch orders ---- */
-.wo-list { list-style: none; }
-.wo-row { display: flex; gap: 0.7rem; align-items: center; padding: 0.45rem 0; }
-.wo-num {
-  flex: 0 0 1.6rem;
+/* ---- watch orders ----
+   Index doors ride the lane-tile chassis (11-home.css); guide pages get
+   the saga's opening-film backdrop up top and ranked rows below. */
+.wo-lead { max-width: 56ch; }
+.wo-grid { grid-template-columns: repeat(3, 1fr); margin-top: 1.5rem; }
+@media (max-width: 900px) {
+  .wo-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 520px) {
+  .wo-grid { grid-template-columns: 1fr; }
+}
+.wo-ambient .lane-frame,
+.wo-ambient:hover .lane-frame {
+  inset: -48px;
+  filter: blur(64px) saturate(1.15);
+  opacity: 0.45;
+}
+
+.wo-hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  margin-bottom: 1.6rem;
+}
+.wo-hero-bare { background: none; border: 0; box-shadow: none; }
+.wo-frame {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 22%;
+}
+.wo-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, rgba(14, 14, 17, 0.96), rgba(14, 14, 17, 0.85) 36%, rgba(14, 14, 17, 0.45) 66%, rgba(14, 14, 17, 0.12)),
+    linear-gradient(to top, rgba(14, 14, 17, 0.9), rgba(14, 14, 17, 0.25) 44%, rgba(14, 14, 17, 0) 64%);
+}
+.wo-hero-body {
+  position: relative;
+  max-width: 46rem;
+  padding: 1.55rem 1.75rem 1.45rem;
+}
+.wo-hero-bare .wo-hero-body { padding: 0; }
+.wo-hero h1 { margin: 0.2rem 0 0.6rem; }
+.wo-intro { margin: 0; max-width: 58ch; color: var(--text); }
+.wo-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  margin: 1.15rem 0 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(248, 246, 242, 0.14);
+}
+.wo-stats dt {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
   color: var(--muted);
+}
+.wo-stats dd {
+  margin: 0.1rem 0 0;
   font-family: var(--display);
   font-stretch: 90%;
-  font-weight: 700;
-  text-align: right;
+  font-weight: 800;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
 }
-.wo-poster { width: 38px; border-radius: var(--radius-sm); flex: 0 0 auto; }
+.wo-asterisk { margin: 0.5rem 0 0; font-size: 0.78rem; }
+
+.wo-section { margin-top: 2.1rem; }
+.wo-list {
+  list-style: none;
+  margin: 0.9rem 0 0;
+  padding: 0;
+}
+.wo-row {
+  display: grid;
+  grid-template-columns: 2rem 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color var(--speed) var(--ease);
+}
+.wo-list li:last-child.wo-row,
+.wo-list li:last-child .wo-row { border-bottom: 0; }
+.wo-row:hover { background: var(--surface); }
+.wo-num {
+  color: var(--muted);
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.wo-poster {
+  width: 46px;
+  height: 69px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  display: block;
+}
+.wo-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.14rem;
+  min-width: 0;
+}
+.wo-title a { font-weight: 600; }
+.wo-provs {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+.wo-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  white-space: nowrap;
+}
+.wo-mins {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.wo-back { margin-top: 1.8rem; }
+@media (max-width: 520px) {
+  .wo-row { grid-template-columns: 1.5rem 40px minmax(0, 1fr) auto; gap: 0.6rem; }
+  .wo-poster { width: 40px; height: 60px; }
+}
 

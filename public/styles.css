@@ -3080,6 +3080,95 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   }
 }
 
+
+/* ============================================================
+   The streaming shuffle (/whats-new): one board per service —
+   logo, chyron, and a shelf of the titles that moved.
+   ============================================================ */
+.region-line {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.9rem 0 0.4rem;
+}
+.region-k {
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.region-line select {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.4rem 0.55rem;
+  font-size: 0.85rem;
+}
+.region-line button {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+.region-line button:hover,
+.region-line button:focus-visible { color: var(--accent); border-color: var(--accent); }
+
+.shuffle { margin-top: 2.1rem; }
+.shuffle h2 { margin: 0; display: flex; align-items: baseline; gap: 0.8rem; }
+.shuffle-sum {
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.shuffle-note { margin: 0.35rem 0 0; font-size: 0.85rem; }
+.shuffle-board { margin-top: 1.5rem; }
+.shuffle-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--line);
+}
+.shuffle-head img { display: block; border-radius: 8px; }
+.shuffle-title {
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.shuffle-title strong { color: var(--text); font-weight: 700; }
+.shuffle-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+/* departures wait in gray until you ask about them */
+.shuffle-out .shelf-tile img {
+  filter: grayscale(1);
+  opacity: 0.7;
+  transition: filter var(--speed) var(--ease), opacity var(--speed) var(--ease);
+}
+.shuffle-out .shelf-tile:hover img,
+.shuffle-out .shelf-tile:focus-visible img { filter: none; opacity: 1; }
 /* ============================================================
    THE CHART — all-time episode leaderboard (/best-episodes)
    An editorial awards countdown rendered in the theater's dark:

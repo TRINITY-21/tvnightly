@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { Bindings, EventRow } from "../types";
-import { REGIONS, visitorRegion } from "../lib/providers";
+import { REGIONS, visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
 import { origin, canonical } from "../lib/seo";
 import { Layout } from "../components/Layout";
 import { SubNav, NEWS_TABS } from "../components/nav";
@@ -118,6 +118,77 @@ app.get("/whats-new", async (c) => {
     return [...m.entries()].sort((a, b) => b[1].length - a[1].length);
   };
 
+  // the shelves wear the titles' real one-sheets: one lookup per medium
+  const posters = new Map<string, string>();
+  const tvSlugs = [...new Set(results.filter((r) => r.kind !== "movie").map((r) => r.slug))];
+  const mvSlugs = [...new Set(results.filter((r) => r.kind === "movie").map((r) => r.slug))];
+  if (tvSlugs.length) {
+    const { results: rs } = await c.env.DB.prepare(
+      `SELECT slug, COALESCE(poster_url, image_url) AS p FROM shows
+       WHERE slug IN (${tvSlugs.map(() => "?").join(",")})`,
+    )
+      .bind(...tvSlugs)
+      .all<{ slug: string; p: string | null }>();
+    for (const r of rs) if (r.p) posters.set(`tv:${r.slug}`, r.p);
+  }
+  if (mvSlugs.length) {
+    const { results: rs } = await c.env.DB.prepare(
+      `SELECT slug, poster_url AS p FROM movies
+       WHERE slug IN (${mvSlugs.map(() => "?").join(",")})`,
+    )
+      .bind(...mvSlugs)
+      .all<{ slug: string; p: string | null }>();
+    for (const r of rs) if (r.p) posters.set(`movie:${r.slug}`, r.p);
+  }
+  const posterOf = (r: { kind: string; slug: string }) =>
+    posters.get(`${r.kind === "movie" ? "movie" : "tv"}:${r.slug}`) ?? null;
+  const shortDate = (ts: number) =>
+    new Date(ts * 1000).toLocaleString("en-US", { month: "short", day: "numeric" });
+
+  // one service's slice of the shuffle: logo, chyron, the shelf
+  const Board = ({
+    verb,
+    service,
+    rows,
+  }: {
+    verb: string;
+    service: string;
+    rows: typeof results;
+  }) => (
+    <section class="shuffle-board">
+      <header class="shuffle-head">
+        {PROVIDER_LOGOS[service] ? (
+          <img src={PROVIDER_LOGOS[service]} alt="" width="30" height="30" loading="lazy" />
+        ) : null}
+        <h3 class="shuffle-title">
+          {verb} <strong>{service}</strong>
+        </h3>
+        <span class="shuffle-count">
+          {rows.length === 1 ? "1 title" : `${rows.length} titles`}
+        </span>
+      </header>
+      <ul class="poster-shelf">
+        {rows.map((r) => (
+          <li>
+            <a
+              class="shelf-tile"
+              href={href(r)}
+              title={`${r.title} · ${r.kind === "movie" ? "Movie" : "TV show"}`}
+            >
+              {posterOf(r) ? (
+                <img src={posterOf(r)!} alt="" width="92" height="138" loading="lazy" decoding="async" />
+              ) : (
+                <span class="shelf-fallback">{r.title}</span>
+              )}
+              <span class="shelf-chip">{shortDate(r.detected_at)}</span>
+            </a>
+            <span class="shelf-name">{r.title}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+
   c.header("Cache-Control", "private, max-age=300");
   return c.html(
     <Layout
@@ -133,15 +204,11 @@ app.get("/whats-new", async (c) => {
       </p>
       {/* explicit submit, no onchange: arrow-keying through a closed select
           must not navigate (WCAG 3.2.2), and it must work without JS */}
-      <form method="get" action="/whats-new" class="sub-form">
-        <label for="region-sel" class="muted" style="flex-basis:auto;font-weight:400">
-          Wrong country?
+      <form method="get" action="/whats-new" class="region-line">
+        <label for="region-sel" class="region-k">
+          Region
         </label>
-        <select
-          id="region-sel"
-          name="region"
-          style="background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:0.35rem 0.5rem"
-        >
+        <select id="region-sel" name="region">
           {REGIONS.map((r) => (
             <option value={r} selected={r === region}>
               {r}
@@ -157,44 +224,25 @@ app.get("/whats-new", async (c) => {
         </p>
       ) : null}
       {added.length ? (
-        <section>
-          <h2>Just added</h2>
+        <section class="shuffle shuffle-in">
+          <h2>
+            Just added <span class="shuffle-sum">{added.length} arrivals</span>
+          </h2>
           {byService(added).map(([service, rows]) => (
-            <section>
-              <h3>New on {service}</h3>
-              <ul class="ep-list">
-                {rows.map((r) => (
-                  <li>
-                    <a href={href(r)}>{r.title}</a>{" "}
-                    <span class="muted">
-                      · {r.kind === "movie" ? "Movie" : "TV"} ·{" "}
-                      {new Date(r.detected_at * 1000).toISOString().slice(0, 10)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <Board verb="New on" service={service} rows={rows} />
           ))}
         </section>
       ) : null}
       {removed.length ? (
-        <section>
-          <h2>Just left</h2>
+        <section class="shuffle shuffle-out">
+          <h2>
+            Just left <span class="shuffle-sum">{removed.length} departures</span>
+          </h2>
+          <p class="muted shuffle-note">
+            Gone from the catalog — they wait in gray. Most circle back; we log it when they do.
+          </p>
           {byService(removed).map(([service, rows]) => (
-            <section>
-              <h3>Left {service}</h3>
-              <ul class="ep-list">
-                {rows.map((r) => (
-                  <li>
-                    <a href={href(r)}>{r.title}</a>{" "}
-                    <span class="muted">
-                      · {r.kind === "movie" ? "Movie" : "TV"} ·{" "}
-                      {new Date(r.detected_at * 1000).toISOString().slice(0, 10)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <Board verb="Left" service={service} rows={rows} />
           ))}
         </section>
       ) : null}

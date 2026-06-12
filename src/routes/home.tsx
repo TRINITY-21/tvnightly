@@ -2,8 +2,8 @@ import { Hono } from "hono";
 import { FC, PropsWithChildren } from "hono/jsx";
 import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
 import { visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
-import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml } from "../lib/format";
-import { tmdbBackdrop, tmdbTrending } from "../lib/tmdb";
+import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml, slugifyName } from "../lib/format";
+import { tmdbBackdrop, tmdbMovieBackdrop, tmdbTrending } from "../lib/tmdb";
 import {
   IconReel,
   IconDial,
@@ -15,12 +15,54 @@ import {
   IconCal,
 } from "../components/icons";
 import { canonical } from "../lib/seo";
-import { VERTICALS } from "../lib/verticals";
 import { Layout } from "../components/Layout";
 import { StatusBadge, ShowCard, MovieCard } from "../components/cards";
 import { ProviderLine } from "../components/providers";
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+// The browse lanes: doors into the hubs and genre charts. Each lane wears
+// its own page's current #1 title art — never stock, never stale by more
+// than the page cache.
+const HUB_LANES = [
+  { href: "/anime", name: "Anime", genre: "Anime", dek: "The best series, what's new, where to stream it." },
+  { href: "/horror", name: "Horror", genre: "Horror", dek: "For people who watch through their fingers." },
+  { href: "/sci-fi", name: "Sci-fi & fantasy", genre: "Science-Fiction", dek: "Other worlds, ranked by real ratings." },
+  { href: "/classics", name: "Classic film", genre: null, dek: "The canon before 1980, streamable tonight." },
+] as const;
+const GENRE_LANES = ["Drama", "Crime", "Comedy", "Thriller", "Fantasy", "Mystery", "Romance", "Action"] as const;
+
+/** Backdrop of a lane's reigning #1 — its genre's top show (or, for the
+ *  classics lane, the top pre-1980 film). All TMDB calls ride the 7-day
+ *  edge cache, so a full render is one burst of cache hits. */
+async function laneArts(c: { env: Bindings }): Promise<({ x1: string; x2: string } | null)[]> {
+  const key = c.env.TMDB_API_KEY;
+  const blank = new Array<null>(HUB_LANES.length + GENRE_LANES.length).fill(null);
+  if (!key) return blank;
+  const fromShows = async (genre: string) => {
+    const r = await c.env.DB.prepare(
+      `SELECT tmdb_id FROM shows WHERE genres LIKE ? AND tmdb_id IS NOT NULL
+       ORDER BY weight DESC LIMIT 1`,
+    )
+      .bind(`%"${genre}"%`)
+      .first<{ tmdb_id: number }>();
+    return r ? tmdbBackdrop(key, r.tmdb_id) : null;
+  };
+  const fromClassics = async () => {
+    const r = await c.env.DB.prepare(
+      `SELECT imdb_id FROM movies WHERE year <= 1979 ORDER BY popularity DESC LIMIT 1`,
+    ).first<{ imdb_id: string }>();
+    return r ? tmdbMovieBackdrop(key, r.imdb_id) : null;
+  };
+  try {
+    return await Promise.all([
+      ...HUB_LANES.map((h) => (h.genre ? fromShows(h.genre) : fromClassics())),
+      ...GENRE_LANES.map((g) => fromShows(g)),
+    ]);
+  } catch {
+    return blank;
+  }
+}
 
 // a scrollable poster row with its paging chevrons — the discover rails
 const Rail: FC<PropsWithChildren<{ label: string }>> = ({ label, children }) => (
@@ -68,7 +110,7 @@ app.get("/", async (c) => {
     ep_airdate: string | null;
     ep_airstamp: string | null;
   };
-  const [top, topMovies, tonight, premieres, spotTonight, spotPremiere, topStill, trendTv, trendMovies] = await Promise.all([
+  const [top, topMovies, tonight, premieres, spotTonight, spotPremiere, topStill, trendTv, trendMovies, arts] = await Promise.all([
     // weight-only ORDER BY rides idx_shows_weight; a rating tiebreak would
     // force a full scan + temp sort (weights are near-unique anyway)
     c.env.DB.prepare("SELECT * FROM shows ORDER BY weight DESC LIMIT 18")
@@ -130,6 +172,7 @@ app.get("/", async (c) => {
     ).first<{ image_url: string }>(),
     trendingRows<ShowRow>(c, "tv", "shows"),
     trendingRows<MovieRow>(c, "movie", "movies"),
+    laneArts(c),
   ]);
 
   const spot: SpotRow | null =
@@ -542,19 +585,57 @@ app.get("/", async (c) => {
               </a>
             </div>
           </div>
-          <p class="browse-line">
-            <span class="browse-label">Browse</span>
-            {VERTICALS.map((v, i) => (
-              <>
-                {i > 0 ? " · " : " "}
-                <a href={`/${v.slug}`}>{v.name}</a>
-              </>
+        </section>
+
+        {/* the doors out — hub and genre lanes wearing their pages' own art */}
+        <section class="home-lanes">
+          <p class="section-eyebrow">Browse</p>
+          <div class="lanes-head">
+            <h2>
+              Pick a lane{" "}
+              <a class="more" href="/lists">
+                every chart &amp; list
+              </a>
+            </h2>
+            <p class="section-lead muted">
+              Hubs and genres — each ranked by real ratings, with where to stream.
+            </p>
+          </div>
+          <div class="lane-grid lane-grid-hubs">
+            {HUB_LANES.map((h, i) => (
+              <a class="lane-tile lane-tile-lg" href={h.href}>
+                {arts[i] ? (
+                  <span
+                    class="lane-frame"
+                    style={heroBg(arts[i]!.x1, arts[i]!.x2)}
+                    aria-hidden="true"
+                  ></span>
+                ) : null}
+                <span class="lane-body">
+                  <span class="lane-kicker">Fandom hub</span>
+                  <strong>{h.name}</strong>
+                  <span class="lane-dek">{h.dek}</span>
+                </span>
+              </a>
             ))}
-            {" · "}
-            <a class="chev-after" href="/lists">
-              All lists
-            </a>
-          </p>
+          </div>
+          <div class="lane-grid lane-grid-genres">
+            {GENRE_LANES.map((g, i) => (
+              <a class="lane-tile" href={`/genre/${slugifyName(g)}`}>
+                {arts[HUB_LANES.length + i] ? (
+                  <span
+                    class="lane-frame"
+                    style={heroBg(arts[HUB_LANES.length + i]!.x1, arts[HUB_LANES.length + i]!.x2)}
+                    aria-hidden="true"
+                  ></span>
+                ) : null}
+                <span class="lane-body">
+                  <span class="lane-kicker">Genre</span>
+                  <strong>{g}</strong>
+                </span>
+              </a>
+            ))}
+          </div>
         </section>
       </div>
     </Layout>,

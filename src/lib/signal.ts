@@ -1,8 +1,9 @@
 // The Episode Grid — every episode one cell on the season × episode matrix,
 // its code and rating printed once, lit on a single-hue filament ramp:
 // barely-lit umber for the duds, white-hot gold for the peak. One builder
-// serves the page chart and every saved frame, so the PNG a fan posts IS
-// the page, never a cousin of it.
+// serves the page chart and the saved card, so the PNG a fan posts IS the
+// page, never a cousin of it. The export is one portrait artifact — no
+// aspect menu, just the good-looking card.
 //
 // All colors are LITERAL HEX (token names in comments): exports must be
 // standalone documents, CSS variables never enter the string.
@@ -10,11 +11,12 @@
 // HONESTY RULES (do not "improve" these away):
 // - unrated/unaired slots render as unlit sockets, never as zeros
 // - every value prints exactly once: cells carry ratings, the peak/low
-//   register lines carry names only, season averages print only in the
-//   footer row, the color ramp is an encoding of the printed value
+//   register carries names only, season averages print only in the AVG
+//   row, the series average prints only in the poster band, the scale
+//   chips are scale, not data
 import { EpisodeRow, ShowRow } from "../types";
 
-export type SignalFrame = "page" | "wide" | "square" | "story";
+export type SignalFrame = "page" | "card";
 
 // palette literals (lockstep with 01-tokens.css — do not "fix" to vars)
 const PLATE = "#0e0e11"; // --plate: the unlit tube
@@ -23,7 +25,7 @@ const SOCKET = "#161619"; // unrated cell: a socket with no filament
 const TEXT = "#f8f6f2"; // --text
 const MUTED = "#b6b1a9"; // --muted
 const GOLD = "#EAC54F"; // --warn: the ratings color
-const AMBER = "#FFA94D"; // --accent (page interactions only; JS uses it)
+const AMBER = "#FFA94D"; // --accent (the lockup dot; page JS uses it too)
 const SYS = "-apple-system, 'Segoe UI', Roboto, sans-serif";
 
 // the filament ramp: one hue, luminance carries the value. Absolute anchors
@@ -69,7 +71,6 @@ const txt = (
     anchor?: "start" | "middle" | "end";
     ls?: number;
     opacity?: number;
-    cls?: string;
     sys?: boolean;
   },
 ) => {
@@ -78,9 +79,7 @@ const txt = (
     : `font-weight="${o.wght ?? 700}" style="font-variation-settings:'wdth' ${o.wdth ?? 105},'wght' ${o.wght ?? 700}"`;
   return `<text x="${r2(x)}" y="${r2(y)}" font-size="${r2(o.size)}" ${f} fill="${o.fill ?? MUTED}"${
     o.anchor ? ` text-anchor="${o.anchor}"` : ""
-  }${o.ls ? ` letter-spacing="${r2(o.ls)}"` : ""}${o.opacity ? ` opacity="${o.opacity}"` : ""}${
-    o.cls ? ` class="${o.cls}"` : ""
-  }>${esc(s)}</text>`;
+  }${o.ls ? ` letter-spacing="${r2(o.ls)}"` : ""}${o.opacity ? ` opacity="${o.opacity}"` : ""}>${esc(s)}</text>`;
 };
 
 export interface SignalResult {
@@ -93,23 +92,40 @@ export interface SignalResult {
 // a guarantee. Chunked btoa: String.fromCharCode has call-stack limits.
 let archivoCss: string | null | undefined;
 
-/** The Archivo woff2 as a data-URI @font-face, so export SVGs rasterize
- *  with the brand face anywhere. Page frames never embed it. */
+/** The Archivo woff2 as a data-URI @font-face, so the saved card rasterizes
+ *  with the brand face anywhere. The page frame never embeds it. */
 export async function archivoFontCss(assets: Fetcher | undefined): Promise<string | null> {
   if (archivoCss !== undefined) return archivoCss;
   if (!assets) return (archivoCss = null);
   try {
     const res = await assets.fetch(new Request("https://assets.invalid/fonts/archivo-var.woff2"));
     if (!res.ok) return (archivoCss = null);
-    const buf = new Uint8Array(await res.arrayBuffer());
-    let bin = "";
-    for (let i = 0; i < buf.length; i += 8192)
-      bin += String.fromCharCode(...buf.subarray(i, i + 8192));
-    archivoCss = `@font-face{font-family:'Archivo';src:url(data:font/woff2;base64,${btoa(bin)}) format('woff2');font-weight:100 900;font-stretch:62% 125%;font-display:block}`;
+    archivoCss = `@font-face{font-family:'Archivo';src:url(${await dataUri(res, "font/woff2")}) format('woff2');font-weight:100 900;font-stretch:62% 125%;font-display:block}`;
   } catch {
     archivoCss = null;
   }
   return archivoCss;
+}
+
+async function dataUri(res: Response, fallbackMime: string): Promise<string> {
+  const buf = new Uint8Array(await res.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 8192)
+    bin += String.fromCharCode(...buf.subarray(i, i + 8192));
+  return `data:${res.headers.get("content-type") ?? fallbackMime};base64,${btoa(bin)}`;
+}
+
+/** The show poster inlined as a data URI — SVG-as-image rasterization
+ *  cannot fetch external resources, so the card must carry its own art. */
+export async function posterDataUri(url: string | null): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { headers: { accept: "image/*" } });
+    if (!res.ok) return null;
+    return await dataUri(res, "image/jpeg");
+  } catch {
+    return null;
+  }
 }
 
 interface Cell {
@@ -121,7 +137,7 @@ interface Cell {
 export function buildSignalSvg(
   epsIn: EpisodeRow[],
   show: ShowRow,
-  opts: { frame: SignalFrame; season: number | null; slug: string; fontCss?: string },
+  opts: { frame: SignalFrame; season: number | null; slug: string; fontCss?: string; poster?: string | null },
 ): SignalResult | null {
   // ---- the matrix: season columns ascending, specials ("SP") last;
   // within a season by number, null numbers appended in airdate order
@@ -144,6 +160,7 @@ export function buildSignalSvg(
 
   const rMin = Math.min(...rated.map((e) => e.rating!));
   const rMax = Math.max(...rated.map((e) => e.rating!));
+  const seriesAvg = rated.reduce((t, e) => t + e.rating!, 0) / rated.length;
   // peak/low: rating, then earlier airdate, then lower id (TVmaze exposes
   // no episode vote counts — never tie-break on votes)
   const byRank = (dir: 1 | -1) => (a: EpisodeRow, b: EpisodeRow) =>
@@ -159,86 +176,112 @@ export function buildSignalSvg(
     `${rated.length} rated episodes across ${S} season${S === 1 ? "" : "s"}, ratings ${rMin.toFixed(1)}–${rMax.toFixed(1)}. ` +
     `Peak: ${code(peakEp)} ${peakEp.name ?? ""}, ${peakEp.rating!.toFixed(1)}.`;
 
-  // ---- frame geometry: the grid fits its box; cells set the page height
-  const isExport = opts.frame !== "page";
-  const W = opts.frame === "wide" ? 1920 : 1080;
-  const m = opts.frame === "wide" ? 96 : opts.frame === "page" ? 28 : 64;
-  const headerH = opts.frame === "wide" ? 220 : opts.frame === "square" ? 190 : opts.frame === "story" ? 330 : 0;
-  const footerH = isExport ? 168 : 0; // lockup + the discrete scale legend
-
+  // ---- geometry: one portrait card; the page is the same card minus the
+  // masthead, scale and lockup (the site chrome carries those jobs)
+  const isCard = opts.frame === "card";
+  const W = 1080;
+  const m = isCard ? 64 : 28;
   const GAP = 5;
-  const labelGutter = 44; // E-row labels
-  const registerH = 56; // THE PEAK / THE LOW line above the grid
+  const labelGutter = 44;
   const colHeadH = 30;
   const avgRowH = 44;
+
+  // masthead (card only)
+  const mastH = isCard ? 190 : 0;
+  // the poster band: art left, the register right
+  const posterW = isCard ? 168 : 132;
+  const posterH = Math.round(posterW * 1.5);
+  const bandPad = isCard ? 26 : 18;
+  const bandTop = mastH + (isCard ? 8 : 16);
+  const bandH = (opts.poster ? posterH : isCard ? 96 : 76) + bandPad;
 
   const gridLeft = m + labelGutter;
   const gridRight = W - m;
   let cellW = (gridRight - gridLeft - GAP * (S - 1)) / S;
   let xOff = 0;
   if (cellW > 124) {
-    // a 3-season show shouldn't render fat bricks — cap and center
     cellW = 124;
     xOff = (gridRight - gridLeft - (cellW * S + GAP * (S - 1))) / 2;
   }
+  const cellH = Math.min(50, Math.max(isCard ? 22 : 26, cellW * 0.62));
 
-  let cellH: number;
-  let H: number;
-  const fixedH = opts.frame === "wide" ? 1080 : opts.frame === "square" ? 1080 : 1920;
-  if (isExport) {
-    const avail = fixedH - headerH - footerH - registerH - colHeadH - avgRowH - 24;
-    // the story frame fills its column — short grids grow into the space
-    const capH = opts.frame === "story" ? 96 : 64;
-    cellH = Math.min(capH, Math.max(13, (avail - GAP * (R - 1)) / R));
-    H = fixedH;
-  } else {
-    cellH = Math.min(50, Math.max(26, cellW * 0.62));
-    H = registerH + colHeadH + R * (cellH + GAP) + avgRowH + 20;
-  }
-  const gridTop = (isExport ? headerH : 0) + registerH + colHeadH;
+  const gridTop = bandTop + bandH + colHeadH;
+  const scaleRowH = isCard ? 64 : 0;
+  const footH = isCard ? 110 : 0;
+  const H = gridTop + R * (cellH + GAP) + avgRowH + scaleRowH + footH + (isCard ? 8 : 16);
   const cx = (col: number) => gridLeft + xOff + col * (cellW + GAP);
   const cy = (row: number) => gridTop + row * (cellH + GAP);
 
-  // level of detail: what fits, prints; what doesn't, yields honestly
-  const showCode = cellW >= 56 && cellH >= 30;
+  // level of detail: the card always prints codes ("this is the artifact");
+  // the page may drop them — hover carries the detail there
+  const showCode = isCard ? cellH >= 18 : cellW >= 56 && cellH >= 30;
+  const codeSize = Math.max(6.5, Math.min(11, cellW * 0.14));
   const valSize = Math.max(9, Math.min(22, cellH * (showCode ? 0.4 : 0.52)));
-  const codeSize = Math.max(8, Math.min(11, cellW * 0.14));
   const showVal = cellH >= 14;
 
   const parts: string[] = [];
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${r2(H)}" font-family="Archivo, ${SYS}"${
-      isExport ? "" : ` aria-hidden="true" focusable="false"`
+      isCard ? "" : ` aria-hidden="true" focusable="false"`
     }>`,
   );
   if (opts.fontCss) parts.push(`<defs><style>${opts.fontCss}</style></defs>`);
-  if (isExport) {
-    parts.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="${PLATE}"/>`);
-    parts.push(exportHeader(show, opts.season, W, m, opts.frame));
+  parts.push(`<clipPath id="sig-poster"><rect x="${m}" y="${bandTop}" width="${posterW}" height="${posterH}" rx="10"/></clipPath>`);
+  if (isCard) {
+    parts.push(`<rect x="0" y="0" width="${W}" height="${r2(H)}" fill="${PLATE}"/>`);
+    // masthead
+    const years = show.premiered
+      ? `${show.premiered.slice(0, 4)}–${show.ended ? show.ended.slice(0, 4) : ""}`
+      : null;
+    const chyron = [
+      "EPISODE RATINGS",
+      show.network?.toUpperCase() ?? null,
+      years,
+      opts.season != null ? `SEASON ${opts.season}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const fit = fitName(show.name.toUpperCase(), 64, 36, W - m * 2);
+    parts.push(
+      txt(m, 84, chyron, { size: 19, wdth: 105, ls: 2.7 }),
+      txt(m, 152, fit.lines[0], { size: fit.size, wght: 800, wdth: 110, fill: TEXT, ls: fit.size * 0.01 }),
+    );
+    if (fit.lines[1]) parts.push(txt(m, 152 + fit.size * 0.95, fit.lines[1], { size: fit.size, wght: 800, wdth: 110, fill: TEXT }));
   } else {
     parts.push(
       `<rect x="0.5" y="0.5" width="${W - 1}" height="${r2(H - 1)}" rx="14" fill="${PLATE}" stroke="${LINE}" stroke-width="1"/>`,
     );
   }
 
-  // ---- the register line: names only — the values live in the ringed cells.
-  // One text per side, label and name as tspans: no width math to get wrong.
-  const regY = (isExport ? headerH : 0) + 34;
-  const regFs = opts.frame === "wide" ? 16 : 13;
-  const regLine = (
-    x: number,
-    anchor: "start" | "end",
-    label: string,
-    ep: EpisodeRow,
-    nameFill: string,
-    labelOpacity: number,
-  ) =>
-    `<text x="${r2(x)}" y="${r2(regY)}"${anchor === "end" ? ` text-anchor="end"` : ""}>` +
-    `<tspan font-size="${r2(regFs * 0.82)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="${r2(regFs * 0.12)}" fill="${MUTED}" opacity="${labelOpacity}">${label}</tspan>` +
-    `<tspan font-size="${regFs}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="1" fill="${nameFill}"> ${esc(trunc((ep.name ?? code(ep)).toUpperCase(), 26))} · ${code(ep)}</tspan>` +
+  // ---- the poster band: the art, then names-only register + series average
+  let regX = m;
+  if (opts.poster) {
+    parts.push(
+      `<image href="${esc(opts.poster)}" x="${m}" y="${bandTop}" width="${posterW}" height="${posterH}" preserveAspectRatio="xMidYMid slice" clip-path="url(#sig-poster)"/>`,
+      `<rect x="${m + 0.5}" y="${bandTop + 0.5}" width="${posterW - 1}" height="${posterH - 1}" rx="10" fill="none" stroke="${LINE}" stroke-width="1"/>`,
+    );
+    regX = m + posterW + (isCard ? 34 : 26);
+  }
+  const regFs = isCard ? 15 : 13;
+  const rowGap = Math.max(34, (opts.poster ? posterH : 60) / 3);
+  const regRow = (y: number, label: string, body: string, bodyFill: string, labelOp: number, bodySys = false) =>
+    `<text x="${r2(regX)}" y="${r2(y)}">` +
+    `<tspan font-size="${r2(regFs * 0.78)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="${r2(regFs * 0.13)}" fill="${MUTED}" opacity="${labelOp}">${label}</tspan>` +
+    (bodySys
+      ? `<tspan font-size="${r2(regFs * 1.25)}" font-family="${SYS}" font-weight="700" fill="${bodyFill}" style="font-variant-numeric:tabular-nums">  ${esc(body)}</tspan>`
+      : `<tspan font-size="${regFs}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="1" fill="${bodyFill}">  ${esc(body)}</tspan>`) +
     `</text>`;
-  parts.push(regLine(m, "start", "THE PEAK", peakEp, TEXT, 0.8));
-  if (!lowSuppressed) parts.push(regLine(gridRight, "end", "THE LOW", lowEp, MUTED, 0.55));
+  const bandMidPad = bandTop + (opts.poster ? 30 : 26);
+  parts.push(
+    regRow(bandMidPad + rowGap * 0, "THE PEAK", `${trunc((peakEp.name ?? code(peakEp)).toUpperCase(), 30)} · ${code(peakEp)}`, TEXT, 0.8),
+  );
+  if (!lowSuppressed)
+    parts.push(
+      regRow(bandMidPad + rowGap * 1, "THE LOW", `${trunc((lowEp.name ?? code(lowEp)).toUpperCase(), 30)} · ${code(lowEp)}`, MUTED, 0.55),
+    );
+  parts.push(
+    regRow(bandMidPad + rowGap * (lowSuppressed ? 1 : 2), "SERIES AVG", seriesAvg.toFixed(1), GOLD, 0.55, true),
+  );
 
   // ---- column heads (page links them into the season filter)
   seasonList.forEach((s, col) => {
@@ -249,7 +292,7 @@ export function buildSignalSvg(
       ls: 1.6,
       anchor: "middle",
     });
-    parts.push(!isExport ? `<a href="?season=${s}">${t}</a>` : t);
+    parts.push(!isCard ? `<a href="?season=${s}">${t}</a>` : t);
   });
 
   // ---- row labels: E1.. every row while they fit, every 5th when they don't
@@ -287,7 +330,7 @@ export function buildSignalSvg(
           txt(x + cellW / 2, y + cellH * 0.36, code(ep), {
             size: codeSize,
             wdth: 105,
-            ls: 0.8,
+            ls: 0.6,
             fill: ink,
             anchor: "middle",
             opacity: 0.72,
@@ -316,13 +359,7 @@ export function buildSignalSvg(
   // ---- season averages: printed once, gold, under each column
   const avgY = cy(R - 1) + cellH + 30;
   parts.push(
-    txt(gridLeft + xOff - 12, avgY, "AVG", {
-      size: 9,
-      wdth: 105,
-      ls: 1.2,
-      anchor: "end",
-      opacity: 0.6,
-    }),
+    txt(gridLeft + xOff - 12, avgY, "AVG", { size: 9, wdth: 105, ls: 1.2, anchor: "end", opacity: 0.6 }),
   );
   seasonList.forEach((s, col) => {
     const colRated = cells.filter((x) => x.col === col && x.ep.rating != null);
@@ -339,13 +376,46 @@ export function buildSignalSvg(
     );
   });
 
-  if (!isExport) parts.push(`<g id="sig-cursor"></g>`);
-  if (isExport) parts.push(exportFooter(W, H, m));
+  if (!isCard) parts.push(`<g id="sig-cursor"></g>`);
+  if (isCard) {
+    // the scale, as discrete chips — a legend is scale, not data (and never
+    // a gradient bar)
+    const chips = [6.0, 7.0, 8.0, 9.0, 9.5];
+    const chipW = 52;
+    const chipH = 24;
+    const legendY = avgY + 26;
+    parts.push(txt(m, legendY + chipH / 2 + 3.5, "SCALE", { size: 10, wdth: 105, ls: 1.4, opacity: 0.6 }));
+    chips.forEach((v, i) => {
+      const x = m + 64 + i * (chipW + 6);
+      parts.push(
+        `<rect x="${x}" y="${legendY}" width="${chipW}" height="${chipH}" rx="5" fill="${rampColor(v)}"/>`,
+        txt(x + chipW / 2, legendY + chipH / 2 + 4, v.toFixed(1), {
+          size: 12,
+          sys: true,
+          wght: 700,
+          fill: inkFor(v),
+          anchor: "middle",
+        }),
+      );
+    });
+    // lockup
+    const hairY = H - 86;
+    const baseY = H - 40;
+    const wfs = 28;
+    const wordW = "TV NIGHTLY".length * wfs * 0.68;
+    parts.push(
+      `<line x1="${m}" y1="${r2(hairY)}" x2="${W - m}" y2="${r2(hairY)}" stroke="${LINE}" stroke-width="1"/>`,
+      txt(m, baseY, "TV NIGHTLY", { size: wfs, wght: 800, wdth: 120, fill: TEXT, ls: wfs * 0.02 }),
+      `<circle cx="${r2(m + wordW + 0.3 * wfs)}" cy="${r2(baseY - 0.08 * wfs)}" r="${r2(0.085 * wfs)}" fill="${AMBER}"/>`,
+      txt(W - m, baseY - 16, "TVNIGHTLY.COM", { size: 16, wdth: 105, ls: 2.2, anchor: "end" }),
+      txt(W - m, baseY, "DATA · TVMAZE", { size: 10, wdth: 105, ls: 1.4, anchor: "end", opacity: 0.6 }),
+    );
+  }
   parts.push("</svg>");
 
   // data island (page only): the server ships the layout, JS computes nothing
   let island: string | null = null;
-  if (!isExport) {
+  if (!isCard) {
     island = JSON.stringify({
       rows: cells.map((cell) => ({
         c: code(cell.ep),
@@ -365,8 +435,6 @@ export function buildSignalSvg(
 
   return { svg: parts.join(""), summary, island };
 }
-
-// ---- export chrome -------------------------------------------------------
 
 function fitName(name: string, maxSize: number, minSize: number, maxW: number): { size: number; lines: string[] } {
   const est = (s: string, fs: number) => s.length * fs * 0.68;
@@ -388,69 +456,4 @@ function fitName(name: string, maxSize: number, minSize: number, maxW: number): 
   size = maxSize;
   while (size > minSize && Math.max(est(l1, size), est(l2, size)) > maxW) size -= 2;
   return { size, lines: l1 ? [l1, l2] : [name] };
-}
-
-function exportHeader(show: ShowRow, season: number | null, W: number, m: number, frame: SignalFrame): string {
-  const years = show.premiered
-    ? `${show.premiered.slice(0, 4)}–${show.ended ? show.ended.slice(0, 4) : ""}`
-    : null;
-  const chyron = [
-    "EPISODE RATINGS",
-    show.network?.toUpperCase() ?? null,
-    years,
-    season != null ? `SEASON ${season}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const chyronFs = frame === "wide" ? 20 : frame === "story" ? 22 : 18;
-  const chyronY = frame === "wide" ? 92 : frame === "story" ? 132 : 80;
-  const nameMax = frame === "wide" ? 76 : frame === "story" ? 64 : 56;
-  const nameY = frame === "wide" ? 176 : frame === "story" ? 214 : 150;
-  const fit = fitName(show.name.toUpperCase(), nameMax, 40, W - m * 2);
-  const out = [
-    txt(m, chyronY, chyron, { size: chyronFs, wdth: 105, ls: chyronFs * 0.14 }),
-    txt(m, nameY, fit.lines[0], { size: fit.size, wght: 800, wdth: 110, fill: TEXT, ls: fit.size * 0.01 }),
-  ];
-  if (fit.lines[1])
-    out.push(txt(m, nameY + fit.size * 0.95, fit.lines[1], { size: fit.size, wght: 800, wdth: 110, fill: TEXT }));
-  return out.join("");
-}
-
-function exportFooter(W: number, H: number, m: number): string {
-  const hairY = H - 96;
-  const baseY = H - 48;
-  const wfs = W === 1920 ? 30 : 28;
-  const cfs = W === 1920 ? 18 : 16;
-  const cfs2 = Math.round(cfs * 0.6);
-  const wordW = "TV NIGHTLY".length * wfs * 0.68;
-  // the scale, as discrete chips — a legend is scale, not data (and never
-  // a gradient bar)
-  const chips = [6.0, 7.0, 8.0, 9.0, 9.5];
-  const chipW = 52;
-  const chipH = 24;
-  const legendY = hairY - 38;
-  const legend = [
-    txt(m, legendY + chipH / 2 + 3.5, "SCALE", { size: 10, wdth: 105, ls: 1.4, opacity: 0.6 }),
-    ...chips.map((v, i) => {
-      const x = m + 64 + i * (chipW + 6);
-      return (
-        `<rect x="${x}" y="${legendY}" width="${chipW}" height="${chipH}" rx="5" fill="${rampColor(v)}"/>` +
-        txt(x + chipW / 2, legendY + chipH / 2 + 4, v.toFixed(1), {
-          size: 12,
-          sys: true,
-          wght: 700,
-          fill: inkFor(v),
-          anchor: "middle",
-        })
-      );
-    }),
-  ].join("");
-  return [
-    legend,
-    `<line x1="${m}" y1="${hairY}" x2="${W - m}" y2="${hairY}" stroke="${LINE}" stroke-width="1"/>`,
-    txt(m, baseY, "TV NIGHTLY", { size: wfs, wght: 800, wdth: 120, fill: TEXT, ls: wfs * 0.02 }),
-    `<circle cx="${r2(m + wordW + 0.3 * wfs)}" cy="${r2(baseY - 0.08 * wfs)}" r="${r2(0.085 * wfs)}" fill="${AMBER}"/>`,
-    txt(W - m, baseY - cfs2 - 6, "TVNIGHTLY.COM", { size: cfs, wdth: 105, ls: cfs * 0.14, anchor: "end" }),
-    txt(W - m, baseY, "DATA · TVMAZE", { size: cfs2, wdth: 105, ls: cfs2 * 0.14, anchor: "end", opacity: 0.6 }),
-  ].join("");
 }

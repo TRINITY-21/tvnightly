@@ -11,7 +11,7 @@ import { epCode, epHref, largeStill, longDate, posterSrc, stripHtml } from "../l
 import { visitorRegion } from "../lib/providers";
 import { getShow, similarShows } from "../lib/queries";
 import { breadcrumbLd, canonical, origin } from "../lib/seo";
-import { archivoFontCss, buildSignalSvg } from "../lib/signal";
+import { archivoFontCss, buildSignalSvg, posterDataUri } from "../lib/signal";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { Bindings, EpisodeRow, EventRow } from "../types";
 
@@ -300,16 +300,18 @@ app.get("/show/:slug/ratings.svg", async (c) => {
   const scope = await ratingsScope(c, "");
   if (!scope) return c.notFound();
   if (scope.redirect) return c.redirect(`/show/${scope.show.slug}/ratings.svg`, 301);
-  const frame = c.req.query("frame") ?? "wide";
-  if (frame !== "wide" && frame !== "square" && frame !== "story") return c.text("bad frame", 400);
   const eps =
     scope.season != null ? scope.allEps.filter((e) => e.season === scope.season) : scope.allEps;
-  const fontCss = (await archivoFontCss(c.env.ASSETS)) ?? undefined;
+  const [fontCss, poster] = await Promise.all([
+    archivoFontCss(c.env.ASSETS),
+    posterDataUri(posterSrc(scope.show)?.src ?? null),
+  ]);
   const sig = buildSignalSvg(eps, scope.show, {
-    frame,
+    frame: "card",
     season: scope.season,
     slug: scope.show.slug,
-    fontCss,
+    fontCss: fontCss ?? undefined,
+    poster,
   });
   if (!sig) return c.notFound();
   c.header("Content-Type", "image/svg+xml; charset=utf-8");
@@ -324,7 +326,14 @@ app.get("/show/:slug/ratings", async (c) => {
   const base = `/show/${show.slug}/ratings`;
   if (scope.redirect) return c.redirect(base, 301);
   const eps = season != null ? allEps.filter((e) => e.season === season) : allEps;
-  const sig = buildSignalSvg(eps, show, { frame: "page", season, slug: show.slug });
+  // the page chart wears the same poster band as the saved card — what you
+  // see is what you download (inline SVG may reference the URL directly)
+  const sig = buildSignalSvg(eps, show, {
+    frame: "page",
+    season,
+    slug: show.slug,
+    poster: posterSrc(show)?.src ?? null,
+  });
   const seasonLabel = season != null ? ` Season ${season}` : "";
   const q = season != null ? `?season=${season}` : "";
 
@@ -386,10 +395,7 @@ app.get("/show/:slug/ratings", async (c) => {
           <div class="sig-strip" data-slug={show.slug} data-season={season ?? ""} hidden>
             <div class="sig-read" id="sig-read"></div>
             <div class="sig-save">
-              <span class="sig-save-label">Save</span>
-              <button data-frame="story">9:16</button>
-              <button data-frame="square">1:1</button>
-              <button data-frame="wide">16:9</button>
+              <button>Save image</button>
             </div>
           </div>
           {raw(`<script type="application/json" id="sig-data">${sig.island}</script>`)}

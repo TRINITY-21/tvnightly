@@ -125,19 +125,16 @@
     }
   });
 
-  // ---- save buttons: fetch the server-rendered frame, rasterize at 2x ----
-  var SIZES = { wide: [3840, 2160], square: [2160, 2160], story: [2160, 3840] };
+  // ---- save: fetch the server-rendered card, rasterize at 2x ----
   var slug = strip.getAttribute("data-slug");
   var season = strip.getAttribute("data-season");
   strip.querySelectorAll(".sig-save button").forEach(function (btn) {
     btn.addEventListener("click", function () {
-      var frame = btn.getAttribute("data-frame");
       var label = btn.textContent;
       btn.textContent = "RENDERING…";
       btn.setAttribute("aria-busy", "true");
-      var url = "/show/" + slug + "/ratings.svg?frame=" + frame + (season ? "&season=" + season : "");
-      var name =
-        slug + "-episode-ratings" + (season ? "-s" + season : "") + "-" + frame + "-tvnightly";
+      var url = "/show/" + slug + "/ratings.svg" + (season ? "?season=" + season : "");
+      var name = slug + "-episode-ratings" + (season ? "-s" + season : "") + "-tvnightly";
       var restore = function () {
         btn.textContent = label;
         btn.removeAttribute("aria-busy");
@@ -162,11 +159,14 @@
               });
             })
             .then(function () {
-              var wh = SIZES[frame];
+              // 2x of the card's design size; height rides the viewBox ratio
+              var vb = /viewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"/.exec(text);
+              var w = 2160;
+              var h = vb ? Math.round((w * parseFloat(vb[2])) / parseFloat(vb[1])) : 3840;
               var canvas = document.createElement("canvas");
-              canvas.width = wh[0];
-              canvas.height = wh[1];
-              canvas.getContext("2d").drawImage(img, 0, 0, wh[0], wh[1]);
+              canvas.width = w;
+              canvas.height = h;
+              canvas.getContext("2d").drawImage(img, 0, 0, w, h);
               URL.revokeObjectURL(objUrl);
               return new Promise(function (resolve, reject) {
                 canvas.toBlob(function (b) {

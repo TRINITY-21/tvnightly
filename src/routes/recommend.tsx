@@ -7,6 +7,8 @@ import { ipHash } from "../lib/crypto";
 import { Layout } from "../components/Layout";
 import { ShowCard, MovieCard } from "../components/cards";
 import { FaceLove, FaceLike, FaceMeh } from "../components/icons";
+import { heroBg, hiRes } from "../lib/format";
+import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -410,30 +412,84 @@ app.get("/loved", async (c) => {
          FROM title_ratings
        ) WHERE total >= 2 ORDER BY score DESC, total DESC LIMIT 40`,
     )
-    .all<{ kind: string; ref: string; total: number; score: number }>();
+    .all<{ kind: string; ref: string; loved: number; liked: number; meh: number; total: number; score: number }>();
 
   const showIds = rows.filter((r) => r.kind === "tv").map((r) => Number(r.ref));
   const movieIds = rows.filter((r) => r.kind === "movie").map((r) => r.ref);
   const shows = showIds.length
     ? (
         await db
-          .prepare(`SELECT id, name, slug FROM shows WHERE id IN (${showIds.map(() => "?").join(",")})`)
+          .prepare(
+            `SELECT id, name, slug, tmdb_id, image_url, COALESCE(poster_url, image_url) AS poster
+             FROM shows WHERE id IN (${showIds.map(() => "?").join(",")})`,
+          )
           .bind(...showIds)
-          .all<{ id: number; name: string; slug: string }>()
+          .all<{ id: number; name: string; slug: string; tmdb_id: number | null; image_url: string | null; poster: string | null }>()
       ).results
     : [];
   const movies = movieIds.length
     ? (
         await db
           .prepare(
-            `SELECT imdb_id, title, year, slug FROM movies WHERE imdb_id IN (${movieIds.map(() => "?").join(",")})`,
+            `SELECT imdb_id, title, year, slug, poster_url FROM movies WHERE imdb_id IN (${movieIds.map(() => "?").join(",")})`,
           )
           .bind(...movieIds)
-          .all<{ imdb_id: string; title: string; year: number | null; slug: string }>()
+          .all<{ imdb_id: string; title: string; year: number | null; slug: string; poster_url: string | null }>()
       ).results
     : [];
   const showMap = new Map(shows.map((s) => [String(s.id), s]));
   const movieMap = new Map(movies.map((m) => [m.imdb_id, m]));
+
+  // one resolved view per chart row; rows whose title left the mirror drop out
+  const board = rows
+    .map((r) => {
+      const s = r.kind === "tv" ? showMap.get(r.ref) : undefined;
+      const m = r.kind === "movie" ? movieMap.get(r.ref) : undefined;
+      if (!s && !m) return null;
+      return {
+        ...r,
+        href: s ? `/show/${s.slug}` : `/movie/${m!.slug}`,
+        label: s ? s.name : m!.title,
+        year: s ? null : (m?.year ?? null),
+        kindLabel: s ? "TV show" : "Movie",
+        poster: s ? s.poster : (m?.poster_url ?? null),
+        tmdbId: s?.tmdb_id ?? null,
+        imdbId: m?.imdb_id ?? null,
+        ambientSrc: s ? hiRes(s.image_url) : (m?.poster_url ?? null),
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  // the podium (top three) wears real backdrops — edge-cached, ambient
+  // poster light when a title has none
+  const podium = board.slice(0, 3);
+  const rest = board.slice(3);
+  const arts: ({ x1: string; x2?: string; ambient?: boolean } | null)[] = await Promise.all(
+    podium.map(async (p) => {
+      if (c.env.TMDB_API_KEY) {
+        const bd = p.tmdbId
+          ? await tmdbBackdrop(c.env.TMDB_API_KEY, p.tmdbId)
+          : p.imdbId
+            ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, p.imdbId)
+            : null;
+        if (bd) return bd;
+      }
+      return p.ambientSrc ? { x1: p.ambientSrc, ambient: true } : null;
+    }),
+  );
+
+  const pct = (r: { score: number }) => `${Math.round(r.score * 100)}%`;
+  const VerdictBar = ({ r }: { r: { loved: number; liked: number; meh: number; total: number } }) => (
+    <span
+      class="loved-bar"
+      role="img"
+      aria-label={`${r.loved} loved, ${r.liked} liked, ${r.meh} meh`}
+    >
+      {r.loved ? <span class="loved-seg seg-loved" style={`flex-grow:${r.loved}`}></span> : null}
+      {r.liked ? <span class="loved-seg seg-liked" style={`flex-grow:${r.liked}`}></span> : null}
+      {r.meh ? <span class="loved-seg seg-meh" style={`flex-grow:${r.meh}`}></span> : null}
+    </span>
+  );
 
   c.header("Cache-Control", "public, max-age=900");
   return c.html(
@@ -442,38 +498,98 @@ app.get("/loved", async (c) => {
       description="Community charts built from real one-tap verdicts: what TV Nightly's raters love right now."
       canonical={canonical(c)}
     >
-      <h1>Most loved by the TV Nightly community</h1>
-      <p class="muted">
-        Ranked by reader verdicts from <a href="/recommend">the recommender</a>. Early days — every
-        rating moves this chart.
-      </p>
-      {rows.length === 0 ? (
-        <p class="muted">
-          No titles have enough ratings yet. <a href="/recommend">Be the first</a>.
+      <div class="loved">
+        <p class="section-eyebrow">Community</p>
+        <h1>Most loved</h1>
+        <p class="muted loved-lead">
+          The chart we can't buy and won't fake: every position here comes from one-tap reader
+          verdicts in <a href="/recommend">the recommender</a>. Early days — every rating moves it.
         </p>
-      ) : null}
-      <ol class="ranked">
-        {rows.map((r) => {
-          const s = r.kind === "tv" ? showMap.get(r.ref) : undefined;
-          const m = r.kind === "movie" ? movieMap.get(r.ref) : undefined;
-          if (!s && !m) return null;
-          const href = s ? `/show/${s.slug}` : `/movie/${m!.slug}`;
-          const label = s ? s.name : `${m!.title}${m!.year ? ` (${m!.year})` : ""}`;
-          return (
-            <li>
-              <strong>
-                <a href={href}>{label}</a>
-              </strong>{" "}
-              <span class="muted">· {s ? "TV show" : "Movie"}</span>
-              <span class="rating"> {Math.round(r.score * 100)}% positive</span>
-              <span class="muted">
-                {" "}
-                · {r.total} rating{r.total === 1 ? "" : "s"}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+        <p class="loved-cta">
+          <a class="btn-ghost chev-after" href="/recommend">
+            Cast your verdict
+          </a>
+        </p>
+        {board.length === 0 ? (
+          <p class="muted">
+            No titles have enough ratings yet. <a href="/recommend">Be the first</a>.
+          </p>
+        ) : null}
+
+        {podium.length ? (
+          <div class="loved-podium">
+            {podium.map((p, i) => (
+              <article class={`loved-hero${i === 0 ? " loved-hero-1" : ""}${arts[i]?.ambient ? " loved-ambient" : ""}`}>
+                {arts[i] ? (
+                  <div class="loved-frame" style={heroBg(arts[i]!.x1, arts[i]!.x2)} aria-hidden="true"></div>
+                ) : null}
+                <div class="loved-hero-body">
+                  <span class="loved-rank" aria-hidden="true">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <p class="loved-kicker">
+                    Community no. {i + 1} · {p.kindLabel}
+                  </p>
+                  <h2 class="loved-hero-title">
+                    <a href={p.href}>
+                      {p.label}
+                      {p.year ? <span class="loved-year"> ({p.year})</span> : null}
+                    </a>
+                  </h2>
+                  <p class="loved-score">
+                    <strong>{pct(p)}</strong> positive · {p.total} rating{p.total === 1 ? "" : "s"}
+                  </p>
+                  <VerdictBar r={p} />
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        {rest.length ? (
+          <section class="loved-board">
+            <h2>The board</h2>
+            <ol class="loved-list" start={4}>
+              {rest.map((r, i) => (
+                <li>
+                  <a class="loved-row" href={r.href}>
+                    <span class="loved-pos" aria-hidden="true">
+                      {String(i + 4).padStart(2, "0")}
+                    </span>
+                    {r.poster ? (
+                      <img src={r.poster} alt="" width="46" height="69" loading="lazy" decoding="async" />
+                    ) : (
+                      <span class="loved-thumb-blank" aria-hidden="true"></span>
+                    )}
+                    <span class="loved-main">
+                      <span class="loved-name">
+                        {r.label}
+                        {r.year ? ` (${r.year})` : ""}
+                      </span>
+                      <span class="loved-meta">{r.kindLabel}</span>
+                    </span>
+                    <span class="loved-tally">
+                      <span class="loved-score">
+                        <strong>{pct(r)}</strong> positive · {r.total}
+                      </span>
+                      <VerdictBar r={r} />
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
+
+        {board.length ? (
+          <p class="loved-foot muted">
+            Score is loved + half-credit for liked, over all verdicts. Titles need two ratings to
+            chart. <span class="loved-key"><span class="loved-dot seg-loved"></span> loved</span>{" "}
+            <span class="loved-key"><span class="loved-dot seg-liked"></span> liked</span>{" "}
+            <span class="loved-key"><span class="loved-dot seg-meh"></span> meh</span>
+          </p>
+        ) : null}
+      </div>
     </Layout>,
   );
 });

@@ -379,22 +379,32 @@ app.get("/show/:slug/ratings", async (c) => {
       ) : (
         <ShowTabs slug={show.slug} current="ratings" />
       )}
-      {seasons.length > 1 ? (
-        <nav class="epreg-rail" aria-label="Filter by season">
-          <span class="epreg-rail-label">Filter</span>
-          <a class="epreg-all" href={base} aria-current={season == null ? "page" : undefined}>
-            All
-          </a>
-          {seasons.map((s) => (
-            <a
-              class="epreg-seg"
-              href={`${base}?season=${s}`}
-              aria-current={season === s ? "page" : undefined}
-            >
-              {s === 0 ? "SP" : `S${s}`}
-            </a>
-          ))}
-        </nav>
+      {seasons.length > 1 || sig ? (
+        <div class="sig-bar">
+          {seasons.length > 1 ? (
+            <nav class="epreg-rail" aria-label="Filter by season">
+              <span class="epreg-rail-label">Filter</span>
+              <a class="epreg-all" href={base} aria-current={season == null ? "page" : undefined}>
+                All
+              </a>
+              {seasons.map((s) => (
+                <a
+                  class="epreg-seg"
+                  href={`${base}?season=${s}`}
+                  aria-current={season === s ? "page" : undefined}
+                >
+                  {s === 0 ? "SP" : `S${s}`}
+                </a>
+              ))}
+            </nav>
+          ) : null}
+          {sig ? (
+            // saving needs JS to rasterize — the control appears with it
+            <div class="sig-save" hidden>
+              <button>Save image</button>
+            </div>
+          ) : null}
+        </div>
       ) : null}
       {sig ? (
         <>
@@ -411,9 +421,6 @@ app.get("/show/:slug/ratings", async (c) => {
           </figure>
           <div class="sig-strip" data-slug={show.slug} data-season={season ?? ""} hidden>
             <div class="sig-read" id="sig-read"></div>
-            <div class="sig-save">
-              <button>Save image</button>
-            </div>
           </div>
           {raw(`<script type="application/json" id="sig-data">${sig.island}</script>`)}
           <nav class="epreg-links" aria-label={`More ${show.name} rankings`}>

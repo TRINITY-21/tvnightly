@@ -25,7 +25,26 @@ figure.sig { margin: 1.1rem 0 0; }
 .sig svg a:hover text,
 .sig svg a:focus-visible text { fill: var(--accent); }
 
-/* ---- the shared strip: readout left, save controls right ---- */
+/* ---- the chart toolbar: season filter left, save control right ---- */
+.sig-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  padding: 0.3rem 0;
+}
+.sig-bar > .epreg-rail {
+  flex: 1 1 auto;
+  min-width: 0; /* long rails wrap inside; the save control keeps the corner */
+  border-bottom: 0;
+  padding: 0.25rem 0;
+}
+.sig-bar > .sig-save { margin-left: auto; padding-top: 0.1rem; }
+@media (max-width: 560px) {
+  .sig-bar { flex-wrap: wrap; }
+}
+
+/* ---- the readout strip below the chart ---- */
 .sig-strip {
   display: flex;
   flex-wrap: wrap;
@@ -57,36 +76,28 @@ a.sig-read-name { color: var(--muted); font-weight: 650; font-size: 0.95rem; }
 a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .sig-read-date { color: var(--muted); font-size: 0.8rem; }
 
-.sig-save { display: flex; align-items: baseline; gap: 1rem; }
-.sig-save-label {
-  font-family: var(--display);
-  font-stretch: 105%;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
+/* the save control in the house outline-button chassis, chyron voice */
 .sig-save button {
   background: none;
-  border: 0;
-  padding: 0.45rem 0.15rem;
-  margin: -0.3rem 0;
-  color: var(--muted);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.95rem;
+  color: var(--accent);
   font-family: var(--display);
   font-stretch: 105%;
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+  white-space: nowrap;
   cursor: pointer;
-  transition: color var(--speed) var(--ease);
+  transition: color var(--speed) var(--ease), border-color var(--speed) var(--ease),
+    background-color var(--speed) var(--ease);
 }
 .sig-save button:hover,
-.sig-save button:focus-visible { color: var(--accent); }
-.sig-save button[aria-busy="true"] { color: var(--text); cursor: progress; }
-
-@media (max-width: 560px) {
-  .sig-strip { flex-direction: column; align-items: stretch; }
-  .sig-save { justify-content: flex-end; }
+.sig-save button:focus-visible { background: rgba(255, 169, 77, 0.1); }
+.sig-save button[aria-busy="true"] {
+  color: var(--text);
+  border-color: var(--line);
+  cursor: progress;
 }

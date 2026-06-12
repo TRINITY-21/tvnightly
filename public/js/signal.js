@@ -19,6 +19,8 @@
   var live = document.getElementById("sig-live");
   if (!svg || !cursor || !strip || !read) return;
   strip.hidden = false;
+  var saveWrap = document.querySelector(".sig-save");
+  if (saveWrap) saveWrap.hidden = false;
   // arrow keys only exist with JS — promise them only now
   fig.setAttribute(
     "aria-label",
@@ -181,7 +183,7 @@
   // ---- save: fetch the server-rendered card, rasterize at 2x ----
   var slug = strip.getAttribute("data-slug");
   var season = strip.getAttribute("data-season");
-  strip.querySelectorAll(".sig-save button").forEach(function (btn) {
+  document.querySelectorAll(".sig-save button").forEach(function (btn) {
     btn.addEventListener("click", function () {
       if (btn.hasAttribute("aria-busy")) return; // already rendering
       var label = btn.textContent;

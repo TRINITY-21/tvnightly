@@ -302,9 +302,14 @@ app.get("/show/:slug/ratings.svg", async (c) => {
   if (scope.redirect) return c.redirect(`/show/${scope.show.slug}/ratings.svg`, 301);
   const eps =
     scope.season != null ? scope.allEps.filter((e) => e.season === scope.season) : scope.allEps;
-  const [fontCss, poster] = await Promise.all([
+  const bd =
+    scope.show.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbBackdrop(c.env.TMDB_API_KEY, scope.show.tmdb_id)
+      : null;
+  const [fontCss, poster, backdrop] = await Promise.all([
     archivoFontCss(c.env.ASSETS),
     posterDataUri(posterSrc(scope.show)?.src ?? null),
+    posterDataUri(bd?.x1 ?? null),
   ]);
   const sig = buildSignalSvg(eps, scope.show, {
     frame: "card",
@@ -312,6 +317,7 @@ app.get("/show/:slug/ratings.svg", async (c) => {
     slug: scope.show.slug,
     fontCss: fontCss ?? undefined,
     poster,
+    backdrop,
   });
   if (!sig) return c.notFound();
   c.header("Content-Type", "image/svg+xml; charset=utf-8");
@@ -326,14 +332,19 @@ app.get("/show/:slug/ratings", async (c) => {
   const base = `/show/${show.slug}/ratings`;
   if (scope.redirect) return c.redirect(base, 301);
   const eps = season != null ? allEps.filter((e) => e.season === season) : allEps;
-  // the page chart wears the same poster band as the saved card — what you
-  // see is what you download (inline SVG may reference the URL directly)
+  // the page chart wears the same band as the saved card — what you see is
+  // what you download (inline SVG may reference URLs directly)
+  const pageBd =
+    show.tmdb_id && c.env.TMDB_API_KEY ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id) : null;
   const sig = buildSignalSvg(eps, show, {
     frame: "page",
     season,
     slug: show.slug,
     poster: posterSrc(show)?.src ?? null,
+    backdrop: pageBd?.x1 ?? null,
   });
+  const similar = await similarShows(c.env.DB, show);
+  const region = visitorRegion(c);
   const seasonLabel = season != null ? ` Season ${season}` : "";
   const q = season != null ? `?season=${season}` : "";
 
@@ -404,6 +415,27 @@ app.get("/show/:slug/ratings", async (c) => {
             <a href={`/show/${show.slug}/worst-episodes${q}`}>Worst episodes</a>
             <a href={`/show/${show.slug}/essential${q}`}>Essential episodes</a>
           </nav>
+          {similar.length ? (
+            <section>
+              <h2>Shows like {show.name}</h2>
+              <p class="dossier-method">
+                The closest matches on shared genres, ranked by match strength and popularity —
+                each opens its own ratings grid.
+              </p>
+              <ol class="dossier-board">
+                {similar.map((s, i) => (
+                  <DossierRow
+                    i={i}
+                    href={`/show/${s.slug}/ratings`}
+                    name={`The episode ratings of ${s.name}`}
+                    d={buildDossier(show, s, region)}
+                    rating={s.rating}
+                    poster={posterSrc(s)}
+                  />
+                ))}
+              </ol>
+            </section>
+          ) : null}
         </>
       ) : (
         <p class="muted">No rated episodes yet for {show.name}.</p>

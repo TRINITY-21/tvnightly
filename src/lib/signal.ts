@@ -137,7 +137,15 @@ interface Cell {
 export function buildSignalSvg(
   epsIn: EpisodeRow[],
   show: ShowRow,
-  opts: { frame: SignalFrame; season: number | null; slug: string; fontCss?: string; poster?: string | null },
+  opts: {
+    frame: SignalFrame;
+    season: number | null;
+    slug: string;
+    fontCss?: string;
+    poster?: string | null;
+    /** the show backdrop behind the masthead band — life over the data */
+    backdrop?: string | null;
+  },
 ): SignalResult | null {
   // ---- the matrix: season columns ascending, specials ("SP") last;
   // within a season by number, null numbers appended in airdate order
@@ -193,7 +201,9 @@ export function buildSignalSvg(
   const posterH = Math.round(posterW * 1.5);
   const bandPad = isCard ? 26 : 18;
   const bandTop = mastH + (isCard ? 8 : 16);
-  const bandH = (opts.poster ? posterH : isCard ? 96 : 76) + bandPad;
+  // the band always sizes to the poster slot — the top-five list needs the
+  // same room whether or not the art arrived
+  const bandH = posterH + bandPad;
 
   const gridLeft = m + labelGutter;
   const gridRight = W - m;
@@ -225,10 +235,34 @@ export function buildSignalSvg(
       isCard ? "" : ` aria-hidden="true" focusable="false"`
     }>`,
   );
-  if (opts.fontCss) parts.push(`<defs><style>${opts.fontCss}</style></defs>`);
-  parts.push(`<clipPath id="sig-poster"><rect x="${m}" y="${bandTop}" width="${posterW}" height="${posterH}" rx="10"/></clipPath>`);
+  const bandBottom = bandTop + bandH;
+  parts.push(
+    "<defs>",
+    opts.fontCss ? `<style>${opts.fontCss}</style>` : "",
+    `<clipPath id="sig-poster"><rect x="${m}" y="${bandTop}" width="${posterW}" height="${posterH}" rx="10"/></clipPath>`,
+    // the scrim: house frame-hero grammar — the art dissolves into the plate
+    // before the data starts; never a decorative edge, always a frame
+    `<linearGradient id="sig-scrim" x1="0" y1="0" x2="0" y2="1">` +
+      `<stop offset="0" stop-color="${PLATE}" stop-opacity="0.66"/>` +
+      `<stop offset="0.62" stop-color="${PLATE}" stop-opacity="0.88"/>` +
+      `<stop offset="1" stop-color="${PLATE}" stop-opacity="1"/>` +
+      `</linearGradient>`,
+    `<clipPath id="sig-plate"><rect x="0.5" y="0.5" width="${W - 1}" height="${r2(H - 1)}" rx="14"/></clipPath>`,
+    "</defs>",
+  );
+  const backdropBlock = () => {
+    if (!opts.backdrop) return "";
+    const bh = r2(bandBottom + 36);
+    return (
+      `<g clip-path="url(#sig-plate)">` +
+      `<image href="${esc(opts.backdrop)}" x="0" y="0" width="${W}" height="${bh}" preserveAspectRatio="xMidYMid slice"/>` +
+      `<rect x="0" y="0" width="${W}" height="${bh}" fill="url(#sig-scrim)"/>` +
+      `</g>`
+    );
+  };
   if (isCard) {
     parts.push(`<rect x="0" y="0" width="${W}" height="${r2(H)}" fill="${PLATE}"/>`);
+    parts.push(backdropBlock());
     // masthead
     const years = show.premiered
       ? `${show.premiered.slice(0, 4)}–${show.ended ? show.ended.slice(0, 4) : ""}`
@@ -251,9 +285,12 @@ export function buildSignalSvg(
     parts.push(
       `<rect x="0.5" y="0.5" width="${W - 1}" height="${r2(H - 1)}" rx="14" fill="${PLATE}" stroke="${LINE}" stroke-width="1"/>`,
     );
+    parts.push(backdropBlock());
   }
 
-  // ---- the poster band: the art, then names-only register + series average
+  // ---- the poster band: the art, then THE TOP FIVE — the index a stranger
+  // argues with. The list reprints five cell values by design: a 300-cell
+  // wall needs its summary; the low needs none (its dashed ring carries it).
   let regX = m;
   if (opts.poster) {
     parts.push(
@@ -262,26 +299,56 @@ export function buildSignalSvg(
     );
     regX = m + posterW + (isCard ? 34 : 26);
   }
-  const regFs = isCard ? 15 : 13;
-  const rowGap = Math.max(34, (opts.poster ? posterH : 60) / 3);
-  const regRow = (y: number, label: string, body: string, bodyFill: string, labelOp: number, bodySys = false) =>
-    `<text x="${r2(regX)}" y="${r2(y)}">` +
-    `<tspan font-size="${r2(regFs * 0.78)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="${r2(regFs * 0.13)}" fill="${MUTED}" opacity="${labelOp}">${label}</tspan>` +
-    (bodySys
-      ? `<tspan font-size="${r2(regFs * 1.25)}" font-family="${SYS}" font-weight="700" fill="${bodyFill}" style="font-variant-numeric:tabular-nums">  ${esc(body)}</tspan>`
-      : `<tspan font-size="${regFs}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="1" fill="${bodyFill}">  ${esc(body)}</tspan>`) +
-    `</text>`;
-  const bandMidPad = bandTop + (opts.poster ? 30 : 26);
+  const top5 = [...rated].sort(byRank(1)).slice(0, 5);
+  const colAvgs = seasonList.map((s, col) => {
+    const colRated = cells.filter((x) => x.col === col && x.ep.rating != null);
+    return colRated.length >= 2
+      ? colRated.reduce((t, x) => t + x.ep.rating!, 0) / colRated.length
+      : null;
+  });
+  let bestSeason: number | null = null;
+  colAvgs.forEach((a, i) => {
+    if (a != null && (bestSeason == null || a > colAvgs[seasonList.indexOf(bestSeason)]!))
+      bestSeason = seasonList[i];
+  });
+  const listFs = isCard ? 14 : 12;
+  const headY = bandTop + (isCard ? 24 : 22);
+  const rowsY0 = headY + (isCard ? 30 : 26);
+  const rowH = (posterH - (rowsY0 - bandTop) - 26) / 5;
   parts.push(
-    regRow(bandMidPad + rowGap * 0, "THE PEAK", `${trunc((peakEp.name ?? code(peakEp)).toUpperCase(), 30)} · ${code(peakEp)}`, TEXT, 0.8),
+    txt(regX, headY, "THE TOP FIVE", { size: listFs * 0.78, wdth: 105, ls: listFs * 0.13, opacity: 0.8 }),
   );
-  if (!lowSuppressed)
+  top5.forEach((ep, i) => {
+    const y = rowsY0 + rowH * i + rowH / 2;
     parts.push(
-      regRow(bandMidPad + rowGap * 1, "THE LOW", `${trunc((lowEp.name ?? code(lowEp)).toUpperCase(), 30)} · ${code(lowEp)}`, MUTED, 0.55),
+      `<text x="${r2(regX)}" y="${r2(y)}">` +
+        `<tspan font-size="${r2(listFs * 1.15)}" font-weight="800" style="font-variation-settings:'wdth' 62,'wght' 800" fill="${TEXT}" opacity="0.3">${String(i + 1).padStart(2, "0")}</tspan>` +
+        `<tspan font-size="${listFs}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="0.8" fill="${TEXT}">  ${esc(trunc((ep.name ?? code(ep)).toUpperCase(), isCard ? 26 : 30))}</tspan>` +
+        `<tspan font-size="${r2(listFs * 0.82)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="1" fill="${MUTED}">  ${code(ep)} · </tspan>` +
+        `<tspan font-size="${r2(listFs * 1.1)}" font-family="${SYS}" font-weight="700" fill="${GOLD}" style="font-variant-numeric:tabular-nums">${ep.rating!.toFixed(1)}</tspan>` +
+        `</text>`,
     );
-  parts.push(
-    regRow(bandMidPad + rowGap * (lowSuppressed ? 1 : 2), "SERIES AVG", seriesAvg.toFixed(1), GOLD, 0.55, true),
-  );
+  });
+  // the band's right column: quiet stats, end-anchored, clear of the list
+  {
+    const statRow = (y: number, label: string, body: string, bodyFill: string, bodySys = false) =>
+      `<text x="${r2(gridRight)}" y="${r2(y)}" text-anchor="end">` +
+      `<tspan font-size="${r2(listFs * 0.78)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="${r2(listFs * 0.13)}" fill="${MUTED}" opacity="0.55">${label}</tspan>` +
+      (bodySys
+        ? `<tspan font-size="${r2(listFs * 1.1)}" font-family="${SYS}" font-weight="700" fill="${bodyFill}" style="font-variant-numeric:tabular-nums">  ${esc(body)}</tspan>`
+        : `<tspan font-size="${r2(listFs * 0.95)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="1" fill="${bodyFill}">  ${esc(body)}</tspan>`) +
+      `</text>`;
+    const stats: [string, string, string, boolean][] = [];
+    if (!lowSuppressed)
+      stats.push(["THE LOW", `${trunc((lowEp.name ?? code(lowEp)).toUpperCase(), 18)} · ${code(lowEp)}`, MUTED, false]);
+    stats.push(["SERIES AVG", seriesAvg.toFixed(1), GOLD, true]);
+    if (bestSeason != null)
+      stats.push(["BEST SEASON", bestSeason === 0 ? "SP" : `S${bestSeason}`, TEXT, false]);
+    if (S > 1) stats.push(["SEASONS", String(S), TEXT, false]);
+    stats.forEach(([label, body, fill, sys], i) =>
+      parts.push(statRow(rowsY0 + rowH * (i * 1.3 + 0.4), label, body, fill, sys)),
+    );
+  }
 
   // ---- column heads (page links them into the season filter)
   seasonList.forEach((s, col) => {
@@ -398,17 +465,24 @@ export function buildSignalSvg(
         }),
       );
     });
-    // lockup
+    // lockup: the standby mark (header geometry, 36x24), wordmark, LED dot
     const hairY = H - 86;
     const baseY = H - 40;
     const wfs = 28;
+    const markScale = 26 / 24;
+    const markW = 36 * markScale;
+    const wordX = m + markW + 14;
     const wordW = "TV NIGHTLY".length * wfs * 0.68;
     parts.push(
       `<line x1="${m}" y1="${r2(hairY)}" x2="${W - m}" y2="${r2(hairY)}" stroke="${LINE}" stroke-width="1"/>`,
-      txt(m, baseY, "TV NIGHTLY", { size: wfs, wght: 800, wdth: 120, fill: TEXT, ls: wfs * 0.02 }),
-      `<circle cx="${r2(m + wordW + 0.3 * wfs)}" cy="${r2(baseY - 0.08 * wfs)}" r="${r2(0.085 * wfs)}" fill="${AMBER}"/>`,
-      txt(W - m, baseY - 16, "TVNIGHTLY.COM", { size: 16, wdth: 105, ls: 2.2, anchor: "end" }),
-      txt(W - m, baseY, "DATA · TVMAZE", { size: 10, wdth: 105, ls: 1.4, anchor: "end", opacity: 0.6 }),
+      `<g transform="translate(${m}, ${r2(baseY - 22)}) scale(${r2(markScale)})">` +
+        `<rect x="1.25" y="1.25" width="33.5" height="21.5" rx="5.5" fill="none" stroke="#F2F5FA" stroke-width="2.5"/>` +
+        `<circle cx="26.5" cy="16.5" r="3.4" fill="${AMBER}" opacity="0.22"/>` +
+        `<circle cx="26.5" cy="16.5" r="2.2" fill="${AMBER}"/>` +
+        `</g>`,
+      txt(wordX, baseY, "TV NIGHTLY", { size: wfs, wght: 800, wdth: 120, fill: TEXT, ls: wfs * 0.02 }),
+      `<circle cx="${r2(wordX + wordW + 0.3 * wfs)}" cy="${r2(baseY - 0.08 * wfs)}" r="${r2(0.085 * wfs)}" fill="${AMBER}"/>`,
+      txt(W - m, baseY - 4, "TVNIGHTLY.COM", { size: 16, wdth: 105, ls: 2.2, anchor: "end" }),
     );
   }
   parts.push("</svg>");

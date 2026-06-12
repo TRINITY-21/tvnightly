@@ -6,20 +6,22 @@ import { FC } from "hono/jsx";
 // answer card, worst/essential via Best-episodes cross-links and the
 // Shortcut slate, the calendar via next-episode/release-date pages.
 export const ShowTabs: FC<{ slug: string; current?: string }> = ({ slug, current }) => {
+  // ordered by essence: the schedule questions fans ask daily, then the
+  // money content, then the explore tail
   const tabs: [string, string, string][] = [
     ["overview", "Overview", `/show/${slug}`],
-    ["similar", "Similar shows", `/show/${slug}/similar`],
-    ["media", "Media", `/show/${slug}/media`],
+    ["next", "Next episode", `/show/${slug}/next-episode`],
+    ["release", "Release date", `/show/${slug}/release-date`],
     ["best", "Best episodes", `/show/${slug}/best-episodes`],
     ["ratings", "Ratings graph", `/show/${slug}/ratings`],
+    ["similar", "Similar shows", `/show/${slug}/similar`],
+    ["cast", "Cast", `/show/${slug}/cast`],
+    ["media", "Media", `/show/${slug}/media`],
     // Compare is a doorway, not a place you're "on" — it only shows from
     // the main details page
     ...(current === "overview"
       ? ([["compare", "Compare", `/compare?a=${slug}`]] as [string, string, string][])
       : []),
-    ["next", "Next episode", `/show/${slug}/next-episode`],
-    ["release", "Release date", `/show/${slug}/release-date`],
-    ["cast", "Cast", `/show/${slug}/cast`],
   ];
   return (
     <nav class="subnav subnav-scroll">

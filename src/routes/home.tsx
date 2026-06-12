@@ -1,8 +1,9 @@
 import { Hono } from "hono";
+import { FC, PropsWithChildren } from "hono/jsx";
 import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
 import { visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
 import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml } from "../lib/format";
-import { tmdbBackdrop } from "../lib/tmdb";
+import { tmdbBackdrop, tmdbTrending } from "../lib/tmdb";
 import {
   IconReel,
   IconDial,
@@ -21,6 +22,42 @@ import { ProviderLine } from "../components/providers";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
+// a scrollable poster row with its paging chevrons — the discover rails
+const Rail: FC<PropsWithChildren<{ label: string }>> = ({ label, children }) => (
+  <div class="poster-rail">
+    <button type="button" class="rail-btn rail-btn-prev" aria-label={`Scroll ${label} left`}>
+      <span class="chev-icon chev-icon-prev" aria-hidden="true"></span>
+    </button>
+    <div class="poster-row">{children}</div>
+    <button type="button" class="rail-btn rail-btn-next" aria-label={`Scroll ${label} right`}>
+      <span class="chev-icon" aria-hidden="true"></span>
+    </button>
+  </div>
+);
+
+/** TMDB's weekly worldwide trending list, matched against our own mirror
+ *  in their trending order — only titles we can actually take the reader to. */
+async function trendingRows<T extends { tmdb_id: number | null }>(
+  c: { env: Bindings },
+  kind: "tv" | "movie",
+  table: "shows" | "movies",
+  limit = 18,
+): Promise<T[]> {
+  if (!c.env.TMDB_API_KEY) return [];
+  const ids = await tmdbTrending(c.env.TMDB_API_KEY, kind);
+  if (!ids.length) return [];
+  const rows = await c.env.DB.prepare(
+    `SELECT * FROM ${table} WHERE tmdb_id IN (${ids.map(() => "?").join(",")})`,
+  )
+    .bind(...ids)
+    .all<T>()
+    .then((r) => r.results);
+  const rank = new Map(ids.map((id, i) => [id, i]));
+  return rows
+    .sort((a, b) => (rank.get(a.tmdb_id!) ?? 99) - (rank.get(b.tmdb_id!) ?? 99))
+    .slice(0, limit);
+}
+
 // ---------------------------------------------------------------- home
 
 app.get("/", async (c) => {
@@ -31,7 +68,7 @@ app.get("/", async (c) => {
     ep_airdate: string | null;
     ep_airstamp: string | null;
   };
-  const [top, topMovies, tonight, premieres, spotTonight, spotPremiere, topStill] = await Promise.all([
+  const [top, topMovies, tonight, premieres, spotTonight, spotPremiere, topStill, trendTv, trendMovies] = await Promise.all([
     // weight-only ORDER BY rides idx_shows_weight; a rating tiebreak would
     // force a full scan + temp sort (weights are near-unique anyway)
     c.env.DB.prepare("SELECT * FROM shows ORDER BY weight DESC LIMIT 18")
@@ -91,6 +128,8 @@ app.get("/", async (c) => {
        WHERE image_url IS NOT NULL AND rating IS NOT NULL
        ORDER BY rating DESC LIMIT 1`,
     ).first<{ image_url: string }>(),
+    trendingRows<ShowRow>(c, "tv", "shows"),
+    trendingRows<MovieRow>(c, "movie", "movies"),
   ]);
 
   const spot: SpotRow | null =
@@ -114,6 +153,9 @@ app.get("/", async (c) => {
   const spotAirTime = spotTonight?.ep_airstamp ? airTime(spotTonight.ep_airstamp) : null;
   const spotGenres: string[] = spot?.genres ? JSON.parse(spot.genres) : [];
   const alsoTonight = spotTonight ? tonight.filter((e) => e.show_slug !== spotTonight.slug) : tonight;
+  // a trending rail needs enough matched titles to read as a rail at all
+  const hasTrendTv = trendTv.length >= 4;
+  const hasTrendMovies = trendMovies.length >= 4;
 
   // the sign-on frame: the spotlight show's real designed backdrop (one
   // edge-cached call); falls back to its poster blurred into ambient light
@@ -341,7 +383,7 @@ app.get("/", async (c) => {
             <input type="radio" name="discover" id="discover-tv" class="discover-input" checked />
             <input type="radio" name="discover" id="discover-movies" class="discover-input" />
             <div class="discover-head">
-              <h2>Popular right now</h2>
+              <h2>Popular TV &amp; movies</h2>
               <p class="section-lead muted">Ranked by what people search and return to most.</p>
             </div>
             <div class="discover-tablist">
@@ -357,36 +399,62 @@ app.get("/", async (c) => {
               </span>
             </div>
             <div class="discover-panel panel-tv">
-              <div class="poster-rail">
-                <button type="button" class="rail-btn rail-btn-prev" aria-label="Scroll shows left">
-                  <span class="chev-icon chev-icon-prev" aria-hidden="true"></span>
-                </button>
-                <div class="poster-row">
-                  {top.map((s) => (
-                    <ShowCard show={s} />
-                  ))}
-                </div>
-                <button type="button" class="rail-btn rail-btn-next" aria-label="Scroll shows right">
-                  <span class="chev-icon" aria-hidden="true"></span>
-                </button>
-              </div>
+              <Rail label="shows">
+                {top.map((s) => (
+                  <ShowCard show={s} />
+                ))}
+              </Rail>
             </div>
             <div class="discover-panel panel-movies">
-              <div class="poster-rail">
-                <button type="button" class="rail-btn rail-btn-prev" aria-label="Scroll movies left">
-                  <span class="chev-icon chev-icon-prev" aria-hidden="true"></span>
-                </button>
-                <div class="poster-row">
-                  {topMovies.map((m) => (
-                    <MovieCard movie={m} />
-                  ))}
-                </div>
-                <button type="button" class="rail-btn rail-btn-next" aria-label="Scroll movies right">
-                  <span class="chev-icon" aria-hidden="true"></span>
-                </button>
-              </div>
+              <Rail label="movies">
+                {topMovies.map((m) => (
+                  <MovieCard movie={m} />
+                ))}
+              </Rail>
             </div>
           </div>
+
+          {/* the weekly worldwide pulse — TMDB trending, matched against our
+              mirror so every card leads to a real page. Quietly absent when
+              the data is (no key, API down, nothing matched). */}
+          {hasTrendTv || hasTrendMovies ? (
+            <div class="discover-tabs">
+              {hasTrendTv && hasTrendMovies ? (
+                <>
+                  <input type="radio" name="trending" id="trend-tv" class="discover-input" checked />
+                  <input type="radio" name="trending" id="trend-movies" class="discover-input" />
+                </>
+              ) : null}
+              <div class="discover-head">
+                <h2>Trending right now</h2>
+                <p class="section-lead muted">What the world is watching this week.</p>
+              </div>
+              {hasTrendTv && hasTrendMovies ? (
+                <div class="discover-tablist">
+                  <label for="trend-tv">TV shows</label>
+                  <label for="trend-movies">Movies</label>
+                </div>
+              ) : null}
+              {hasTrendTv ? (
+                <div class={hasTrendMovies ? "discover-panel panel-tv" : undefined}>
+                  <Rail label="trending shows">
+                    {trendTv.map((s) => (
+                      <ShowCard show={s} />
+                    ))}
+                  </Rail>
+                </div>
+              ) : null}
+              {hasTrendMovies ? (
+                <div class={hasTrendTv ? "discover-panel panel-movies" : undefined}>
+                  <Rail label="trending movies">
+                    {trendMovies.map((m) => (
+                      <MovieCard movie={m} />
+                    ))}
+                  </Rail>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section class="home-tools">

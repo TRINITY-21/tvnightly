@@ -65,6 +65,7 @@ export interface MovieRow {
   votes: number | null;
   popularity: number | null;
   poster_url: string | null;
+  tmdb_id: number | null;
   providers: string | null; // JSON string array of US streaming services
   providers_intl: string | null; // JSON object: country code -> service names
 }

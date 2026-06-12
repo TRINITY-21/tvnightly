@@ -222,6 +222,39 @@ export async function tmdbMovieBackdrop(
   return data ? pickBackdrop(data) : null;
 }
 
+/** This week's worldwide trending titles as rank-ordered TMDB ids (two
+ *  pages, 40 titles), edge-cached for 6 hours. The homepage matches them
+ *  against the mirror — we only surface titles we can take the reader to. */
+export async function tmdbTrending(key: string, kind: "tv" | "movie"): Promise<number[]> {
+  const cacheKey = new Request(`https://edge-cache.tvnightly.com/trending/v1/${kind}`);
+  const cache = caches.default;
+  try {
+    let res = await cache.match(cacheKey);
+    if (!res) {
+      const pages = await Promise.all(
+        [1, 2].map((p) =>
+          fetch(
+            `https://api.themoviedb.org/3/trending/${kind}/week?api_key=${key}&page=${p}`,
+            { headers: { accept: "application/json" } },
+          ).then((r) => (r.ok ? (r.json() as Promise<{ results?: { id: number }[] }>) : null)),
+        ),
+      );
+      const ids = pages.flatMap((j) => (j?.results ?? []).map((t) => t.id));
+      if (!ids.length) return [];
+      res = new Response(JSON.stringify(ids), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=21600",
+        },
+      });
+      await cache.put(cacheKey, res.clone());
+    }
+    return (await res.json()) as number[];
+  } catch {
+    return [];
+  }
+}
+
 /** The hero poster: the community's top-voted one-sheet, preferring the
  *  English version (a poster's title typography is the point), then
  *  textless, then TMDB's designated poster_path. Same cached bundle. */

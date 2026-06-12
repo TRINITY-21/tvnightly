@@ -364,6 +364,16 @@
 #discover-tv:checked ~ .panel-tv,
 #discover-movies:checked ~ .panel-movies { display: block; }
 
+/* the trending unit sits below the popular one inside the same section */
+.discover-tabs + .discover-tabs { margin-top: 2.2rem; }
+#trend-tv:checked ~ .discover-tablist label[for="trend-tv"],
+#trend-movies:checked ~ .discover-tablist label[for="trend-movies"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+#trend-tv:checked ~ .panel-tv,
+#trend-movies:checked ~ .panel-movies { display: block; }
+
 /* tools: unified bento grid — no settings-menu list */
 .home-tools h2 { margin: 0 0 1rem; }
 .tools-bento {

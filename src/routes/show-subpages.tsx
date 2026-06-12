@@ -773,10 +773,14 @@ app.get("/show/:slug/next-episode", async (c) => {
                 {show.network ? ` · ${show.network}` : ""}
               </p>
               <p class="slate-title">{next.name ?? epCode(next)}</p>
-              <p class="slate-sub">
-                Airs <strong>{next.airdate ? longDate(next.airdate) : "soon"}</strong>
-                {show.network ? ` on ${show.network}` : ""}.{pitch ? ` ${pitch}` : ""}
-              </p>
+              <div class="slate-facts">
+                <p class="slate-fact">
+                  <span class="fact-k">Airs</span>
+                  <strong>{next.airdate ? longDate(next.airdate) : "soon"}</strong>
+                  {show.network ? ` on ${show.network}` : ""}
+                </p>
+                {pitch ? <p class="slate-fact slate-pitch">{pitch}</p> : null}
+              </div>
               {next.airstamp ? <CountBand ts={next.airstamp} /> : null}
               {raw(COUNTDOWN_JS)}
             </>
@@ -787,16 +791,19 @@ app.get("/show/:slug/next-episode", async (c) => {
                 {lastAired?.airdate ? ` · ${longDate(lastAired.airdate)}` : ""}
               </p>
               <p class="slate-title">{lastAired?.name ?? "No episode scheduled"}</p>
-              <p class="slate-sub">
-                No next episode is scheduled yet. <StatusBadge status={show.status} />
-                {show.status === "Ended" && show.ended ? (
-                  <> The show ended on {longDate(show.ended)}.</>
-                ) : show.status === "To Be Determined" ? (
-                  <> Awaiting renewal news — we track the schedule hourly.</>
-                ) : show.status === "Running" ? (
-                  <> The network hasn't dated the next one — we check hourly.</>
-                ) : null}
-              </p>
+              <div class="slate-facts">
+                <p class="slate-fact">
+                  <StatusBadge status={show.status} />
+                  {show.status === "Ended" ? (
+                    <>{show.name} ended with this episode — no new season is coming.</>
+                  ) : show.status === "To Be Determined" ? (
+                    <>No next episode is scheduled — awaiting renewal news. We track the schedule hourly.</>
+                  ) : (
+                    <>No next episode is scheduled yet — the network hasn't dated the next one. We check hourly.</>
+                  )}
+                </p>
+                {pitch ? <p class="slate-fact slate-pitch">{pitch}</p> : null}
+              </div>
             </>
           )}
         </div>
@@ -936,13 +943,15 @@ app.get("/show/:slug/release-date", async (c) => {
   let answer: string;
   let showCountdown = false;
   // the slate: chyron qualifies, the title is THE answer (a date when we
-  // have one, the honest pattern when we don't)
+  // have one, the honest pattern when we don't), the facts row by row
   let chyron: string;
   let slateTitle: string;
+  let statusLine: string;
   if (next && (next.season ?? 0) > maxAired) {
     answer = `Season ${next.season} of ${show.name} premieres on ${next.airdate ? longDate(next.airdate) : "a date TBA"}.`;
     chyron = `Season ${next.season} premiere${show.network ? ` · ${show.network}` : ""}`;
     slateTitle = next.airdate ? longDate(next.airdate) : `Season ${next.season}`;
+    statusLine = `${show.name} returns for Season ${next.season}${show.network ? ` on ${show.network}` : ""}.`;
     showCountdown = true;
   } else if (next) {
     answer = `Season ${next.season} of ${show.name} is currently airing — the next episode (${epCode(
@@ -950,23 +959,28 @@ app.get("/show/:slug/release-date", async (c) => {
     )}) airs ${next.airdate ? longDate(next.airdate) : "soon"}.`;
     chyron = `Season ${next.season} · now airing · next: ${epCode(next)}`;
     slateTitle = next.airdate ? longDate(next.airdate) : "Now airing";
+    statusLine = `${epCode(next)}${next.name ? ` "${next.name}"` : ""} airs next — Season ${next.season} is still airing.`;
     showCountdown = true;
   } else if (show.status === "Ended") {
     answer = `${show.name} has ended${show.ended ? ` (final episode: ${longDate(show.ended)})` : ""} — no new season is coming.`;
     chyron = "Series ended";
     slateTitle = show.ended ? longDate(show.ended) : "Ended";
+    statusLine = `${show.name} ended${lastAired?.name ? ` with ${lastAired.name} (${epCode(lastAired)})` : ""} — no new season is coming.`;
   } else if (show.status === "To Be Determined") {
     answer = `${show.name} has not yet been renewed for Season ${maxAired + 1}. Its status is officially "To Be Determined."`;
     chyron = `Season ${maxAired + 1} · awaiting renewal`;
     slateTitle = "Not renewed yet";
+    statusLine = `${show.name} hasn't been renewed for Season ${maxAired + 1} yet.`;
   } else if (show.status === "In Development") {
     answer = `${show.name} is in development — no premiere date has been announced yet.`;
     chyron = "In development";
     slateTitle = "Date not announced";
+    statusLine = `${show.name} is in development — no premiere date has been announced.`;
   } else {
     answer = `${show.name} is ${show.status ?? "of unknown status"}, but no next air date has been announced yet.`;
     chyron = `Season ${maxAired + 1} · not scheduled yet`;
     slateTitle = pattern ? `Historically ${pattern.month}` : "Date not announced";
+    statusLine = `${show.name} is ${show.status?.toLowerCase() ?? "of unknown status"} — the next air date hasn't been announced.`;
   }
 
   const site = origin(c);
@@ -1007,31 +1021,32 @@ app.get("/show/:slug/release-date", async (c) => {
               src={media.src}
               srcset={media.srcset}
               alt={`${show.name} poster`}
-              width={media.poster ? 190 : 384}
-              height={media.poster ? 285 : 216}
+              width={media.poster ? 150 : 384}
+              height={media.poster ? 225 : 216}
             />
           </div>
         ) : null}
         <div class="slate-body">
           <p class="slate-chyron">{chyron}</p>
           <p class="slate-title">{slateTitle}</p>
-          <p class="slate-sub">
-            <StatusBadge status={show.status} /> {answer}
-            {!showCountdown && pattern ? (
-              <>
-                {" "}
-                {pattern.n} of {pattern.total} seasons premiered in {pattern.month} — we'll have
-                the date the moment it's set.
-              </>
+          <div class="slate-facts">
+            <p class="slate-fact">
+              <StatusBadge status={show.status} /> {statusLine}
+            </p>
+            {!next && show.status !== "Ended" && pattern ? (
+              <p class="slate-fact">
+                <span class="fact-k">History</span>
+                {pattern.n} of {pattern.total} seasons premiered in {pattern.month}.
+              </p>
             ) : null}
-            {lastAired ? (
-              <>
-                {" "}
-                Last aired: {lastAired.name} ({epCode(lastAired)}) on{" "}
-                {lastAired.airdate ? longDate(lastAired.airdate) : "—"}.
-              </>
+            {lastAired && show.status !== "Ended" ? (
+              <p class="slate-fact">
+                <span class="fact-k">Last aired</span>
+                {lastAired.name ?? epCode(lastAired)} ({epCode(lastAired)})
+                {lastAired.airdate ? ` · ${longDate(lastAired.airdate)}` : ""}
+              </p>
             ) : null}
-          </p>
+          </div>
           {showCountdown && next?.airstamp ? (
             <>
               <CountBand ts={next.airstamp} />
@@ -1040,14 +1055,14 @@ app.get("/show/:slug/release-date", async (c) => {
           ) : null}
         </div>
       </section>
-      <SubscribeForm
-        showId={show.id}
-        label={`Email me when ${show.name} renewal or premiere news lands:`}
-      />
       <p>
         <a href={`/show/${show.slug}/calendar.ics`}><IconCal /> Add {show.name} to your calendar</a>{" "}
         <span class="muted">— subscribe in Google/Apple Calendar and never miss an episode</span>
       </p>
+      <SubscribeForm
+        showId={show.id}
+        label={`Email me when ${show.name} renewal or premiere news lands:`}
+      />
       {firsts.length > 1 ? (
         <section>
           <h2>Season premiere dates</h2>

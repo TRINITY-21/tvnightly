@@ -4530,11 +4530,15 @@ li.epreg-plate .epreg-sum {
 /* poster variant: a one-sheet column instead of a wide still. The image
    fills the row, so anchor the crop to the top — key art carries its faces
    in the upper half; never decapitate them. */
-.slate.has-media.is-poster { grid-template-columns: 190px 1fr; }
+.slate.has-media.is-poster { grid-template-columns: 150px 1fr; }
 .slate.is-poster .slate-media img { aspect-ratio: auto; object-position: top center; }
 .slate-body {
   padding: 1.15rem 1.4rem 1.25rem;
   min-width: 0;
+  /* center the lockup against tall art — composed, never top-crammed */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .slate-chyron {
@@ -4560,13 +4564,37 @@ li.epreg-plate .epreg-sum {
   font-size: clamp(1.5rem, 4.2vw, 2.3rem);
   line-height: 1.05;
 }
-.slate-sub {
+/* the facts: one row per statement, room to breathe */
+.slate-facts {
+  margin-top: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.slate-fact {
   margin: 0;
   color: var(--muted);
   max-width: 62ch;
+  line-height: 1.5;
 }
-.slate-sub strong { color: var(--text); }
-.slate-sub .badge { vertical-align: 0.08em; margin-right: 0.15rem; }
+.slate-fact strong { color: var(--text); }
+.slate-fact .badge { vertical-align: 0.08em; margin-right: 0.45rem; }
+.fact-k {
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  opacity: 0.8;
+  margin-right: 0.55rem;
+}
+.slate-pitch {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 /* ---- the live count band: stat-band grammar, ticking ---- */
 .count-band {

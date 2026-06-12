@@ -7,7 +7,7 @@ import { tmdbMovieBackdrop } from "../lib/tmdb";
 import { canonical } from "../lib/seo";
 import { similarMovies } from "../lib/queries";
 import { Layout } from "../components/Layout";
-import { MovieCard } from "../components/cards";
+import { MovieCard, ExploreCard } from "../components/cards";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -48,13 +48,23 @@ app.get("/watch-orders", async (c) => {
     const matched = f.entries.map(movieFor);
     const mins = matched.reduce((a, m) => a + (m?.runtime ?? 0), 0);
     const years = f.entries.map((e) => e.year);
+    const rated = matched.filter((m): m is MovieRow => m?.rating != null);
     return {
       f,
       mins,
       span: `${Math.min(...years)}–${Math.max(...years)}`,
       rep: matched.find((m) => m?.imdb_id) ?? null,
+      // an average over a couple of films would flatter the short sagas
+      avg: rated.length >= 3 ? rated.reduce((a, m) => a + m.rating!, 0) / rated.length : null,
     };
   });
+
+  // the concierge cards: honest superlatives computed from the board itself
+  const timed = guides.filter((g) => g.mins > 0);
+  const shortest = timed.length ? timed.reduce((a, b) => (b.mins < a.mins ? b : a)) : null;
+  const longest = timed.length ? timed.reduce((a, b) => (b.mins > a.mins ? b : a)) : null;
+  const rated = guides.filter((g) => g.avg != null);
+  const best = rated.length ? rated.reduce((a, b) => (b.avg! > a.avg! ? b : a)) : null;
 
   // each guide's door wears its opening film's backdrop (7-day edge cache)
   const arts: ({ x1: string; x2?: string; ambient?: boolean } | null)[] = await Promise.all(
@@ -99,6 +109,61 @@ app.get("/watch-orders", async (c) => {
           </a>
         ))}
       </div>
+
+      {shortest || longest || best ? (
+        <section class="wo-doors">
+          <h2>Where to start</h2>
+          <div class="explore-grid">
+            {shortest ? (
+              <ExploreCard
+                icon="One weekend"
+                title={`${shortest.f.name} — ${fmtMarathon(shortest.mins)}`}
+                desc={`The quickest run on the board: ${shortest.f.entries.length} films, one determined Saturday.`}
+                href={`/watch-order/${shortest.f.slug}`}
+              />
+            ) : null}
+            {longest && longest !== shortest ? (
+              <ExploreCard
+                icon="The long haul"
+                title={`${longest.f.name} — ${fmtMarathon(longest.mins)}`}
+                desc={`${longest.f.entries.length} films back to back. Block out the month.`}
+                href={`/watch-order/${longest.f.slug}`}
+              />
+            ) : null}
+            {best ? (
+              <ExploreCard
+                icon="Strongest run"
+                title={`${best.f.name} — ★ ${best.avg!.toFixed(1)} average`}
+                desc="The highest average rating across its films — the safest bet on the board."
+                href={`/watch-order/${best.f.slug}`}
+              />
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="The chart"
+            title="The best films of all time"
+            desc="Every movie ranked by rating, with where to stream."
+            href="/movies/best"
+          />
+          <ExploreCard
+            icon="The canon"
+            title="Classic film, minus the dust"
+            desc="The greatest pre-1980 movies, streamable tonight."
+            href="/classics"
+          />
+          <ExploreCard
+            icon="Picker"
+            title="Can't pick a saga?"
+            desc="Filter by genre, runtime, and streaming service — then spin."
+            href="/what-to-watch"
+          />
+        </div>
+      </section>
     </Layout>,
   );
 });

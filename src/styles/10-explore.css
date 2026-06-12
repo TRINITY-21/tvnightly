@@ -217,3 +217,22 @@
   .wo-poster { width: 40px; height: 60px; }
 }
 
+
+/* the index's concierge + doors */
+.wo-doors { margin-top: 2.6rem; }
+.wo-doors h2 { margin-bottom: 1rem; }
+
+/* ---- hub pages: hero actions + section rhythm ---- */
+.hub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1.2rem 0 0;
+}
+.hub-ambient .wo-frame {
+  inset: -48px;
+  filter: blur(64px) saturate(1.15);
+  opacity: 0.45;
+}
+.hub-sec { margin-top: 2.3rem; }

@@ -105,7 +105,11 @@
   text-transform: uppercase;
   color: var(--muted);
 }
-.watch-bar select {
+/* the native <select> base — shared by the picker's own fields and any
+   FilterSelect (.watch-field), so the no-JS fallback is styled everywhere,
+   not only inside .watch-bar */
+.watch-bar select,
+.watch-field select {
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
@@ -123,7 +127,9 @@
   transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
 }
 .watch-bar select:hover,
-.watch-bar select:focus {
+.watch-bar select:focus,
+.watch-field select:hover,
+.watch-field select:focus {
   border-color: rgba(255, 169, 77, 0.45);
   background-color: rgba(18, 18, 20, 0.85);
   outline: none;

@@ -1713,7 +1713,11 @@ button, .verdict-btn {
   text-transform: uppercase;
   color: var(--muted);
 }
-.watch-bar select {
+/* the native <select> base — shared by the picker's own fields and any
+   FilterSelect (.watch-field), so the no-JS fallback is styled everywhere,
+   not only inside .watch-bar */
+.watch-bar select,
+.watch-field select {
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
@@ -1731,7 +1735,9 @@ button, .verdict-btn {
   transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
 }
 .watch-bar select:hover,
-.watch-bar select:focus {
+.watch-bar select:focus,
+.watch-field select:hover,
+.watch-field select:focus {
   border-color: rgba(255, 169, 77, 0.45);
   background-color: rgba(18, 18, 20, 0.85);
   outline: none;
@@ -2411,6 +2417,25 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   .wo-poster { width: 40px; height: 60px; }
 }
 
+
+/* the index's concierge + doors */
+.wo-doors { margin-top: 2.6rem; }
+.wo-doors h2 { margin-bottom: 1rem; }
+
+/* ---- hub pages: hero actions + section rhythm ---- */
+.hub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1.2rem 0 0;
+}
+.hub-ambient .wo-frame {
+  inset: -48px;
+  filter: blur(64px) saturate(1.15);
+  opacity: 0.45;
+}
+.hub-sec { margin-top: 2.3rem; }
 /* ---- homepage architecture ---- */
 .home > section + section { margin-top: 3rem; }
 
@@ -2551,10 +2576,6 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 .spot-actions {
   margin: 0.9rem 0 0;
 }
-/* the outline button needs its own dark to hold AA over bright frames */
-.spotlight .btn-ghost {
-  background: rgba(18, 18, 20, 0.5);
-}
 .spotlight + .evening {
   margin-top: 1.75rem;
 }
@@ -2619,13 +2640,19 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
    the art, never an edge) answers "when", the poster answers "what". */
 .poster-shelf {
   list-style: none;
-  padding: 0;
+  padding: 0 0 0.45rem;
   margin: 1rem 0 0;
   display: flex;
-  flex-wrap: wrap;
+  /* one row, always: overflow scrolls sideways instead of wrapping */
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 0.7rem 0.6rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-2) transparent;
+  -webkit-overflow-scrolling: touch;
 }
 .poster-shelf li {
+  flex: 0 0 92px;
   width: 92px;
   display: flex;
   flex-direction: column;
@@ -2662,6 +2689,18 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   color: var(--muted);
   text-align: center;
 }
+/* a service badge in the tile corner (hub arrival shelves) */
+.shelf-tile .shelf-logo {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 22px;
+  height: 22px;
+  aspect-ratio: auto;
+  border-radius: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+.shelf-tile:hover .shelf-logo { transform: none; }
 .shelf-chip {
   position: absolute;
   left: 0;
@@ -3042,11 +3081,14 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   display: inline-block;
   border: 1px solid var(--accent);
   border-radius: var(--radius);
+  /* dark backing so the outline + label hold AA contrast over bright hero
+     frames (wo-hero, hub heroes, the chart pages), not only on flat dark */
+  background: rgba(18, 18, 20, 0.5);
   color: var(--accent);
   font-weight: 600;
   padding: 0.5rem 1.1rem;
 }
-.btn-ghost:hover { background: rgba(255, 169, 77, 0.1); text-decoration: none; }
+.btn-ghost:hover { background: rgba(255, 169, 77, 0.12); text-decoration: none; }
 
 /* horizontal poster rails — flex keeps cards from colliding */
 .poster-rail {
@@ -3345,29 +3387,15 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
    The streaming shuffle (/whats-new): one board per service —
    logo, chyron, and a shelf of the titles that moved.
    ============================================================ */
+/* rides the house FilterSelect (watch-field + data-fancy dropdown);
+   the Go button sits on the control's baseline, under the field label */
 .region-line {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 0.6rem;
   margin: 0.9rem 0 0.4rem;
 }
-.region-k {
-  font-family: var(--display);
-  font-stretch: 105%;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.region-line select {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--text);
-  padding: 0.4rem 0.55rem;
-  font-size: 0.85rem;
-}
+.region-line .watch-field { min-width: 7.5rem; }
 .region-line button {
   background: none;
   border: 1px solid var(--line);
@@ -3429,6 +3457,9 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 }
 .shuffle-out .shelf-tile:hover img,
 .shuffle-out .shelf-tile:focus-visible img { filter: none; opacity: 1; }
+
+/* renewals wire: the door line before the inbox capture */
+.wire-foot { margin-top: 2.2rem; max-width: 56ch; }
 /* ============================================================
    THE CHART — all-time episode leaderboard (/best-episodes)
    An editorial awards countdown rendered in the theater's dark:

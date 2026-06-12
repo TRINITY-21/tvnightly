@@ -14,7 +14,7 @@ import { hubForGenres } from "../lib/verticals";
 import { Layout } from "../components/Layout";
 import { MovieCard, ExploreCard, ClampSummary } from "../components/cards";
 import { ProviderLine } from "../components/providers";
-import { RateInline } from "../components/forms";
+import { RateInline, FilterSelect } from "../components/forms";
 import { buildMovieDossier } from "../lib/dossier";
 import { DossierRow } from "../components/dossier";
 
@@ -102,6 +102,24 @@ app.get("/movies/best", async (c) => {
   )
     .bind(...binds)
     .all<MovieRow>();
+  const region = visitorRegion(c);
+
+  // the chart opens on its own #1 — the reigning film's real backdrop
+  const top = results[0] ?? null;
+  let art: { x1: string; x2?: string } | null = null;
+  let ambient = false;
+  if (top && c.env.TMDB_API_KEY) {
+    art = await tmdbMovieBackdrop(c.env.TMDB_API_KEY, top.imdb_id);
+  }
+  if (!art && top?.poster_url) {
+    art = { x1: top.poster_url };
+    ambient = true;
+  }
+
+  const years = results.map((m) => m.year).filter((y): y is number => y != null);
+  const span = years.length ? `${Math.min(...years)}–${Math.max(...years)}` : null;
+  const fmtVotes = (n: number) =>
+    n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n);
 
   const heading = genre ? `The best ${genre.toLowerCase()} movies, ranked` : "The best movies of all time, ranked";
   c.header("Cache-Control", "public, max-age=3600");
@@ -114,6 +132,7 @@ app.get("/movies/best", async (c) => {
           ? `${origin(c)}/movies/best?genre=${encodeURIComponent(genre)}`
           : canonical(c)
       }
+      scripts={["/js/dropdown.js"]}
       ld={[
         {
           "@context": "https://schema.org",
@@ -128,34 +147,129 @@ app.get("/movies/best", async (c) => {
         },
       ]}
     >
-      <h1>{heading}</h1>
-      <form method="get" action="/movies/best" class="picker-form">
-        <label>
-          Genre{" "}
-          <select name="genre">
-            <option value="">All genres</option>
-            {genreRows.map((r) => (
-              <option value={r.g} selected={r.g === genre}>
-                {r.g}
-              </option>
-            ))}
-          </select>
-        </label>
+      <header class={`wo-hero${ambient ? " hub-ambient" : ""}`}>
+        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
+        <div class="wo-hero-body">
+          <p class="section-eyebrow">The chart</p>
+          <h1>{heading}</h1>
+          <p class="wo-intro">
+            Ranked by viewer rating alone — every film here cleared a thousand votes, so nothing
+            on the board is a fluke. Cut it by genre, or let the picker choose for you.
+          </p>
+          {results.length ? (
+            <dl class="wo-stats">
+              <div>
+                <dt>Films</dt>
+                <dd>{results.length}</dd>
+              </div>
+              <div>
+                <dt>Top rating</dt>
+                <dd>★ {results[0].rating!.toFixed(1)}</dd>
+              </div>
+              {span ? (
+                <div>
+                  <dt>Years</dt>
+                  <dd>{span}</dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
+          <p class="hub-actions">
+            <a class="verdict-btn" href="/what-to-watch?type=movie">
+              Pick me a movie
+            </a>
+            <a class="btn-ghost" href="/movies/upcoming">
+              What's coming next
+            </a>
+          </p>
+        </div>
+      </header>
+      {/* explicit submit, no onchange: arrow-keying through a closed select
+          must not navigate (WCAG 3.2.2), and it must work without JS */}
+      <form method="get" action="/movies/best" class="region-line">
+        <FilterSelect
+          label="Genre"
+          name="genre"
+          current={genre}
+          options={[
+            { value: "", text: "All genres" },
+            ...genreRows.map((r) => ({ value: r.g, text: r.g })),
+          ]}
+        />
         <button type="submit">Rank</button>
       </form>
       {results.length === 0 ? <p class="muted">No rated movies for that filter yet.</p> : null}
-      <ol class="ranked">
-        {results.map((m) => (
-          <li>
-            <strong>
-              <a href={`/movie/${m.slug}`}>{m.title}</a>
-            </strong>{" "}
-            {m.year ? <span class="muted">({m.year})</span> : null}
-            <span class="rating"> ★ {m.rating!.toFixed(1)}</span>
-            {m.overview ? <p class="muted">{m.overview.slice(0, 180)}…</p> : null}
-          </li>
-        ))}
+      <ol class="wo-list">
+        {results.map((m, i) => {
+          const provs = [...new Set(providersFor(m, region).names.map(providerBrand))];
+          const gs: string[] = m.genres ? JSON.parse(m.genres) : [];
+          return (
+            <li class="wo-row">
+              <span class="wo-num" aria-hidden="true">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              {m.poster_url ? (
+                <img class="wo-poster" src={m.poster_url} alt="" width="46" height="69" loading="lazy" decoding="async" />
+              ) : (
+                <span class="wo-poster wo-poster-blank" aria-hidden="true"></span>
+              )}
+              <span class="wo-main">
+                <span class="wo-title">
+                  <a href={`/movie/${m.slug}`}>{m.title}</a>{" "}
+                  {m.year ? <span class="muted">({m.year})</span> : null}
+                </span>
+                <span class="wo-provs">
+                  {(provs.length ? provs.slice(0, 3) : gs.slice(0, 2)).join(" · ")}
+                </span>
+              </span>
+              <span class="wo-side">
+                <span class="rating">★ {m.rating!.toFixed(1)}</span>
+                {m.votes ? <span class="wo-mins">{fmtVotes(m.votes)} votes</span> : null}
+              </span>
+            </li>
+          );
+        })}
       </ol>
+      <section class="hub-sec">
+        <h2>Cut the chart by genre</h2>
+        <p class="quick-picks">
+          {genreRows
+            .filter((r) => r.g !== genre)
+            .map((r) => (
+              <a class="chip" href={`/movies/best?genre=${encodeURIComponent(r.g)}`}>
+                {r.g}
+              </a>
+            ))}
+          {genre ? (
+            <a class="chip" href="/movies/best">
+              All genres
+            </a>
+          ) : null}
+        </p>
+      </section>
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="Guides"
+            title="Watch every saga in order"
+            desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
+            href="/watch-orders"
+          />
+          <ExploreCard
+            icon="The canon"
+            title="The classic films page"
+            desc="The best of cinema's first eighty years, ranked and streamable."
+            href="/classics"
+          />
+          <ExploreCard
+            icon="Community"
+            title="Loved by this community"
+            desc="The chart built from real one-tap reader verdicts."
+            href="/loved"
+          />
+        </div>
+      </section>
     </Layout>,
   );
 });
@@ -440,7 +554,7 @@ app.get("/movie/:slug", async (c) => {
                 ) : null}
                 {hub ? (
                   <ExploreCard
-                    icon="Hub"
+                    icon="Fandom hub"
                     title={`The ${hub.name.toLowerCase()} hub`}
                     desc="The whole fandom on one bookmarkable page — rankings, premieres, what's new."
                     href={`/${hub.slug}`}

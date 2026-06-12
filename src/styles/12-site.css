@@ -150,29 +150,15 @@
    The streaming shuffle (/whats-new): one board per service —
    logo, chyron, and a shelf of the titles that moved.
    ============================================================ */
+/* rides the house FilterSelect (watch-field + data-fancy dropdown);
+   the Go button sits on the control's baseline, under the field label */
 .region-line {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 0.6rem;
   margin: 0.9rem 0 0.4rem;
 }
-.region-k {
-  font-family: var(--display);
-  font-stretch: 105%;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.region-line select {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--text);
-  padding: 0.4rem 0.55rem;
-  font-size: 0.85rem;
-}
+.region-line .watch-field { min-width: 7.5rem; }
 .region-line button {
   background: none;
   border: 1px solid var(--line);
@@ -234,3 +220,6 @@
 }
 .shuffle-out .shelf-tile:hover img,
 .shuffle-out .shelf-tile:focus-visible img { filter: none; opacity: 1; }
+
+/* renewals wire: the door line before the inbox capture */
+.wire-foot { margin-top: 2.2rem; max-width: 56ch; }

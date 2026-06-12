@@ -1,14 +1,18 @@
 import { Hono } from "hono";
 import { Bindings, ShowRow, MovieRow } from "../types";
-import { slugifyName } from "../lib/format";
+import { slugifyName, heroBg, hiRes } from "../lib/format";
+import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { canonical } from "../lib/seo";
 import { networkDirectory, genreDirectory } from "../lib/queries";
 import { visitorRegion, providerBrand } from "../lib/providers";
-import { VERTICALS } from "../lib/verticals";
+import { VERTICALS, hubForGenres } from "../lib/verticals";
 import { Layout } from "../components/Layout";
 import { ShowCard, MovieCard, ExploreCard } from "../components/cards";
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+// "Pick me an action show" vs "a drama" — genre names decide the article
+const aOrAn = (word: string) => (/^[aeiou]/i.test(word) ? "an" : "a");
 
 app.get("/lists", async (c) => {
   const [networks, genres] = await Promise.all([networkDirectory(c.env.DB), genreDirectory(c.env.DB)]);
@@ -521,6 +525,32 @@ app.get("/genre/:slug", async (c) => {
   const shows = tvGenre ? await topGenreShows(db, tvGenre, 12) : [];
   const movies = movieGenre ? await topGenreMovies(db, movieGenre, 12) : [];
 
+  // the genre opens on its own #1 — best-rated series first, films if
+  // the genre only exists on the movie side
+  let art: { x1: string; x2?: string } | null = null;
+  let ambient = false;
+  if (c.env.TMDB_API_KEY) {
+    art = shows[0]?.tmdb_id
+      ? await tmdbBackdrop(c.env.TMDB_API_KEY, shows[0].tmdb_id)
+      : !shows.length && movies[0]
+        ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, movies[0].imdb_id)
+        : null;
+  }
+  if (!art) {
+    const p = shows[0] ? hiRes(shows[0].image_url) : (movies[0]?.poster_url ?? null);
+    if (p) {
+      art = { x1: p };
+      ambient = true;
+    }
+  }
+
+  // lateral doors: the rest of the genre map, then the hub that claims
+  // this genre (if one does)
+  const siblings = [...new Set([...dir.tv, ...dir.movie])]
+    .filter((g) => g !== tvGenre && g !== movieGenre)
+    .slice(0, 16);
+  const hub = hubForGenres([label], null);
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
@@ -528,21 +558,34 @@ app.get("/genre/:slug", async (c) => {
       description={`Top-rated ${label.toLowerCase()} TV series and films, with streaming availability.`}
       canonical={canonical(c)}
     >
-      <h1>The best of {label}</h1>
-      <p>
-        {tvGenre ? (
-          <a class="verdict-btn" href={`/what-to-watch?genre=${encodeURIComponent(tvGenre)}`}>
-            Pick me a {label.toLowerCase()} show
-          </a>
-        ) : null}{" "}
-        {movieGenre ? (
-          <a class="verdict-btn" href={`/what-to-watch?type=movie&genre=${encodeURIComponent(movieGenre)}`}>
-            Pick me a {label.toLowerCase()} movie
-          </a>
-        ) : null}
-      </p>
+      <header class={`wo-hero${ambient ? " hub-ambient" : ""}`}>
+        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
+        <div class="wo-hero-body">
+          <p class="section-eyebrow">Genre</p>
+          <h1>The best of {label}</h1>
+          <p class="wo-intro">
+            Every {label.toLowerCase()} title we track, ranked by real ratings — with live
+            streaming availability in your country.
+          </p>
+          <p class="hub-actions">
+            {tvGenre ? (
+              <a class="verdict-btn" href={`/what-to-watch?genre=${encodeURIComponent(tvGenre)}`}>
+                Pick me {aOrAn(label)} {label.toLowerCase()} show
+              </a>
+            ) : null}
+            {movieGenre ? (
+              <a
+                class={tvGenre ? "btn-ghost" : "verdict-btn"}
+                href={`/what-to-watch?type=movie&genre=${encodeURIComponent(movieGenre)}`}
+              >
+                Pick me {aOrAn(label)} {label.toLowerCase()} movie
+              </a>
+            ) : null}
+          </p>
+        </div>
+      </header>
       {shows.length ? (
-        <section>
+        <section class="hub-sec">
           <h2>
             Top {label.toLowerCase()} series{" "}
             <a class="more" href={`/genre/${slug}/shows`}>
@@ -557,7 +600,7 @@ app.get("/genre/:slug", async (c) => {
         </section>
       ) : null}
       {movies.length ? (
-        <section>
+        <section class="hub-sec">
           <h2>
             Top {label.toLowerCase()} films{" "}
             <a class="more" href={`/genre/${slug}/movies`}>
@@ -571,9 +614,55 @@ app.get("/genre/:slug", async (c) => {
           </div>
         </section>
       ) : null}
-      <p>
-        <a class="chev-after" href="/lists">All genres</a>
-      </p>
+      {siblings.length ? (
+        <section class="hub-sec">
+          <h2>
+            More genres{" "}
+            <a class="more" href="/lists">
+              all of them
+            </a>
+          </h2>
+          <p class="quick-picks">
+            {siblings.map((g) => (
+              <a class="chip" href={`/genre/${slugifyName(g)}`}>
+                {g}
+              </a>
+            ))}
+          </p>
+        </section>
+      ) : null}
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          {hub ? (
+            <ExploreCard
+              icon="Fandom hub"
+              title={`The ${hub.name} hub`}
+              desc="News, premieres, and the best of the genre on one page."
+              href={`/${hub.slug}`}
+            />
+          ) : (
+            <ExploreCard
+              icon="Tonight"
+              title="What's actually on"
+              desc="Tonight's schedule, in air-time order."
+              href="/tonight"
+            />
+          )}
+          <ExploreCard
+            icon="Tailored"
+            title="Rate one thing, get a pick"
+            desc="The recommender finds your next watch from one rating."
+            href="/recommend"
+          />
+          <ExploreCard
+            icon="Community"
+            title="Loved by this community"
+            desc="The chart built from real one-tap reader verdicts."
+            href="/loved"
+          />
+        </div>
+      </section>
     </Layout>,
   );
 });
@@ -587,31 +676,137 @@ app.get("/genre/:slug/shows", async (c) => {
   const tvGenre = dir.tv.find((g) => slugifyName(g) === slug);
   if (!tvGenre) return c.notFound();
   const rows = await topGenreShows(db, tvGenre, 48);
+  const hasMovies = dir.movie.some((g) => slugifyName(g) === slug);
+  const lower = tvGenre.toLowerCase();
+
+  // the chart opens on its own #1
+  let art: { x1: string; x2?: string } | null = null;
+  let ambient = false;
+  if (c.env.TMDB_API_KEY && rows[0]?.tmdb_id) {
+    art = await tmdbBackdrop(c.env.TMDB_API_KEY, rows[0].tmdb_id);
+  }
+  if (!art && rows[0]) {
+    const p = hiRes(rows[0].image_url);
+    if (p) {
+      art = { x1: p };
+      ambient = true;
+    }
+  }
+
+  const years = rows
+    .map((s) => (s.premiered ? Number(s.premiered.slice(0, 4)) : null))
+    .filter((y): y is number => y != null && y > 0);
+  const span = years.length ? `${Math.min(...years)}–${Math.max(...years)}` : null;
+  const hub = hubForGenres([tvGenre], null);
+  const siblings = dir.tv.filter((g) => g !== tvGenre).slice(0, 16);
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title={`Top ${tvGenre.toLowerCase()} shows — ranked | TV Nightly`}
-      description={`The best ${tvGenre.toLowerCase()} TV shows, ranked by viewer rating, with streaming availability.`}
+      title={`Top ${lower} shows — ranked | TV Nightly`}
+      description={`The best ${lower} TV shows, ranked by viewer rating, with streaming availability.`}
       canonical={canonical(c)}
     >
-      <h1>Top {tvGenre.toLowerCase()} shows</h1>
-      <div class="grid">
-        {rows.map((s) => (
-          <ShowCard show={s} />
-        ))}
-      </div>
-      <p>
-        {dir.movie.some((g) => slugifyName(g) === slug) ? (
-          <>
-            <a class="chev-after" href={`/genre/${slug}/movies`}>
-              Top {tvGenre.toLowerCase()} movies
-            </a>{" "}
-            ·{" "}
-          </>
-        ) : null}
-        <a href={`/genre/${slug}`}>The best of {tvGenre}</a>
-      </p>
+      <header class={`wo-hero${ambient ? " hub-ambient" : ""}`}>
+        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
+        <div class="wo-hero-body">
+          <p class="section-eyebrow">Genre chart</p>
+          <h1>Top {lower} shows</h1>
+          <p class="wo-intro">
+            Every {lower} series we track with a real rating, ranked — no editors, no
+            sponsorships, just the numbers.
+          </p>
+          {rows.length ? (
+            <dl class="wo-stats">
+              <div>
+                <dt>Series</dt>
+                <dd>{rows.length}</dd>
+              </div>
+              <div>
+                <dt>Top rating</dt>
+                <dd>★ {rows[0].rating!.toFixed(1)}</dd>
+              </div>
+              {span ? (
+                <div>
+                  <dt>Years</dt>
+                  <dd>{span}</dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
+          <p class="hub-actions">
+            <a class="verdict-btn" href={`/what-to-watch?genre=${encodeURIComponent(tvGenre)}`}>
+              Pick me {aOrAn(lower)} {lower} show
+            </a>
+            {hasMovies ? (
+              <a class="btn-ghost" href={`/genre/${slug}/movies`}>
+                Top {lower} movies
+              </a>
+            ) : null}
+            <a class="btn-ghost" href={`/genre/${slug}`}>
+              The best of {tvGenre}
+            </a>
+          </p>
+        </div>
+      </header>
+      {rows.length ? (
+        <div class="grid">
+          {rows.map((s) => (
+            <ShowCard show={s} />
+          ))}
+        </div>
+      ) : (
+        <p class="muted">No rated {lower} shows yet.</p>
+      )}
+      {siblings.length ? (
+        <section class="hub-sec">
+          <h2>
+            More show charts{" "}
+            <a class="more" href="/lists">
+              all of them
+            </a>
+          </h2>
+          <p class="quick-picks">
+            {siblings.map((g) => (
+              <a class="chip" href={`/genre/${slugifyName(g)}/shows`}>
+                {g}
+              </a>
+            ))}
+          </p>
+        </section>
+      ) : null}
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          {hub ? (
+            <ExploreCard
+              icon="Fandom hub"
+              title={`The ${hub.name} hub`}
+              desc="News, premieres, and the best of the genre on one page."
+              href={`/${hub.slug}`}
+            />
+          ) : (
+            <ExploreCard
+              icon="Tonight"
+              title="What's actually on"
+              desc="Tonight's schedule, in air-time order."
+              href="/tonight"
+            />
+          )}
+          <ExploreCard
+            icon="Tailored"
+            title="Rate one thing, get a pick"
+            desc="The recommender finds your next watch from one rating."
+            href="/recommend"
+          />
+          <ExploreCard
+            icon="Community"
+            title="Loved by this community"
+            desc="The chart built from real one-tap reader verdicts."
+            href="/loved"
+          />
+        </div>
+      </section>
     </Layout>,
   );
 });
@@ -623,31 +818,135 @@ app.get("/genre/:slug/movies", async (c) => {
   const movieGenre = dir.movie.find((g) => slugifyName(g) === slug);
   if (!movieGenre) return c.notFound();
   const rows = await topGenreMovies(db, movieGenre, 48);
+  const hasShows = dir.tv.some((g) => slugifyName(g) === slug);
+  const lower = movieGenre.toLowerCase();
+
+  // the chart opens on its own #1
+  let art: { x1: string; x2?: string } | null = null;
+  let ambient = false;
+  if (c.env.TMDB_API_KEY && rows[0]) {
+    art = await tmdbMovieBackdrop(c.env.TMDB_API_KEY, rows[0].imdb_id);
+  }
+  if (!art && rows[0]?.poster_url) {
+    art = { x1: rows[0].poster_url };
+    ambient = true;
+  }
+
+  const years = rows.map((m) => m.year).filter((y): y is number => y != null);
+  const span = years.length ? `${Math.min(...years)}–${Math.max(...years)}` : null;
+  const hub = hubForGenres([movieGenre], null);
+  const siblings = dir.movie.filter((g) => g !== movieGenre).slice(0, 16);
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title={`Top ${movieGenre.toLowerCase()} movies — ranked | TV Nightly`}
-      description={`The best ${movieGenre.toLowerCase()} films, ranked by viewer rating, with streaming availability.`}
+      title={`Top ${lower} movies — ranked | TV Nightly`}
+      description={`The best ${lower} films, ranked by viewer rating, with streaming availability.`}
       canonical={canonical(c)}
     >
-      <h1>Top {movieGenre.toLowerCase()} movies</h1>
-      <div class="grid">
-        {rows.map((m) => (
-          <MovieCard movie={m} />
-        ))}
-      </div>
-      <p>
-        {dir.tv.some((g) => slugifyName(g) === slug) ? (
-          <>
-            <a class="chev-after" href={`/genre/${slug}/shows`}>
-              Top {movieGenre.toLowerCase()} shows
-            </a>{" "}
-            ·{" "}
-          </>
-        ) : null}
-        <a href={`/genre/${slug}`}>The best of {movieGenre}</a>
-      </p>
+      <header class={`wo-hero${ambient ? " hub-ambient" : ""}`}>
+        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
+        <div class="wo-hero-body">
+          <p class="section-eyebrow">Genre chart</p>
+          <h1>Top {lower} movies</h1>
+          <p class="wo-intro">
+            Every {lower} film we track with a real rating, ranked — no editors, no sponsorships,
+            just the numbers.
+          </p>
+          {rows.length ? (
+            <dl class="wo-stats">
+              <div>
+                <dt>Films</dt>
+                <dd>{rows.length}</dd>
+              </div>
+              <div>
+                <dt>Top rating</dt>
+                <dd>★ {rows[0].rating!.toFixed(1)}</dd>
+              </div>
+              {span ? (
+                <div>
+                  <dt>Years</dt>
+                  <dd>{span}</dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
+          <p class="hub-actions">
+            <a
+              class="verdict-btn"
+              href={`/what-to-watch?type=movie&genre=${encodeURIComponent(movieGenre)}`}
+            >
+              Pick me {aOrAn(lower)} {lower} movie
+            </a>
+            {hasShows ? (
+              <a class="btn-ghost" href={`/genre/${slug}/shows`}>
+                Top {lower} shows
+              </a>
+            ) : null}
+            <a class="btn-ghost" href={`/genre/${slug}`}>
+              The best of {movieGenre}
+            </a>
+          </p>
+        </div>
+      </header>
+      {rows.length ? (
+        <div class="grid">
+          {rows.map((m) => (
+            <MovieCard movie={m} />
+          ))}
+        </div>
+      ) : (
+        <p class="muted">No rated {lower} films yet.</p>
+      )}
+      {siblings.length ? (
+        <section class="hub-sec">
+          <h2>
+            More film charts{" "}
+            <a class="more" href="/lists">
+              all of them
+            </a>
+          </h2>
+          <p class="quick-picks">
+            {siblings.map((g) => (
+              <a class="chip" href={`/genre/${slugifyName(g)}/movies`}>
+                {g}
+              </a>
+            ))}
+          </p>
+        </section>
+      ) : null}
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          {hub ? (
+            <ExploreCard
+              icon="Fandom hub"
+              title={`The ${hub.name} hub`}
+              desc="News, premieres, and the best of the genre on one page."
+              href={`/${hub.slug}`}
+            />
+          ) : (
+            <ExploreCard
+              icon="The chart"
+              title="The best films of all time"
+              desc="Every movie ranked by rating, with where to stream."
+              href="/movies/best"
+            />
+          )}
+          <ExploreCard
+            icon="Tailored"
+            title="Rate one thing, get a pick"
+            desc="The recommender finds your next watch from one rating."
+            href="/recommend"
+          />
+          <ExploreCard
+            icon="Community"
+            title="Loved by this community"
+            desc="The chart built from real one-tap reader verdicts."
+            href="/loved"
+          />
+        </div>
+      </section>
     </Layout>,
   );
 });

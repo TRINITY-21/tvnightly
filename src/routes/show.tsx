@@ -587,7 +587,7 @@ app.get("/show/:slug", async (c) => {
                 ))}
                 {hub ? (
                   <ExploreCard
-                    icon="Hub"
+                    icon="Fandom hub"
                     title={`The ${hub.name.toLowerCase()} hub`}
                     desc="The whole fandom on one bookmarkable page — rankings, premieres, what's new."
                     href={`/${hub.slug}`}

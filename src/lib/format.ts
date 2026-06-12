@@ -41,6 +41,10 @@ export const longDate = (iso: string): string => {
   return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
 };
 
+/** epoch seconds → "Jun 12" — the date chyron on wire rows and shelf chips */
+export const shortDate = (ts: number) =>
+  new Date(ts * 1000).toLocaleString("en-US", { month: "short", day: "numeric" });
+
 export const slugifyName = (name: string) =>
   name
     .toLowerCase()

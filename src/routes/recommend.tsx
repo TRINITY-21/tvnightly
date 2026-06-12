@@ -523,10 +523,10 @@ app.get("/loved", async (c) => {
                 {arts[i] ? (
                   <div class="loved-frame" style={heroBg(arts[i]!.x1, arts[i]!.x2)} aria-hidden="true"></div>
                 ) : null}
+                <span class="loved-rank" aria-hidden="true">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
                 <div class="loved-hero-body">
-                  <span class="loved-rank" aria-hidden="true">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
                   <p class="loved-kicker">
                     Community no. {i + 1} · {p.kindLabel}
                   </p>

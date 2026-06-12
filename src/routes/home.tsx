@@ -500,6 +500,57 @@ app.get("/", async (c) => {
           ) : null}
         </section>
 
+        {/* the doors out — hub and genre lanes wearing their pages' own art */}
+        <section class="home-lanes">
+          <p class="section-eyebrow">Browse</p>
+          <div class="lanes-head">
+            <h2>
+              Pick a lane{" "}
+              <a class="more" href="/lists">
+                every chart &amp; list
+              </a>
+            </h2>
+            <p class="section-lead muted">
+              Hubs and genres — each ranked by real ratings, with where to stream.
+            </p>
+          </div>
+          <div class="lane-grid lane-grid-hubs">
+            {HUB_LANES.map((h, i) => (
+              <a class="lane-tile lane-tile-lg" href={h.href}>
+                {arts[i] ? (
+                  <span
+                    class="lane-frame"
+                    style={heroBg(arts[i]!.x1, arts[i]!.x2)}
+                    aria-hidden="true"
+                  ></span>
+                ) : null}
+                <span class="lane-body">
+                  <span class="lane-kicker">Fandom hub</span>
+                  <strong>{h.name}</strong>
+                  <span class="lane-dek">{h.dek}</span>
+                </span>
+              </a>
+            ))}
+          </div>
+          <div class="lane-grid lane-grid-genres">
+            {GENRE_LANES.map((g, i) => (
+              <a class="lane-tile" href={`/genre/${slugifyName(g)}`}>
+                {arts[HUB_LANES.length + i] ? (
+                  <span
+                    class="lane-frame"
+                    style={heroBg(arts[HUB_LANES.length + i]!.x1, arts[HUB_LANES.length + i]!.x2)}
+                    aria-hidden="true"
+                  ></span>
+                ) : null}
+                <span class="lane-body">
+                  <span class="lane-kicker">Genre</span>
+                  <strong>{g}</strong>
+                </span>
+              </a>
+            ))}
+          </div>
+        </section>
+
         <section class="home-tools">
           <p class="section-eyebrow">Tools</p>
           <h2>Go deeper</h2>
@@ -587,56 +638,6 @@ app.get("/", async (c) => {
           </div>
         </section>
 
-        {/* the doors out — hub and genre lanes wearing their pages' own art */}
-        <section class="home-lanes">
-          <p class="section-eyebrow">Browse</p>
-          <div class="lanes-head">
-            <h2>
-              Pick a lane{" "}
-              <a class="more" href="/lists">
-                every chart &amp; list
-              </a>
-            </h2>
-            <p class="section-lead muted">
-              Hubs and genres — each ranked by real ratings, with where to stream.
-            </p>
-          </div>
-          <div class="lane-grid lane-grid-hubs">
-            {HUB_LANES.map((h, i) => (
-              <a class="lane-tile lane-tile-lg" href={h.href}>
-                {arts[i] ? (
-                  <span
-                    class="lane-frame"
-                    style={heroBg(arts[i]!.x1, arts[i]!.x2)}
-                    aria-hidden="true"
-                  ></span>
-                ) : null}
-                <span class="lane-body">
-                  <span class="lane-kicker">Fandom hub</span>
-                  <strong>{h.name}</strong>
-                  <span class="lane-dek">{h.dek}</span>
-                </span>
-              </a>
-            ))}
-          </div>
-          <div class="lane-grid lane-grid-genres">
-            {GENRE_LANES.map((g, i) => (
-              <a class="lane-tile" href={`/genre/${slugifyName(g)}`}>
-                {arts[HUB_LANES.length + i] ? (
-                  <span
-                    class="lane-frame"
-                    style={heroBg(arts[HUB_LANES.length + i]!.x1, arts[HUB_LANES.length + i]!.x2)}
-                    aria-hidden="true"
-                  ></span>
-                ) : null}
-                <span class="lane-body">
-                  <span class="lane-kicker">Genre</span>
-                  <strong>{g}</strong>
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
       </div>
     </Layout>,
   );

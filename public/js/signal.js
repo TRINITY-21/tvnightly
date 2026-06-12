@@ -139,7 +139,9 @@
         btn.textContent = label;
         btn.removeAttribute("aria-busy");
       };
-      fetch(url)
+      // no-cache: a save must always render the current card, never an
+      // hour-old browser-cached SVG
+      fetch(url, { cache: "no-cache" })
         .then(function (r) {
           if (!r.ok) throw new Error("fetch");
           return r.text();

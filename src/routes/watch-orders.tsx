@@ -5,7 +5,9 @@ import { providersFor } from "../lib/providers";
 import { fmtMarathon, heroBg } from "../lib/format";
 import { tmdbMovieBackdrop } from "../lib/tmdb";
 import { canonical } from "../lib/seo";
+import { similarMovies } from "../lib/queries";
 import { Layout } from "../components/Layout";
+import { MovieCard } from "../components/cards";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -125,11 +127,24 @@ app.get("/watch-order/:slug", async (c) => {
   const span = `${Math.min(...years)}–${Math.max(...years)}`;
 
   // the saga's opening film frames the page
-  const opener = release.map(movieFor).find((m) => m?.imdb_id) ?? null;
+  const matched = release.map(movieFor);
+  const opener = matched.find((m) => m?.imdb_id) ?? null;
   const art =
     c.env.TMDB_API_KEY && opener
       ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, opener.imdb_id)
       : null;
+
+  // the door out: kin by genre, seeded from the saga's best-rated film,
+  // with the franchise's own entries filtered back out
+  const seed = matched
+    .filter((m): m is MovieRow => Boolean(m))
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
+  const inFranchise = new Set(titles.map((t) => t.toLowerCase()));
+  const alike = seed
+    ? (await similarMovies(c.env.DB, seed, 18))
+        .filter((m) => !inFranchise.has(m.title.toLowerCase()))
+        .slice(0, 6)
+    : [];
 
   const Row = ({ e, idx }: { e: FranchiseEntry; idx: number }) => {
     const m = movieFor(e);
@@ -226,6 +241,16 @@ app.get("/watch-order/:slug", async (c) => {
           ))}
         </ol>
       </section>
+      {alike.length ? (
+        <section class="wo-section">
+          <h2>Movies like {fr.name}</h2>
+          <div class="grid">
+            {alike.map((m) => (
+              <MovieCard movie={m} />
+            ))}
+          </div>
+        </section>
+      ) : null}
       <p class="wo-back">
         <a class="chev-after" href="/watch-orders">All watch-order guides</a>
       </p>

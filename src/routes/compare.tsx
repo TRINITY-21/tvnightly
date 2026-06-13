@@ -130,13 +130,13 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
       {suggestions.length ? (
         <section>
           <h2>More comparisons</h2>
-          <p class="quick-picks">
+          <div class="footer-picks">
             {suggestions.map((s) => (
-              <a class="chip" href={s.href}>
+              <a class="footer-card" href={s.href}>
                 {s.label}
               </a>
             ))}
-          </p>
+          </div>
         </section>
       ) : null}
     </Layout>,
@@ -214,19 +214,19 @@ app.get("/compare", async (c) => {
       {showA && !showB ? (
         <section>
           <h2>Compare {showA.name} with…</h2>
-          <p class="quick-picks">
+          <div class="footer-picks">
             {(await similarShows(db, showA)).slice(0, 6).map((s) => (
-              <a class="chip" href={comparePathFor(showA.slug, s.slug)}>
+              <a class="footer-card" href={comparePathFor(showA.slug, s.slug)}>
                 {showA.name} vs {s.name}
               </a>
             ))}
-          </p>
+          </div>
         </section>
       ) : null}
       {!showA && !showB ? (
         <section>
           <h2>Popular matchups</h2>
-          <p class="quick-picks">
+          <div class="footer-picks">
             {await (async () => {
               const { results: tops } = await db
                 .prepare("SELECT slug, name, genres FROM shows ORDER BY weight DESC LIMIT 8")
@@ -235,13 +235,13 @@ app.get("/compare", async (c) => {
               return tops.slice(0, 6).map((s, i) => {
                 const other = tops[(i + 1) % tops.length];
                 return (
-                  <a class="chip" href={comparePathFor(s.slug, other.slug)}>
+                  <a class="footer-card" href={comparePathFor(s.slug, other.slug)}>
                     {s.name} vs {other.name}
                   </a>
                 );
               });
             })()}
-          </p>
+          </div>
         </section>
       ) : null}
     </Layout>,

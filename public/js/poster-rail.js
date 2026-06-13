@@ -1,6 +1,10 @@
 (function () {
+  function scrollRow(rail) {
+    return rail.querySelector(".poster-row") || rail.querySelector(".poster-shelf");
+  }
+
   function updateRail(rail) {
-    var row = rail.querySelector(".poster-row");
+    var row = scrollRow(rail);
     if (!row) return;
     var max = row.scrollWidth - row.clientWidth;
     var sl = row.scrollLeft;
@@ -11,16 +15,16 @@
   }
 
   function scrollRail(rail, dir) {
-    var row = rail.querySelector(".poster-row");
+    var row = scrollRow(rail);
     if (!row) return;
-    var card = row.querySelector(".card");
+    var item = row.querySelector(".card, .shelf-tile, li");
     var gap = parseFloat(getComputedStyle(row).gap) || 16;
-    var step = card ? (card.offsetWidth + gap) * 2 : row.clientWidth * 0.75;
+    var step = item ? (item.offsetWidth + gap) * 2 : row.clientWidth * 0.75;
     row.scrollBy({ left: dir * step, behavior: "smooth" });
   }
 
   function bindRail(rail) {
-    var row = rail.querySelector(".poster-row");
+    var row = scrollRow(rail);
     var prev = rail.querySelector(".rail-btn-prev");
     var next = rail.querySelector(".rail-btn-next");
     if (!row || !prev || !next) return;

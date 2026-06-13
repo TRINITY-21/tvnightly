@@ -305,6 +305,40 @@
   .poster-shelf li {
     width: 78px;
   }
+  .evening-aside .shelf-rail {
+    width: calc(3 * 78px + 2 * 0.6rem + 1.75rem);
+  }
+}
+
+/* evening shelves reuse poster-rail chevrons — smaller tiles, card-colored fades */
+.shelf-rail {
+  margin-inline: -0.65rem;
+}
+/* main card is wider — use the row; aside keeps ~3 posters + a peek */
+.evening-main .shelf-rail {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+.evening-aside .shelf-rail {
+  display: inline-block;
+  vertical-align: top;
+  max-width: 100%;
+  width: calc(3 * 92px + 2 * 0.6rem + 1.75rem);
+}
+.shelf-rail::before {
+  background: linear-gradient(to right, var(--surface), transparent);
+}
+.shelf-rail::after {
+  background: linear-gradient(to left, var(--surface), transparent);
+}
+.shelf-rail .rail-btn {
+  top: calc(1rem + 69px - 1.075rem);
+}
+@media (max-width: 600px) {
+  .shelf-rail .rail-btn {
+    top: calc(1rem + 58px - 1.075rem);
+  }
 }
 
 /* the CTA seat: a page-dark moat punched through the cards' bottom band —

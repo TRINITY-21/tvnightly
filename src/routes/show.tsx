@@ -1,22 +1,22 @@
 import { Hono } from "hono";
 import { raw } from "hono/html";
-import { Bindings, EpisodeRow, ShowRow } from "../types";
-import { visitorRegion, REGIONS, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
-import { stripHtml, epCode, epHref, hiRes, retinaSet, posterSrc, heroBg, longDate, slugifyName, personHref, comparePathFor, largeStill } from "../lib/format";
-import { origin, canonical, breadcrumbLd } from "../lib/seo";
+import { Layout } from "../components/Layout";
+import { ClampSummary, ExploreCard } from "../components/cards";
+import { VsCard } from "../components/compare";
+import { DossierRow } from "../components/dossier";
+import { FilterSelect, RateInline, SubscribeForm } from "../components/forms";
+import { IconPlay } from "../components/icons";
+import { SeasonTabs, ShowTabs } from "../components/nav";
+import { ProviderLine } from "../components/providers";
+import { buildDossier } from "../lib/dossier";
+import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml } from "../lib/format";
+import { PROVIDER_LOGOS, REGIONS, providerBrand, visitorRegion } from "../lib/providers";
 import { getShow, similarShows } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
+import { breadcrumbLd, canonical, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMedia } from "../lib/tmdb";
-import { buildDossier } from "../lib/dossier";
-import { DossierRow } from "../components/dossier";
-import { VsCard } from "../components/compare";
-import { IconPlay } from "../components/icons";
 import { hubForGenres } from "../lib/verticals";
-import { Layout } from "../components/Layout";
-import { ShowTabs, SeasonTabs } from "../components/nav";
-import { StatusBadge, ExploreCard, ClampSummary } from "../components/cards";
-import { ProviderLine } from "../components/providers";
-import { RateInline, SubscribeForm } from "../components/forms";
+import { Bindings, EpisodeRow, ShowRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -687,6 +687,7 @@ app.get("/show/:slug/where-to-watch", async (c) => {
       canonical={`${site}${base}`}
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, "Where to watch", base)]}
+      scripts={["/js/dropdown.js"]}
     >
       <article class="show-hub">
         <header class="detail-hero frame-hero">
@@ -704,23 +705,14 @@ app.get("/show/:slug/where-to-watch", async (c) => {
               </p>
               <h1>Where to watch {show.name}</h1>
               <p class="summary">{stripHtml(show.summary).slice(0, 180)}</p>
-              {/* explicit submit, no onchange (WCAG 3.2.2); works without JS */}
-              <form method="get" action={base} class="sub-form watch-region">
-                <label for="wr-region" class="muted" style="flex-basis:auto;font-weight:400">
-                  Showing options for
-                </label>
-                <select
-                  id="wr-region"
+              {/* data-submit-on-change: dropdown.js submits on pick (no Go button) */}
+              <form method="get" action={base} class="region-line watch-region" data-submit-on-change>
+                <FilterSelect
+                  label="Showing options for"
                   name="region"
-                  style="background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:0.35rem 0.5rem"
-                >
-                  {REGIONS.map((r) => (
-                    <option value={r} selected={r === region}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-                <button type="submit">Go</button>
+                  current={region}
+                  options={REGIONS.map((r) => ({ value: r, text: r }))}
+                />
               </form>
             </div>
           </div>
@@ -757,39 +749,38 @@ app.get("/show/:slug/where-to-watch", async (c) => {
               ))}
             </ul>
           ) : (
-            <p class="muted">
-              {show.name} isn't on a streaming service in {region} right now
-              {elsewhere.length ? " — but it is elsewhere:" : "."}
-            </p>
-          )}
-          {elsewhere.length ? (
-            <p class="muted watch-elsewhere">
-              Also streaming in:{" "}
-              {elsewhere.map((r, i) => (
+            <>
+              <p class="muted">
+                {show.name} isn't on a streaming service in {region} right now.
+              </p>
+              {elsewhere.length ? (
                 <>
-                  {i > 0 ? " · " : ""}
-                  <a href={`${base}?region=${r}`}>{r}</a>
+                  <p class="watch-elsewhere-eyebrow muted">Also streaming in</p>
+                  <div class="footer-picks watch-region-picks">
+                    {elsewhere.map((r) => (
+                      <a class="footer-card" href={`${base}?region=${r}`}>
+                        {r}
+                      </a>
+                    ))}
+                  </div>
                 </>
-              ))}
-            </p>
-          ) : null}
-          <p class="muted watch-src">
-            Streaming data via JustWatch/TMDB, re-checked around the clock by our provider patrol.
-          </p>
+              ) : null}
+            </>
+          )}
         </section>
         <section>
           <h2>Keep going</h2>
-          <nav class="pill-nav">
-            <a class="chev-after" href={`/show/${show.slug}`}>
+          <div class="footer-picks">
+            <a class="footer-card" href={`/show/${show.slug}`}>
               {show.name} overview
             </a>
-            <a class="chev-after" href={`/show/${show.slug}/best-episodes`}>
+            <a class="footer-card" href={`/show/${show.slug}/best-episodes`}>
               Best episodes
             </a>
-            <a class="chev-after" href={`/whats-new`}>
+            <a class="footer-card" href={`/whats-new`}>
               What's new on streaming
             </a>
-          </nav>
+          </div>
         </section>
         <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
       </article>
@@ -887,17 +878,17 @@ app.get("/show/:slug/similar", async (c) => {
         </section>
         <section>
           <h2>Keep going</h2>
-          <nav class="pill-nav">
-            <a class="chev-after" href={`/show/${show.slug}`}>
+          <div class="footer-picks">
+            <a class="footer-card" href={`/show/${show.slug}`}>
               {show.name} overview
             </a>
-            <a class="chev-after" href={`/show/${show.slug}/where-to-watch`}>
+            <a class="footer-card" href={`/show/${show.slug}/where-to-watch`}>
               Where to watch
             </a>
-            <a class="chev-after" href="/what-to-watch">
+            <a class="footer-card" href="/what-to-watch">
               What should I watch tonight?
             </a>
-          </nav>
+          </div>
         </section>
         <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
       </article>
@@ -1079,17 +1070,17 @@ app.get("/show/:slug/media", async (c) => {
         ) : null}
         <section>
           <h2>Keep going</h2>
-          <nav class="pill-nav">
-            <a class="chev-after" href={`/show/${show.slug}`}>
+          <div class="footer-picks">
+            <a class="footer-card" href={`/show/${show.slug}`}>
               {show.name} overview
             </a>
-            <a class="chev-after" href={`/show/${show.slug}/similar`}>
+            <a class="footer-card" href={`/show/${show.slug}/similar`}>
               Shows like {show.name}
             </a>
-            <a class="chev-after" href={`/show/${show.slug}/where-to-watch`}>
+            <a class="footer-card" href={`/show/${show.slug}/where-to-watch`}>
               Where to watch
             </a>
-          </nav>
+          </div>
         </section>
         <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
       </article>

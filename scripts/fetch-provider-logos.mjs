@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Builds data/provider-logos.json: provider_name -> TMDB logo URL (w92).
+// Builds data/provider-logos.json: provider_name -> TMDB logo URL (w185).
 // One global map covers every region; provider names in providers_intl come
 // from the same TMDB source, so lookups are exact-match.
 //   node scripts/fetch-provider-logos.mjs
-import { writeFileSync, readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 function devVar(name) {
   if (process.env[name]) return process.env[name];
@@ -27,7 +27,7 @@ for (const kind of ["tv", "movie"]) {
   const { results } = await res.json();
   for (const p of results ?? []) {
     if (p.provider_name && p.logo_path && !map[p.provider_name]) {
-      map[p.provider_name] = `https://image.tmdb.org/t/p/w92${p.logo_path}`;
+      map[p.provider_name] = `https://image.tmdb.org/t/p/w185${p.logo_path}`;
     }
   }
 }

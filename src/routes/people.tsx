@@ -513,10 +513,10 @@ app.get("/person/:slug", async (c) => {
                   .
                 </p>
               ) : null}
-              <nav class="pill-nav">
+              <div class="footer-picks">
                 {person.imdb_id ? (
                   <a
-                    class="chev-after"
+                    class="footer-card"
                     href={`https://www.imdb.com/name/${person.imdb_id}/`}
                     rel="noopener"
                   >
@@ -525,7 +525,7 @@ app.get("/person/:slug", async (c) => {
                 ) : null}
                 {socials.ig ? (
                   <a
-                    class="chev-after"
+                    class="footer-card"
                     href={`https://www.instagram.com/${socials.ig}/`}
                     rel="noopener"
                   >
@@ -533,16 +533,16 @@ app.get("/person/:slug", async (c) => {
                   </a>
                 ) : null}
                 {socials.tw ? (
-                  <a class="chev-after" href={`https://x.com/${socials.tw}`} rel="noopener">
+                  <a class="footer-card" href={`https://x.com/${socials.tw}`} rel="noopener">
                     X
                   </a>
                 ) : null}
                 {person.homepage ? (
-                  <a class="chev-after" href={person.homepage} rel="noopener">
+                  <a class="footer-card" href={person.homepage} rel="noopener">
                     Website
                   </a>
                 ) : null}
-              </nav>
+              </div>
             </div>
           </div>
         </header>

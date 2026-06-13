@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import { raw } from "hono/html";
-import { Bindings, EpisodeRow } from "../types";
-import { stripHtml, epCode } from "../lib/format";
-import { origin, canonical } from "../lib/seo";
 import { Layout } from "../components/Layout";
+import { ExploreCard } from "../components/cards";
+import { epCode, largeStill, longDate, stripHtml } from "../lib/format";
+import { canonical, origin } from "../lib/seo";
+import { Bindings, EpisodeRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -22,6 +22,10 @@ app.get("/best-episodes", async (c) => {
        WHERE e.rating IS NOT NULL AND s.rating IS NOT NULL AND s.weight >= 75
      ) WHERE rn <= 3 ORDER BY score DESC, id LIMIT 100`,
   ).all<EpisodeRow & { show_name: string; show_slug: string; show_img: string | null }>();
+
+  const anyStill = results.some((e) => e.image_url);
+  const plates = 3;
+  const heroSrc = (url: string) => url.replace("/medium_landscape/", "/original_untouched/");
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -45,186 +49,120 @@ app.get("/best-episodes", async (c) => {
         },
       ]}
     >
-      <header class="chart-head">
-        <p class="chart-kicker">The All-Time 100</p>
-        <h1>The highest-rated TV episodes of all time</h1>
-        <p class="chart-intro">
-          Ranked by viewer rating, weighted against each show's overall score so tiny-sample
-          outliers don't game the list. Maximum three entries per show.
-        </p>
-        {results.length ? (
-          <p class="chart-statline">
-            <span>
-              <strong>{results.length}</strong> episodes
-            </span>
-            <span class="sep">·</span>
-            <span>
-              from <strong>{new Set(results.map((e) => e.show_slug)).size}</strong> shows
-            </span>
-            <span class="sep">·</span>
-            <span>
-              top score <strong>{results[0].rating!.toFixed(1)}</strong>
-            </span>
-            <span class="sep">·</span>
-            <span>max 3 per show</span>
+      <article class="chart-page">
+        <header class="chart-head">
+          <p class="section-eyebrow">The all-time 100</p>
+          <h1 class="chart-h1">The highest-rated TV episodes of all time</h1>
+          <p class="section-lead">
+            Ranked by viewer rating, weighted against each show&apos;s overall score so
+            tiny-sample outliers don&apos;t game the list. Maximum three entries per show.
           </p>
-        ) : null}
-      </header>
-      {results.length === 0 ? (
-        <p class="muted">Ratings are still loading — check back soon.</p>
-      ) : (
-        (() => {
-          // TVmaze stills are stored at medium_landscape (250px). The lone #1
-          // earns the full-res original; the runners-up take the 400px variant;
-          // the ledger thumbs keep the small stored size. (Verified live: only
-          // original_untouched / large_landscape resolve — /original/ 404s.)
-          const heroSrc = (url: string | null) =>
-            url ? url.replace("/medium_landscape/", "/original_untouched/") : null;
-          const midSrc = (url: string | null) =>
-            url ? url.replace("/medium_landscape/", "/large_landscape/") : null;
-          const year = (e: EpisodeRow) => (e.airdate ? e.airdate.slice(0, 4) : null);
-          const initials = (name: string) =>
-            name
-              .split(/\s+/)
-              .slice(0, 2)
-              .map((w) => w[0] ?? "")
-              .join("")
-              .toUpperCase();
+          {results.length ? (
+            <p class="chart-statline">
+              <span class="chart-statline-main">
+                <strong>{results.length}</strong> episodes
+              </span>
+              <span class="chart-statline-links">
+                <a class="chev-after" href="/top/tv">
+                  Top TV shows
+                </a>
+                <a class="chev-after" href="/compare">
+                  Compare shows
+                </a>
+              </span>
+            </p>
+          ) : null}
+        </header>
 
-          const hero = results[0];
-          const podium = results.slice(1, 3);
-          const rest = results.slice(3);
-
-          return (
-            <>
-              {/* #1 — the lone cinematic moment */}
-              <a class="chart-hero" href={`/show/${hero.show_slug}/best-episodes`}>
-                {hero.image_url ? (
-                  <img
-                    class="chart-still"
-                    src={heroSrc(hero.image_url)!}
-                    alt={`${hero.show_name}: ${hero.name ?? epCode(hero)}`}
-                    width="960"
-                    height="540"
-                    fetchpriority="high"
-                    decoding="async"
-                  />
-                ) : null}
-                <span class="card-rating chart-rating">★ {hero.rating!.toFixed(1)}</span>
-                <div class="chart-hero__bill">
-                  {hero.show_img ? (
-                    <img
-                      class="chart-hero__poster"
-                      src={hero.show_img}
-                      alt=""
-                      width="116"
-                      height="174"
-                      loading="lazy"
-                    />
+        {results.length === 0 ? (
+          <p class="muted">Ratings are still loading — check back soon.</p>
+        ) : (
+          <>
+            <ol class={anyStill ? "epreg chart-epreg" : "epreg epreg--textonly chart-epreg"}>
+              {results.map((e, i) => (
+                <li class={i < plates ? "epreg-plate" : undefined}>
+                  <span class="epreg-num">{String(i + 1).padStart(2, "0")}</span>
+                  {anyStill ? (
+                    <a
+                      class="epreg-still-link"
+                      href={`/show/${e.show_slug}/best-episodes`}
+                      tabindex={-1}
+                      aria-hidden="true"
+                    >
+                      {e.image_url ? (
+                        <img
+                          class="epreg-still"
+                          src={i < plates ? heroSrc(e.image_url) : e.image_url}
+                          srcset={
+                            i < plates
+                              ? `${heroSrc(e.image_url)} 1920w`
+                              : `${e.image_url} 1x, ${largeStill(e.image_url)} 2x`
+                          }
+                          width={i < plates ? 256 : 168}
+                          height={i < plates ? 144 : 95}
+                          alt=""
+                          loading={i === 0 ? "eager" : "lazy"}
+                          fetchpriority={i === 0 ? "high" : undefined}
+                          decoding="async"
+                        />
+                      ) : (
+                        <span class="epreg-still--empty">{epCode(e)}</span>
+                      )}
+                    </a>
                   ) : null}
-                  <span class="chart-hero__rank">1</span>
-                  <div class="chart-hero__text">
-                    <span class="chart-hero__show">{hero.show_name}</span>
-                    <h2 class="chart-hero__title">{hero.name ?? epCode(hero)}</h2>
-                    <p class="chart-hero__meta">
-                      <span>{epCode(hero)}</span>
-                      {year(hero) ? (
+                  <span class="epreg-main">
+                    <p class="epreg-meta">
+                      <a class="chart-show" href={`/show/${e.show_slug}`}>
+                        {e.show_name}
+                      </a>
+                      <span class="sep"> · </span>
+                      <span class="epreg-code">{epCode(e)}</span>
+                      {e.airdate ? (
                         <>
-                          <span class="sep">·</span>
-                          <span>{year(hero)}</span>
+                          <span class="sep"> · </span>
+                          {longDate(e.airdate)}
                         </>
                       ) : null}
                     </p>
-                  </div>
-                </div>
-              </a>
-
-              {/* the runners-up — ranks 2 & 3 */}
-              {podium.length ? (
-                <div class="chart-podium">
-                  {podium.map((e, i) => (
-                    <a class="chart-podium-card" href={`/show/${e.show_slug}/best-episodes`}>
-                      {e.image_url ? (
-                        <img
-                          class="chart-still"
-                          src={midSrc(e.image_url)!}
-                          srcset={`${midSrc(e.image_url)} 400w, ${heroSrc(e.image_url)} 1920w`}
-                          sizes="(max-width: 700px) 100vw, 466px"
-                          alt={`${e.show_name}: ${e.name ?? epCode(e)}`}
-                          width="460"
-                          height="259"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : null}
-                      <span class="card-rating chart-rating">★ {e.rating!.toFixed(1)}</span>
-                      <div class="chart-podium__bill">
-                        <span class="chart-podium__rank">{i + 2}</span>
-                        <div class="chart-podium__text">
-                          <span class="chart-podium__show">{e.show_name}</span>
-                          <h2 class="chart-podium__title">{e.name ?? epCode(e)}</h2>
-                          <p class="chart-podium__meta">
-                            <span>{epCode(e)}</span>
-                            {year(e) ? (
-                              <>
-                                <span class="sep">·</span>
-                                <span>{year(e)}</span>
-                              </>
-                            ) : null}
-                          </p>
-                        </div>
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              ) : null}
-
-              {/* the ledger — ranks 4..100 */}
-              {rest.length ? (
-                <ol class="chart-list" start={4}>
-                  {rest.map((e, i) => (
-                    <li>
-                      <a class="chart-row" href={`/show/${e.show_slug}/best-episodes`}>
-                        <span class="chart-row__rank">{i + 4}</span>
-                        <span class="chart-row__thumb">
-                          {e.image_url ? (
-                            <img src={e.image_url} alt="" width="116" height="65" loading="lazy" />
-                          ) : (
-                            <span class="chart-row__thumb--empty" aria-hidden="true">
-                              {initials(e.show_name)}
-                            </span>
-                          )}
-                        </span>
-                        <div class="chart-row__body">
-                          <p class="chart-row__head">
-                            <span class="chart-row__show">{e.show_name}</span>
-                            <span class="muted">: </span>
-                            <span class="chart-row__title">{e.name ?? epCode(e)}</span>
-                          </p>
-                          <p class="chart-row__meta">
-                            <span>{epCode(e)}</span>
-                            <span class="sep">·</span>
-                            <span class="rating">★ {e.rating!.toFixed(1)}</span>
-                            {year(e) ? (
-                              <>
-                                <span class="sep">·</span>
-                                <span>{year(e)}</span>
-                              </>
-                            ) : null}
-                          </p>
-                          {e.summary ? (
-                            <p class="chart-row__summary">{stripHtml(e.summary)}</p>
-                          ) : null}
-                        </div>
+                    <p class="epreg-line">
+                      <a class="epreg-name" href={`/show/${e.show_slug}/best-episodes`}>
+                        {e.name ?? epCode(e)}
                       </a>
-                    </li>
-                  ))}
-                </ol>
-              ) : null}
-            </>
-          );
-        })()
-      )}
+                      <span class="epreg-leader"></span>
+                      <span class="rating">★ {e.rating!.toFixed(1)}</span>
+                    </p>
+                    {e.summary ? <p class="epreg-sum">{stripHtml(e.summary)}</p> : null}
+                  </span>
+                </li>
+              ))}
+            </ol>
+
+            <section class="wo-doors">
+              <h2>Keep exploring</h2>
+              <div class="explore-grid">
+                <ExploreCard
+                  icon="Charts"
+                  title="Top TV shows"
+                  desc="The highest-rated series we track — weight and popularity gate the board."
+                  href="/top/tv"
+                />
+                <ExploreCard
+                  icon="Compare"
+                  title="Compare two shows"
+                  desc="Episode ratings head-to-head on one chart — settle the argument."
+                  href="/compare"
+                />
+                <ExploreCard
+                  icon="Directory"
+                  title="Browse everything"
+                  desc="Networks, genres, hubs, and every chart in one directory."
+                  href="/lists"
+                />
+              </div>
+            </section>
+          </>
+        )}
+      </article>
     </Layout>,
   );
 });

@@ -9,9 +9,14 @@
   input.setAttribute("autocomplete", "off");
 
   var active = -1;
+  var QUICK = [
+    ["Top TV shows", "/top/tv"],
+    ["Best movies", "/movies/best"],
+    ["Browse everything", "/lists"],
+  ];
 
   function rows() {
-    return box.querySelectorAll("a");
+    return box.querySelectorAll("a.ta-row, a.ta-all");
   }
   function close() {
     box.hidden = true;
@@ -23,6 +28,23 @@
     if (active >= 0 && list[active]) list[active].classList.remove("ta-active");
     active = ((i % list.length) + list.length) % list.length;
     list[active].classList.add("ta-active");
+  }
+
+  function showHint() {
+    if (input.value.trim().length >= 2) return;
+    box.innerHTML = "";
+    var hint = document.createElement("p");
+    hint.className = "ta-hint";
+    hint.textContent = "Search shows, movies, and people";
+    box.appendChild(hint);
+    QUICK.forEach(function (pair) {
+      var a = document.createElement("a");
+      a.className = "ta-quick";
+      a.href = pair[1];
+      a.textContent = pair[0];
+      box.appendChild(a);
+    });
+    box.hidden = false;
   }
 
   function hrefFor(it) {
@@ -92,19 +114,28 @@
   }
 
   var timer;
+  var ignoreClose = false;
+  input.addEventListener("mousedown", function () {
+    ignoreClose = true;
+    setTimeout(function () {
+      ignoreClose = false;
+    }, 0);
+  });
+  input.addEventListener("focus", showHint);
   input.addEventListener("input", function () {
     clearTimeout(timer);
     var q = input.value.trim();
     if (q.length < 2) {
-      close();
+      showHint();
       return;
     }
     timer = setTimeout(function () {
-      // 300ms: each request costs a D1 table scan server-side.
       fetch("/api/search?q=" + encodeURIComponent(q))
-        .then(function (r) { return r.json(); })
+        .then(function (r) {
+          return r.json();
+        })
         .then(function (items) {
-          if (input.value.trim() !== q) return; // stale response
+          if (input.value.trim() !== q) return;
           if (!items.length) {
             close();
             return;
@@ -133,9 +164,8 @@
     }
   });
 
-  // pointer and keyboard share one highlight
   box.addEventListener("mouseover", function (e) {
-    var a = e.target.closest("a");
+    var a = e.target.closest("a.ta-row, a.ta-all");
     if (!a) return;
     var list = rows();
     for (var i = 0; i < list.length; i++) {
@@ -147,6 +177,7 @@
   });
 
   document.addEventListener("click", function (e) {
+    if (ignoreClose) return;
     if (e.target !== input && !box.contains(e.target)) close();
   });
 })();

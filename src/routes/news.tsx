@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
+import { ExploreCard } from "../components/cards";
 import { FilterSelect } from "../components/forms";
 import { NEWS_TABS, SubNav } from "../components/nav";
 import { heroBg, hiRes, longDate, shortDate, stripHtml } from "../lib/format";
@@ -298,16 +299,14 @@ app.get("/whats-new", async (c) => {
         Our patrol re-checks availability around the clock and logs every change. Yesterday's
         catalog shuffle, today's news.
       </p>
-      {/* explicit submit, no onchange: arrow-keying through a closed select
-          must not navigate (WCAG 3.2.2), and it must work without JS */}
-      <form method="get" action="/whats-new" class="region-line">
+      {/* data-submit-on-change: dropdown.js submits on pick (no Go button) */}
+      <form method="get" action="/whats-new" class="region-line watch-region" data-submit-on-change>
         <FilterSelect
           label="Region"
           name="region"
           current={region}
           options={REGIONS.map((r) => ({ value: r, text: r }))}
         />
-        <button type="submit">Go</button>
       </form>
       {results.length === 0 ? (
         <p class="muted">
@@ -338,13 +337,22 @@ app.get("/whats-new", async (c) => {
           ))}
         </section>
       ) : null}
-      <p class="wire-foot muted">
-        The patrol watches {region}'s catalog around the clock — but renewals, cancellations and
-        premiere dates ride a different wire.{" "}
-        <a class="chev-after" href="/renewals">
-          See renewals & premiere dates
-        </a>
-      </p>
+      <section class="shuffle-doors" aria-label="More on the schedule wire">
+        <div class="explore-grid shuffle-door-grid">
+          <ExploreCard
+            icon="The wire"
+            title="Renewals & cancellations"
+            desc="New seasons confirmed, ended runs, and status moves — detected hourly."
+            href="/renewals"
+          />
+          <ExploreCard
+            icon="Premieres"
+            title="Upcoming premiere dates"
+            desc="Season launches in the next few weeks, in calendar order."
+            href="/premieres"
+          />
+        </div>
+      </section>
       <div class="sub-form inline">
         <form method="post" action="/subscribe" class="sub-form">
           <input type="hidden" name="kind" value="daily" />

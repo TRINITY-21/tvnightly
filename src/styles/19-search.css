@@ -5,22 +5,36 @@
 
 .srch h1 { margin-bottom: 0.4rem; }
 
-.srch-form {
-  display: flex;
-  gap: 0.6rem;
-  max-width: 40rem;
+.srch-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 40rem) auto;
+  gap: 0.75rem;
+  align-items: stretch;
   margin-top: 0.9rem;
+  height: 2.75rem;
+}
+.srch-form {
+  min-width: 0;
+  height: 100%;
+  margin: 0;
 }
 .srch-form input {
-  flex: 1 1 auto;
+  display: block;
+  width: 100%;
+  height: 100%;
   min-width: 0;
+  margin: 0;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
   font: inherit;
   font-size: 1.02rem;
+  line-height: 1.2;
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 0.62rem 0.95rem;
+  padding: 0 0.95rem;
   transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
 }
 .srch-form input:hover { border-color: rgba(255, 255, 255, 0.18); }
@@ -31,23 +45,101 @@
 }
 .srch-form input::placeholder { color: var(--muted); opacity: 0.7; }
 .srch-form input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
-.srch-form button {
-  font-family: var(--display);
-  font-stretch: 80%;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--accent);
-  background: none;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  padding: 0.5rem 1.05rem;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background-color var(--speed) var(--ease);
+
+.srch-tools {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  height: 100%;
 }
-.srch-form button:hover { background: rgba(255, 169, 77, 0.1); }
+.srch-bar .footer-card.srch-browse {
+  height: 100%;
+  min-height: 0;
+  padding: 0 0.95rem;
+  font-size: 0.84rem;
+  white-space: nowrap;
+  box-shadow: none;
+  line-height: 1;
+}
+.srch-bar .footer-card.srch-browse:hover {
+  transform: none;
+  box-shadow: none;
+}
+.srch-filter-dd {
+  min-width: 8.5rem;
+  height: 100%;
+}
+.srch-filter-dd .dd-btn {
+  height: 100%;
+  min-height: 0;
+  padding: 0 1.65rem 0 0.75rem;
+  font-size: 0.84rem;
+  font-weight: 500;
+  line-height: 1;
+  background-color: var(--surface);
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+.srch-filter-dd .dd-btn.is-filtered {
+  border-color: rgba(255, 169, 77, 0.55);
+  color: var(--accent);
+}
+.srch-filter-dd .dd-list {
+  min-width: 13.5rem;
+  padding: 0.35rem;
+}
+.srch-filter-menu .srch-filter-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 0.52rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.86rem;
+  color: var(--text);
+  transition: background-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+.srch-filter-menu .srch-filter-opt:hover:not(.is-disabled):not(.srch-filter-sep) {
+  background: rgba(255, 255, 255, 0.04);
+}
+.srch-filter-menu .srch-filter-opt.is-active {
+  background: rgba(255, 169, 77, 0.12);
+}
+.srch-filter-menu .srch-filter-opt.is-active .srch-filter-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+.srch-filter-menu .srch-filter-opt.is-disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.srch-filter-name { line-height: 1.25; }
+.srch-filter-count {
+  font-size: 0.74rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.srch-filter-menu .srch-filter-opt.is-active .srch-filter-count {
+  color: rgba(255, 169, 77, 0.75);
+}
+.srch-filter-sep {
+  height: 1px;
+  margin: 0.28rem 0.35rem;
+  padding: 0;
+  background: var(--line);
+  pointer-events: none;
+  cursor: default;
+}
+.srch-filter-clear .srch-filter-name {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.srch-filter-clear:hover .srch-filter-name {
+  color: var(--accent);
+}
 
 .srch-sum {
   margin: 1rem 0 0;
@@ -154,6 +246,18 @@
 .srch-doors h2 { margin-bottom: 1rem; }
 
 @media (max-width: 700px) {
+  .srch-bar {
+    grid-template-columns: 1fr;
+    height: auto;
+    gap: 0.65rem;
+  }
+  .srch-form {
+    height: 2.75rem;
+  }
+  .srch-tools {
+    flex-wrap: wrap;
+    height: 2.75rem;
+  }
   .srch-hero-body { min-height: 0; padding-top: 4.2rem; justify-content: flex-end; }
   .srch-hero-title { font-size: 1.5rem; }
 }

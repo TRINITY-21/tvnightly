@@ -222,6 +222,15 @@ export async function tmdbMovieBackdrop(
   return data ? pickBackdrop(data) : null;
 }
 
+/** Upcoming snapshot titles often lack an IMDb bridge — TMDB numeric id works. */
+export async function tmdbUpcomingBackdrop(
+  key: string,
+  tmdbId: number,
+): Promise<{ x1: string; x2: string } | null> {
+  const data = await bundle(key, "movie", tmdbId);
+  return data ? pickBackdrop(data) : null;
+}
+
 /** This week's worldwide trending titles as rank-ordered TMDB ids (two
  *  pages, 40 titles), edge-cached for 6 hours. The homepage matches them
  *  against the mirror — we only surface titles we can take the reader to. */

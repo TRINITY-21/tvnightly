@@ -1,13 +1,13 @@
 import { Hono } from "hono";
-import { Bindings, AppContext, ShowRow, MovieRow } from "../types";
-import { FRANCHISE_BY_SLUG } from "../lib/franchises";
-import { visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
-import { origin, canonical } from "../lib/seo";
-import { Vertical, genreOr, genreBinds, VERTICALS } from "../lib/verticals";
-import { heroBg, hiRes, premiereDateParts, shortDate, slugifyName } from "../lib/format";
-import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { Layout } from "../components/Layout";
-import { ShowCard, MovieCard, ExploreCard } from "../components/cards";
+import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
+import { heroBg, hiRes, premiereDateParts, shortDate, slugifyName } from "../lib/format";
+import { FRANCHISE_BY_SLUG } from "../lib/franchises";
+import { PROVIDER_LOGOS, visitorRegion } from "../lib/providers";
+import { origin } from "../lib/seo";
+import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import { VERTICALS, Vertical, genreBinds, genreOr } from "../lib/verticals";
+import { AppContext, Bindings, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 

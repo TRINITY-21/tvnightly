@@ -1,137 +1,765 @@
 import { Hono } from "hono";
-import { Bindings, ShowRow, MovieRow } from "../types";
-import { slugifyName, heroBg, hiRes } from "../lib/format";
-import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
-import { canonical } from "../lib/seo";
-import { networkDirectory, genreDirectory } from "../lib/queries";
-import { visitorRegion, providerBrand } from "../lib/providers";
-import { VERTICALS, hubForGenres } from "../lib/verticals";
+import type { FC } from "hono/jsx";
 import { Layout } from "../components/Layout";
-import { ShowCard, MovieCard, ExploreCard } from "../components/cards";
+import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
+import { heroBg, hiRes, posterSrc, slugifyName } from "../lib/format";
+import { FRANCHISE_BY_SLUG } from "../lib/franchises";
+import { networkLogo, networkLogoForBrand, providerBrand, visitorRegion } from "../lib/providers";
+import { genreDirectory, networkDirectory } from "../lib/queries";
+import { canonical, origin } from "../lib/seo";
+import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import { VERTICALS, Vertical, genreBinds, genreOr, hubForGenres } from "../lib/verticals";
+import { Bindings, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
 // "Pick me an action show" vs "a drama" — genre names decide the article
 const aOrAn = (word: string) => (/^[aeiou]/i.test(word) ? "an" : "a");
 
+const showProvLinks = (s: {
+  network: string | null;
+  web_channel: string | null;
+  genres: string | null;
+}) => {
+  const links: { href: string; label: string }[] = [];
+  const home = s.network ?? s.web_channel ?? null;
+  if (home) links.push({ href: `/network/${slugifyName(home)}`, label: home });
+  const genres: string[] = s.genres ? JSON.parse(s.genres) : [];
+  for (const g of genres.slice(0, 2)) {
+    links.push({ href: `/genre/${slugifyName(g)}/shows`, label: g });
+  }
+  return links;
+};
+
+const FEATURED = [
+  {
+    kicker: "Charts",
+    title: "Top TV shows",
+    desc: "The highest-rated series we track, ranked honestly.",
+    href: "/top/tv",
+  },
+  {
+    kicker: "Shortcut",
+    title: "All-time best episodes",
+    desc: "The single greatest hours of television, across every show.",
+    href: "/best-episodes",
+  },
+  {
+    kicker: "Film",
+    title: "Top movies",
+    desc: "The best films of all time, with where to stream them.",
+    href: "/movies/best",
+  },
+  {
+    kicker: "Community",
+    title: "Most loved",
+    desc: "What TV Nightly visitors actually loved — voted here, not imported.",
+    href: "/loved",
+  },
+  {
+    kicker: "Matchup",
+    title: "Compare two shows",
+    desc: "Episode-by-episode rating history, head to head on one chart.",
+    href: "/compare",
+  },
+  {
+    kicker: "Guides",
+    title: "Watch-order guides",
+    desc: "Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked.",
+    href: "/watch-orders",
+  },
+] as const;
+
+async function lovedFeaturedArt(
+  db: D1Database,
+  key: string,
+): Promise<{ x1: string; x2?: string } | null> {
+  const top = await db
+    .prepare(
+      `SELECT kind, ref FROM (
+         SELECT kind, ref, (loved + liked + meh) AS total,
+                (loved + 0.5 * liked) / CAST(loved + liked + meh AS REAL) AS score
+         FROM title_ratings
+       ) WHERE total >= 2 ORDER BY score DESC, total DESC LIMIT 1`,
+    )
+    .first<{ kind: string; ref: string }>();
+  if (!top) return null;
+  if (top.kind === "tv") {
+    const s = await db
+      .prepare(`SELECT tmdb_id, image_url FROM shows WHERE id = ?`)
+      .bind(Number(top.ref))
+      .first<{ tmdb_id: number | null; image_url: string | null }>();
+    if (s?.tmdb_id) {
+      const bd = await tmdbBackdrop(key, s.tmdb_id);
+      if (bd) return bd;
+    }
+    const p = hiRes(s?.image_url ?? null);
+    return p ? { x1: p } : null;
+  }
+  const bd = await tmdbMovieBackdrop(key, top.ref);
+  if (bd) return bd;
+  const m = await db
+    .prepare(`SELECT poster_url FROM movies WHERE imdb_id = ?`)
+    .bind(top.ref)
+    .first<{ poster_url: string | null }>();
+  return m?.poster_url ? { x1: m.poster_url } : null;
+}
+
+async function movieFeaturedArt(
+  db: D1Database,
+  key: string,
+): Promise<{ x1: string; x2?: string } | null> {
+  const top = await db
+    .prepare(
+      `SELECT imdb_id, poster_url FROM movies
+       WHERE rating IS NOT NULL AND votes >= 1000
+       ORDER BY rating DESC, votes DESC LIMIT 1`,
+    )
+    .first<{ imdb_id: string; poster_url: string | null }>();
+  if (!top?.imdb_id) return top?.poster_url ? { x1: top.poster_url } : null;
+  const bd = await tmdbMovieBackdrop(key, top.imdb_id);
+  if (bd) return bd;
+  return top.poster_url ? { x1: top.poster_url } : null;
+}
+
+/** Backdrop art for the six featured doors — each wears its destination's
+ *  reigning #1, never stock. */
+async function featuredArts(c: { env: Bindings }): Promise<({ x1: string; x2?: string } | null)[]> {
+  const key = c.env.TMDB_API_KEY;
+  const blank = new Array<null>(FEATURED.length).fill(null);
+  if (!key) return blank;
+  try {
+    const [topShow, topEp, topMovieArt, compareShow, lovedArt, guideArt] = await Promise.all([
+      c.env.DB.prepare(
+        `SELECT tmdb_id FROM shows WHERE rating IS NOT NULL AND weight >= 75
+         ORDER BY rating DESC, weight DESC LIMIT 1`,
+      ).first<{ tmdb_id: number }>(),
+      c.env.DB.prepare(
+        `SELECT s.tmdb_id FROM episodes e JOIN shows s ON s.id = e.show_id
+         WHERE e.rating IS NOT NULL AND s.tmdb_id IS NOT NULL
+         ORDER BY e.rating DESC LIMIT 1`,
+      ).first<{ tmdb_id: number }>(),
+      movieFeaturedArt(c.env.DB, key),
+      c.env.DB.prepare(
+        `SELECT tmdb_id FROM shows WHERE rating IS NOT NULL AND weight >= 75
+         ORDER BY rating DESC, weight DESC LIMIT 1 OFFSET 2`,
+      ).first<{ tmdb_id: number }>(),
+      lovedFeaturedArt(c.env.DB, key),
+      guidesHubCardArt(c.env.DB, key),
+    ]);
+    return await Promise.all([
+      topShow?.tmdb_id ? tmdbBackdrop(key, topShow.tmdb_id) : null,
+      topEp?.tmdb_id ? tmdbBackdrop(key, topEp.tmdb_id) : null,
+      topMovieArt,
+      lovedArt,
+      compareShow?.tmdb_id ? tmdbBackdrop(key, compareShow.tmdb_id) : null,
+      guideArt,
+    ]);
+  } catch {
+    return blank;
+  }
+}
+
+/** Faint card backdrops for the browse hub grid — each hub's own #1 title. */
+async function hubCardArt(
+  db: D1Database,
+  key: string | undefined,
+  v: Vertical,
+): Promise<{ x1: string; x2?: string } | null> {
+  const movieConds = ["rating IS NOT NULL", "votes >= 1000"];
+  const movieBinds: (string | number)[] = [];
+  if (v.movieGenres?.length) {
+    movieConds.push(genreOr("genres", v.movieGenres));
+    movieBinds.push(...genreBinds(v.movieGenres));
+  }
+  if (v.movieYearMax) {
+    movieConds.push("year <= ?");
+    movieBinds.push(v.movieYearMax);
+  }
+
+  const [topShow, topMovie] = await Promise.all([
+    v.tvGenres?.length
+      ? db
+          .prepare(
+            `SELECT tmdb_id, image_url FROM shows
+             WHERE ${genreOr("genres", v.tvGenres)} AND rating IS NOT NULL AND weight >= 60
+             ORDER BY rating DESC, weight DESC LIMIT 1`,
+          )
+          .bind(...genreBinds(v.tvGenres))
+          .first<{ tmdb_id: number | null; image_url: string | null }>()
+      : null,
+    db
+      .prepare(
+        `SELECT imdb_id, poster_url FROM movies WHERE ${movieConds.join(" AND ")}
+         ORDER BY rating DESC, votes DESC LIMIT 1`,
+      )
+      .bind(...movieBinds)
+      .first<{ imdb_id: string; poster_url: string | null }>(),
+  ]);
+
+  if (key) {
+    if (topShow?.tmdb_id) {
+      const bd = await tmdbBackdrop(key, topShow.tmdb_id);
+      if (bd) return bd;
+    }
+    if (!topShow && topMovie?.imdb_id) {
+      const bd = await tmdbMovieBackdrop(key, topMovie.imdb_id);
+      if (bd) return bd;
+    }
+  }
+  const p = topShow ? hiRes(topShow.image_url) : (topMovie?.poster_url ?? null);
+  return p ? { x1: p } : null;
+}
+
+async function guidesHubCardArt(
+  db: D1Database,
+  key: string | undefined,
+): Promise<{ x1: string; x2?: string } | null> {
+  const opener = FRANCHISE_BY_SLUG.get("star-wars")?.entries[0];
+  if (!opener) return null;
+  const rep = await db
+    .prepare(
+      `SELECT imdb_id, poster_url FROM movies
+       WHERE title = ? AND year BETWEEN ? AND ? AND imdb_id IS NOT NULL
+       ORDER BY rating DESC LIMIT 1`,
+    )
+    .bind(opener.title, opener.year - 1, opener.year + 1)
+    .first<{ imdb_id: string; poster_url: string | null }>();
+  if (key && rep?.imdb_id) {
+    const bd = await tmdbMovieBackdrop(key, rep.imdb_id);
+    if (bd) return bd;
+  }
+  return rep?.poster_url ? { x1: rep.poster_url } : null;
+}
+
+async function hubCardArts(c: { env: Bindings }): Promise<({ x1: string; x2?: string } | null)[]> {
+  const key = c.env.TMDB_API_KEY;
+  return Promise.all(VERTICALS.map((v) => hubCardArt(c.env.DB, key, v)));
+}
+
+const hubCardBg = (art: { x1: string; x2?: string } | null): string | undefined =>
+  art ? `--hub-art:url('${(art.x2 ?? art.x1).replace(/'/g, "%27")}')` : undefined;
+
+const NET_COPY: { match: RegExp; line: string }[] = [
+  { match: /\bhbo\b|\bmax\b/i, line: "Prestige drama and limited series — appointment television with a budget line to match." },
+  { match: /netflix/i, line: "Global originals at volume — binge drops, true crime, and something for every mood." },
+  { match: /apple/i, line: "Curated and cinematic — fewer shows, but most of them look like movies." },
+  { match: /disney/i, line: "Franchise gravity — Marvel, Star Wars, and the family canon under one roof." },
+  { match: /prime|amazon/i, line: "Wide catalog, global reach — originals riding alongside the everything bundle." },
+  { match: /hulu/i, line: "Next-day network TV and bold originals — the cord-cutter's living room." },
+  { match: /\bfx\b/i, line: "Adult-skewing prestige — antiheroes, auteurs, and water-cooler risk-taking." },
+  { match: /amc/i, line: "Genre-defining cable drama — proof that basic cable could outclass broadcast." },
+  { match: /paramount/i, line: "Legacy studios meet streaming — depth from CBS plus Paramount+ originals." },
+  { match: /peacock/i, line: "Broadcast heritage streaming — NBC next-day, sports, and reboot season." },
+  { match: /showtime/i, line: "Premium cable grit — crime, comedy, and a reputation for going there." },
+  { match: /starz/i, line: "Premium genre fare — historical epics, crime, and franchise deep cuts." },
+  { match: /syfy/i, line: "Science fiction and fantasy — cult genre TV with cult followings." },
+  { match: /bbc/i, line: "British broadcasting gold — period drama, documentary, and dry wit." },
+  { match: /\bnbc\b/i, line: "Broad mainstream reach — sitcoms, procedurals, and live spectacle." },
+  { match: /\bcbs\b/i, line: "Procedural machines and comfort classics — the most-watched playbook." },
+  { match: /\babc\b/i, line: "Broadcast tentpoles — soaps, Shondaland, and family event TV." },
+  { match: /\bcw\b/i, line: "Young-adult genre television — superhero soaps and long-running cult hooks." },
+  { match: /adult swim/i, line: "Late-night irreverence — animation, absurdism, and midnight cult." },
+  { match: /\btnt\b/i, line: "Populist drama and sports — broad-appeal scripted with event-TV energy." },
+];
+
+const NET_COLORS: { match: RegExp; bg: string }[] = [
+  { match: /\bhbo\b|\bmax\b/i, bg: "#3b1a7a" },
+  { match: /netflix/i, bg: "#8f0a12" },
+  { match: /apple/i, bg: "#2a2a2e" },
+  { match: /disney/i, bg: "#0c2480" },
+  { match: /prime|amazon/i, bg: "#0a4d6e" },
+  { match: /hulu/i, bg: "#0d3d24" },
+  { match: /\bfx\b/i, bg: "#141414" },
+  { match: /amc/i, bg: "#3a2414" },
+  { match: /paramount/i, bg: "#0047c7" },
+  { match: /peacock/i, bg: "#061428" },
+  { match: /showtime/i, bg: "#7a0a18" },
+  { match: /starz/i, bg: "#1a1018" },
+  { match: /syfy/i, bg: "#1a2840" },
+  { match: /bbc/i, bg: "#0a2850" },
+  { match: /\bnbc\b/i, bg: "#6a1078" },
+  { match: /\bcbs\b/i, bg: "#0a2858" },
+  { match: /\babc\b/i, bg: "#5c4808" },
+  { match: /\bcw\b/i, bg: "#0a4028" },
+  { match: /adult swim/i, bg: "#1a2848" },
+  { match: /\btnt\b/i, bg: "#4a1018" },
+];
+
+const networkTagline = (name: string) =>
+  NET_COPY.find(({ match }) => match.test(name))?.line ??
+  "Every series we track on this network — with streaming availability in your country.";
+
+/** Brand tint for ambient glow — not flat card fills. */
+const networkGlow = (name: string) => {
+  const hit = NET_COLORS.find(({ match }) => match.test(name));
+  if (hit) return hit.bg;
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return `hsl(${h % 360} 42% 42%)`;
+};
+
+const networkEyebrow = (name: string) =>
+  /netflix|hulu|disney|prime|amazon|apple|paramount|peacock|\bmax\b|showtime|starz|fubo/i.test(name)
+    ? "Streamer"
+    : "Network";
+
+async function networkHeroArt(
+  key: string | undefined,
+  best: ShowRow[],
+  films: MovieRow[],
+): Promise<{ art: { x1: string; x2?: string } | null; ambient: boolean }> {
+  let art: { x1: string; x2?: string } | null = null;
+  let ambient = false;
+  if (key) {
+    art = best[0]?.tmdb_id
+      ? await tmdbBackdrop(key, best[0].tmdb_id)
+      : films[0]
+        ? await tmdbMovieBackdrop(key, films[0].imdb_id)
+        : null;
+  }
+  if (!art) {
+    const p = best[0] ? hiRes(best[0].image_url) : (films[0]?.poster_url ?? null);
+    if (p) {
+      art = { x1: p };
+      ambient = true;
+    }
+  }
+  return { art, ambient };
+}
+
+const NetworkHero: FC<{
+  name: string;
+  art: { x1: string; x2?: string } | null;
+  ambient: boolean;
+  eyebrow: string;
+  title: string;
+  intro: string;
+  stats?: { label: string; value: string }[];
+  children?: unknown;
+}> = ({ name, art, ambient, eyebrow, title, intro, stats, children }) => (
+  <header
+    class={`net-hero wo-hero${ambient ? " hub-ambient" : ""}${art ? "" : " net-hero-glow-only"}`}
+    style={`--net-glow: ${networkGlow(name)}`}
+  >
+    <span class="net-hero-glow" aria-hidden="true"></span>
+    {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
+    <div class="wo-hero-body">
+      <div class="net-hero-head">
+        <span class="net-hero-logo">
+          <NetLogo name={name} size="lg" />
+        </span>
+        <div class="net-hero-copy">
+          <p class="section-eyebrow">{eyebrow}</p>
+          <h1>{title}</h1>
+          <p class="wo-intro">{intro}</p>
+        </div>
+      </div>
+      {stats?.length ? (
+        <dl class="wo-stats">
+          {stats.map(({ label, value }) => (
+            <div>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {children ? <p class="hub-actions">{children}</p> : null}
+    </div>
+  </header>
+);
+
+const NetworkDoors: FC = () => (
+  <section class="wo-doors">
+    <h2>Keep exploring</h2>
+    <div class="explore-grid">
+      <ExploreCard
+        icon="Networks"
+        title="All networks ranked"
+        desc="Netflix, HBO, Disney+, and every major home — browse by brand."
+        href="/top/networks"
+      />
+      <ExploreCard
+        icon="Tonight"
+        title="What's actually on"
+        desc="Tonight's schedule, in air-time order."
+        href="/tonight"
+      />
+      <ExploreCard
+        icon="Tailored"
+        title="Rate one thing, get a pick"
+        desc="The recommender finds your next watch from one rating."
+        href="/recommend"
+      />
+    </div>
+  </section>
+);
+
+const BrowseDoors: FC = () => (
+  <section class="wo-doors">
+    <h2>Keep exploring</h2>
+    <div class="explore-grid">
+      <ExploreCard
+        icon="Charts"
+        title="Top TV shows"
+        desc="The highest-rated series we track — ranked honestly."
+        href="/top/tv"
+      />
+      <ExploreCard
+        icon="Networks"
+        title="All networks ranked"
+        desc="Netflix, HBO, Disney+, and every major home by quality."
+        href="/top/networks"
+      />
+      <ExploreCard
+        icon="News"
+        title="Streaming news"
+        desc="What just landed, what's leaving, and what's coming."
+        href="/whats-new"
+      />
+    </div>
+  </section>
+);
+
+const TOOLS: [string, string][] = [
+  ["What to watch", "/what-to-watch"],
+  ["Tonight's schedule", "/tonight"],
+  ["Full TV calendar", "/calendar"],
+  ["Get a recommendation", "/recommend"],
+];
+
+// Major streamers & networks first — the names people actually search for.
+const HEADLINE_PATTERNS: RegExp[] = [
+  /netflix/i,
+  /hulu/i,
+  /\bhbo\b|hbo max/i,
+  /disney/i,
+  /prime video|amazon prime/i,
+  /apple tv/i,
+  /paramount/i,
+  /peacock/i,
+  /showtime/i,
+  /\bfx\b/i,
+  /amc/i,
+  /\bnbc\b/i,
+  /\bcbs\b/i,
+  /\babc\b/i,
+  /\bcw\b/i,
+  /syfy/i,
+  /bbc one/i,
+  /bbc two/i,
+  /adult swim/i,
+  /starz/i,
+  /\btnt\b/i,
+];
+
+type BrowseNet = { name: string; slug: string; count: number };
+
+function sortBrowseNetworks(networks: BrowseNet[]): BrowseNet[] {
+  const used = new Set<string>();
+  const sorted: BrowseNet[] = [];
+  for (const pat of HEADLINE_PATTERNS) {
+    const hit = networks.find((n) => !used.has(n.name) && pat.test(n.name));
+    if (hit) {
+      sorted.push(hit);
+      used.add(hit.name);
+    }
+  }
+  for (const n of networks) {
+    if (!used.has(n.name)) sorted.push(n);
+  }
+  return sorted;
+}
+
+const NetLogo: FC<{ name: string; size?: "lg" | "md" | "sm"; wordmark?: boolean }> = ({
+  name,
+  size = "md",
+  wordmark,
+}) => {
+  const src = wordmark ? networkLogoForBrand(name) : networkLogo(name);
+  const cls = `net-logo net-logo-${size}${wordmark ? " net-logo-wordmark" : ""}`;
+  const px = size === "lg" ? 56 : size === "md" ? 44 : 36;
+  if (src) {
+    return wordmark ? (
+      <img class={cls} src={src} alt="" loading="lazy" decoding="async" />
+    ) : (
+      <img class={cls} src={src} alt="" width={px} height={px} loading="lazy" decoding="async" />
+    );
+  }
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0] ?? "")
+    .join("")
+    .toUpperCase();
+  return (
+    <span class={`${cls} net-logo-fallback`} aria-hidden="true">
+      {initials}
+    </span>
+  );
+};
+
+const NetBrandCard: FC<{ name: string; href: string }> = ({ name, href }) => (
+  <a class="net-brand" href={href} style={`--net-brand: ${networkGlow(name)}`}>
+    <span class="net-brand-shine" aria-hidden="true"></span>
+    <span class="net-brand-copy">
+      <h2 class="net-brand-name">{name}</h2>
+      <span class="net-brand-tick" aria-hidden="true"></span>
+    </span>
+    <span class="net-brand-logo">
+      <NetLogo name={name} wordmark />
+    </span>
+  </a>
+);
+
+const BrowseNetTile: FC<{ name: string; slug: string }> = ({ name, slug }) => (
+  <a class="browse-net-tile" href={`/network/${slug}`}>
+    <span class="browse-net-logo">
+      <NetLogo name={name} size="md" />
+    </span>
+    <span class="browse-net-name">{name}</span>
+  </a>
+);
+
+const BrowseTile: FC<{
+  kicker: string;
+  title: string;
+  desc: string;
+  href: string;
+  hero?: boolean;
+  art?: { x1: string; x2?: string } | null;
+}> = ({ kicker, title, desc, href, hero, art }) => (
+  <a
+    class={`browse-tile${hero ? " browse-tile-hero" : ""}${art ? "" : " browse-tile-plain"}`}
+    href={href}
+  >
+    {art ? (
+      <span class="browse-tile-art" style={heroBg(art.x1, art.x2)} aria-hidden="true"></span>
+    ) : null}
+    <span class="browse-tile-body">
+      <span class="browse-tile-kicker">{kicker}</span>
+      <strong>{title}</strong>
+      <span class="browse-tile-dek">{desc}</span>
+    </span>
+    <span class="chev-icon browse-tile-chev" aria-hidden="true"></span>
+  </a>
+);
+
 app.get("/lists", async (c) => {
-  const [networks, genres] = await Promise.all([networkDirectory(c.env.DB), genreDirectory(c.env.DB)]);
+  const [networks, genres, arts, hubArts] = await Promise.all([
+    networkDirectory(c.env.DB),
+    genreDirectory(c.env.DB),
+    featuredArts(c),
+    hubCardArts(c),
+  ]);
   const CHARTS: [string, string][] = [
     ["Top TV shows", "/top/tv"],
     ["Top movies", "/movies/best"],
     ["Top TV seasons", "/top/seasons"],
-    ["Top networks", "/top/networks"],
     ["All-time top episodes", "/best-episodes"],
     ["Most loved (community)", "/loved"],
     ["Compare two shows", "/compare"],
+    ["Compare two movies", "/movies/compare"],
     ["Upcoming TV premieres", "/premieres"],
     ["Upcoming movies", "/movies/upcoming"],
-    ["Streaming news", "/whats-new"],
+    ["Streaming arrivals", "/whats-new"],
+    ["Renewals & cancellations", "/renewals"],
+    ["Popular movies", "/movies"],
   ];
+  const moreCharts = CHARTS.filter(
+    ([, href]) =>
+      !["/top/tv", "/movies/best", "/best-episodes", "/loved", "/compare"].includes(href),
+  );
+  const sortedNets = sortBrowseNetworks(networks);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title="Browse — every chart, network & genre | TV Nightly"
-      description="All of TV Nightly in one place: charts, networks, TV and movie genres, fandom hubs, and watch-order guides."
+      description="All of TV Nightly in one place: top charts, networks, genres, fandom hubs, and tools to pick your next watch."
       canonical={canonical(c)}
     >
-      <h1>Browse</h1>
-      <section>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Charts"
-            title="Top TV shows"
-            desc="The highest-rated series we track, ranked honestly."
-            href="/top/tv"
-          />
-          <ExploreCard
-            icon="Shortcut"
-            title="All-time best episodes"
-            desc="The single greatest hours of television, across every show."
-            href="/best-episodes"
-          />
-          <ExploreCard
-            icon="Film"
-            title="Top movies"
-            desc="The best films of all time, with where to stream them."
-            href="/movies/best"
-          />
-          <ExploreCard
-            icon="Community"
-            title="Most loved (community)"
-            desc="What TV Nightly visitors actually loved — voted here, not imported."
-            href="/loved"
-          />
-          <ExploreCard
-            icon="Matchup"
-            title="Compare two shows"
-            desc="Episode-by-episode rating history, head to head on one chart."
-            href="/compare"
-          />
-          <ExploreCard
-            icon="Guides"
-            title="Watch-order guides"
-            desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
-            href="/watch-orders"
-          />
-        </div>
-      </section>
-      <section>
-        <h2>More charts</h2>
-        <p class="quick-picks">
-          {CHARTS.filter(
-            ([, href]) =>
-              !["/top/tv", "/movies/best", "/best-episodes", "/loved", "/compare"].includes(href),
-          ).map(([label, href]) => (
-            <a class="chip" href={href}>
-              {label}
+      <div class="browse">
+        <header class="browse-hero">
+          <p class="section-eyebrow">Directory</p>
+          <h1>Browse everything</h1>
+          <p class="browse-lead muted">
+            Charts, networks, genres, and fandom hubs — one map of everything TV Nightly tracks.
+          </p>
+          <div class="browse-hero-foot">
+            <dl class="browse-stats">
+              <div>
+                <dt>Charts</dt>
+                <dd>{CHARTS.length}</dd>
+              </div>
+              <div>
+                <dt>Tools</dt>
+                <dd>{TOOLS.length}</dd>
+              </div>
+              <div>
+                <dt>Networks</dt>
+                <dd>{networks.length}</dd>
+              </div>
+              <div>
+                <dt>Genres</dt>
+                <dd>{genres.tv.length + genres.movie.length}</dd>
+              </div>
+              <div>
+                <dt>Hubs</dt>
+                <dd>{VERTICALS.length}</dd>
+              </div>
+            </dl>
+            <a class="browse-search" href="/search">
+              Search the canon
+              <span class="chev-icon" aria-hidden="true"></span>
             </a>
-          ))}
-        </p>
-      </section>
-      <section>
-        <h2>Networks & streamers</h2>
-        <p class="quick-picks">
-          {networks.map((n) => (
-            <a class="chip" href={`/network/${n.slug}`}>
-              {n.name}
-            </a>
-          ))}
-        </p>
-      </section>
-      <section>
-        <h2>TV genres</h2>
-        <p class="quick-picks">
-          {genres.tv.map((g) => (
-            <a class="chip" href={`/genre/${slugifyName(g)}`}>
-              {g}
-            </a>
-          ))}
-        </p>
-      </section>
-      <section>
-        <h2>Movie genres</h2>
-        <p class="quick-picks">
-          {genres.movie.map((g) => (
-            <a class="chip" href={`/genre/${slugifyName(g)}`}>
-              {g}
-            </a>
-          ))}
-        </p>
-      </section>
-      <section>
-        <h2>Hubs & guides</h2>
-        <p class="quick-picks">
-          {VERTICALS.map((v) => (
-            <a class="chip" href={`/${v.slug}`}>
-              {v.name} hub
-            </a>
-          ))}
-          <a class="chip" href="/watch-orders">
-            Watch-order guides
-          </a>
-        </p>
-      </section>
+          </div>
+        </header>
+
+        <section class="browse-sec browse-featured">
+          <div class="browse-sec-head">
+            <div>
+              <h2>Start here</h2>
+              <p class="section-lead muted">The six doors everyone bookmarks.</p>
+            </div>
+          </div>
+          <div class="browse-bento">
+            {FEATURED.map((f, i) => (
+              <BrowseTile {...f} hero={i < 2} art={arts[i]} />
+            ))}
+          </div>
+        </section>
+
+        <section class="browse-sec browse-duo">
+          <div class="browse-duo-panel">
+            <div class="browse-duo-col">
+              <div class="browse-duo-head">
+                <h2>More charts</h2>
+                <p class="browse-duo-lead muted">Ranked lists, premieres, and what's new.</p>
+              </div>
+              <ul class="browse-index browse-index-grow" aria-label="More charts">
+                {moreCharts.map(([label, href]) => (
+                  <li>
+                    <a href={href}>
+                      <span class="browse-index-label">{label}</span>
+                      <span class="chev-icon" aria-hidden="true"></span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div class="browse-duo-col">
+              <div class="browse-duo-head">
+                <h2>Tools</h2>
+                <p class="browse-duo-lead muted">Pick, plan, and get a recommendation.</p>
+              </div>
+              <ul class="browse-index browse-index-grow" aria-label="Tools">
+                {TOOLS.map(([label, href]) => (
+                  <li>
+                    <a href={href}>
+                      <span class="browse-index-label">{label}</span>
+                      <span class="chev-icon" aria-hidden="true"></span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="browse-sec browse-nets">
+          <div class="browse-nets-head">
+            <div>
+              <p class="browse-nets-eyebrow">Television</p>
+              <h2>TV networks</h2>
+            </div>
+            <div class="browse-nets-meta">
+              <span class="browse-nets-count muted">
+                {networks.length} {networks.length === 1 ? "network" : "networks"}
+              </span>
+              <a class="more" href="/top/networks">
+                ranked by quality
+              </a>
+            </div>
+          </div>
+          <div class="browse-netgrid" role="list">
+            {sortedNets.map((n) => (
+              <BrowseNetTile name={n.name} slug={n.slug} />
+            ))}
+          </div>
+        </section>
+
+        <section class="browse-sec browse-genres">
+          <div class="browse-sec-head">
+            <div>
+              <h2>Genres</h2>
+              <p class="section-lead muted">Ranked charts for every TV and movie genre.</p>
+            </div>
+          </div>
+          <div class="browse-genre-stack">
+            <div class="browse-genre-pane">
+              <div class="browse-genre-head">
+                <div>
+                  <p class="browse-genre-eyebrow">Television</p>
+                  <h2>TV genres</h2>
+                </div>
+                <span class="browse-genre-count muted">
+                  {genres.tv.length} {genres.tv.length === 1 ? "genre" : "genres"}
+                </span>
+              </div>
+              <div class="browse-genre-grid" role="list" aria-label="TV genres">
+                {genres.tv.map((g) => (
+                  <a class="browse-genre-tile" href={`/genre/${slugifyName(g)}`} role="listitem">
+                    {g}
+                  </a>
+                ))}
+              </div>
+            </div>
+            <div class="browse-genre-pane">
+              <div class="browse-genre-head">
+                <div>
+                  <p class="browse-genre-eyebrow">Movies</p>
+                  <h2>Movie genres</h2>
+                </div>
+                <span class="browse-genre-count muted">
+                  {genres.movie.length} {genres.movie.length === 1 ? "genre" : "genres"}
+                </span>
+              </div>
+              <div class="browse-genre-grid" role="list" aria-label="Movie genres">
+                {genres.movie.map((g) => (
+                  <a
+                    class="browse-genre-tile"
+                    href={`/genre/${slugifyName(g)}/movies`}
+                    role="listitem"
+                  >
+                    {g}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="browse-sec">
+          <div class="browse-sec-head">
+            <div>
+              <h2>Fandom hubs</h2>
+              <p class="section-lead muted">Niche verticals — anime, horror, classics, sci-fi.</p>
+            </div>
+          </div>
+          <div class="browse-hub-grid">
+            {VERTICALS.map((v, i) => (
+              <a class="browse-hub-card" href={`/${v.slug}`} style={hubCardBg(hubArts[i])}>
+                <span class="browse-hub-kicker">Fandom hub</span>
+                <strong>{v.name}</strong>
+                <p>{v.intro.split("—")[0].trim()}</p>
+              </a>
+            ))}
+          </div>
+        </section>
+
+        <BrowseDoors />
+      </div>
     </Layout>,
   );
 });
@@ -141,28 +769,131 @@ app.get("/top/tv", async (c) => {
     `SELECT * FROM shows WHERE rating IS NOT NULL AND weight >= 75
      ORDER BY rating DESC, weight DESC LIMIT 100`,
   ).all<ShowRow>();
+
+  const showYear = (s: ShowRow) => (s.premiered ? s.premiered.slice(0, 4) : null);
+  const showHome = (s: ShowRow) => s.network ?? s.web_channel ?? null;
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title="The 100 top-rated TV shows | TV Nightly"
       description={`The best TV shows ranked by viewer rating${results[0] ? `, starting with ${results[0].name}` : ""}.`}
       canonical={canonical(c)}
+      ld={[
+        {
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          name: "The top-rated TV shows",
+          itemListElement: results.slice(0, 25).map((s, i) => ({
+            "@type": "ListItem",
+            position: i + 1,
+            name: `${s.name}${showYear(s) ? ` (${showYear(s)})` : ""}`,
+            url: `${origin(c)}/show/${s.slug}`,
+          })),
+        },
+      ]}
     >
-      <h1>The top-rated TV shows</h1>
-      <ol class="ranked">
-        {results.map((s) => (
-          <li>
-            <strong>
-              <a href={`/show/${s.slug}`}>{s.name}</a>
-            </strong>{" "}
-            {s.premiered ? <span class="muted">({s.premiered.slice(0, 4)})</span> : null}
-            <span class="rating"> ★ {s.rating!.toFixed(1)}</span>{" "}
-            <a class="muted" href={`/show/${s.slug}/best-episodes`}>
-              best episodes
-            </a>
-          </li>
-        ))}
-      </ol>
+      <header class="chart-head">
+        <p class="chart-kicker">The All-Time 100</p>
+        <h1>The top-rated TV shows</h1>
+        <p class="chart-intro">
+          Ranked by viewer rating on shows we actually track — weight and popularity gate the
+          board so a three-episode fluke never outranks a decade of consensus.
+        </p>
+        {results.length ? (
+          <p class="chart-statline">
+            <span class="chart-statline-main">
+              <strong>{results.length}</strong> series
+            </span>
+            <span class="chart-statline-links">
+              <a class="chev-after" href="/best-episodes">
+                Best episodes
+              </a>
+              <a class="chev-after" href="/compare">
+                Compare shows
+              </a>
+            </span>
+          </p>
+        ) : null}
+      </header>
+
+      {!results.length ? (
+        <p class="muted">Ratings are still loading — check back soon.</p>
+      ) : (
+        <ol class="wo-list">
+          {results.map((s, i) => {
+            const art = posterSrc(s);
+            const provLinks = showProvLinks(s);
+            return (
+              <li class="wo-row">
+                <span class="wo-num" aria-hidden="true">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                {art ? (
+                  <img
+                    class="wo-poster"
+                    src={art.src}
+                    srcset={art.srcset}
+                    alt=""
+                    width="46"
+                    height="69"
+                    loading={i < 8 ? "eager" : "lazy"}
+                    decoding="async"
+                  />
+                ) : (
+                  <span class="wo-poster wo-poster-blank" aria-hidden="true"></span>
+                )}
+                <span class="wo-main">
+                  <span class="wo-title">
+                    <a href={`/show/${s.slug}`}>{s.name}</a>
+                    {showYear(s) ? <span class="muted"> ({showYear(s)})</span> : null}
+                  </span>
+                  {provLinks.length ? (
+                    <span class="wo-provs">
+                      {provLinks.map((l, j) => (
+                        <>
+                          {j > 0 ? " · " : null}
+                          <a href={l.href}>{l.label}</a>
+                        </>
+                      ))}
+                    </span>
+                  ) : null}
+                </span>
+                <span class="wo-side">
+                  <span class="rating">★ {s.rating!.toFixed(1)}</span>
+                  <a class="wo-mins" href={`/show/${s.slug}/best-episodes`}>
+                    best episodes
+                  </a>
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="Shortcut"
+            title="All-time best episodes"
+            desc="The single greatest hours of television, across every show."
+            href="/best-episodes"
+          />
+          <ExploreCard
+            icon="Directory"
+            title="Browse everything"
+            desc="Networks, genres, hubs, and every chart in one directory."
+            href="/lists"
+          />
+          <ExploreCard
+            icon="Compare"
+            title="Compare two shows"
+            desc="Episode ratings head-to-head on one chart — settle the argument."
+            href="/compare"
+          />
+        </div>
+      </section>
     </Layout>,
   );
 });
@@ -174,37 +905,155 @@ app.get("/top/seasons", async (c) => {
     `SELECT * FROM (
        SELECT e.show_id, e.season, COUNT(*) AS eps, AVG(e.rating) AS avg_r,
               (AVG(e.rating) + 2.0 * s.rating) / 3.0 AS score, s.name, s.slug,
+              s.genres, s.network, s.web_channel, s.poster_url, s.image_url,
               ROW_NUMBER() OVER (PARTITION BY e.show_id ORDER BY AVG(e.rating) DESC) AS rn
        FROM episodes e JOIN shows s ON s.id = e.show_id
        WHERE e.rating IS NOT NULL AND s.rating IS NOT NULL AND s.weight >= 75
          AND e.season IS NOT NULL
        GROUP BY e.show_id, e.season HAVING COUNT(*) >= 6
      ) WHERE rn <= 2 ORDER BY score DESC LIMIT 50`,
-  ).all<{ show_id: number; season: number; eps: number; avg_r: number; name: string; slug: string }>();
+  ).all<{
+    show_id: number;
+    season: number;
+    eps: number;
+    avg_r: number;
+    name: string;
+    slug: string;
+    genres: string | null;
+    network: string | null;
+    web_channel: string | null;
+    poster_url: string | null;
+    image_url: string | null;
+  }>();
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title="The 50 best TV seasons of all time | TV Nightly"
       description="Whole seasons ranked by their average episode rating — the greatest single runs in TV history."
       canonical={canonical(c)}
+      ld={[
+        {
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          name: "The best TV seasons of all time",
+          itemListElement: results.slice(0, 25).map((r, i) => ({
+            "@type": "ListItem",
+            position: i + 1,
+            name: `${r.name} — Season ${r.season}`,
+            url: `${origin(c)}/show/${r.slug}/season/${r.season}`,
+          })),
+        },
+      ]}
     >
-      <h1>The best TV seasons of all time</h1>
-      <p class="muted">
-        Ranked by average episode rating (seasons with at least 6 rated episodes).
-      </p>
-      <ol class="ranked">
-        {results.map((r) => (
-          <li>
-            <strong>
-              <a href={`/show/${r.slug}/season/${r.season}`}>
-                {r.name} — Season {r.season}
-              </a>
-            </strong>
-            <span class="rating"> ★ {r.avg_r.toFixed(2)}</span>{" "}
-            <span class="muted">avg over {r.eps} episodes</span>
-          </li>
-        ))}
-      </ol>
+      <article class="chart-page">
+        <header class="chart-head">
+          <p class="section-eyebrow">The all-time 50</p>
+          <h1 class="chart-h1">The best TV seasons of all time</h1>
+          <p class="section-lead">
+            Ranked by average episode rating, pulled toward each show&apos;s overall score.
+            Seasons need at least six rated episodes; maximum two per show.
+          </p>
+          {results.length ? (
+            <p class="chart-statline">
+              <span class="chart-statline-main">
+                <strong>{results.length}</strong> seasons
+              </span>
+              <span class="chart-statline-links">
+                <a class="chev-after" href="/top/tv">
+                  Top TV shows
+                </a>
+                <a class="chev-after" href="/best-episodes">
+                  Best episodes
+                </a>
+                <a class="chev-after" href="/compare">
+                  Compare shows
+                </a>
+              </span>
+            </p>
+          ) : null}
+        </header>
+
+        {!results.length ? (
+          <p class="muted">Ratings are still loading — check back soon.</p>
+        ) : (
+          <ol class="wo-list">
+            {results.map((r, i) => {
+              const art = posterSrc(r);
+              const provLinks = showProvLinks(r);
+              return (
+                <li class="wo-row">
+                  <span class="wo-num" aria-hidden="true">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  {art ? (
+                    <img
+                      class="wo-poster"
+                      src={art.src}
+                      srcset={art.srcset}
+                      alt=""
+                      width="46"
+                      height="69"
+                      loading={i < 8 ? "eager" : "lazy"}
+                      decoding="async"
+                    />
+                  ) : (
+                    <span class="wo-poster wo-poster-blank" aria-hidden="true"></span>
+                  )}
+                  <span class="wo-main">
+                    <span class="wo-title">
+                      <a href={`/show/${r.slug}`}>{r.name}</a>
+                      <span class="muted">
+                        {" "}
+                        ·{" "}
+                        <a href={`/show/${r.slug}/season/${r.season}`}>Season {r.season}</a>
+                      </span>
+                    </span>
+                    {provLinks.length ? (
+                      <span class="wo-provs">
+                        {provLinks.map((l, j) => (
+                          <>
+                            {j > 0 ? " · " : null}
+                            <a href={l.href}>{l.label}</a>
+                          </>
+                        ))}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span class="wo-side">
+                    <span class="rating">★ {r.avg_r.toFixed(2)}</span>
+                    <span class="wo-mins">{r.eps} episodes</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+
+        <section class="wo-doors">
+          <h2>Keep exploring</h2>
+          <div class="explore-grid">
+            <ExploreCard
+              icon="Charts"
+              title="Top TV shows"
+              desc="The highest-rated series we track — weight and popularity gate the board."
+              href="/top/tv"
+            />
+            <ExploreCard
+              icon="Shortcut"
+              title="All-time best episodes"
+              desc="The single greatest hours of television, across every show."
+              href="/best-episodes"
+            />
+            <ExploreCard
+              icon="Directory"
+              title="Browse everything"
+              desc="Networks, genres, hubs, and every chart in one directory."
+              href="/lists"
+            />
+          </div>
+        </section>
+      </article>
     </Layout>,
   );
 });
@@ -213,7 +1062,7 @@ app.get("/top/networks", async (c) => {
   // Bayesian prior toward a 7.5 global mean (m=5) so a 3-show boutique can't
   // outrank a 30-show network on a lucky sample.
   const { results } = await c.env.DB.prepare(
-    `SELECT n, c, r FROM (
+    `SELECT n, c, r, score FROM (
        SELECT n, COUNT(*) AS c, AVG(rating) AS r,
               (SUM(rating) + 7.5 * 5) / (COUNT(*) + 5.0) AS score
        FROM (
@@ -221,27 +1070,72 @@ app.get("/top/networks", async (c) => {
          WHERE rating IS NOT NULL AND weight >= 60
        ) WHERE n IS NOT NULL GROUP BY n HAVING c >= 3
      ) ORDER BY score DESC LIMIT 30`,
-  ).all<{ n: string; c: number; r: number }>();
+  ).all<{ n: string; c: number; r: number; score: number }>();
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title="TV networks & streamers ranked by show quality | TV Nightly"
-      description="Which network actually makes the best TV? Every major network and streamer ranked by the average rating of its shows."
+      title="Top TV networks & streamers | TV Nightly"
+      description="Netflix, Hulu, HBO, Disney+, and every major network and streamer — browse the best shows on each."
       canonical={canonical(c)}
     >
-      <h1>Networks ranked by show quality</h1>
-      <p class="muted">Average rating across each network's shows (minimum 3 rated shows).</p>
-      <ol class="ranked">
-        {results.map((r) => (
-          <li>
-            <strong>
-              <a href={`/network/${slugifyName(r.n)}`}>{r.n}</a>
-            </strong>
-            <span class="rating"> ★ {r.r.toFixed(2)}</span>{" "}
-            <span class="muted">across {r.c} shows</span>
-          </li>
-        ))}
-      </ol>
+      <div class="nets">
+        <header class="nets-hero net-hero wo-hero net-hero-glow-only">
+          <span class="net-hero-glow" aria-hidden="true"></span>
+          <div class="wo-hero-body">
+            <p class="section-eyebrow">Networks &amp; streamers</p>
+            <h1>Top TV networks</h1>
+            <p class="wo-intro">
+              Netflix, Hulu, HBO, and every major home — pick a network and see what&apos;s worth
+              watching in your country.
+            </p>
+            <p class="hub-actions">
+              <a class="verdict-btn" href="/lists">
+                Browse everything
+              </a>
+              <a class="btn-ghost" href="/top/tv">
+                Top TV shows
+              </a>
+            </p>
+          </div>
+        </header>
+
+        {!results.length ? (
+          <p class="muted">Not enough shows tracked yet — check back soon.</p>
+        ) : (
+          <section class="hub-sec nets-grid-sec">
+            <div class="nets-grid">
+              {results.map((r) => (
+                <NetBrandCard name={r.n} href={`/network/${slugifyName(r.n)}`} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section class="wo-doors">
+          <h2>Keep exploring</h2>
+          <div class="explore-grid">
+            <ExploreCard
+              icon="Directory"
+              title="Browse everything"
+              desc="Networks, genres, hubs, and every chart in one directory."
+              href="/lists"
+            />
+            <ExploreCard
+              icon="Shortcut"
+              title="Best episodes ever"
+              desc="The single greatest hours of television, across every show."
+              href="/best-episodes"
+            />
+            <ExploreCard
+              icon="Matchup"
+              title="Compare two shows"
+              desc="Episode-by-episode rating history, head to head on one chart."
+              href="/compare"
+            />
+          </div>
+        </section>
+      </div>
     </Layout>,
   );
 });
@@ -356,6 +1250,16 @@ app.get("/network/:slug", async (c) => {
       .all<ShowRow>(),
   ]);
   const airing = airingRes.results;
+  const { art, ambient } = await networkHeroArt(c.env.TMDB_API_KEY, best, films);
+
+  const stats: { label: string; value: string }[] = [];
+  if (best.length) {
+    stats.push({ label: "Top shows", value: String(best.length) });
+    if (best[0].rating != null) stats.push({ label: "Peak rating", value: `★ ${best[0].rating.toFixed(1)}` });
+  }
+  if (films.length) stats.push({ label: "Films", value: String(films.length) });
+  if (airing.length) stats.push({ label: "On air", value: String(airing.length) });
+  if (entry.count) stats.push({ label: "In catalog", value: String(entry.count) });
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -368,9 +1272,31 @@ app.get("/network/:slug", async (c) => {
       description={`Every ${entry.name} ${films.length ? "show and movie" : "show"} worth watching, ranked by rating, plus what's currently airing.`}
       canonical={canonical(c)}
     >
-      <h1>The best of {entry.name}</h1>
+      <NetworkHero
+        name={entry.name}
+        art={art}
+        ambient={ambient}
+        eyebrow={networkEyebrow(entry.name)}
+        title={entry.name}
+        intro={networkTagline(entry.name)}
+        stats={stats.length ? stats : undefined}
+      >
+        {best.length ? (
+          <a class="verdict-btn" href={`/network/${slug}/shows`}>
+            Top {entry.name} shows
+          </a>
+        ) : null}
+        {films.length ? (
+          <a class={best.length ? "btn-ghost" : "verdict-btn"} href={`/network/${slug}/movies`}>
+            Top {entry.name} movies
+          </a>
+        ) : null}
+        <a class="btn-ghost" href="/top/networks">
+          All networks ranked
+        </a>
+      </NetworkHero>
       {best.length ? (
-        <section>
+        <section class="hub-sec">
           <h2>
             Top {entry.name} shows{" "}
             <a class="more" href={`/network/${slug}/shows`}>
@@ -385,7 +1311,7 @@ app.get("/network/:slug", async (c) => {
         </section>
       ) : null}
       {films.length ? (
-        <section>
+        <section class="hub-sec">
           <h2>
             Top {entry.name} movies{" "}
             <a class="more" href={`/network/${slug}/movies`}>
@@ -400,23 +1326,49 @@ app.get("/network/:slug", async (c) => {
         </section>
       ) : null}
       {airing.length ? (
-        <section>
-          <h2>Currently running</h2>
-          <ul class="ep-list">
-            {airing.map((s) => (
-              <li>
-                <a href={`/show/${s.slug}`}>{s.name}</a>{" "}
-                <a class="muted" href={`/show/${s.slug}/next-episode`}>
-                  next episode
-                </a>
-              </li>
-            ))}
-          </ul>
+        <section class="hub-sec sched-day">
+          <h2>
+            Currently on air{" "}
+            <span class="sched-count">
+              {airing.length} running
+            </span>
+          </h2>
+          <ol class="sched-list">
+            {airing.map((s) => {
+              const p = posterSrc(s);
+              return (
+                <li>
+                  <a class="sched-row" href={`/show/${s.slug}`}>
+                    <span class="sched-rail">Live</span>
+                    {p ? (
+                      <img
+                        src={p.src}
+                        srcset={p.srcset}
+                        alt=""
+                        width="46"
+                        height="69"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <span class="sched-thumb-blank" aria-hidden="true"></span>
+                    )}
+                    <span class="sched-main">
+                      <span class="sched-show">{s.name}</span>
+                      <span class="sched-ep">
+                        {s.rating != null ? `★ ${s.rating.toFixed(1)} · ` : ""}
+                        <span class="muted">next episode</span>
+                      </span>
+                    </span>
+                    <span class="sched-net">Running</span>
+                  </a>
+                </li>
+              );
+            })}
+          </ol>
         </section>
       ) : null}
-      <p>
-        <a class="chev-after" href="/top/networks">All networks ranked</a> · <a href="/lists">Directory</a>
-      </p>
+      <NetworkDoors />
     </Layout>,
   );
 });
@@ -430,6 +1382,13 @@ app.get("/network/:slug/shows", async (c) => {
   if (!entry) return c.notFound();
   const regionHas = regionTester(visitorRegion(c), entry.name);
   const rows = await topNetworkShows(db, entry, regionHas, 48);
+  const hasMovies = (await topNetworkMovies(db, regionHas, 1)).length > 0;
+  const { art, ambient } = await networkHeroArt(c.env.TMDB_API_KEY, rows, []);
+
+  const years = rows
+    .map((s) => (s.premiered ? Number(s.premiered.slice(0, 4)) : null))
+    .filter((y): y is number => y != null && y > 0);
+  const span = years.length ? `${Math.min(...years)}–${Math.max(...years)}` : null;
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -438,7 +1397,35 @@ app.get("/network/:slug/shows", async (c) => {
       description={`The best TV shows on ${entry.name}, ranked by viewer rating.`}
       canonical={canonical(c)}
     >
-      <h1>Top {entry.name} shows</h1>
+      <NetworkHero
+        name={entry.name}
+        art={art}
+        ambient={ambient}
+        eyebrow={`${networkEyebrow(entry.name)} chart`}
+        title={`Top ${entry.name} shows`}
+        intro={`Every ${entry.name} series we track with a real rating, ranked — originals and catalog titles in your region.`}
+        stats={
+          rows.length
+            ? [
+                { label: "Series", value: String(rows.length) },
+                { label: "Top rating", value: `★ ${rows[0].rating!.toFixed(1)}` },
+                ...(span ? [{ label: "Years", value: span }] : []),
+              ]
+            : undefined
+        }
+      >
+        <a class="verdict-btn" href={`/network/${slug}`}>
+          The best of {entry.name}
+        </a>
+        {hasMovies ? (
+          <a class="btn-ghost" href={`/network/${slug}/movies`}>
+            Top {entry.name} movies
+          </a>
+        ) : null}
+        <a class="btn-ghost" href="/top/networks">
+          All networks ranked
+        </a>
+      </NetworkHero>
       {rows.length ? (
         <div class="grid">
           {rows.map((s) => (
@@ -448,10 +1435,7 @@ app.get("/network/:slug/shows", async (c) => {
       ) : (
         <p class="muted">No {entry.name} shows in this region's catalog yet.</p>
       )}
-      <p>
-        <a class="chev-after" href={`/network/${slug}/movies`}>Top {entry.name} movies</a> ·{" "}
-        <a href={`/network/${slug}`}>The best of {entry.name}</a>
-      </p>
+      <NetworkDoors />
     </Layout>,
   );
 });
@@ -463,6 +1447,11 @@ app.get("/network/:slug/movies", async (c) => {
   if (!entry) return c.notFound();
   const regionHas = regionTester(visitorRegion(c), entry.name);
   const rows = await topNetworkMovies(db, regionHas, 48);
+  const hasShows = (await topNetworkShows(db, entry, regionHas, 1)).length > 0;
+  const { art, ambient } = await networkHeroArt(c.env.TMDB_API_KEY, [], rows);
+
+  const years = rows.map((m) => m.year).filter((y): y is number => y != null);
+  const span = years.length ? `${Math.min(...years)}–${Math.max(...years)}` : null;
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -471,7 +1460,35 @@ app.get("/network/:slug/movies", async (c) => {
       description={`The best movies on ${entry.name}, ranked by viewer rating.`}
       canonical={canonical(c)}
     >
-      <h1>Top {entry.name} movies</h1>
+      <NetworkHero
+        name={entry.name}
+        art={art}
+        ambient={ambient}
+        eyebrow={`${networkEyebrow(entry.name)} chart`}
+        title={`Top ${entry.name} movies`}
+        intro={`Every ${entry.name} film in your regional catalog with a real rating — ranked honestly, no sponsorships.`}
+        stats={
+          rows.length
+            ? [
+                { label: "Films", value: String(rows.length) },
+                { label: "Top rating", value: `★ ${rows[0].rating!.toFixed(1)}` },
+                ...(span ? [{ label: "Years", value: span }] : []),
+              ]
+            : undefined
+        }
+      >
+        <a class="verdict-btn" href={`/network/${slug}`}>
+          The best of {entry.name}
+        </a>
+        {hasShows ? (
+          <a class="btn-ghost" href={`/network/${slug}/shows`}>
+            Top {entry.name} shows
+          </a>
+        ) : null}
+        <a class="btn-ghost" href="/top/networks">
+          All networks ranked
+        </a>
+      </NetworkHero>
       {rows.length ? (
         <div class="grid">
           {rows.map((m) => (
@@ -481,10 +1498,7 @@ app.get("/network/:slug/movies", async (c) => {
       ) : (
         <p class="muted">No {entry.name} movies in this region's catalog yet.</p>
       )}
-      <p>
-        <a class="chev-after" href={`/network/${slug}/shows`}>Top {entry.name} shows</a> ·{" "}
-        <a href={`/network/${slug}`}>The best of {entry.name}</a>
-      </p>
+      <NetworkDoors />
     </Layout>,
   );
 });
@@ -622,13 +1636,13 @@ app.get("/genre/:slug", async (c) => {
               all of them
             </a>
           </h2>
-          <p class="quick-picks">
+          <div class="footer-picks">
             {siblings.map((g) => (
-              <a class="chip" href={`/genre/${slugifyName(g)}`}>
+              <a class="footer-card" href={`/genre/${slugifyName(g)}`}>
                 {g}
               </a>
             ))}
-          </p>
+          </div>
         </section>
       ) : null}
       <section class="wo-doors">
@@ -766,13 +1780,13 @@ app.get("/genre/:slug/shows", async (c) => {
               all of them
             </a>
           </h2>
-          <p class="quick-picks">
+          <div class="footer-picks">
             {siblings.map((g) => (
-              <a class="chip" href={`/genre/${slugifyName(g)}/shows`}>
+              <a class="footer-card" href={`/genre/${slugifyName(g)}/shows`}>
                 {g}
               </a>
             ))}
-          </p>
+          </div>
         </section>
       ) : null}
       <section class="wo-doors">
@@ -906,13 +1920,13 @@ app.get("/genre/:slug/movies", async (c) => {
               all of them
             </a>
           </h2>
-          <p class="quick-picks">
+          <div class="footer-picks">
             {siblings.map((g) => (
-              <a class="chip" href={`/genre/${slugifyName(g)}/movies`}>
+              <a class="footer-card" href={`/genre/${slugifyName(g)}/movies`}>
                 {g}
               </a>
             ))}
-          </p>
+          </div>
         </section>
       ) : null}
       <section class="wo-doors">

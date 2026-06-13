@@ -1,6 +1,6 @@
 // Page chrome: header/nav/footer, logo mark, message page.
 import { FC, PropsWithChildren } from "hono/jsx";
-import { canonical, jsonLd } from "../lib/seo";
+import { jsonLd } from "../lib/seo";
 import { VERTICALS } from "../lib/verticals";
 
 // Live countdown band: four stat blocks ticking once a second. Renders "—"
@@ -26,6 +26,52 @@ export const LogoMark: FC<{ size?: number }> = ({ size = 26 }) => (
 
 // Every /show/:slug/* page renders these so searchers landing on a subpage
 
+const BROWSE_PATHS = [
+  "/lists",
+  "/top",
+  "/movies",
+  "/best-episodes",
+  "/loved",
+  "/watch-orders",
+  "/watch-order",
+  "/compare",
+  "/network",
+  "/genre",
+  "/search",
+  "/classics",
+];
+
+const BROWSE_MENU = [
+  {
+    label: "TV charts",
+    links: [
+      ["Top TV shows", "/top/tv"],
+      ["Best episodes", "/best-episodes"],
+      ["Top seasons", "/top/seasons"],
+      ["Most loved", "/loved"],
+      ["Compare shows", "/compare"],
+    ],
+  },
+  {
+    label: "Movies",
+    links: [
+      ["Best movies", "/movies/best"],
+      ["Popular movies", "/movies"],
+      ["Upcoming movies", "/movies/upcoming"],
+      ["Compare movies", "/movies/compare"],
+      ["Watch orders", "/watch-orders"],
+    ],
+  },
+  {
+    label: "Directory",
+    links: [
+      ["Browse everything", "/lists"],
+      ["Top networks", "/top/networks"],
+      ["Search", "/search"],
+    ],
+  },
+] as const;
+
 export const Layout: FC<
   PropsWithChildren<{
     title: string;
@@ -50,6 +96,7 @@ export const Layout: FC<
   })();
   const navClass = (prefixes: string[]) =>
     prefixes.some((p) => path === p || path.startsWith(p + "/")) ? "active" : "";
+  const browseActive = BROWSE_PATHS.some((p) => path === p || path.startsWith(p + "/"));
   return (
   <html lang="en">
     <head>
@@ -98,25 +145,34 @@ export const Layout: FC<
               What to watch
             </a>
             <a href="/whats-new" class={navClass(["/whats-new", "/renewals"])}>
-              News
+              What&apos;s new
             </a>
-            <a
-              href="/lists"
-              class={navClass([
-                "/lists",
-                "/top",
-                "/movies",
-                "/best-episodes",
-                "/loved",
-                "/watch-orders",
-                "/watch-order",
-                "/compare",
-                "/network",
-                "/genre",
-              ])}
-            >
-              Browse
-            </a>
+            <div class={`nav-mega${browseActive ? " active" : ""}`}>
+              <button
+                type="button"
+                class="nav-mega-btn"
+                aria-expanded="false"
+                aria-controls="browse-panel"
+              >
+                Browse
+                <span class="nav-mega-chev" aria-hidden="true"></span>
+              </button>
+              <div id="browse-panel" class="nav-mega-panel" hidden>
+                <div class="nav-mega-grid">
+                  {BROWSE_MENU.map((col) => (
+                    <div class="nav-mega-col">
+                      <p class="nav-mega-kicker">{col.label}</p>
+                      {col.links.map(([label, href]) => (
+                        <a href={href}>{label}</a>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <a class="nav-mega-all chev-after" href="/lists">
+                  Browse everything
+                </a>
+              </div>
+            </div>
           </nav>
           <form action="/search" method="get" class="search" role="search">
             <input
@@ -149,7 +205,7 @@ export const Layout: FC<
             <a href="/what-to-watch">What to watch</a>
             <a href="/recommend">Get a recommendation</a>
             <a href="/tonight">Tonight's schedule</a>
-            <a href="/whats-new">Streaming news</a>
+            <a href="/whats-new">What&apos;s new</a>
             <a href="/watch-orders">Watch orders</a>
             <a href="/lists">Browse everything</a>
           </div>
@@ -210,7 +266,7 @@ export const Layout: FC<
         </p>
         </div>
       </footer>
-      {["/js/typeahead.js", ...(props.scripts ?? [])].map((s) => (
+      {["/js/typeahead.js", "/js/nav-mega.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>
       ))}
     </body>

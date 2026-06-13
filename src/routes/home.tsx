@@ -77,6 +77,23 @@ const Rail: FC<PropsWithChildren<{ label: string }>> = ({ label, children }) => 
   </div>
 );
 
+// evening-card shelves — same chevrons, but the list itself scrolls
+const ShelfRail: FC<PropsWithChildren<{ label: string; ordered?: boolean }>> = ({
+  label,
+  ordered,
+  children,
+}) => (
+  <div class="poster-rail shelf-rail">
+    <button type="button" class="rail-btn rail-btn-prev" aria-label={`Scroll ${label} left`}>
+      <span class="chev-icon chev-icon-prev" aria-hidden="true"></span>
+    </button>
+    {ordered ? <ol class="poster-shelf">{children}</ol> : <ul class="poster-shelf">{children}</ul>}
+    <button type="button" class="rail-btn rail-btn-next" aria-label={`Scroll ${label} right`}>
+      <span class="chev-icon" aria-hidden="true"></span>
+    </button>
+  </div>
+);
+
 /** TMDB's weekly worldwide trending list, matched against our own mirror
  *  in their trending order — only titles we can actually take the reader to. */
 async function trendingRows<T extends { tmdb_id: number | null }>(
@@ -326,7 +343,7 @@ app.get("/", async (c) => {
                 <p class="section-lead muted">Every episode airing today, in air-time order.</p>
               </div>
               {alsoTonight.length ? (
-                <ol class="poster-shelf">
+                <ShelfRail label="also on tonight" ordered>
                   {alsoTonight.map((e) => (
                     <li>
                       <a
@@ -352,7 +369,7 @@ app.get("/", async (c) => {
                       <span class="shelf-name">{e.show_name}</span>
                     </li>
                   ))}
-                </ol>
+                </ShelfRail>
               ) : (
                 <p class="muted">
                   {spotTonight
@@ -372,7 +389,7 @@ app.get("/", async (c) => {
                 <p class="section-lead muted">Season premieres in the next three weeks.</p>
               </div>
               {premieres.length ? (
-                <ul class="poster-shelf">
+                <ShelfRail label="coming up premieres">
                   {premieres.map((p) => {
                     const { day, month } = premiereDateParts(p.airdate);
                     return (
@@ -404,7 +421,7 @@ app.get("/", async (c) => {
                       </li>
                     );
                   })}
-                </ul>
+                </ShelfRail>
               ) : (
                 <p class="muted">No premieres in the next three weeks.</p>
               )}

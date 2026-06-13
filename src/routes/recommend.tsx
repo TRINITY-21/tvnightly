@@ -1,14 +1,14 @@
 import { Hono } from "hono";
-import { Bindings, ShowRow, MovieRow } from "../types";
-import { origin, canonical } from "../lib/seo";
-import { similarShows, similarMovies, PICKER_MIN_WEIGHT } from "../lib/queries";
-import { VERDICTS, RatedEntry, getRatedTitle, parseRated, fmtRated, titleKey } from "../lib/ratings";
-import { ipHash } from "../lib/crypto";
 import { Layout } from "../components/Layout";
-import { ShowCard, MovieCard } from "../components/cards";
-import { FaceLove, FaceLike, FaceMeh } from "../components/icons";
+import { MovieCard, ShowCard } from "../components/cards";
+import { FaceLike, FaceLove, FaceMeh } from "../components/icons";
+import { ipHash } from "../lib/crypto";
 import { heroBg, hiRes } from "../lib/format";
+import { PICKER_MIN_WEIGHT, similarMovies, similarShows } from "../lib/queries";
+import { RatedEntry, VERDICTS, fmtRated, getRatedTitle, parseRated, titleKey } from "../lib/ratings";
+import { canonical, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import { Bindings, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -343,18 +343,18 @@ app.get("/recommend", async (c) => {
         <button type="submit" class="verdict-btn">Find it</button>
       </form>
       <h2>Or tap one you've seen</h2>
-      <p class="quick-picks">
+      <div class="footer-picks">
         {topShows.map((s) => (
-          <a class="chip" href={`/recommend?kind=tv&ref=${s.id}${ratedQS}`}>
+          <a class="footer-card" href={`/recommend?kind=tv&ref=${s.id}${ratedQS}`}>
             {s.name}
           </a>
         ))}
         {topMovies.map((m) => (
-          <a class="chip" href={`/recommend?kind=movie&ref=${m.imdb_id}${ratedQS}`}>
+          <a class="footer-card" href={`/recommend?kind=movie&ref=${m.imdb_id}${ratedQS}`}>
             {m.title}
           </a>
         ))}
-      </p>
+      </div>
       <p>
         <a class="chev-after" href="/loved">See what the community loves</a>
       </p>
@@ -498,21 +498,36 @@ app.get("/loved", async (c) => {
       description="Community charts built from real one-tap verdicts: what TV Nightly's raters love right now."
       canonical={canonical(c)}
     >
-      <div class="loved">
-        <p class="section-eyebrow">Community</p>
-        <h1>Most loved</h1>
-        <p class="muted loved-lead">
-          The chart we can't buy and won't fake: every position here comes from one-tap reader
-          verdicts in <a href="/recommend">the recommender</a>. Early days — every rating moves it.
-        </p>
-        <p class="loved-cta">
-          <a class="btn-ghost chev-after" href="/recommend">
-            Cast your verdict
-          </a>
-        </p>
+      <article class="chart-page loved">
+        <header class="chart-head">
+          <p class="section-eyebrow">Community</p>
+          <h1 class="chart-h1">Most loved shows and movies</h1>
+          <p class="section-lead">
+            Ranked from one-tap reader verdicts — loved, liked, or not for me. Titles need at
+            least two ratings to chart.
+          </p>
+          {board.length ? (
+            <p class="chart-statline">
+              <span class="chart-statline-main">
+                <strong>{board.length}</strong> titles
+              </span>
+              <span class="chart-statline-links">
+                <a class="chev-after" href="/recommend">
+                  Rate a title
+                </a>
+                <a class="chev-after" href="/top/tv">
+                  Top TV shows
+                </a>
+                <a class="chev-after" href="/movies/best">
+                  Best movies
+                </a>
+              </span>
+            </p>
+          ) : null}
+        </header>
         {board.length === 0 ? (
           <p class="muted">
-            No titles have enough ratings yet. <a href="/recommend">Be the first</a>.
+            No titles have enough ratings yet. <a href="/recommend">Rate something first</a>.
           </p>
         ) : null}
 
@@ -583,13 +598,13 @@ app.get("/loved", async (c) => {
 
         {board.length ? (
           <p class="loved-foot muted">
-            Score is loved + half-credit for liked, over all verdicts. Titles need two ratings to
-            chart. <span class="loved-key"><span class="loved-dot seg-loved"></span> loved</span>{" "}
+            Score weights loved at full credit and liked at half.{" "}
+            <span class="loved-key"><span class="loved-dot seg-loved"></span> loved</span>{" "}
             <span class="loved-key"><span class="loved-dot seg-liked"></span> liked</span>{" "}
             <span class="loved-key"><span class="loved-dot seg-meh"></span> meh</span>
           </p>
         ) : null}
-      </div>
+      </article>
     </Layout>,
   );
 });

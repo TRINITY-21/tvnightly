@@ -1,0 +1,79 @@
+/* ---- /movies/upcoming: theatrical release radar -------------------------
+   Hero + headline card + opening-soon shelf + monthly rows — same grammar
+   as premieres and the chart pages, tuned for films without slugs yet. */
+
+.wo-hero .wo-hero-body {
+  min-height: 15rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* the nearest release lives inside the page hero — one frame, one story */
+.upcoming-spotlight {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(248, 246, 242, 0.12);
+}
+.upcoming-spotlight-title {
+  margin: 0.15rem 0 0;
+  font-size: 1.65rem;
+  line-height: 1.08;
+}
+.upcoming-spotlight-title a { color: var(--text); }
+.upcoming-spotlight-title a:hover,
+.upcoming-spotlight-title a:focus-visible { color: var(--accent); text-decoration: none; }
+
+.upcoming-shelf { margin-top: 2.2rem; }
+.upcoming-shelf h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0;
+}
+.upcoming-lead { margin: 0.35rem 0 0; font-size: 0.88rem; }
+
+/* rows without a catalog page yet — same grid, no hover affordance */
+.sched-row-static {
+  cursor: default;
+}
+.sched-row-static:hover { background: transparent; }
+
+/* two-line logline under the date on calendar rows */
+.sched-blurb {
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sched-row .sched-main { gap: 0.08rem; }
+
+/* countdown chyron where sched-net would sit on TV rows */
+.upcoming-chip {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid rgba(255, 169, 77, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 169, 77, 0.08);
+}
+
+.shelf-tile-static {
+  cursor: default;
+  pointer-events: none;
+}
+
+@media (max-width: 520px) {
+  .sched-row .sched-blurb { -webkit-line-clamp: 1; }
+  .upcoming-chip { font-size: 0.58rem; padding: 0.22rem 0.45rem; }
+}

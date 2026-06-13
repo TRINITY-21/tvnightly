@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import { FC } from "hono/jsx";
-import { Bindings, TonightRow } from "../types";
-import { epCode, airTime, homeDateline, heroBg, hiRes, stripHtml, MONTHS, premiereDateParts } from "../lib/format";
-import { tmdbBackdrop } from "../lib/tmdb";
-import { canonical } from "../lib/seo";
 import { Layout } from "../components/Layout";
-import { SubNav, SCHEDULE_TABS } from "../components/nav";
+import { ExploreCard } from "../components/cards";
+import { SCHEDULE_TABS, SubNav } from "../components/nav";
+import { MONTHS, airTime, epCode, heroBg, hiRes, homeDateline, premiereDateParts, stripHtml } from "../lib/format";
+import { canonical } from "../lib/seo";
+import { tmdbBackdrop } from "../lib/tmdb";
+import { Bindings, TonightRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -137,6 +138,30 @@ app.get("/tonight", async (c) => {
           ))}
         </ol>
       ) : null}
+
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="Calendar"
+            title="This week's calendar"
+            desc="Every episode airing in the next seven days, grouped by day."
+            href="/calendar"
+          />
+          <ExploreCard
+            icon="Premieres"
+            title="Upcoming premieres"
+            desc="Season premieres on the books for the next ninety days."
+            href="/premieres"
+          />
+          <ExploreCard
+            icon="Charts"
+            title="Top TV shows"
+            desc="The highest-rated series we track — weight and popularity gate the board."
+            href="/top/tv"
+          />
+        </div>
+      </section>
     </Layout>,
   );
 });
@@ -191,6 +216,30 @@ app.get("/calendar", async (c) => {
           </ol>
         </section>
       ))}
+
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="Tonight"
+            title="On TV tonight"
+            desc="Every episode airing today, in air-time order."
+            href="/tonight"
+          />
+          <ExploreCard
+            icon="Premieres"
+            title="Upcoming premieres"
+            desc="Season premieres on the books for the next ninety days."
+            href="/premieres"
+          />
+          <ExploreCard
+            icon="Shortcut"
+            title="All-time best episodes"
+            desc="The single greatest hours of television, across every show."
+            href="/best-episodes"
+          />
+        </div>
+      </section>
     </Layout>,
   );
 });
@@ -255,6 +304,30 @@ app.get("/premieres", async (c) => {
           </ol>
         </section>
       ))}
+
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="Tonight"
+            title="On TV tonight"
+            desc="Every episode airing today, in air-time order."
+            href="/tonight"
+          />
+          <ExploreCard
+            icon="Calendar"
+            title="This week's calendar"
+            desc="Every episode airing in the next seven days, grouped by day."
+            href="/calendar"
+          />
+          <ExploreCard
+            icon="The wire"
+            title="Renewals & cancellations"
+            desc="Which shows got picked up, which got the axe."
+            href="/renewals"
+          />
+        </div>
+      </section>
     </Layout>,
   );
 });

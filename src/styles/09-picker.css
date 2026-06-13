@@ -1,14 +1,36 @@
 /* ---- chips, picks, providers ---- */
-.quick-picks { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.quick-picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: 0.65rem;
+}
 .chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.85rem;
+  padding: 0.65rem 0.8rem;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   color: var(--text);
-  padding: 0.32rem 0.85rem;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+  box-shadow: var(--shadow-1);
+  transition:
+    border-color var(--speed) var(--ease),
+    box-shadow var(--speed) var(--ease),
+    transform var(--speed) var(--ease);
 }
-.chip:hover { border-color: var(--accent); text-decoration: none; }
+.chip:hover {
+  border-color: rgba(255, 169, 77, 0.42);
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
 
 .pick-card {
   display: flex;

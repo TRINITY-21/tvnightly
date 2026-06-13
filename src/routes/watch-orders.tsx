@@ -1,13 +1,13 @@
 import { Hono } from "hono";
-import { Bindings, MovieRow } from "../types";
+import { Layout } from "../components/Layout";
+import { ExploreCard, MovieCard } from "../components/cards";
+import { fmtMarathon, heroBg, slugifyName } from "../lib/format";
 import { FRANCHISES, FRANCHISE_BY_SLUG, FranchiseEntry } from "../lib/franchises";
 import { providersFor } from "../lib/providers";
-import { fmtMarathon, heroBg } from "../lib/format";
-import { tmdbMovieBackdrop } from "../lib/tmdb";
-import { canonical } from "../lib/seo";
 import { similarMovies } from "../lib/queries";
-import { Layout } from "../components/Layout";
-import { MovieCard, ExploreCard } from "../components/cards";
+import { canonical } from "../lib/seo";
+import { tmdbMovieBackdrop } from "../lib/tmdb";
+import { Bindings, MovieRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -204,6 +204,15 @@ app.get("/watch-order/:slug", async (c) => {
   const seed = matched
     .filter((m): m is MovieRow => Boolean(m))
     .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
+  const genreCounts = new Map<string, number>();
+  for (const m of matched) {
+    if (!m?.genres) continue;
+    const gs: string[] = JSON.parse(m.genres);
+    for (const g of gs) genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
+  }
+  const primaryGenre = genreCounts.size
+    ? [...genreCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]
+    : null;
   const inFranchise = new Set(titles.map((t) => t.toLowerCase()));
   const alike = seed
     ? (await similarMovies(c.env.DB, seed, 18))
@@ -283,6 +292,14 @@ app.get("/watch-order/:slug", async (c) => {
               <dt>Years</dt>
               <dd>{span}</dd>
             </div>
+            {primaryGenre ? (
+              <div>
+                <dt>Genre</dt>
+                <dd>
+                  <a href={`/genre/${slugifyName(primaryGenre)}/movies`}>{primaryGenre}</a>
+                </dd>
+              </div>
+            ) : null}
           </dl>
           {marathonMins > 0 && !allMatched ? (
             <p class="wo-asterisk muted">*counting the films we have runtimes for</p>

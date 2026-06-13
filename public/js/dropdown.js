@@ -3,6 +3,19 @@
 // the DOM (hidden) as the form control and no-JS fallback. Touch devices keep
 // the native control — the OS picker sheet beats any web panel on a phone.
 (function () {
+  // Filter forms: submit on committed selection. The fancy dropdown below
+  // dispatches change only on click/Enter/Tab — not while arrow-keying the
+  // open list (WCAG 3.2.2). Native <select> on touch gets the same via change.
+  document.querySelectorAll("form[data-submit-on-change]").forEach(function (form) {
+    form.querySelectorAll("select").forEach(function (sel) {
+      sel.addEventListener("change", function () {
+        form.submit();
+      });
+    });
+    var btn = form.querySelector('button[type="submit"]');
+    if (btn) btn.hidden = true;
+  });
+
   if (window.matchMedia("(pointer: coarse)").matches) return;
   var uid = 0;
 

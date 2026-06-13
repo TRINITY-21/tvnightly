@@ -409,17 +409,17 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
         ) : null}
         <section>
           <h2>Keep going</h2>
-          <nav class="pill-nav">
-            <a class="chev-after" href={`/show/${show.slug}/season/${seasonNo}`}>
+          <div class="footer-picks">
+            <a class="footer-card" href={`/show/${show.slug}/season/${seasonNo}`}>
               Season {seasonNo} ranked & reviewed
             </a>
-            <a class="chev-after" href={`/show/${show.slug}/best-episodes`}>
+            <a class="footer-card" href={`/show/${show.slug}/best-episodes`}>
               Best of {show.name}
             </a>
-            <a class="chev-after" href={`/show/${show.slug}/ratings`}>
+            <a class="footer-card" href={`/show/${show.slug}/ratings`}>
               Ratings graph
             </a>
-          </nav>
+          </div>
         </section>
       </article>
     </Layout>,

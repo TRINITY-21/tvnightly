@@ -1,0 +1,109 @@
+/* ============================================================
+   NETWORK — /network/{slug}
+   Brand glow + logo in the wo-hero frame; same hub rhythm as
+   genre pages. The logo is the identity; the backdrop is alive.
+   ============================================================ */
+
+.net-hero,
+.nets-hero {
+  --net-glow: hsl(220 42% 42%);
+}
+.net-hero-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      ellipse 120% 90% at 92% 88%,
+      color-mix(in srgb, var(--net-glow) 42%, transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 80% 60% at 8% 20%,
+      color-mix(in srgb, var(--net-glow) 18%, transparent),
+      transparent 55%
+    );
+  opacity: 0.88;
+  transition: opacity var(--speed) var(--ease);
+}
+.net-hero:hover .net-hero-glow,
+.nets-hero:hover .net-hero-glow {
+  opacity: 1;
+}
+.net-hero-glow-only .net-hero-glow,
+.nets-hero.net-hero-glow-only .net-hero-glow {
+  opacity: 1;
+  background:
+    radial-gradient(
+      ellipse 100% 80% at 72% 100%,
+      color-mix(in srgb, var(--net-glow) 50%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      ellipse 60% 50% at 18% 0%,
+      color-mix(in srgb, var(--net-glow) 24%, transparent),
+      transparent 50%
+    );
+}
+.net-hero .wo-frame,
+.nets-hero .wo-frame {
+  z-index: 0;
+}
+.net-hero .wo-hero-body,
+.nets-hero .wo-hero-body {
+  z-index: 1;
+}
+
+.net-hero-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.15rem;
+}
+.net-hero-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  transition: transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+.net-hero:hover .net-hero-logo {
+  transform: translateY(-2px);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.55),
+    0 0 24px color-mix(in srgb, var(--net-glow) 35%, transparent);
+}
+.net-hero-copy {
+  min-width: 0;
+  flex: 1;
+}
+.net-hero-copy h1 {
+  margin: 0.15rem 0 0.5rem;
+  font-size: clamp(1.55rem, 3.2vw, 2.05rem);
+}
+.net-hero-copy .section-eyebrow {
+  margin: 0;
+}
+.net-hero .wo-stats {
+  margin-top: 1.25rem;
+}
+
+@media (max-width: 520px) {
+  .net-hero-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.85rem;
+  }
+  .net-hero-logo {
+    width: 4.5rem;
+    height: 4.5rem;
+    border-radius: 14px;
+  }
+}

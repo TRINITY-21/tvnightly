@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import { Bindings, ShowRow, MovieRow } from "../types";
 import { Layout } from "../components/Layout";
-import { ShowCard, MovieCard, ExploreCard, StatusBadge } from "../components/cards";
-import { heroBg, hiRes, stripHtml, slugifyName, retinaSet } from "../lib/format";
+import { ExploreCard, MovieCard, ShowCard, StatusBadge } from "../components/cards";
+import { heroBg, hiRes, retinaSet, slugifyName, stripHtml } from "../lib/format";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import { Bindings, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -176,24 +176,97 @@ app.get("/search", async (c) => {
       : `/movie/${best.movie.slug}`
     : "#";
 
+  const filterCounts = {
+    all: total,
+    tv: results.length,
+    movie: movieResults.length,
+    person: personResults.length,
+  };
+
   c.header("Cache-Control", "public, max-age=300");
   // infinite ?q= variants must not enter the index (doorway/thin-content risk)
   return c.html(
-    <Layout title={`Search${q ? `: ${q}` : ""} | TV Nightly`} noindex>
+    <Layout title={`Search${q ? `: ${q}` : ""} | TV Nightly`} noindex scripts={["/js/search-live.js"]}>
       <div class="srch">
         <p class="section-eyebrow">Search</p>
-        <h1>{q ? "Results" : "Find anything we track"}</h1>
-        <form method="get" action="/search" class="srch-form" role="search">
-          <input
-            type="search"
-            name="q"
-            value={q}
-            placeholder="A show, a movie, a person…"
-            aria-label="Search shows and movies"
-            autofocus={!q}
-          />
-          <button type="submit">Search</button>
-        </form>
+        <h1 class="srch-title">{q ? "Results" : "Find a show, movie, or person"}</h1>
+        <div class="srch-bar">
+          <form method="get" action="/search" class="srch-form" role="search">
+            <input
+              type="search"
+              name="q"
+              value={q}
+              placeholder="A show, a movie, a person…"
+              aria-label="Search shows and movies"
+              autofocus={!q}
+            />
+          </form>
+          <div class="srch-tools">
+            <a class="footer-card srch-browse" href="/lists">
+              Browse
+            </a>
+            <div class="srch-filter-dd dd" hidden={!q}>
+              <button
+                type="button"
+                class="dd-btn srch-filter-btn"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+              >
+                Filter
+              </button>
+              <ul class="dd-list srch-filter-menu" role="listbox">
+                <li
+                  role="option"
+                  class="srch-filter-opt is-active"
+                  data-filter="all"
+                  aria-selected="true"
+                >
+                  <span class="srch-filter-name">All results</span>
+                  {filterCounts.all ? <span class="srch-filter-count">{filterCounts.all}</span> : null}
+                </li>
+                <li
+                  role="option"
+                  class={`srch-filter-opt${results.length ? "" : " is-disabled"}`}
+                  data-filter="tv"
+                  aria-selected="false"
+                  aria-disabled={!results.length}
+                >
+                  <span class="srch-filter-name">TV shows</span>
+                  {results.length ? <span class="srch-filter-count">{filterCounts.tv}</span> : null}
+                </li>
+                <li
+                  role="option"
+                  class={`srch-filter-opt${movieResults.length ? "" : " is-disabled"}`}
+                  data-filter="movie"
+                  aria-selected="false"
+                  aria-disabled={!movieResults.length}
+                >
+                  <span class="srch-filter-name">Movies</span>
+                  {movieResults.length ? (
+                    <span class="srch-filter-count">{filterCounts.movie}</span>
+                  ) : null}
+                </li>
+                <li
+                  role="option"
+                  class={`srch-filter-opt${personResults.length ? "" : " is-disabled"}`}
+                  data-filter="person"
+                  aria-selected="false"
+                  aria-disabled={!personResults.length}
+                >
+                  <span class="srch-filter-name">People</span>
+                  {personResults.length ? (
+                    <span class="srch-filter-count">{filterCounts.person}</span>
+                  ) : null}
+                </li>
+                <li role="separator" class="srch-filter-sep" aria-hidden="true"></li>
+                <li role="option" class="srch-filter-opt srch-filter-clear" data-action="clear">
+                  <span class="srch-filter-name">Clear search</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="srch-live">
         {q && total > 0 ? (
           <p class="srch-sum">
             <strong>{total}</strong> {total === 1 ? "match" : "matches"} for “{q}”
@@ -214,7 +287,7 @@ app.get("/search", async (c) => {
         ) : null}
 
         {best ? (
-          <article class={`srch-hero${ambient ? " srch-ambient" : ""}`}>
+          <article class={`srch-hero${ambient ? " srch-ambient" : ""}`} data-srch-kind={best.kind === "tv" ? "tv" : "movie"}>
             {art ? (
               <div class="srch-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div>
             ) : null}
@@ -259,7 +332,7 @@ app.get("/search", async (c) => {
         ) : null}
 
         {restShows.length ? (
-          <section class="srch-section">
+          <section class="srch-section" data-srch-kind="tv">
             <h2>
               TV shows <span class="srch-count">{restShows.length}</span>
             </h2>
@@ -271,7 +344,7 @@ app.get("/search", async (c) => {
           </section>
         ) : null}
         {restMovies.length ? (
-          <section class="srch-section">
+          <section class="srch-section" data-srch-kind="movie">
             <h2>
               Movies <span class="srch-count">{restMovies.length}</span>
             </h2>
@@ -283,7 +356,7 @@ app.get("/search", async (c) => {
           </section>
         ) : null}
         {personResults.length ? (
-          <section class="srch-section">
+          <section class="srch-section" data-srch-kind="person">
             <h2>
               People <span class="srch-count">{personResults.length}</span>
             </h2>
@@ -328,6 +401,7 @@ app.get("/search", async (c) => {
             </ul>
           </section>
         ) : null}
+        </div>
 
         <section class="srch-doors">
           <h2>Keep exploring</h2>

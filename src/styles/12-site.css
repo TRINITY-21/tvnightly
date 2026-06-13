@@ -130,9 +130,16 @@
     min-width: 0;
     max-width: none;
   }
-  .search:focus-within { flex-basis: 100%; }
+  .search:focus-within { max-width: none; }
   .header-inner { gap: 0.6rem; }
   .site-header nav { gap: 0.7rem; font-size: 0.84rem; }
+  .nav-mega-panel {
+    left: auto;
+    right: 0;
+    transform: none;
+    width: min(22rem, calc(100vw - 2rem));
+  }
+  .nav-mega-grid { grid-template-columns: 1fr; gap: 0.65rem; }
   .poster-row > .card {
     flex: 0 0 112px;
     width: 112px;
@@ -158,7 +165,16 @@
   gap: 0.6rem;
   margin: 0.9rem 0 0.4rem;
 }
+.region-line.watch-region {
+  align-items: center;
+  margin-top: 0.9rem;
+  justify-content: flex-start;
+}
 .region-line .watch-field { min-width: 7.5rem; }
+.region-line.watch-region .watch-field {
+  min-width: 0;
+  width: auto;
+}
 .region-line button {
   background: none;
   border: 1px solid var(--line);
@@ -220,6 +236,14 @@
 }
 .shuffle-out .shelf-tile:hover img,
 .shuffle-out .shelf-tile:focus-visible img { filter: none; opacity: 1; }
+
+.shuffle-doors { margin-top: 2.2rem; }
+.shuffle-door-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (max-width: 640px) {
+  .shuffle-door-grid { grid-template-columns: 1fr; }
+}
 
 /* renewals wire: the door line before the inbox capture */
 .wire-foot { margin-top: 2.2rem; max-width: 56ch; }

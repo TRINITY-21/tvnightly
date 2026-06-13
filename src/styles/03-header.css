@@ -26,6 +26,23 @@
   max-width: 948px;
   margin: 0 auto;
 }
+@media (min-width: 701px) {
+  .header-inner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 14.5rem;
+    align-items: center;
+    flex-wrap: nowrap;
+  }
+  .site-header nav {
+    justify-content: center;
+    gap: 1.1rem;
+  }
+  .search {
+    margin-left: 0;
+    width: 100%;
+    max-width: none;
+  }
+}
 .footer-inner { max-width: 948px; margin: 0 auto; }
 .logo {
   display: inline-flex;
@@ -56,11 +73,7 @@
   margin-left: auto;
   flex: 0 1 14.5rem;
   min-width: 11.5rem;
-  transition: flex-basis 0.22s var(--ease), max-width 0.22s var(--ease);
-}
-.search:focus-within {
-  flex-basis: 18rem;
-  max-width: 100%;
+  max-width: 14.5rem;
 }
 .search::before {
   content: "";
@@ -153,6 +166,131 @@
   box-shadow: var(--glow);
 }
 
+/* browse mega-menu */
+.nav-mega {
+  position: relative;
+}
+.nav-mega-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  background: none;
+  border: 0;
+  padding: 0.3rem 0;
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-weight: 600;
+  font-size: 0.84rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text);
+}
+.nav-mega-btn::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateX(-50%) scale(0);
+  transition: transform var(--speed) var(--ease);
+}
+.nav-mega.active .nav-mega-btn::after {
+  transform: translateX(-50%) scale(1);
+  box-shadow: var(--glow);
+}
+.nav-mega-chev {
+  width: 0.38rem;
+  height: 0.38rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-0.08em);
+  opacity: 0.72;
+  transition: transform var(--speed) var(--ease), opacity var(--speed) var(--ease);
+}
+.nav-mega.open .nav-mega-chev {
+  transform: rotate(-135deg) translateY(0.08em);
+  opacity: 0.95;
+}
+.nav-mega-panel {
+  position: absolute;
+  top: calc(100% + 0.65rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(36rem, calc(100vw - 2rem));
+  padding: 0.85rem 0.95rem 0.75rem;
+  background: rgba(30, 30, 34, 0.98);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  z-index: 60;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+/* invisible bridge over the gap — panel is position:absolute so .nav-mega
+   doesn't grow; this keeps the pointer path from the button to the links */
+.nav-mega-panel::before {
+  content: "";
+  position: absolute;
+  left: -0.75rem;
+  right: -0.75rem;
+  bottom: 100%;
+  height: 0.85rem;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .nav-mega-panel { background: var(--surface-2); }
+}
+.nav-mega-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem 1.1rem;
+}
+.nav-mega-kicker {
+  margin: 0 0 0.45rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nav-mega-col a {
+  display: block;
+  padding: 0.38rem 0.15rem;
+  margin: 0 -0.15rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  transition: color var(--speed) var(--ease), background-color var(--speed) var(--ease);
+}
+.nav-mega-col a:hover {
+  color: var(--accent);
+  background: rgba(255, 169, 77, 0.08);
+  text-decoration: none;
+}
+.nav-mega-all {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--line);
+  width: 100%;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.nav-mega-all:hover { text-decoration: none; }
+
 .search .ta-box {
   position: absolute;
   top: calc(100% + 0.4rem);
@@ -164,10 +302,32 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
-  z-index: 20;
+  z-index: 70;
   overflow: hidden;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+}
+.search .ta-box[hidden] {
+  display: none !important;
+}
+.ta-hint {
+  margin: 0;
+  padding: 0.65rem 0.75rem 0.35rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.ta-quick {
+  display: block;
+  padding: 0.42rem 0.75rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.ta-quick:hover {
+  background: rgba(255, 169, 77, 0.08);
+  color: var(--accent);
+  text-decoration: none;
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .search .ta-box { background: var(--surface-2); }

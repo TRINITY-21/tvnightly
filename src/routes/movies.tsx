@@ -1,50 +1,303 @@
 import { Hono } from "hono";
-import { Bindings, MovieRow } from "../types";
-import { franchiseOfMovie } from "../lib/franchises";
-import { visitorRegion, providersFor, REGIONS, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
-import { slugifyName, heroBg, stripHtml, movieComparePathFor } from "../lib/format";
-import { VsCard } from "../components/compare";
-import { tmdbMovieBackdrop, tmdbMovieMedia, tmdbMovieCast, tmdbMovieCrew } from "../lib/tmdb";
-import { MovieTabs } from "../components/nav";
-import { IconPlay } from "../components/icons";
-import { origin, canonical } from "../lib/seo";
-import { similarMovies, crewLinkMap } from "../lib/queries";
-import { titleStat } from "../lib/ratings";
-import { hubForGenres } from "../lib/verticals";
 import { Layout } from "../components/Layout";
-import { MovieCard, ExploreCard, ClampSummary } from "../components/cards";
-import { ProviderLine } from "../components/providers";
-import { RateInline, FilterSelect } from "../components/forms";
-import { buildMovieDossier } from "../lib/dossier";
+import { ClampSummary, ExploreCard } from "../components/cards";
+import { VsCard } from "../components/compare";
 import { DossierRow } from "../components/dossier";
+import { FilterSelect, RateInline } from "../components/forms";
+import { IconPlay } from "../components/icons";
+import { MovieTabs } from "../components/nav";
+import { ProviderLine } from "../components/providers";
+import { buildMovieDossier } from "../lib/dossier";
+import { MONTHS, heroBg, longDate, movieComparePathFor, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
+import { franchiseOfMovie } from "../lib/franchises";
+import { PROVIDER_LOGOS, REGIONS, providerBrand, providersFor, visitorRegion } from "../lib/providers";
+import { crewLinkMap, similarMovies } from "../lib/queries";
+import { titleStat } from "../lib/ratings";
+import { canonical, origin } from "../lib/seo";
+import { tmdbMovieBackdrop, tmdbMovieCast, tmdbMovieCrew, tmdbMovieMedia, tmdbUpcomingBackdrop } from "../lib/tmdb";
+import { hubForGenres } from "../lib/verticals";
+import { Bindings, MovieRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
+const fmtVotes = (n: number) =>
+  n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n);
+
+const movieProvLinks = (m: MovieRow, region: string) => {
+  const links: { href: string; label: string }[] = [];
+  const provs = [...new Set(providersFor(m, region).names.map(providerBrand))];
+  for (const p of provs.slice(0, 2)) {
+    links.push({ href: `/network/${slugifyName(p)}/movies`, label: p });
+  }
+  const genres: string[] = m.genres ? JSON.parse(m.genres) : [];
+  for (const g of genres.slice(0, 2)) {
+    if (links.length >= 3) break;
+    links.push({ href: `/genre/${slugifyName(g)}/movies`, label: g });
+  }
+  return links;
+};
+
 app.get("/movies/upcoming", async (c) => {
+  type UpcomingRow = {
+    tmdb_id: number;
+    title: string;
+    release_date: string;
+    poster_url: string | null;
+    overview: string | null;
+    slug: string | null;
+    imdb_id: string | null;
+  };
   const { results } = await c.env.DB.prepare(
-    `SELECT * FROM upcoming_movies WHERE release_date >= date('now')
-     ORDER BY release_date LIMIT 40`,
-  ).all<{ tmdb_id: number; title: string; release_date: string; poster_url: string | null; overview: string | null }>();
+    `SELECT u.tmdb_id, u.title, u.release_date, u.poster_url, u.overview,
+            m.slug, m.imdb_id
+     FROM upcoming_movies u
+     LEFT JOIN movies m ON m.tmdb_id = u.tmdb_id
+     WHERE u.release_date >= date('now')
+     ORDER BY u.release_date LIMIT 40`,
+  ).all<UpcomingRow>();
+
+  const daysUntil = (iso: string) => {
+    const d = Math.ceil((new Date(`${iso}T12:00:00`).getTime() - Date.now()) / 86400000);
+    if (d < 0) return null;
+    if (d === 0) return "Opens today";
+    if (d === 1) return "Tomorrow";
+    return `In ${d} days`;
+  };
+  const monthLabel = (ym: string) => `${MONTHS[Number(ym.slice(5, 7)) - 1] ?? ym} ${ym.slice(0, 4)}`;
+
+  // the page opens on the nearest wide release — promoted out of the board
+  const head = results[0] ?? null;
+  const tail = head ? results.slice(1) : results;
+  const soonCutoff = new Date();
+  soonCutoff.setUTCDate(soonCutoff.getUTCDate() + 21);
+  const soonCut = soonCutoff.toISOString().slice(0, 10);
+  const openingSoon = tail.filter((m) => m.release_date <= soonCut);
+  const later = tail.filter((m) => m.release_date > soonCut);
+
+  const byMonth = new Map<string, UpcomingRow[]>();
+  for (const m of later) {
+    const month = m.release_date.slice(0, 7);
+    if (!byMonth.has(month)) byMonth.set(month, []);
+    byMonth.get(month)!.push(m);
+  }
+
+  let art: { x1: string; x2?: string } | null = null;
+  let ambient = false;
+  if (head && c.env.TMDB_API_KEY) {
+    art =
+      (head.imdb_id ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, head.imdb_id) : null) ??
+      (await tmdbUpcomingBackdrop(c.env.TMDB_API_KEY, head.tmdb_id));
+  }
+  if (!art && head?.poster_url) {
+    art = { x1: head.poster_url };
+    ambient = true;
+  }
+
+  const span =
+    results.length > 1
+      ? `${MONTHS[Number(results[0].release_date.slice(5, 7)) - 1].slice(0, 3)} – ${MONTHS[Number(results[results.length - 1].release_date.slice(5, 7)) - 1]} ${results[results.length - 1].release_date.slice(0, 4)}`
+      : head
+        ? longDate(head.release_date)
+        : null;
+
+  const Row = ({ m }: { m: UpcomingRow }) => {
+    const { day, month } = premiereDateParts(m.release_date);
+    const countdown = daysUntil(m.release_date);
+    const body = (
+      <>
+        <span class="sched-rail">{month ? `${month} ${day}` : "TBA"}</span>
+        {m.poster_url ? (
+          <img src={m.poster_url} alt="" width="46" height="69" loading="lazy" decoding="async" />
+        ) : (
+          <span class="sched-thumb-blank" aria-hidden="true"></span>
+        )}
+        <span class="sched-main">
+          <span class="sched-show">{m.title}</span>
+          <span class="sched-ep">{longDate(m.release_date)}</span>
+          {m.overview ? <span class="sched-blurb">{stripHtml(m.overview)}</span> : null}
+        </span>
+        {countdown ? <span class="upcoming-chip">{countdown}</span> : null}
+      </>
+    );
+    return (
+      <li>
+        {m.slug ? (
+          <a class="sched-row" href={`/movie/${m.slug}`}>
+            {body}
+          </a>
+        ) : (
+          <div class="sched-row sched-row-static">{body}</div>
+        )}
+      </li>
+    );
+  };
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title="Upcoming movies — release dates | TV Nightly"
-      description="Every major movie coming to theaters, in release order."
+      title="Upcoming movies — theatrical release dates | TV Nightly"
+      description="Every major movie heading to theaters soon, in release order — with dates, posters, and what to watch while you wait."
       canonical={canonical(c)}
     >
-      <h1>Upcoming movies</h1>
-      {results.length === 0 ? <p class="muted">No upcoming snapshot loaded yet.</p> : null}
-      <ul class="ep-list">
-        {results.map((m) => (
-          <li class="wo-row">
-            {m.poster_url ? <img class="wo-poster" src={m.poster_url} alt={m.title} loading="lazy" /> : null}
-            <span>
-              <strong>{m.title}</strong> <span class="muted">· {m.release_date}</span>
-              {m.overview ? <p class="muted">{m.overview.slice(0, 160)}…</p> : null}
+      <header class={`wo-hero${ambient ? " hub-ambient" : ""}`}>
+        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
+        <div class="wo-hero-body">
+          <p class="section-eyebrow">Release radar</p>
+          <h1>Upcoming movies</h1>
+          <p class="wo-intro">
+            The theatrical calendar, distilled — every wide release we are tracking from TMDB's
+            upcoming feed, in date order. Bookmark it before the trailers pile up.
+          </p>
+          {results.length ? (
+            <dl class="wo-stats">
+              <div>
+                <dt>On the board</dt>
+                <dd>{results.length}</dd>
+              </div>
+              {span ? (
+                <div>
+                  <dt>Window</dt>
+                  <dd>{span}</dd>
+                </div>
+              ) : null}
+              {head ? (
+                <div>
+                  <dt>Next up</dt>
+                  <dd>{daysUntil(head.release_date) ?? longDate(head.release_date)}</dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
+          {head ? (
+            <div class="upcoming-spotlight">
+              <p class="sched-kicker">
+                Next wide release · {daysUntil(head.release_date) ?? longDate(head.release_date)}
+              </p>
+              <h2 class="upcoming-spotlight-title">
+                {head.slug ? <a href={`/movie/${head.slug}`}>{head.title}</a> : head.title}
+              </h2>
+              <p class="sched-hero-ep">
+                <strong>{longDate(head.release_date)}</strong>
+                {head.slug ? <span class="muted"> · already in our catalog</span> : null}
+              </p>
+              {head.overview ? <p class="sched-dek">{stripHtml(head.overview)}</p> : null}
+            </div>
+          ) : null}
+          <p class="hub-actions">
+            <a class="verdict-btn" href="/what-to-watch?type=movie">
+              Pick me a movie tonight
+            </a>
+            <a class="btn-ghost" href="/movies/best">
+              Best movies, ranked
+            </a>
+          </p>
+        </div>
+      </header>
+
+      {results.length === 0 ? (
+        <p class="muted">No upcoming snapshot loaded yet — the movie seed refreshes this chart.</p>
+      ) : null}
+
+      {openingSoon.length ? (
+        <section class="upcoming-shelf">
+          <h2>
+            Opening soon{" "}
+            <span class="sched-count">
+              {openingSoon.length} premiere{openingSoon.length === 1 ? "" : "s"}
             </span>
-          </li>
-        ))}
-      </ul>
+          </h2>
+          <p class="muted upcoming-lead">The next three weeks on the theatrical calendar.</p>
+          <ul class="poster-shelf">
+            {openingSoon.map((m) => {
+              const { day, month } = premiereDateParts(m.release_date);
+              const href = m.slug ? `/movie/${m.slug}` : null;
+              const tile = (
+                <>
+                  {m.poster_url ? (
+                    <img src={m.poster_url} alt="" width="92" height="138" loading="lazy" decoding="async" />
+                  ) : (
+                    <span class="shelf-fallback">{m.title}</span>
+                  )}
+                  <span class="shelf-chip shelf-chip-date">
+                    {daysUntil(m.release_date) === "Tomorrow" || daysUntil(m.release_date) === "Opens today" ? (
+                      <span class="chip-soon">{daysUntil(m.release_date)}</span>
+                    ) : null}
+                    {month ? `${month} ${day}` : "Soon"}
+                  </span>
+                </>
+              );
+              return (
+                <li>
+                  {href ? (
+                    <a class="shelf-tile" href={href} title={`${m.title} · ${longDate(m.release_date)}`}>
+                      {tile}
+                    </a>
+                  ) : (
+                    <span class="shelf-tile shelf-tile-static" title={m.title}>
+                      {tile}
+                    </span>
+                  )}
+                  <span class="shelf-name">{m.title}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
+      {[...byMonth.entries()].map(([month, rows]) => (
+        <section class="sched-day">
+          <h2>
+            {monthLabel(month)}{" "}
+            <span class="sched-count">
+              {rows.length} film{rows.length === 1 ? "" : "s"}
+            </span>
+          </h2>
+          <ol class="sched-list">
+            {rows.map((m) => (
+              <Row m={m} />
+            ))}
+          </ol>
+        </section>
+      ))}
+
+      <p class="wire-foot muted">
+        Dates come from TMDB's theatrical feed and can move — we refresh the snapshot when the movie
+        catalog syncs. Already in theaters?{" "}
+        <a class="chev-after" href="/what-to-watch?type=movie">
+          Spin the movie picker
+        </a>
+      </p>
+
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="The chart"
+            title="The best films of all time"
+            desc="Every movie ranked by rating, with where to stream."
+            href="/movies/best"
+          />
+          <ExploreCard
+            icon="Tonight"
+            title="Upcoming TV premieres"
+            desc="Season premieres in the next ninety days — the small-screen calendar."
+            href="/premieres"
+          />
+          <ExploreCard
+            icon="Guides"
+            title="Watch every saga in order"
+            desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
+            href="/watch-orders"
+          />
+          <ExploreCard
+            icon="Tailored"
+            title="Rate one thing, get a pick"
+            desc="The recommender finds your next watch from one rating."
+            href="/recommend"
+          />
+        </div>
+      </section>
     </Layout>,
   );
 });
@@ -55,26 +308,142 @@ app.get("/movies", async (c) => {
   const { results } = await c.env.DB.prepare(
     "SELECT * FROM movies ORDER BY popularity DESC LIMIT 48",
   ).all<MovieRow>();
+  const region = visitorRegion(c);
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title="Popular movies — ratings, runtimes & picks | TV Nightly"
       description="The most popular movies with ratings, runtimes and genres — plus ranked best-of lists and a what-to-watch picker."
       canonical={canonical(c)}
+      ld={[
+        {
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          name: "Popular movies",
+          itemListElement: results.slice(0, 24).map((m, i) => ({
+            "@type": "ListItem",
+            position: i + 1,
+            name: m.title,
+            url: `${origin(c)}/movie/${m.slug}`,
+          })),
+        },
+      ]}
     >
-      <h1>Popular movies</h1>
-      <p>
-        <a class="chev-after" href="/movies/best">Best movies, ranked</a> ·{" "}
-        <a href="/what-to-watch?type=movie">Pick one for me</a>
-      </p>
-      {results.length === 0 ? (
-        <p class="muted">No movies loaded yet — the catalog is on its way.</p>
-      ) : null}
-      <div class="grid">
-        {results.map((m) => (
-          <MovieCard movie={m} />
-        ))}
-      </div>
+      <article class="chart-page">
+        <header class="chart-head">
+          <p class="section-eyebrow">The catalog</p>
+          <h1 class="chart-h1">Popular movies</h1>
+          <p class="section-lead">
+            What people are looking at right now — every title here has ratings, runtimes, genres,
+            and where to stream it.
+          </p>
+          {results.length ? (
+            <p class="chart-statline">
+              <span class="chart-statline-main">
+                <strong>{results.length}</strong> films
+              </span>
+              <span class="chart-statline-links">
+                <a class="chev-after" href="/movies/best">
+                  Best movies, ranked
+                </a>
+                <a class="chev-after" href="/what-to-watch?type=movie">
+                  Pick one for me
+                </a>
+                <a class="chev-after" href="/movies/upcoming">
+                  Upcoming
+                </a>
+              </span>
+            </p>
+          ) : null}
+        </header>
+
+        {!results.length ? (
+          <p class="muted">No movies loaded yet — the catalog is on its way.</p>
+        ) : (
+          <ol class="wo-list">
+            {results.map((m, i) => {
+              const provLinks = movieProvLinks(m, region);
+              return (
+                <li class="wo-row">
+                  <span class="wo-num" aria-hidden="true">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  {m.poster_url ? (
+                    <img
+                      class="wo-poster"
+                      src={m.poster_url}
+                      alt=""
+                      width="46"
+                      height="69"
+                      loading={i < 8 ? "eager" : "lazy"}
+                      decoding="async"
+                    />
+                  ) : (
+                    <span class="wo-poster wo-poster-blank" aria-hidden="true"></span>
+                  )}
+                  <span class="wo-main">
+                    <span class="wo-title">
+                      <a href={`/movie/${m.slug}`}>{m.title}</a>
+                      {m.year ? <span class="muted"> ({m.year})</span> : null}
+                    </span>
+                    {provLinks.length ? (
+                      <span class="wo-provs">
+                        {provLinks.map((l, j) => (
+                          <>
+                            {j > 0 ? " · " : null}
+                            <a href={l.href}>{l.label}</a>
+                          </>
+                        ))}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span class="wo-side">
+                    {m.rating != null ? (
+                      <span class="rating">★ {m.rating.toFixed(1)}</span>
+                    ) : null}
+                    {m.runtime ? (
+                      <span class="wo-mins">{m.runtime} min</span>
+                    ) : m.votes ? (
+                      <span class="wo-mins">{fmtVotes(m.votes)} votes</span>
+                    ) : null}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+
+        <section class="wo-doors">
+          <h2>Keep exploring</h2>
+          <div class="explore-grid">
+            <ExploreCard
+              icon="Charts"
+              title="Best movies, ranked"
+              desc="The highest-rated films we track — a thousand votes minimum, no flukes."
+              href="/movies/best"
+            />
+            <ExploreCard
+              icon="Guides"
+              title="Watch every saga in order"
+              desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
+              href="/watch-orders"
+            />
+            <ExploreCard
+              icon="Compare"
+              title="Compare two movies"
+              desc="Ratings, runtimes, and streaming — head-to-head on one page."
+              href="/movies/compare"
+            />
+            <ExploreCard
+              icon="Community"
+              title="Loved by this community"
+              desc="The chart built from real one-tap reader verdicts."
+              href="/loved"
+            />
+          </div>
+        </section>
+      </article>
     </Layout>,
   );
 });
@@ -118,8 +487,6 @@ app.get("/movies/best", async (c) => {
 
   const years = results.map((m) => m.year).filter((y): y is number => y != null);
   const span = years.length ? `${Math.min(...years)}–${Math.max(...years)}` : null;
-  const fmtVotes = (n: number) =>
-    n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n);
 
   const heading = genre ? `The best ${genre.toLowerCase()} movies, ranked` : "The best movies of all time, ranked";
   c.header("Cache-Control", "public, max-age=3600");
@@ -184,9 +551,8 @@ app.get("/movies/best", async (c) => {
           </p>
         </div>
       </header>
-      {/* explicit submit, no onchange: arrow-keying through a closed select
-          must not navigate (WCAG 3.2.2), and it must work without JS */}
-      <form method="get" action="/movies/best" class="region-line">
+      {/* data-submit-on-change: dropdown.js submits on pick (no Go button) */}
+      <form method="get" action="/movies/best" class="region-line watch-region" data-submit-on-change>
         <FilterSelect
           label="Genre"
           name="genre"
@@ -196,7 +562,6 @@ app.get("/movies/best", async (c) => {
             ...genreRows.map((r) => ({ value: r.g, text: r.g })),
           ]}
         />
-        <button type="submit">Rank</button>
       </form>
       {results.length === 0 ? <p class="muted">No rated movies for that filter yet.</p> : null}
       <ol class="wo-list">
@@ -232,20 +597,20 @@ app.get("/movies/best", async (c) => {
       </ol>
       <section class="hub-sec">
         <h2>Cut the chart by genre</h2>
-        <p class="quick-picks">
+        <div class="footer-picks">
           {genreRows
             .filter((r) => r.g !== genre)
             .map((r) => (
-              <a class="chip" href={`/movies/best?genre=${encodeURIComponent(r.g)}`}>
+              <a class="footer-card" href={`/movies/best?genre=${encodeURIComponent(r.g)}`}>
                 {r.g}
               </a>
             ))}
           {genre ? (
-            <a class="chip" href="/movies/best">
+            <a class="footer-card" href="/movies/best">
               All genres
             </a>
           ) : null}
-        </p>
+        </div>
       </section>
       <section class="wo-doors">
         <h2>Keep exploring</h2>
@@ -675,17 +1040,17 @@ app.get("/movie/:slug/similar", async (c) => {
         </section>
         <section>
           <h2>Keep going</h2>
-          <nav class="pill-nav">
-            <a class="chev-after" href={`/movie/${movie.slug}`}>
+          <div class="footer-picks">
+            <a class="footer-card" href={`/movie/${movie.slug}`}>
               {movie.title} overview
             </a>
-            <a class="chev-after" href="/movies/best">
+            <a class="footer-card" href="/movies/best">
               Best movies
             </a>
-            <a class="chev-after" href="/what-to-watch?type=movie">
+            <a class="footer-card" href="/what-to-watch?type=movie">
               What should I watch tonight?
             </a>
-          </nav>
+          </div>
         </section>
       </article>
     </Layout>,
@@ -883,17 +1248,17 @@ app.get("/movie/:slug/media", async (c) => {
         ) : null}
         <section>
           <h2>Keep going</h2>
-          <nav class="pill-nav">
-            <a class="chev-after" href={`/movie/${movie.slug}`}>
+          <div class="footer-picks">
+            <a class="footer-card" href={`/movie/${movie.slug}`}>
               {movie.title} overview
             </a>
-            <a class="chev-after" href={`/movie/${movie.slug}/similar`}>
+            <a class="footer-card" href={`/movie/${movie.slug}/similar`}>
               Movies like {movie.title}
             </a>
-            <a class="chev-after" href="/movies/best">
+            <a class="footer-card" href="/movies/best">
               Best movies
             </a>
-          </nav>
+          </div>
         </section>
       </article>
     </Layout>,
@@ -1054,6 +1419,7 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
       }
       canonical={`${site}${base}`}
       ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+      scripts={["/js/dropdown.js"]}
     >
       <article class="show-hub">
         <header class={heroFrame ? "detail-hero frame-hero" : "detail-hero"}>
@@ -1080,23 +1446,14 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
               </p>
               <h1>Where to watch {movie.title}</h1>
               <p class="summary">{stripHtml(movie.overview ?? "").slice(0, 180)}</p>
-              {/* explicit submit, no onchange (WCAG 3.2.2); works without JS */}
-              <form method="get" action={base} class="sub-form watch-region">
-                <label for="wr-region" class="muted" style="flex-basis:auto;font-weight:400">
-                  Showing options for
-                </label>
-                <select
-                  id="wr-region"
+              {/* data-submit-on-change: dropdown.js submits on pick (no Go button) */}
+              <form method="get" action={base} class="region-line watch-region" data-submit-on-change>
+                <FilterSelect
+                  label="Showing options for"
                   name="region"
-                  style="background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:0.35rem 0.5rem"
-                >
-                  {REGIONS.map((r) => (
-                    <option value={r} selected={r === region}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-                <button type="submit">Go</button>
+                  current={region}
+                  options={REGIONS.map((r) => ({ value: r, text: r }))}
+                />
               </form>
             </div>
           </div>
@@ -1133,41 +1490,46 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
               ))}
             </ul>
           ) : (
-            <p class="muted">
-              Not on a subscription service in {region} right now.{" "}
-              <a class="chev-after" href="/what-to-watch?type=movie">
-                Find one that is streaming
-              </a>
-            </p>
-          )}
-          {elsewhere.length ? (
-            <p class="watch-elsewhere">
-              <span class="muted">Also streaming in:</span>{" "}
-              {elsewhere.map((r, i) => (
+            <>
+              <p class="muted">
+                Not on a subscription service in {region} right now.
+                {!elsewhere.length ? (
+                  <>
+                    {" "}
+                    <a class="chev-after" href="/what-to-watch?type=movie">
+                      Find one that is streaming
+                    </a>
+                  </>
+                ) : null}
+              </p>
+              {elsewhere.length ? (
                 <>
-                  {i > 0 ? " · " : ""}
-                  <a href={`${base}?region=${r}`}>{r}</a>
+                  <p class="watch-elsewhere-eyebrow muted">Also streaming in</p>
+                  <div class="footer-picks watch-region-picks">
+                    {elsewhere.map((r) => (
+                      <a class="footer-card" href={`${base}?region=${r}`}>
+                        {r}
+                      </a>
+                    ))}
+                  </div>
                 </>
-              ))}
-            </p>
-          ) : null}
-          <p class="muted watch-src">
-            Streaming data via JustWatch/TMDB, refreshed with the monthly catalog seeds.
-          </p>
+              ) : null}
+            </>
+          )}
         </section>
         <section>
           <h2>Keep going</h2>
-          <nav class="pill-nav">
-            <a class="chev-after" href={`/movie/${movie.slug}`}>
+          <div class="footer-picks">
+            <a class="footer-card" href={`/movie/${movie.slug}`}>
               {movie.title} overview
             </a>
-            <a class="chev-after" href={`/movie/${movie.slug}/similar`}>
+            <a class="footer-card" href={`/movie/${movie.slug}/similar`}>
               Movies like {movie.title}
             </a>
-            <a class="chev-after" href="/what-to-watch?type=movie">
+            <a class="footer-card" href="/what-to-watch?type=movie">
               What should I watch tonight?
             </a>
-          </nav>
+          </div>
         </section>
       </article>
     </Layout>,
@@ -1226,19 +1588,19 @@ app.get("/movies/compare", async (c) => {
       {ma && !mb ? (
         <section>
           <h2>Compare {ma.title} with…</h2>
-          <p class="quick-picks">
+          <div class="footer-picks">
             {(await similarMovies(db, ma)).slice(0, 6).map((m) => (
-              <a class="chip" href={movieComparePathFor(ma.slug, m.slug)}>
+              <a class="footer-card" href={movieComparePathFor(ma.slug, m.slug)}>
                 {ma.title} vs {m.title}
               </a>
             ))}
-          </p>
+          </div>
         </section>
       ) : null}
       {!ma && !mb ? (
         <section>
           <h2>Popular matchups</h2>
-          <p class="quick-picks">
+          <div class="footer-picks">
             {await (async () => {
               const { results: tops } = await db
                 .prepare("SELECT slug, title FROM movies ORDER BY popularity DESC LIMIT 8")
@@ -1246,13 +1608,13 @@ app.get("/movies/compare", async (c) => {
               return tops.slice(0, 6).map((m, i) => {
                 const other = tops[(i + 1) % tops.length];
                 return (
-                  <a class="chip" href={movieComparePathFor(m.slug, other.slug)}>
+                  <a class="footer-card" href={movieComparePathFor(m.slug, other.slug)}>
                     {m.title} vs {other.title}
                   </a>
                 );
               });
             })()}
-          </p>
+          </div>
         </section>
       ) : null}
     </Layout>,
@@ -1463,28 +1825,28 @@ app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
       {more.length > 0 ? (
         <section>
           <h2>More comparisons</h2>
-          <p class="quick-picks">
+          <div class="footer-picks">
             {more.map(({ anchor, other }) => (
-              <a class="chip" href={movieComparePathFor(anchor.slug, other.slug)}>
+              <a class="footer-card" href={movieComparePathFor(anchor.slug, other.slug)}>
                 {anchor.title} vs {other.title}
               </a>
             ))}
-          </p>
+          </div>
         </section>
       ) : null}
       <section>
         <h2>Keep going</h2>
-        <nav class="pill-nav">
-          <a class="chev-after" href={`/movie/${a.slug}`}>
+        <div class="footer-picks">
+          <a class="footer-card" href={`/movie/${a.slug}`}>
             {a.title} overview
           </a>
-          <a class="chev-after" href={`/movie/${b.slug}`}>
+          <a class="footer-card" href={`/movie/${b.slug}`}>
             {b.title} overview
           </a>
-          <a class="chev-after" href={`/movie/${a.slug}/compare`}>
+          <a class="footer-card" href={`/movie/${a.slug}/compare`}>
             More {a.title} matchups
           </a>
-        </nav>
+        </div>
       </section>
     </Layout>,
   );

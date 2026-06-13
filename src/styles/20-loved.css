@@ -4,14 +4,11 @@
    carries the score, the bar carries the loved/liked/meh split — accent
    stays reserved for interaction. */
 
-.loved-lead { max-width: 56ch; }
-.loved-cta { margin: 1.1rem 0 0; }
-
 .loved-podium {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.65rem;
-  margin-top: 1.6rem;
+  margin-top: 0.2rem;
 }
 .loved-hero {
   position: relative;
@@ -103,6 +100,16 @@
 .seg-meh { background: rgba(248, 246, 242, 0.16); }
 
 .loved-board { margin-top: 2.4rem; }
+.loved-board h2 {
+  margin: 0;
+  font-size: 0.72rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .loved-list {
   list-style: none;
   margin: 1rem 0 0;

@@ -142,13 +142,13 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
   // the doors out, tuned per hub: its own chart first
   const chartDoor = v.tvGenres?.length
     ? {
-        icon: "The chart",
+        icon: "Charts",
         title: `Every ${v.name.toLowerCase()} show, ranked`,
-        desc: "The full genre chart — series and films, by rating.",
+        desc: `The full ${v.name.toLowerCase()} chart, ordered by rating.`,
         href: `/genre/${slugifyName(v.tvGenres[0])}`,
       }
     : {
-        icon: "The chart",
+        icon: "Film",
         title: "The best films of all time",
         desc: "Every movie ranked by rating, with where to stream.",
         href: "/movies/best",

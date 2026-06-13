@@ -34,6 +34,17 @@
   color: var(--accent);
   margin-bottom: 0.1rem;
 }
+/* a score riding the kicker row: gold, pushed to the right beside the arrow */
+.explore-rating {
+  margin-left: auto;
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.explore-rating + .explore-arrow { margin-left: 0.45rem; }
 .explore-title {
   font-family: var(--display);
   font-stretch: 110%;
@@ -248,6 +259,11 @@
   align-items: center;
   gap: 0.6rem;
   margin: 1.2rem 0 0;
+}
+/* ghost buttons ride over the hero backdrop — give the accent text its own
+   dark plate so it holds AA where the frame scrim thins (spotlight precedent) */
+.wo-hero .btn-ghost {
+  background: rgba(14, 14, 17, 0.55);
 }
 .hub-ambient .wo-frame {
   inset: -48px;

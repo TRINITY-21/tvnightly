@@ -55,15 +55,17 @@ export const MovieCard: FC<{ movie: MovieRow }> = ({ movie }) => (
 
 // A destination slate in the lower-third voice: kicker word up top with the
 // house chevron, confident display title, one quiet line of why-go.
-export const ExploreCard: FC<{ icon: string; title: string; desc: string; href: string }> = ({
-  icon,
-  title,
-  desc,
-  href,
-}) => (
+export const ExploreCard: FC<{
+  icon: string;
+  title: string;
+  desc: string;
+  href: string;
+  rating?: number;
+}> = ({ icon, title, desc, href, rating }) => (
   <a class="explore-card" href={href}>
     <span class="explore-kicker">
       {icon}
+      {rating != null ? <span class="rating explore-rating">★ {rating.toFixed(1)}</span> : null}
       <span class="chev-icon explore-arrow" aria-hidden="true"></span>
     </span>
     <strong class="explore-title">{title}</strong>

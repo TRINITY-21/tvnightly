@@ -251,6 +251,83 @@
   color: var(--muted);
   text-align: center;
 }
+
+/* ---- shelf scroll arrows (shelf-scroll.js wraps overflowing shelves) ----
+   Quiet edge buttons that page the row; each fades in only on the side you
+   can still travel, with a soft scrim so posters dissolve under them. */
+.shelf-scroller { position: relative; }
+.shelf-scroller::before,
+.shelf-scroller::after {
+  content: "";
+  position: absolute;
+  top: 1rem;
+  height: var(--shelf-art-h, 138px);
+  width: 3.4rem;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+  transition: opacity var(--speed) var(--ease);
+}
+.shelf-scroller::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bg), rgba(18, 18, 20, 0));
+}
+.shelf-scroller::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bg), rgba(18, 18, 20, 0));
+}
+.shelf-scroller.can-prev::before,
+.shelf-scroller.can-next::after { opacity: 0.85; }
+
+.shelf-nav {
+  position: absolute;
+  top: calc(1rem + var(--shelf-art-h, 138px) / 2);
+  transform: translateY(-50%) scale(0.85);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(14, 14, 17, 0.74);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--speed) var(--ease), transform var(--speed) var(--ease),
+    border-color var(--speed) var(--ease), background var(--speed) var(--ease);
+}
+.shelf-nav-prev { left: 0.1rem; }
+.shelf-nav-next { right: 0.1rem; }
+.shelf-scroller.can-prev .shelf-nav-prev,
+.shelf-scroller.can-next .shelf-nav-next {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+}
+.shelf-nav:hover {
+  border-color: var(--accent);
+  background: rgba(14, 14, 17, 0.92);
+  color: var(--accent);
+}
+.shelf-nav:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.shelf-nav-chev {
+  width: 0.46rem;
+  height: 0.46rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+}
+.shelf-nav-next .shelf-nav-chev { transform: rotate(-45deg); margin-left: -3px; }
+.shelf-nav-prev .shelf-nav-chev { transform: rotate(135deg); margin-right: -3px; }
 /* a service badge in the tile corner (hub arrival shelves) */
 .shelf-tile .shelf-logo {
   position: absolute;

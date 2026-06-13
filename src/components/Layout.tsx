@@ -266,7 +266,7 @@ export const Layout: FC<
         </p>
         </div>
       </footer>
-      {["/js/typeahead.js", "/js/nav-mega.js", ...(props.scripts ?? [])].map((s) => (
+      {["/js/typeahead.js", "/js/nav-mega.js", "/js/shelf-scroll.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>
       ))}
     </body>

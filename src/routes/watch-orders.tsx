@@ -52,6 +52,9 @@ app.get("/watch-orders", async (c) => {
     return {
       f,
       mins,
+      // a marathon total is only honest if every film matched a runtime —
+      // otherwise a sparsely-mirrored saga fakes a short run and wins
+      fullyTimed: matched.every((m) => (m?.runtime ?? 0) > 0),
       span: `${Math.min(...years)}–${Math.max(...years)}`,
       rep: matched.find((m) => m?.imdb_id) ?? null,
       // an average over a couple of films would flatter the short sagas
@@ -59,11 +62,13 @@ app.get("/watch-orders", async (c) => {
     };
   });
 
-  // the concierge cards: honest superlatives computed from the board itself
-  const timed = guides.filter((g) => g.mins > 0);
+  // the concierge cards: honest superlatives computed from the board itself.
+  // marathon ranking only considers fully-timed sagas; best dedupes against
+  // the two it might otherwise repeat.
+  const timed = guides.filter((g) => g.fullyTimed && g.mins > 0);
   const shortest = timed.length ? timed.reduce((a, b) => (b.mins < a.mins ? b : a)) : null;
   const longest = timed.length ? timed.reduce((a, b) => (b.mins > a.mins ? b : a)) : null;
-  const rated = guides.filter((g) => g.avg != null);
+  const rated = guides.filter((g) => g.avg != null && g !== shortest && g !== longest);
   const best = rated.length ? rated.reduce((a, b) => (b.avg! > a.avg! ? b : a)) : null;
 
   // each guide's door wears its opening film's backdrop (7-day edge cache)
@@ -116,24 +121,25 @@ app.get("/watch-orders", async (c) => {
           <div class="explore-grid">
             {shortest ? (
               <ExploreCard
-                icon="One weekend"
-                title={`${shortest.f.name} — ${fmtMarathon(shortest.mins)}`}
-                desc={`The quickest run on the board: ${shortest.f.entries.length} films, one determined Saturday.`}
+                icon="Quickest"
+                title={shortest.f.name}
+                desc="The shortest run on the board — one determined weekend clears it end to end."
                 href={`/watch-order/${shortest.f.slug}`}
               />
             ) : null}
             {longest && longest !== shortest ? (
               <ExploreCard
-                icon="The long haul"
-                title={`${longest.f.name} — ${fmtMarathon(longest.mins)}`}
-                desc={`${longest.f.entries.length} films back to back. Block out the month.`}
+                icon="Deepest"
+                title={longest.f.name}
+                desc="The longest haul we track. Block out the month before you press play."
                 href={`/watch-order/${longest.f.slug}`}
               />
             ) : null}
             {best ? (
               <ExploreCard
-                icon="Strongest run"
-                title={`${best.f.name} — ★ ${best.avg!.toFixed(1)} average`}
+                icon="Top-rated"
+                rating={best.avg!}
+                title={best.f.name}
                 desc="The highest average rating across its films — the safest bet on the board."
                 href={`/watch-order/${best.f.slug}`}
               />
@@ -145,7 +151,7 @@ app.get("/watch-orders", async (c) => {
         <h2>Keep exploring</h2>
         <div class="explore-grid">
           <ExploreCard
-            icon="The chart"
+            icon="Film"
             title="The best films of all time"
             desc="Every movie ranked by rating, with where to stream."
             href="/movies/best"

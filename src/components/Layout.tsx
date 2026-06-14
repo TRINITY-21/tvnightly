@@ -1,5 +1,6 @@
 // Page chrome: header/nav/footer, logo mark, message page.
 import { FC, PropsWithChildren } from "hono/jsx";
+import { raw } from "hono/html";
 import { jsonLd } from "../lib/seo";
 import { VERTICALS } from "../lib/verticals";
 
@@ -104,6 +105,8 @@ export const Layout: FC<
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
+      {/* mark JS early so the poster-skeleton shimmer is scoped on before first paint */}
+      {raw('<script>document.documentElement.classList.add("js")</script>')}
       <title>{props.title}</title>
       {props.description ? <meta name="description" content={props.description} /> : null}
       {props.canonical ? <link rel="canonical" href={props.canonical} /> : null}
@@ -131,6 +134,7 @@ export const Layout: FC<
       {(props.ld ?? []).map((d) => jsonLd(d))}
     </head>
     <body>
+      <div class="nprogress" aria-hidden="true"><span class="nprogress-bar"></span></div>
       <header class="site-header">
         {/* inner rail centers on the same 948px column as main content */}
         <div class="header-inner">
@@ -269,7 +273,7 @@ export const Layout: FC<
         </p>
         </div>
       </footer>
-      {["/js/typeahead.js", "/js/nav-mega.js", "/js/shelf-scroll.js", ...(props.scripts ?? [])].map((s) => (
+      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/shelf-scroll.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>
       ))}
     </body>

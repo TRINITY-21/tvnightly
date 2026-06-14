@@ -1,0 +1,135 @@
+/* ============================================================
+   Loading system — three pieces, all progressive-enhancement:
+   1. .nprogress  a top bar that fills while a navigation is in flight
+   2. .card-media shimmer  a skeleton behind poster art until it decodes
+   3. .spinner / .skeleton  reusable primitives for genuine client fetches
+   The site is server-rendered, so none of this gates content — every
+   screen is fully usable with JS off (the shimmer/bar simply never appear).
+   ============================================================ */
+
+/* ---- 1. top navigation progress bar ---- */
+/* sits above the sticky header; a click/submit/unload starts it, the next
+   page paint replaces it. No "complete" needed for a multi-page app. */
+.nprogress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 200;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s var(--ease);
+}
+.nprogress.is-active {
+  opacity: 1;
+}
+.nprogress-bar {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(255, 169, 77, 0.7), 0 0 4px rgba(255, 169, 77, 0.9);
+  border-radius: 0 2px 2px 0;
+}
+/* the trickle: rush to ~25% then crawl toward 92%, so it always feels like
+   something is happening without ever pretending to be finished */
+.nprogress.is-active .nprogress-bar {
+  width: 92%;
+  transition: width 9s cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nprogress.is-active .nprogress-bar { width: 40%; transition: none; }
+}
+
+/* ---- 2. poster skeleton: a shimmer behind the art until it loads ----
+   The image paints on top and covers it; JS adds .is-loaded to stop the
+   animation once decoded. Scoped to .js so a no-JS page (which can never
+   add .is-loaded) just shows the flat surface, never an endless shimmer. */
+.card-media { background: var(--surface-2); }
+.js .card-media:not(.is-loaded) {
+  background-image: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 28%,
+    rgba(255, 255, 255, 0.06) 48%,
+    rgba(255, 255, 255, 0) 68%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: skel-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes skel-shimmer {
+  from { background-position: 160% 0; }
+  to { background-position: -60% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .js .card-media:not(.is-loaded) { animation: none; }
+}
+
+/* ---- 3. reusable primitives ---- */
+/* spinner: the brand ring, sized by --spin-size (default 28px) */
+.spinner {
+  display: inline-block;
+  width: var(--spin-size, 28px);
+  height: var(--spin-size, 28px);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+  flex: 0 0 auto;
+}
+.spinner-sm { --spin-size: 18px; }
+.spinner-lg { --spin-size: 40px; border-width: 3px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; border-top-color: var(--accent); }
+}
+
+/* a centered "loading…" stack for an empty panel while it fetches */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 1.6rem 1rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+/* skeleton block/line: a shimmering placeholder for text or media blocks */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.skeleton-line { height: 0.8em; margin: 0.35em 0; border-radius: 4px; }
+.skeleton-line.is-short { width: 55%; }
+.js .skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 28%,
+    rgba(255, 255, 255, 0.07) 48%,
+    rgba(255, 255, 255, 0) 68%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: skel-shimmer 1.3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .js .skeleton::after { animation: none; }
+}
+
+/* typeahead loading row: a spinner while /api/search is in flight */
+.ta-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}

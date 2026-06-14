@@ -47,6 +47,24 @@
     box.hidden = false;
   }
 
+  // a brief spinner row while /api/search is in flight
+  function showLoading() {
+    box.innerHTML = "";
+    active = -1;
+    var row = document.createElement("div");
+    row.className = "ta-loading";
+    var sp = document.createElement("span");
+    sp.className = "spinner spinner-sm";
+    sp.setAttribute("role", "status");
+    sp.setAttribute("aria-label", "Searching");
+    var txt = document.createElement("span");
+    txt.textContent = "Searching…";
+    row.appendChild(sp);
+    row.appendChild(txt);
+    box.appendChild(row);
+    box.hidden = false;
+  }
+
   function hrefFor(it) {
     if (it.kind === "movie") return "/movie/" + it.slug;
     if (it.kind === "person") return "/person/" + it.slug;
@@ -130,6 +148,7 @@
       return;
     }
     timer = setTimeout(function () {
+      showLoading();
       fetch("/api/search?q=" + encodeURIComponent(q))
         .then(function (r) {
           return r.json();

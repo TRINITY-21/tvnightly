@@ -97,6 +97,15 @@
 @media (hover: none) {
   .card-body { display: flex; }
   .card-hover-title { display: none; }
+  /* touch shows the caption (no hover reveal), so let the title use two lines
+     instead of a single-line ellipsis that cut "The Shawshank Redempt…" */
+  .card-title {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.25;
+  }
 }
 
 /* ---- badges: broadcast chyrons ---- */
@@ -130,5 +139,14 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   vertical-align: middle;
+}
+
+/* Phone: drop the poster-grid column minimum so two columns fit at 320px
+   (140px min collapses to a single oversized card in the ~288px content box). */
+@media (max-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.7rem;
+  }
 }
 

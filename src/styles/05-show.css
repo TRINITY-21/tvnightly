@@ -42,6 +42,10 @@
   margin: 0.1rem 0 0.5rem;
   font-weight: 900;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
+  /* the full-bleed hero is overflow:visible, so a long single-word title
+     (e.g. "Supernatural") spills past the 320px viewport instead of wrapping;
+     allow an in-word break as a last resort. Only triggers when it would overflow. */
+  overflow-wrap: anywhere;
 }
 /* lift the whole lower block off bright frames, not just the title */
 .frame-hero .meta-strip,
@@ -242,7 +246,11 @@
 @media (max-width: 560px) {
   .fold-num { font-size: 1.15rem; }
   .m-label { display: none; }
-  .fold-meta { gap: 0.8rem; align-items: center; }
+  /* tighten the row so the "Best season" badge can't shove the rating cell off
+     the edge of the (overflow:hidden) board and clip the "★ 7.3" tail */
+  .season-fold summary { gap: 0.5rem; }
+  .fold-slate { min-width: 2.5rem; }
+  .fold-meta { gap: 0.6rem; align-items: center; }
   .fold-meta .m { min-width: 0; }
   .fold-meta .m-aired { display: none; }
   .m-val { font-size: 0.84rem; }

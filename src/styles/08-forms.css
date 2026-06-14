@@ -182,3 +182,29 @@ button, .verdict-btn {
   font: inherit;
 }
 
+/* touch: enlarge the rate-inline verdict faces to a 44px tap target (icon/palette unchanged) */
+@media (pointer: coarse) {
+  .rate-inline .vote-btn {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.85rem;
+  }
+}
+
+/* phones: let the plain sub-form email field fill the card so the button wraps cleanly */
+@media (max-width: 600px) {
+  .sub-form input[type="email"] {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  /* the alerts-card controls (.sub-form.inline > .sub-controls) hold a flex input
+     with a 100% basis; without min-width:0 the wrapper keeps its content size and
+     the "Notify me" button rides ~10px past the 320px viewport edge */
+  .sub-controls {
+    min-width: 0;
+  }
+}
+

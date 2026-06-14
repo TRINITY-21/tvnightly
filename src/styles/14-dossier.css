@@ -209,6 +209,18 @@ a.dossier-compare {
   .dossier-era {
     display: none;
   }
+  /* with the leader/era gone, let the title wrap to two lines instead of
+     truncating "The best episodes of True Det…" */
+  .dossier-line { align-items: center; }
+  a.dossier-name {
+    white-space: normal;
+    display: -webkit-box;
+    /* 3 lines: the name column is narrow next to the thumb+rating, and the show
+       name ("…of True Detective") sits at the END — 2 lines still cut it */
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    line-height: 1.25;
+  }
 }
 
 /* ---- head-to-head: matchup cards into the compare charts ---- */

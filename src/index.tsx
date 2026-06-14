@@ -1,7 +1,7 @@
 // TV Nightly — app assembly. Routes live in src/routes/, one file per
 // page family; shared pieces in src/lib/ and src/components/.
 import { Hono } from "hono";
-import { Layout } from "./components/Layout";
+import { NotFoundPage } from "./components/notfound";
 import { providerPatrol, runSync, sendDailyDigest } from "./sync";
 import type { Bindings } from "./types";
 
@@ -28,6 +28,24 @@ import whatToWatch from "./routes/what-to-watch";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
+// SEO URL canonicalization: one address per page. Lowercase the path and drop
+// trailing slashes, 301ing variants to the canonical form so "/Show/The-Wire/"
+// and "/show/the-wire" never split into duplicate URLs (and uppercase typos
+// resolve instead of 404ing). GET/HEAD only — never redirect a form POST; skips
+// %-encoded paths so escape sequences aren't mangled.
+app.use("*", async (c, next) => {
+  if (c.req.method === "GET" || c.req.method === "HEAD") {
+    const url = new URL(c.req.url);
+    const p = url.pathname;
+    if (!p.includes("%")) {
+      let norm = p.toLowerCase();
+      if (norm.length > 1) norm = norm.replace(/\/+$/, "");
+      if (norm !== p) return c.redirect(norm + url.search, 301);
+    }
+  }
+  return next();
+});
+
 app.route("/", home);
 app.route("/", bestEpisodes);
 app.route("/", show);
@@ -49,17 +67,7 @@ app.route("/", subscribe);
 app.route("/", sitemaps);
 app.route("/", legal);
 
-app.notFound((c) =>
-  c.html(
-    <Layout title="Not found | TV Nightly">
-      <h1>Page not found</h1>
-      <p class="muted">
-        Try <a href="/search">searching for a show</a> or head <a href="/">home</a>.
-      </p>
-    </Layout>,
-    404,
-  ),
-);
+app.notFound((c) => c.html(<NotFoundPage />, 404));
 
 export default {
   fetch: app.fetch,

@@ -232,9 +232,11 @@
   }
   .rail-btn {
     top: 4.75rem;
-    width: 1.9rem;
-    height: 1.9rem;
+    width: 2.4rem;
+    height: 2.4rem;
   }
+  /* iOS Safari zooms on focus of inputs under 16px; clear the threshold */
+  .footer-sub input[type="email"] { font-size: 16px; }
 }
 
 
@@ -290,6 +292,7 @@
 .shuffle-board { margin-top: 1.75rem; }
 .shuffle-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.7rem;
   padding-bottom: 0.7rem;
@@ -306,6 +309,8 @@
 }
 .shuffle-title {
   margin: 0;
+  min-width: 0;            /* allow the flex item to shrink below content size */
+  overflow-wrap: anywhere; /* break the rare space-less long service name */
   font-family: var(--display);
   font-stretch: 105%;
   font-size: 0.7rem;

@@ -194,6 +194,22 @@
   transition: border-color var(--speed) var(--ease), color var(--speed) var(--ease);
 }
 .rec-undo:hover { border-color: rgba(255, 255, 255, 0.18); color: var(--text); text-decoration: none; }
+/* phones have no left gutter beside the centered card — seat the undo in the
+   poster's free top-left corner (verdict chip is top-center, title cap is at
+   the bottom) and grow it to a 40px touch target */
+@media (max-width: 480px) {
+  .rec-undo {
+    left: 0.6rem;
+    top: 0.6rem;
+    transform: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    background: rgba(14, 14, 17, 0.72);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 2;
+  }
+}
 
 /* ---- rating control: a fanned "smile" of sentiment circles, worst -> best ----
    cool steel + taupe recede on the left; the brand's gold + amber bloom on the

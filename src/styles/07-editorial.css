@@ -164,6 +164,35 @@ a.ep-name:hover { color: var(--accent); text-decoration: none; }
 @media (max-width: 560px) {
   .ep-date { display: none; }
   .still-wrap { flex-basis: 64px; }
+  /* the season-summary "Best season" badge is 105px on a 285px row — shrink it
+     so it stops crowding the rating cell off the edge */
+  .ep-best {
+    font-size: 0.54rem;
+    padding: 0.05rem 0.26rem;
+    margin-left: 0;
+    letter-spacing: 0.05em;
+  }
+  /* Episode rundown rows: code(64) + thumb(64) + flex dotted-leader + rate(56)
+     summed past the row width and squeezed the episode NAME to ~0px (only dots
+     + rating showed). Drop the decorative leader, slim the code/thumb, and let
+     the name wrap to two lines so the title actually reads. */
+  .fold-body .ep-row { gap: 0.5rem; }
+  .fold-body .ep-code { flex: 0 0 2.4rem; font-size: 0.72rem; }
+  .fold-body .still-wrap { flex-basis: 48px; }
+  .fold-body .ep-leader { display: none; }
+  .fold-body .ep-rate { flex-basis: 2.9rem; }
+  /* the 48px mobile still is too small for the "Season's best" chyron — it just
+     clips; the season's-best episode still reads from the gold spark + "Best
+     season" tag above, so drop the overlay label here */
+  .fold-body .still-chyron { display: none; }
+  .fold-body .ep-name {
+    white-space: normal;
+    font-size: 0.9rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.25;
+  }
 }
 .ranked li { margin-bottom: 0.9rem; }
 .ranked p { margin: 0.15rem 0 0; font-size: 0.88rem; max-width: 65ch; }

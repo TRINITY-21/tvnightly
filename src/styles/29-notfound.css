@@ -1,0 +1,248 @@
+/* ============================================================
+   404 — "Off air"
+   The Standby Glow tube with no signal: a powered screen, CRT
+   scanlines, a slow vertical sweep, the amber standby LED still
+   lit. Pure CSS; solid hairlines only (no gradient borders).
+   ============================================================ */
+.nf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 60vh;
+  gap: clamp(1.6rem, 4vw, 2.6rem);
+  padding: clamp(1.5rem, 5vw, 3.5rem) 0 clamp(2.5rem, 7vw, 4.5rem);
+}
+
+/* ---- the screen ---- */
+.nf-screen {
+  position: relative;
+  width: min(100%, 460px);
+  aspect-ratio: 16 / 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  /* the unlit tube with one soft top light caught in the glass */
+  background:
+    radial-gradient(120% 140% at 50% 0%, rgba(255, 255, 255, 0.045), transparent 60%),
+    var(--plate);
+  box-shadow:
+    var(--shadow-2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 30px 90px rgba(255, 169, 77, 0.06);
+  overflow: hidden;
+}
+/* faint CRT scanlines */
+.nf-scan {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.028) 0 1px,
+    transparent 1px 3px
+  );
+  pointer-events: none;
+}
+/* a slow signal sweep travelling down the tube */
+.nf-sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -28%;
+  height: 28%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(255, 255, 255, 0.05) 46%,
+    rgba(255, 169, 77, 0.06) 56%,
+    transparent
+  );
+  pointer-events: none;
+  animation: nfSweep 5.5s var(--ease) infinite;
+}
+@keyframes nfSweep {
+  0% { transform: translateY(0); opacity: 0; }
+  14% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { transform: translateY(460%); opacity: 0; }
+}
+/* curved-glass vignette: darken the corners, keep the centre bright */
+.nf-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(130% 130% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55));
+  pointer-events: none;
+}
+.nf-screen-label {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em; /* re-centre against the trailing tracking */
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nf-code {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 125%;
+  font-weight: 800;
+  font-size: clamp(3.4rem, 15vw, 6rem);
+  line-height: 0.9;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 30px rgba(255, 169, 77, 0.22), 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+/* the standby LED, still lit — same language as the logo mark */
+.nf-led {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0.34rem rgba(255, 169, 77, 0.14), var(--glow);
+  animation: nfPulse 2.4s var(--ease) infinite;
+}
+@keyframes nfPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ---- copy ---- */
+.nf-copy { max-width: 34rem; }
+.nf-eyebrow {
+  margin: 0 0 0.7rem;
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.nf-title {
+  margin: 0 0 0.7rem;
+  font-size: clamp(1.7rem, 5.2vw, 2.5rem);
+}
+.nf-lead {
+  margin: 0 auto;
+  max-width: 42ch;
+  color: var(--muted);
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+
+/* ---- search: a single joined pill, amber action ---- */
+.nf-search {
+  display: flex;
+  margin: 1.6rem auto 0;
+  max-width: 30rem;
+  background: rgba(18, 18, 20, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+.nf-search:focus-within {
+  border-color: rgba(255, 169, 77, 0.55);
+  box-shadow: var(--glow);
+}
+.nf-search input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* >=16px so iOS Safari never zooms on focus */
+  padding: 0.72rem 0.5rem 0.72rem 1.15rem;
+}
+.nf-search input::placeholder { color: var(--muted); opacity: 0.85; }
+.nf-search input:focus { outline: 0; }
+.nf-search input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.nf-search button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 0;
+  background: var(--accent);
+  color: var(--bg);
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  padding: 0 1.4rem;
+  cursor: pointer;
+  transition: filter var(--speed) var(--ease);
+}
+.nf-search button:hover { filter: brightness(1.1); }
+.nf-search button:active { filter: brightness(0.95); }
+
+/* ---- quick doors ---- */
+.nf-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem;
+  margin: 1.6rem auto 0;
+}
+.nf-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.4rem;
+  padding: 0.45rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease),
+    transform var(--speed) var(--ease);
+}
+.nf-link:hover {
+  border-color: rgba(255, 169, 77, 0.4);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+.nf-link:active { transform: translateY(0); }
+
+.nf-home {
+  display: inline-block;
+  margin-top: 1.7rem;
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nf-home::before { content: "\2190  "; } /* ← */
+.nf-home:hover { color: var(--accent); text-decoration: none; }
+
+@media (max-width: 600px) {
+  .nf { min-height: 52vh; }
+  .nf-search button { padding: 0 1.1rem; }
+}

@@ -260,6 +260,7 @@
   gap: 0.14rem;
   min-width: 0;
 }
+.wo-title { overflow-wrap: anywhere; }
 .wo-title a { font-weight: 600; }
 .wo-provs {
   font-family: var(--display);

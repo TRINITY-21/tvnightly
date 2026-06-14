@@ -608,6 +608,14 @@
     max-width: none;
     width: 100%;
   }
+  /* lift the native <select> to the iOS no-zoom threshold (16px) on phones —
+     covers the no-JS fallback for the picker fields and every FilterSelect
+     (.watch-field: region picker, /movies/best genre); the JS .dd-btn is a
+     <button> and immune to focus-zoom, and >560px keeps the 0.85rem base */
+  .watch-bar select,
+  .watch-field select {
+    font-size: 16px;
+  }
   .watch-head h1 {
     font-size: 1.55rem;
   }

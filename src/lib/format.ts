@@ -51,6 +51,10 @@ export const slugifyName = (name: string) =>
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/&/g, " and ")
+    // drop apostrophes/quotes and acronym dots BEFORE hyphenating so they join
+    // their word: "Marvel's S.H.I.E.L.D." \u2192 marvels-shield (not marvel-s-s-h-i-e-l-d),
+    // "Schindler's List" \u2192 schindlers-list, "Colin O'Donoghue" \u2192 colin-odonoghue
+    .replace(/['\u2018\u2019"\u201c\u201d.]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 

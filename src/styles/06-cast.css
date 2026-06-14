@@ -11,6 +11,11 @@
   gap: 0.85rem;
   margin-top: 1.2rem;
 }
+/* below ~340px the 154px min collapses to ONE column — a full-width cast photo
+   per person, turning a 25-person cast into a mile of scroll. Force two. */
+@media (max-width: 400px) {
+  .cast-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+}
 .cast-tile {
   position: relative;
   display: block;
@@ -278,6 +283,16 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* phones: the role + eps + years subtitle is worth two lines rather than
+   cutting to "Raven Reyes ·…" */
+@media (max-width: 560px) {
+  .rank-sub {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
 }
 /* the genre in the sub-line is a door, but stays quiet like the rest of it —
    overrides .rank-main a (white/bold) back to muted, amber only on hover */

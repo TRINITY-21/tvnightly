@@ -152,20 +152,34 @@
 }
 @media (max-width: 600px) {
   .spotlight {
-    padding: 4.5rem 0 1.4rem;
+    padding: 3.6rem 0 1.4rem;
   }
   .spot-ambient {
     padding-top: 2.4rem;
   }
+  /* Stack on phones. Side-by-side put a ~250px poster next to a ~420px text
+     block with align-items:flex-end — leaving a dead backdrop void ABOVE the
+     poster and crushing every line into a ~180px gutter ("Science-/Fiction").
+     Now the poster is a hero thumbnail above a full-width editorial block:
+     no void, and the dek/episode/meta get the whole column. */
   .spot-head {
-    gap: 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.85rem;
   }
   .spot-poster {
-    width: 104px;
+    width: 108px;
+  }
+  .spot-info {
+    width: 100%;
+    flex: none;
   }
   .spot-title {
-    font-size: clamp(1.4rem, 7vw, 1.9rem);
+    font-size: clamp(1.6rem, 8.5vw, 2.2rem);
     overflow-wrap: anywhere;
+  }
+  .spot-dek {
+    -webkit-line-clamp: 3;
   }
 }
 
@@ -926,6 +940,13 @@
   .poster-rail.can-scroll-right .rail-btn-next .chev-icon,
   .poster-rail.can-scroll-left .rail-btn-prev .chev-icon { animation: none; }
 }
+/* Touch: drop the circular overlay scroll buttons. On a phone you swipe, and at
+   phone widths the buttons just sit on top of the posters (clutter). The edge
+   fade-scrims stay as the "there's more" affordance, plus the next-poster peek. */
+@media (pointer: coarse) {
+  .rail-btn,
+  .shelf-nav { display: none; }
+}
 .poster-row {
   display: flex;
   flex-wrap: nowrap;
@@ -1049,6 +1070,15 @@
   .lane-tile-lg strong { font-size: 1.25rem; }
   /* the big "Go deeper" tiles had desktop-sized right padding crushing the text */
   .tool-tile-lg { padding: 1.1rem 1.4rem 1.1rem 1.1rem; min-height: 7rem; }
+  /* on a full-width phone tile the right-side art/glyph sat behind — and washed
+     out — the muted description ("Every show's finest hours…" was unreadable
+     over the collage). Drop the decoration on phones so the copy reads cleanly;
+     it returns as an accent at ≥561px where there's room beside the text. */
+  .tool-tile-art,
+  .tool-tile-glyph,
+  .tool-tile-provs { display: none; }
+  .tool-tile-lg { padding-right: 2.6rem; }
+  .tool-tile-lg p { max-width: none; }
   /* CTA pill: let it use the full width and shrink the buttons a touch */
   .evening-cta { width: auto; max-width: 100%; }
   .evening-cta .verdict-btn,

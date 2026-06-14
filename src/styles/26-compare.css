@@ -494,8 +494,49 @@
   .vsx-hero {
     min-height: 12rem;
   }
+  /* tighter name cap + smaller badge so the wrapped titles climbing from the
+     bottom corners clear the centered VS medallion at narrow widths */
+  .vsx-name {
+    max-width: 38%;
+    font-size: clamp(1rem, 4.5vw, 1.3rem);
+    bottom: 0.9rem;
+  }
+  .vsx-name-a {
+    left: 1rem;
+  }
+  .vsx-name-b {
+    right: 1rem;
+  }
+  .vsx-badge {
+    width: 2.4rem;
+    height: 2.4rem;
+    font-size: 0.8rem;
+  }
   .vsx-body {
     padding: 2rem 1rem 1.2rem;
+  }
+  /* the fixed-table 42%/16%/42% cells are too narrow for full show names and
+     metric labels here — let the nowrap headings/labels wrap inside the cell
+     instead of painting past the page edge */
+  .tape-team {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.12;
+  }
+  /* give the centre metric column real room: the 16% default is ~46px, too
+     narrow for single words like "PREMIERED"/"NETWORK", which then paint past
+     the cell. 30% fits them; values stay legible at 35% each. */
+  .tape th:nth-child(1),
+  .tape td:nth-child(1),
+  .tape th:nth-child(3),
+  .tape td:nth-child(3) { width: 35%; }
+  .tape th:nth-child(2),
+  .tape td:nth-child(2) { width: 30%; }
+  .tape td,
+  .tape tbody th { padding: 0.72rem 0.35rem; }
+  .tape-metric {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
   .tape-val {
     font-size: 0.95rem;

@@ -38,6 +38,9 @@ const slugify = (name) =>
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/&/g, " and ")
+    // strip apostrophes/quotes/acronym-dots so they join their word:
+    // "Marvel's S.H.I.E.L.D." -> marvels-shield, "Grey's Anatomy" -> greys-anatomy
+    .replace(/['‘’"“”.]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "show";
 

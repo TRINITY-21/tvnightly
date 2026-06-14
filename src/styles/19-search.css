@@ -87,6 +87,9 @@
 }
 .srch-filter-dd .dd-list {
   min-width: 13.5rem;
+  max-width: calc(100vw - 2rem);
+  left: auto;
+  right: 0;
   padding: 0.35rem;
 }
 .srch-filter-menu .srch-filter-opt {

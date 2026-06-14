@@ -50,6 +50,9 @@ const slugify = (name) =>
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/&/g, " and ")
+    // strip apostrophes/quotes/acronym-dots so they join their word:
+    // "Schindler's List" -> schindlers-list, "Ocean's Eleven" -> oceans-eleven
+    .replace(/['‘’"“”.]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "movie";
 

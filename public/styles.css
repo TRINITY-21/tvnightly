@@ -345,6 +345,12 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 @media (pointer: coarse) {
   .search-key { display: none; }
 }
+/* 16px is the iOS Safari no-zoom threshold; below it, focusing the sticky-header
+   search force-zooms the viewport. Absolute px (not rem) so it lands exactly on
+   the threshold regardless of the 16.5px root; desktop 0.84rem look is untouched. */
+@media (max-width: 600px) {
+  .search input { font-size: 16px; }
+}
 .search input::placeholder {
   color: var(--muted);
   opacity: 0.8;
@@ -997,6 +1003,15 @@ body.nav-open { overflow: hidden; }
 @media (hover: none) {
   .card-body { display: flex; }
   .card-hover-title { display: none; }
+  /* touch shows the caption (no hover reveal), so let the title use two lines
+     instead of a single-line ellipsis that cut "The Shawshank Redempt…" */
+  .card-title {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.25;
+  }
 }
 
 /* ---- badges: broadcast chyrons ---- */
@@ -1030,6 +1045,15 @@ body.nav-open { overflow: hidden; }
   text-transform: uppercase;
   letter-spacing: 0.06em;
   vertical-align: middle;
+}
+
+/* Phone: drop the poster-grid column minimum so two columns fit at 320px
+   (140px min collapses to a single oversized card in the ~288px content box). */
+@media (max-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.7rem;
+  }
 }
 
 /* ---- detail pages: the decision hero ---- */
@@ -1076,6 +1100,10 @@ body.nav-open { overflow: hidden; }
   margin: 0.1rem 0 0.5rem;
   font-weight: 900;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
+  /* the full-bleed hero is overflow:visible, so a long single-word title
+     (e.g. "Supernatural") spills past the 320px viewport instead of wrapping;
+     allow an in-word break as a last resort. Only triggers when it would overflow. */
+  overflow-wrap: anywhere;
 }
 /* lift the whole lower block off bright frames, not just the title */
 .frame-hero .meta-strip,
@@ -1276,7 +1304,11 @@ body.nav-open { overflow: hidden; }
 @media (max-width: 560px) {
   .fold-num { font-size: 1.15rem; }
   .m-label { display: none; }
-  .fold-meta { gap: 0.8rem; align-items: center; }
+  /* tighten the row so the "Best season" badge can't shove the rating cell off
+     the edge of the (overflow:hidden) board and clip the "★ 7.3" tail */
+  .season-fold summary { gap: 0.5rem; }
+  .fold-slate { min-width: 2.5rem; }
+  .fold-meta { gap: 0.6rem; align-items: center; }
   .fold-meta .m { min-width: 0; }
   .fold-meta .m-aired { display: none; }
   .m-val { font-size: 0.84rem; }
@@ -1614,6 +1646,11 @@ a.cast-tile:hover { text-decoration: none; }
   gap: 0.85rem;
   margin-top: 1.2rem;
 }
+/* below ~340px the 154px min collapses to ONE column — a full-width cast photo
+   per person, turning a 25-person cast into a mile of scroll. Force two. */
+@media (max-width: 400px) {
+  .cast-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+}
 .cast-tile {
   position: relative;
   display: block;
@@ -1882,6 +1919,16 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* phones: the role + eps + years subtitle is worth two lines rather than
+   cutting to "Raven Reyes ·…" */
+@media (max-width: 560px) {
+  .rank-sub {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+}
 /* the genre in the sub-line is a door, but stays quiet like the rest of it —
    overrides .rank-main a (white/bold) back to muted, amber only on hover */
 .rank-sub .rank-genre { color: inherit; font-weight: inherit; }
@@ -2118,6 +2165,35 @@ a.ep-name:hover { color: var(--accent); text-decoration: none; }
 @media (max-width: 560px) {
   .ep-date { display: none; }
   .still-wrap { flex-basis: 64px; }
+  /* the season-summary "Best season" badge is 105px on a 285px row — shrink it
+     so it stops crowding the rating cell off the edge */
+  .ep-best {
+    font-size: 0.54rem;
+    padding: 0.05rem 0.26rem;
+    margin-left: 0;
+    letter-spacing: 0.05em;
+  }
+  /* Episode rundown rows: code(64) + thumb(64) + flex dotted-leader + rate(56)
+     summed past the row width and squeezed the episode NAME to ~0px (only dots
+     + rating showed). Drop the decorative leader, slim the code/thumb, and let
+     the name wrap to two lines so the title actually reads. */
+  .fold-body .ep-row { gap: 0.5rem; }
+  .fold-body .ep-code { flex: 0 0 2.4rem; font-size: 0.72rem; }
+  .fold-body .still-wrap { flex-basis: 48px; }
+  .fold-body .ep-leader { display: none; }
+  .fold-body .ep-rate { flex-basis: 2.9rem; }
+  /* the 48px mobile still is too small for the "Season's best" chyron — it just
+     clips; the season's-best episode still reads from the gold spark + "Best
+     season" tag above, so drop the overlay label here */
+  .fold-body .still-chyron { display: none; }
+  .fold-body .ep-name {
+    white-space: normal;
+    font-size: 0.9rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.25;
+  }
 }
 .ranked li { margin-bottom: 0.9rem; }
 .ranked p { margin: 0.15rem 0 0; font-size: 0.88rem; max-width: 65ch; }
@@ -2330,6 +2406,32 @@ button, .verdict-btn {
   padding: 0.55rem 0.75rem;
   min-width: 220px;
   font: inherit;
+}
+
+/* touch: enlarge the rate-inline verdict faces to a 44px tap target (icon/palette unchanged) */
+@media (pointer: coarse) {
+  .rate-inline .vote-btn {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.85rem;
+  }
+}
+
+/* phones: let the plain sub-form email field fill the card so the button wraps cleanly */
+@media (max-width: 600px) {
+  .sub-form input[type="email"] {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  /* the alerts-card controls (.sub-form.inline > .sub-controls) hold a flex input
+     with a 100% basis; without min-width:0 the wrapper keeps its content size and
+     the "Notify me" button rides ~10px past the 320px viewport edge */
+  .sub-controls {
+    min-width: 0;
+  }
 }
 
 /* ---- chips, picks, providers ---- */
@@ -2942,6 +3044,14 @@ button, .verdict-btn {
     max-width: none;
     width: 100%;
   }
+  /* lift the native <select> to the iOS no-zoom threshold (16px) on phones —
+     covers the no-JS fallback for the picker fields and every FilterSelect
+     (.watch-field: region picker, /movies/best genre); the JS .dd-btn is a
+     <button> and immune to focus-zoom, and >560px keeps the 0.85rem base */
+  .watch-bar select,
+  .watch-field select {
+    font-size: 16px;
+  }
   .watch-head h1 {
     font-size: 1.55rem;
   }
@@ -3234,6 +3344,7 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   gap: 0.14rem;
   min-width: 0;
 }
+.wo-title { overflow-wrap: anywhere; }
 .wo-title a { font-weight: 600; }
 .wo-provs {
   font-family: var(--display);
@@ -3514,20 +3625,34 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 }
 @media (max-width: 600px) {
   .spotlight {
-    padding: 4.5rem 0 1.4rem;
+    padding: 3.6rem 0 1.4rem;
   }
   .spot-ambient {
     padding-top: 2.4rem;
   }
+  /* Stack on phones. Side-by-side put a ~250px poster next to a ~420px text
+     block with align-items:flex-end — leaving a dead backdrop void ABOVE the
+     poster and crushing every line into a ~180px gutter ("Science-/Fiction").
+     Now the poster is a hero thumbnail above a full-width editorial block:
+     no void, and the dek/episode/meta get the whole column. */
   .spot-head {
-    gap: 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.85rem;
   }
   .spot-poster {
-    width: 104px;
+    width: 108px;
+  }
+  .spot-info {
+    width: 100%;
+    flex: none;
   }
   .spot-title {
-    font-size: clamp(1.4rem, 7vw, 1.9rem);
+    font-size: clamp(1.6rem, 8.5vw, 2.2rem);
     overflow-wrap: anywhere;
+  }
+  .spot-dek {
+    -webkit-line-clamp: 3;
   }
 }
 
@@ -4288,6 +4413,13 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   .poster-rail.can-scroll-right .rail-btn-next .chev-icon,
   .poster-rail.can-scroll-left .rail-btn-prev .chev-icon { animation: none; }
 }
+/* Touch: drop the circular overlay scroll buttons. On a phone you swipe, and at
+   phone widths the buttons just sit on top of the posters (clutter). The edge
+   fade-scrims stay as the "there's more" affordance, plus the next-poster peek. */
+@media (pointer: coarse) {
+  .rail-btn,
+  .shelf-nav { display: none; }
+}
 .poster-row {
   display: flex;
   flex-wrap: nowrap;
@@ -4411,6 +4543,15 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   .lane-tile-lg strong { font-size: 1.25rem; }
   /* the big "Go deeper" tiles had desktop-sized right padding crushing the text */
   .tool-tile-lg { padding: 1.1rem 1.4rem 1.1rem 1.1rem; min-height: 7rem; }
+  /* on a full-width phone tile the right-side art/glyph sat behind — and washed
+     out — the muted description ("Every show's finest hours…" was unreadable
+     over the collage). Drop the decoration on phones so the copy reads cleanly;
+     it returns as an accent at ≥561px where there's room beside the text. */
+  .tool-tile-art,
+  .tool-tile-glyph,
+  .tool-tile-provs { display: none; }
+  .tool-tile-lg { padding-right: 2.6rem; }
+  .tool-tile-lg p { max-width: none; }
   /* CTA pill: let it use the full width and shrink the buttons a touch */
   .evening-cta { width: auto; max-width: 100%; }
   .evening-cta .verdict-btn,
@@ -4650,9 +4791,11 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   }
   .rail-btn {
     top: 4.75rem;
-    width: 1.9rem;
-    height: 1.9rem;
+    width: 2.4rem;
+    height: 2.4rem;
   }
+  /* iOS Safari zooms on focus of inputs under 16px; clear the threshold */
+  .footer-sub input[type="email"] { font-size: 16px; }
 }
 
 
@@ -4708,6 +4851,7 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 .shuffle-board { margin-top: 1.75rem; }
 .shuffle-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.7rem;
   padding-bottom: 0.7rem;
@@ -4724,6 +4868,8 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 }
 .shuffle-title {
   margin: 0;
+  min-width: 0;            /* allow the flex item to shrink below content size */
+  overflow-wrap: anywhere; /* break the rare space-less long service name */
   font-family: var(--display);
   font-stretch: 105%;
   font-size: 0.7rem;
@@ -5078,6 +5224,18 @@ a.dossier-compare {
   .dossier-leader,
   .dossier-era {
     display: none;
+  }
+  /* with the leader/era gone, let the title wrap to two lines instead of
+     truncating "The best episodes of True Det…" */
+  .dossier-line { align-items: center; }
+  a.dossier-name {
+    white-space: normal;
+    display: -webkit-box;
+    /* 3 lines: the name column is narrow next to the thumb+rating, and the show
+       name ("…of True Detective") sits at the END — 2 lines still cut it */
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    line-height: 1.25;
   }
 }
 
@@ -6175,6 +6333,21 @@ li.epreg-plate .epreg-sum {
   /* phones: a clean viewing band up top, the text settles low on the scrim */
   .slate-hero .slate-body { min-height: 0; padding-top: 4.6rem; justify-content: flex-end; }
 }
+
+@media (max-width: 600px) {
+  /* the count band wraps to a 2x2 grid so a 3-digit Days value never
+     overruns the narrow slate body; stat-band voice and tokens unchanged */
+  .count-band {
+    flex-wrap: wrap;
+    gap: 0.6rem 1.4rem;
+  }
+  .count {
+    flex: 0 0 calc(50% - 0.7rem);
+  }
+  .count-num {
+    font-size: 1.5rem;
+  }
+}
 /* ============================================================
    Signal — the episode ratings graph. The plate and frame live
    inside the SVG; the page supplies the screen housing, the
@@ -6367,6 +6540,9 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 }
 .srch-filter-dd .dd-list {
   min-width: 13.5rem;
+  max-width: calc(100vw - 2rem);
+  left: auto;
+  right: 0;
   padding: 0.35rem;
 }
 .srch-filter-menu .srch-filter-opt {
@@ -6706,6 +6882,16 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* phones: wrap the title instead of cutting "The Mandalorian a…" */
+@media (max-width: 560px) {
+  .loved-name {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.25;
+  }
+}
 .loved-meta {
   font-family: var(--display);
   font-stretch: 80%;
@@ -6929,6 +7115,21 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   .sched-thumb-blank { width: 40px; height: 60px; }
   .sched-net { display: none; }
   .sched-hero-body { min-height: 0; padding-top: 4rem; }
+  /* let the show name + line wrap instead of truncating "American Horror …" —
+     the name is the row's whole point on a phone */
+  .sched-show {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.2;
+  }
+  .sched-ep {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
 }
 /* ---- /movies/upcoming: theatrical release radar -------------------------
    Hero + headline card + opening-soon shelf + monthly rows — same grammar
@@ -8380,8 +8581,49 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   .vsx-hero {
     min-height: 12rem;
   }
+  /* tighter name cap + smaller badge so the wrapped titles climbing from the
+     bottom corners clear the centered VS medallion at narrow widths */
+  .vsx-name {
+    max-width: 38%;
+    font-size: clamp(1rem, 4.5vw, 1.3rem);
+    bottom: 0.9rem;
+  }
+  .vsx-name-a {
+    left: 1rem;
+  }
+  .vsx-name-b {
+    right: 1rem;
+  }
+  .vsx-badge {
+    width: 2.4rem;
+    height: 2.4rem;
+    font-size: 0.8rem;
+  }
   .vsx-body {
     padding: 2rem 1rem 1.2rem;
+  }
+  /* the fixed-table 42%/16%/42% cells are too narrow for full show names and
+     metric labels here — let the nowrap headings/labels wrap inside the cell
+     instead of painting past the page edge */
+  .tape-team {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.12;
+  }
+  /* give the centre metric column real room: the 16% default is ~46px, too
+     narrow for single words like "PREMIERED"/"NETWORK", which then paint past
+     the cell. 30% fits them; values stay legible at 35% each. */
+  .tape th:nth-child(1),
+  .tape td:nth-child(1),
+  .tape th:nth-child(3),
+  .tape td:nth-child(3) { width: 35%; }
+  .tape th:nth-child(2),
+  .tape td:nth-child(2) { width: 30%; }
+  .tape td,
+  .tape tbody th { padding: 0.72rem 0.35rem; }
+  .tape-metric {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
   .tape-val {
     font-size: 0.95rem;
@@ -8589,6 +8831,22 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   transition: border-color var(--speed) var(--ease), color var(--speed) var(--ease);
 }
 .rec-undo:hover { border-color: rgba(255, 255, 255, 0.18); color: var(--text); text-decoration: none; }
+/* phones have no left gutter beside the centered card — seat the undo in the
+   poster's free top-left corner (verdict chip is top-center, title cap is at
+   the bottom) and grow it to a 40px touch target */
+@media (max-width: 480px) {
+  .rec-undo {
+    left: 0.6rem;
+    top: 0.6rem;
+    transform: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    background: rgba(14, 14, 17, 0.72);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 2;
+  }
+}
 
 /* ---- rating control: a fanned "smile" of sentiment circles, worst -> best ----
    cool steel + taupe recede on the left; the brand's gold + amber bloom on the
@@ -9166,4 +9424,252 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   padding: 0.7rem 0.85rem;
   color: var(--muted);
   font-size: 0.85rem;
+}
+/* ============================================================
+   404 — "Off air"
+   The Standby Glow tube with no signal: a powered screen, CRT
+   scanlines, a slow vertical sweep, the amber standby LED still
+   lit. Pure CSS; solid hairlines only (no gradient borders).
+   ============================================================ */
+.nf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 60vh;
+  gap: clamp(1.6rem, 4vw, 2.6rem);
+  padding: clamp(1.5rem, 5vw, 3.5rem) 0 clamp(2.5rem, 7vw, 4.5rem);
+}
+
+/* ---- the screen ---- */
+.nf-screen {
+  position: relative;
+  width: min(100%, 460px);
+  aspect-ratio: 16 / 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  /* the unlit tube with one soft top light caught in the glass */
+  background:
+    radial-gradient(120% 140% at 50% 0%, rgba(255, 255, 255, 0.045), transparent 60%),
+    var(--plate);
+  box-shadow:
+    var(--shadow-2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 30px 90px rgba(255, 169, 77, 0.06);
+  overflow: hidden;
+}
+/* faint CRT scanlines */
+.nf-scan {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.028) 0 1px,
+    transparent 1px 3px
+  );
+  pointer-events: none;
+}
+/* a slow signal sweep travelling down the tube */
+.nf-sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -28%;
+  height: 28%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(255, 255, 255, 0.05) 46%,
+    rgba(255, 169, 77, 0.06) 56%,
+    transparent
+  );
+  pointer-events: none;
+  animation: nfSweep 5.5s var(--ease) infinite;
+}
+@keyframes nfSweep {
+  0% { transform: translateY(0); opacity: 0; }
+  14% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { transform: translateY(460%); opacity: 0; }
+}
+/* curved-glass vignette: darken the corners, keep the centre bright */
+.nf-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(130% 130% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55));
+  pointer-events: none;
+}
+.nf-screen-label {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em; /* re-centre against the trailing tracking */
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nf-code {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 125%;
+  font-weight: 800;
+  font-size: clamp(3.4rem, 15vw, 6rem);
+  line-height: 0.9;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 30px rgba(255, 169, 77, 0.22), 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+/* the standby LED, still lit — same language as the logo mark */
+.nf-led {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0.34rem rgba(255, 169, 77, 0.14), var(--glow);
+  animation: nfPulse 2.4s var(--ease) infinite;
+}
+@keyframes nfPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ---- copy ---- */
+.nf-copy { max-width: 34rem; }
+.nf-eyebrow {
+  margin: 0 0 0.7rem;
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.nf-title {
+  margin: 0 0 0.7rem;
+  font-size: clamp(1.7rem, 5.2vw, 2.5rem);
+}
+.nf-lead {
+  margin: 0 auto;
+  max-width: 42ch;
+  color: var(--muted);
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+
+/* ---- search: a single joined pill, amber action ---- */
+.nf-search {
+  display: flex;
+  margin: 1.6rem auto 0;
+  max-width: 30rem;
+  background: rgba(18, 18, 20, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+.nf-search:focus-within {
+  border-color: rgba(255, 169, 77, 0.55);
+  box-shadow: var(--glow);
+}
+.nf-search input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* >=16px so iOS Safari never zooms on focus */
+  padding: 0.72rem 0.5rem 0.72rem 1.15rem;
+}
+.nf-search input::placeholder { color: var(--muted); opacity: 0.85; }
+.nf-search input:focus { outline: 0; }
+.nf-search input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.nf-search button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 0;
+  background: var(--accent);
+  color: var(--bg);
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  padding: 0 1.4rem;
+  cursor: pointer;
+  transition: filter var(--speed) var(--ease);
+}
+.nf-search button:hover { filter: brightness(1.1); }
+.nf-search button:active { filter: brightness(0.95); }
+
+/* ---- quick doors ---- */
+.nf-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem;
+  margin: 1.6rem auto 0;
+}
+.nf-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.4rem;
+  padding: 0.45rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease),
+    transform var(--speed) var(--ease);
+}
+.nf-link:hover {
+  border-color: rgba(255, 169, 77, 0.4);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+.nf-link:active { transform: translateY(0); }
+
+.nf-home {
+  display: inline-block;
+  margin-top: 1.7rem;
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nf-home::before { content: "\2190  "; } /* ← */
+.nf-home:hover { color: var(--accent); text-decoration: none; }
+
+@media (max-width: 600px) {
+  .nf { min-height: 52vh; }
+  .nf-search button { padding: 0 1.1rem; }
 }

@@ -1,404 +1,600 @@
 import { Hono } from "hono";
+import { Child, FC } from "hono/jsx";
 import { Layout } from "../components/Layout";
-import { MovieCard, ShowCard } from "../components/cards";
-import { FaceLike, FaceLove, FaceMeh } from "../components/icons";
+import { ExploreCard } from "../components/cards";
 import { ipHash } from "../lib/crypto";
 import { heroBg, hiRes } from "../lib/format";
-import { PICKER_MIN_WEIGHT, similarMovies, similarShows } from "../lib/queries";
-import { RatedEntry, VERDICTS, fmtRated, getRatedTitle, parseRated, titleKey } from "../lib/ratings";
+import { RatedEntry, VERDICTS, VERDICT_SCALE, fmtRated, getRatedTitle, parseRated } from "../lib/ratings";
+import { DeckCard, Pick, WhySignal, buildRecommendation, enrichDeck, landingPicks } from "../lib/recommend";
 import { canonical, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
-import { Bindings, MovieRow, ShowRow } from "../types";
+import { Bindings } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+// Ratings collected before we synthesize the match (rate card 1 + deck cards).
+const TARGET = 5;
+
+// ---- shared bits ----------------------------------------------------------
+
+// 4-step rating control: a fanned arc of overlapping colored circles
+// (cool→warm sentiment ramp), label inside, the chosen one is the only glow.
+// Real mini POST forms — zero-JS safe; recommend.js upgrades the deck to one-tap.
+const RatingControl: FC<{ kind: string; ref: string; rated: string }> = ({ kind, ref, rated }) => (
+  <div class="rate-fan" role="group" aria-label="How was it?">
+    {VERDICT_SCALE.map(({ code, label }) => (
+      <form method="post" action="/recommend" class="rate-opt">
+        <input type="hidden" name="kind" value={kind} />
+        <input type="hidden" name="ref" value={ref} />
+        {rated ? <input type="hidden" name="rated" value={rated} /> : null}
+        <input type="hidden" name="verdict" value={code} />
+        <button type="submit" class={`rate-circle rc-${code}`} data-verdict={code}>
+          {label}
+        </button>
+      </form>
+    ))}
+  </div>
+);
+
+// the app's standard poster card, linking into the rate step
+const PosterCard: FC<{ c: DeckCard; href: string }> = ({ c, href }) => (
+  <a class="card" href={href}>
+    <div class="card-media">
+      {c.poster ? (
+        <img src={c.poster} alt={c.name} loading="lazy" decoding="async" />
+      ) : (
+        <div class="card-fallback">{c.name}</div>
+      )}
+    </div>
+    <div class="card-body">
+      <span class="card-title">{c.name}</span>
+    </div>
+  </a>
+);
+
+// one short, honest chip per contender — the single strongest signal, not prose
+const contChip = (p: Pick): string => {
+  const w = p.why;
+  if (w) {
+    if (w.cf >= 2) return "Shared taste";
+    if (w.genres.length) return w.genres[0].name;
+    if (w.era) return w.era;
+    if (w.prov) return w.prov;
+  }
+  return "Close match";
+};
+
+const ContenderCard: FC<{ p: Pick; bg: string | null }> = ({ p, bg }) => (
+  <a class="rec-cont" href={p.kind === "tv" ? `/show/${p.slug}` : `/movie/${p.slug}`}>
+    <div class="rec-cont-art" style={bg ?? undefined}>
+      {!bg ? <span class="rec-cont-blank">{p.name}</span> : null}
+      <span class="rec-cont-scrim" aria-hidden="true"></span>
+      {p.rating != null ? <span class="card-rating rec-cont-rating">★ {p.rating.toFixed(1)}</span> : null}
+      <span class="rec-cont-overlay">
+        <span class="card-title">{p.name}</span>
+        <span class="rec-cont-chip">{contChip(p)}</span>
+      </span>
+    </div>
+  </a>
+);
+
+// The "Why this matches" ledger — the heart of the redesign. Each row is a fact
+// the user can check against their own taste, derived from the engine's signals.
+const WhyLedger: FC<{ why: WhySignal }> = ({ why }) => {
+  const rows: { k: string; main: Child; sub: string }[] = [];
+  if (why.anchor) rows.push({ k: "anchor", main: <>Because you loved <strong>{why.anchor}</strong></>, sub: "your standout" });
+  if (why.genres.length) {
+    const names = why.genres.map((g) => g.name).join(" · ");
+    const topN = Math.max(...why.genres.map((g) => g.n));
+    rows.push({ k: "genre", main: <strong>{names}</strong>, sub: topN >= 2 ? `in ${topN} of your picks` : "your lane" });
+  }
+  if (why.era) rows.push({ k: "era", main: <strong>{why.era}</strong>, sub: "the era you rate highest" });
+  if (why.prov) rows.push({ k: "prov", main: <>On <strong>{why.prov}</strong></>, sub: "where you watch" });
+  if (why.cf >= 2) rows.push({ k: "cf", main: <><strong>{why.cf}</strong> with your taste loved it</>, sub: "community" });
+  if (!rows.length) return null;
+  return (
+    <div class="rec-why-ledger">
+      <p class="rec-why-head">Why this matches</p>
+      <ul>
+        {rows.map((r) => (
+          <li class={`rwl rwl-${r.k}`}>
+            <span class="rwl-mark" aria-hidden="true"></span>
+            <span class="rwl-main">{r.main}</span>
+            <span class="rwl-sub">{r.sub}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+const RecDoors: FC = () => (
+  <div class="rec-doors">
+    <ExploreCard icon="Picker" title="Browse by mood" desc="Filter by genre, service and runtime — pick in seconds." href="/what-to-watch" />
+    <ExploreCard icon="Tonight" title="On tonight" desc="Every episode airing today, in air-time order." href="/tonight" />
+    <ExploreCard icon="Loved" title="Community loved" desc="What TV Nightly's raters rate highest right now." href="/loved" />
+  </div>
+);
+
+// the same Alerts component used across show pages — general daily digest here
+const RecEmail: FC = () => (
+  <form action="/subscribe" method="post" class="sub-form inline">
+    <input type="hidden" name="kind" value="daily" />
+    <div class="sub-copy">
+      <span class="sub-kicker">Alerts</span>
+      <label class="sub-title" for="rec-email">A nightly pick in your inbox</label>
+      <span class="sub-note">
+        Tonight's TV, new arrivals and one pick worth your evening. One confirmation email first —
+        unsubscribe any time.
+      </span>
+    </div>
+    <div class="sub-controls">
+      <input id="rec-email" type="email" name="email" placeholder="you@example.com" required />
+      <button type="submit">Notify me</button>
+    </div>
+  </form>
+);
+
+// honest progress: how many of the target ratings are in. Server-rendered from
+// real trail state; recommend.js only nudges it after an actual rating.
+const RecProgress: FC<{ done: number; target: number }> = ({ done, target }) => (
+  <div class="rec-prog" style={`--done:${done}; --target:${target}`}>
+    <div class="rec-prog-label">
+      <span class="rec-prog-text">Grow Your Profile</span>
+      <span class="rec-prog-count">{Math.round((done / target) * 100)}%</span>
+    </div>
+    <div class="rec-prog-track">
+      <div class="rec-prog-fill"></div>
+    </div>
+  </div>
+);
+
+// undo: a real link back to the prior trail (works with no JS); the deck's JS
+// upgrades it to pop the last rating in place.
+const RecUndo: FC<{ href: string; label: string }> = ({ href, label }) => (
+  <a class="rec-undo" href={href} aria-label={label}>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h11a5 5 0 0 1 0 10h-1" />
+    </svg>
+  </a>
+);
+
+// ---- GET /recommend (multi-state) -----------------------------------------
 
 app.get("/recommend", async (c) => {
   const db = c.env.DB;
   const q = (c.req.query("q") ?? "").trim();
   const kind = c.req.query("kind") ?? "";
   const ref = (c.req.query("ref") ?? "").trim();
-  const v = c.req.query("v") ?? "";
+  const step = c.req.query("step") ?? "";
+  const rated = parseRated(c.req.query("rated"));
+  const ratedStr = fmtRated(rated);
+  const ratedQS = ratedStr ? `&rated=${encodeURIComponent(ratedStr)}` : "";
 
-  // Step 3: verdict saved (arrived via POST redirect) -> show the picks.
-  if (kind && ref && VERDICTS[v]) {
-    const title = await getRatedTitle(db, kind, ref);
-    if (!title) return c.notFound();
-    const rated = parseRated(c.req.query("rated"));
-    if (!rated.some((e) => e.kind === kind && e.ref === ref)) {
-      rated.push({ kind: kind as RatedEntry["kind"], ref, verdict: v as RatedEntry["verdict"] });
-    }
-    const positives = rated.filter((e) => e.verdict !== "meh");
-
-    const counts = await db
-      .prepare("SELECT loved, liked, meh FROM title_ratings WHERE kind = ? AND ref = ?")
-      .bind(kind, ref)
-      .first<{ loved: number; liked: number; meh: number }>();
-    const total = (counts?.loved ?? 0) + (counts?.liked ?? 0) + (counts?.meh ?? 0);
-    const positive = (counts?.loved ?? 0) + (counts?.liked ?? 0);
-    const stat =
-      total >= 2
-        ? v === "meh"
-          ? `${Math.round(((counts?.meh ?? 0) / total) * 100)}% of raters shrugged at it too.`
-          : `${Math.round((positive / total) * 100)}% of raters loved or liked it too.`
-        : "You're one of its first raters — thanks!";
-
-    // Never recommend what this visitor already rated: the URL trail plus
-    // everything their hashed IP rated before.
+  // ----- RESULTS -----
+  if (step === "results" && rated.length) {
     const ip = c.req.header("cf-connecting-ip") ?? "0.0.0.0";
     const hash = await ipHash(c.env.SECRET ?? "anon-salt", ip);
-    const { results: priorRatings } = await db
-      .prepare("SELECT kind, ref FROM rate_log WHERE ip_hash = ? LIMIT 200")
-      .bind(hash)
-      .all<{ kind: string; ref: string }>();
-    const exclude = new Set<string>([
-      ...rated.map((e) => titleKey(e.kind, e.ref)),
-      ...priorRatings.map((r) => titleKey(r.kind, r.ref)),
-    ]);
+    const { primary, contenders, confidence, tasteRead, matchPct } = await buildRecommendation(db, hash, rated);
+    // Under two ratings we're guessing, and we say so — honesty is the trust.
+    const peek = rated.length < 2;
 
-    // Collaborative filtering: what other raters who loved these also loved.
-    let cfShows: ShowRow[] = [];
-    let cfMovies: MovieRow[] = [];
-    if (positives.length) {
-      const pairCond = positives.map(() => "(r1.kind = ? AND r1.ref = ?)").join(" OR ");
-      const { results: cfRows } = await db
-        .prepare(
-          `SELECT r2.kind AS kind, r2.ref AS ref, COUNT(DISTINCT r2.ip_hash) AS n
-           FROM rate_log r1
-           JOIN rate_log r2 ON r2.ip_hash = r1.ip_hash
-           WHERE r1.verdict IN ('love','like') AND (${pairCond})
-             AND r2.verdict IN ('love','like') AND r2.ip_hash != ?
-             AND NOT (r2.kind = r1.kind AND r2.ref = r1.ref)
-           GROUP BY r2.kind, r2.ref
-           ORDER BY n DESC LIMIT 20`,
-        )
-        .bind(...positives.flatMap((e) => [e.kind, e.ref]), hash)
-        .all<{ kind: string; ref: string; n: number }>();
-      const strong = cfRows.filter((r) => r.n >= 2 && !exclude.has(titleKey(r.kind, r.ref)));
-      const showIds = strong.filter((r) => r.kind === "tv").map((r) => Number(r.ref)).slice(0, 6);
-      const movieIds = strong.filter((r) => r.kind === "movie").map((r) => r.ref).slice(0, 6);
-      if (showIds.length) {
-        const ph = showIds.map(() => "?").join(",");
-        cfShows = (
-          await db.prepare(`SELECT * FROM shows WHERE id IN (${ph})`).bind(...showIds).all<ShowRow>()
-        ).results;
-      }
-      if (movieIds.length) {
-        const ph = movieIds.map(() => "?").join(",");
-        cfMovies = (
-          await db.prepare(`SELECT * FROM movies WHERE imdb_id IN (${ph})`).bind(...movieIds).all<MovieRow>()
-        ).results;
-      }
+    let art: { x1: string; x2?: string } | null = null;
+    if (primary && c.env.TMDB_API_KEY) {
+      art = primary.tmdbId
+        ? await tmdbBackdrop(c.env.TMDB_API_KEY, primary.tmdbId)
+        : primary.imdbId
+          ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, primary.imdbId)
+          : null;
     }
-    const cfKeys = new Set([
-      ...cfShows.map((s) => titleKey("tv", String(s.id))),
-      ...cfMovies.map((m) => titleKey("movie", m.imdb_id)),
-    ]);
+    if (!art && primary?.poster) art = { x1: hiRes(primary.poster) ?? primary.poster };
+    const heroFrame = art ? heroBg(art.x1, art.x2) : null;
+    const heroHref = primary ? (primary.kind === "tv" ? `/show/${primary.slug}` : `/movie/${primary.slug}`) : "/recommend";
+    const sharpenHref = `/recommend?step=enrich${ratedQS}`;
 
-    // Genre triangulation across everything loved/liked this session.
-    let recShows: ShowRow[] = [];
-    let recMovies: MovieRow[] = [];
-    if (positives.length) {
-      const showCount = new Map<number, { row: ShowRow; n: number }>();
-      const movieCount = new Map<string, { row: MovieRow; n: number }>();
-      for (const e of positives) {
-        const t = e.kind === kind && e.ref === ref ? title : await getRatedTitle(db, e.kind, e.ref);
-        if (!t) continue;
-        if (t.show) {
-          for (const s of await similarShows(db, t.show)) {
-            const cur = showCount.get(s.id) ?? { row: s, n: 0 };
-            cur.n++;
-            showCount.set(s.id, cur);
-          }
+    // Contender cards wear their own landscape backdrop (same pattern as the
+    // home lanes): fetched in parallel, edge-cached, poster as graceful fallback.
+    const contArt = await Promise.all(
+      contenders.map(async (p) => {
+        if (c.env.TMDB_API_KEY) {
+          const bd = p.tmdbId
+            ? await tmdbBackdrop(c.env.TMDB_API_KEY, p.tmdbId)
+            : p.imdbId
+              ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, p.imdbId)
+              : null;
+          if (bd) return heroBg(bd.x1, bd.x2);
         }
-        if (t.movie) {
-          for (const m of await similarMovies(db, t.movie)) {
-            const cur = movieCount.get(m.imdb_id) ?? { row: m, n: 0 };
-            cur.n++;
-            movieCount.set(m.imdb_id, cur);
-          }
-        }
-      }
-      recShows = [...showCount.values()]
-        .filter((x) => !exclude.has(titleKey("tv", String(x.row.id))) && !cfKeys.has(titleKey("tv", String(x.row.id))))
-        .sort((a, b) => b.n - a.n || b.row.weight - a.row.weight)
-        .slice(0, 6)
-        .map((x) => x.row);
-      recMovies = [...movieCount.values()]
-        .filter((x) => !exclude.has(titleKey("movie", x.row.imdb_id)) && !cfKeys.has(titleKey("movie", x.row.imdb_id)))
-        .sort((a, b) => b.n - a.n || (b.row.rating ?? 0) - (a.row.rating ?? 0))
-        .slice(0, 6)
-        .map((x) => x.row);
-    } else {
-      // Everything so far was 'meh' — change direction: avoid ALL its genres.
-      const genreJson = title.show?.genres ?? title.movie?.genres ?? null;
-      const gs: string[] = (genreJson ? JSON.parse(genreJson) : []).slice(0, 3);
-      const notLike = gs.map(() => "AND (genres IS NULL OR genres NOT LIKE ?)").join(" ");
-      if (kind === "tv") {
-        recShows = (
-          await db
-            .prepare(
-              `SELECT * FROM shows WHERE id != ? AND weight >= ? AND rating >= 7.5 ${notLike}
-               ORDER BY weight DESC LIMIT 6`,
-            )
-            .bind(title.show!.id, PICKER_MIN_WEIGHT, ...gs.map((g) => `%"${g}"%`))
-            .all<ShowRow>()
-        ).results.filter((s) => !exclude.has(titleKey("tv", String(s.id))));
-      } else {
-        recMovies = (
-          await db
-            .prepare(
-              `SELECT * FROM movies WHERE imdb_id != ? AND rating >= 7.5 ${notLike}
-               ORDER BY popularity DESC LIMIT 6`,
-            )
-            .bind(title.movie!.imdb_id, ...gs.map((g) => `%"${g}"%`))
-            .all<MovieRow>()
-        ).results.filter((m) => !exclude.has(titleKey("movie", m.imdb_id)));
-      }
-    }
-
-    const ratedParam = encodeURIComponent(fmtRated(rated));
-    const heading =
-      positives.length > 1
-        ? `Triangulating from your ${rated.length} ratings`
-        : v === "meh"
-          ? "Let's go a different direction"
-          : `Because you ${v === "love" ? "loved" : "liked"} ${title.name}`;
-    const recNames = [
-      ...cfShows.map((s) => s.name),
-      ...cfMovies.map((m) => m.title),
-      ...recShows.map((s) => s.name),
-      ...recMovies.map((m) => m.title),
-    ];
+        return p.poster ? heroBg(hiRes(p.poster) ?? p.poster) : null;
+      }),
+    );
 
     c.header("Cache-Control", "no-store");
     return c.html(
       <Layout
-        title={`Your next watch, based on ${title.name} | TV Nightly`}
-        description={
-          recNames.length
-            ? `Rated ${title.name}? TV Nightly says: ${recNames.slice(0, 3).join(", ")}…`
-            : `Rate what you watched, get your next pick.`
-        }
+        title={primary ? (peek ? `A starting point: ${primary.name} | TV Nightly` : `Watch ${primary.name} next | TV Nightly`) : "Your next watch | TV Nightly"}
+        description={primary ? `Based on your ratings, TV Nightly says watch ${primary.name} next.` : "Rate a few things, get your next watch."}
         canonical={`${origin(c)}/recommend`}
-        ogImage={title.image ?? undefined}
+        noindex
+        ogImage={primary?.poster ?? undefined}
+        scripts={["/js/recommend.js"]}
       >
-        <h1>{heading}</h1>
-        <p class="muted">Verdict saved — {stat}</p>
-        {cfShows.length || cfMovies.length ? (
-          <section>
-            <h2>Raters with your taste also loved</h2>
-            <div class="grid">
-              {cfShows.map((s) => (
-                <ShowCard show={s} />
-              ))}
-              {cfMovies.map((m) => (
-                <MovieCard movie={m} />
-              ))}
+        <article class="rec-page rec-results">
+          <header class="chart-head rec-result-head">
+            <p class="section-eyebrow">{peek ? "Early read" : "Your match"}</p>
+            <h1 class="chart-h1">{primary ? (peek ? `A starting point: ${primary.name}` : `Watch ${primary.name} next`) : "Your next watch"}</h1>
+            {tasteRead.length ? (
+              <p class="rec-taste">
+                <span class="rec-taste-label">Your taste</span>
+                <span class="rec-taste-chips">
+                  {tasteRead.map((t) => (
+                    <span class="taste-chip">{t}</span>
+                  ))}
+                </span>
+              </p>
+            ) : null}
+          </header>
+
+          {primary ? (
+            <header class="detail-hero frame-hero rec-match">
+              {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
+              <div class="detail-head">
+                <div class="detail-side">
+                  <div class="rec-poster-wrap">
+                    {primary.poster ? (
+                      <img class="poster" src={primary.poster} alt={primary.name} />
+                    ) : (
+                      <div class="poster card-fallback">{primary.name}</div>
+                    )}
+                    {!peek && matchPct ? (
+                      <span class="rec-match-pct" style={`--pct:${matchPct}`} role="img" aria-label={`${matchPct} percent match`}>
+                        <span class="rec-match-pct-num">
+                          {matchPct}
+                          <span class="rec-match-pct-sign">%</span>
+                        </span>
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <div class="detail-info">
+                  <p class="rec-match-tag">
+                    <span class="rec-conf">{peek ? "Best guess so far" : confidence}</span>
+                    {primary.rating != null ? <span class="rec-match-star"> · ★ {primary.rating.toFixed(1)}</span> : null}
+                    {" · "}
+                    {primary.kind === "tv" ? "TV series" : "Film"}
+                    {!peek ? <span class="rec-from"> · from {rated.length} ratings</span> : null}
+                  </p>
+                  <h1>
+                    {primary.name}
+                    {primary.year ? <span class="rec-match-year"> ({primary.year})</span> : null}
+                  </h1>
+                  {primary.why && (primary.why.anchor || primary.why.genres.length || primary.why.era || primary.why.prov || primary.why.cf >= 2) ? (
+                    <WhyLedger why={primary.why} />
+                  ) : (
+                    <p class="rec-match-reason">{primary.reason}.</p>
+                  )}
+                  <p class="rec-match-cta">
+                    <a class="verdict-btn" href={heroHref}>See {primary.kind === "tv" ? "the show" : "the film"}</a>
+                  </p>
+                </div>
+              </div>
+            </header>
+          ) : (
+            <p class="muted">We couldn't find a confident pick yet — <a href="/recommend">rate one more thing</a>.</p>
+          )}
+
+          {primary && rated.length < 4 ? (
+            <div class={`rec-sharpen${peek ? " is-primary" : ""}`}>
+              <span class="rec-sharpen-copy">{peek ? "Rate a couple more and this locks in" : "Want a sharper match?"}</span>
+              <a class="verdict-btn rec-sharpen-btn" href={sharpenHref}>
+                Rate {peek ? "more" : "one more"}
+              </a>
             </div>
-          </section>
-        ) : null}
-        {recShows.length || recMovies.length ? (
-          <section>
-            <h2>{positives.length > 1 ? "Matched to all your picks" : "More in this vein"}</h2>
-            <div class="grid">
-              {recShows.map((s) => (
-                <ShowCard show={s} />
-              ))}
-              {recMovies.map((m) => (
-                <MovieCard movie={m} />
-              ))}
+          ) : null}
+
+          {contenders.length ? (
+            <section class="rec-sec">
+              <h2>If not that, then</h2>
+              <div class="rec-cont-grid">
+                {contenders.map((p, i) => (
+                  <ContenderCard p={p} bg={contArt[i]} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <section class="rec-foot">
+            <div class="rec-foot-actions">
+              <button type="button" class="btn-ghost rec-copy" data-copied="Link copied">Copy your taste link</button>
             </div>
+            <RecDoors />
+            <RecEmail />
           </section>
-        ) : null}
-        {!cfShows.length && !cfMovies.length && !recShows.length && !recMovies.length ? (
-          <p class="muted">
-            We need a bit more data for this one — try the <a href="/what-to-watch">picker</a>.
-          </p>
-        ) : null}
-        <p>
-          <a class="verdict-btn" href={`/recommend?rated=${ratedParam}`}>
-            Rate one more — picks get sharper
-          </a>
-        </p>
-        <div class="sub-form inline">
-          <form method="post" action="/subscribe" class="sub-form">
-            <input type="hidden" name="kind" value="daily" />
-            <label>Want a fresh pick in your inbox? Join the daily email:</label>
-            <input type="email" name="email" placeholder="you@example.com" required />
-            <button type="submit">Sign me up</button>
-          </form>
+        </article>
+      </Layout>,
+    );
+  }
+
+  // ----- ENRICH DECK -----
+  if (step === "enrich" && !rated.length) return c.redirect("/recommend", 302);
+  if (step === "enrich" && rated.length) {
+    const synthHref = `/recommend?step=synth${ratedQS}`;
+    if (rated.length >= TARGET) return c.redirect(synthHref, 302);
+    const deck = await enrichDeck(db, rated, TARGET + 1);
+    if (!deck.length) return c.redirect(synthHref, 302);
+    // Undo pops to the prior enrich trail, or — for the very first rating —
+    // back to that title's own rate card (never an empty/dead-end trail).
+    const prevTrail = rated.slice(0, -1);
+    const last = rated[rated.length - 1];
+    const undoHref = prevTrail.length
+      ? `/recommend?step=enrich&rated=${encodeURIComponent(fmtRated(prevTrail))}`
+      : `/recommend?kind=${last.kind}&ref=${last.ref}`;
+
+    c.header("Cache-Control", "no-store");
+    return c.html(
+      <Layout title="Calculating your taste... | TV Nightly" canonical={`${origin(c)}/recommend`} noindex scripts={["/js/recommend.js"]}>
+        <div class="rec-page rec-narrow rec-center rec-room">
+          <RecProgress done={rated.length} target={TARGET} />
+          <div class="rec-deck" data-rated={ratedStr} data-target={String(TARGET)}>
+            {deck.map((card, i) => (
+              <article class="rec-deck-card" data-idx={String(i)} data-kind={card.kind} data-ref={card.ref} hidden={i > 0}>
+                <div class="rec-card-shell">
+                  <RecUndo href={undoHref} label="Undo last rating" />
+                  <span class="rec-poster">
+                    {card.poster ? (
+                      <img src={card.poster} alt={card.name} loading={i === 0 ? "eager" : "lazy"} decoding="async" />
+                    ) : (
+                      <span class="rec-poster-blank">{card.name}</span>
+                    )}
+                    <span class="rec-card-cap">
+                      <span class="rec-card-title">{card.name}</span>
+                      {card.year ? <span class="rec-card-year">{card.year}</span> : null}
+                    </span>
+                  </span>
+                </div>
+                <RatingControl kind={card.kind} ref={card.ref} rated={ratedStr} />
+              </article>
+            ))}
+          </div>
+          <a class="rec-skip" href={synthHref}>Haven't Seen</a>
         </div>
       </Layout>,
     );
   }
 
-  // Step 2: title chosen -> ask the verdict.
+  // ----- SYNTH: the "thinking" interstitial — gathers the rated titles into a
+  // spinner before revealing the match. Real page (works no-JS via meta-refresh;
+  // recommend.js advances a touch sooner). The results route does the genuine
+  // engine + backdrop work; this is the framing for that moment. -----
+  if (step === "synth" && rated.length) {
+    const resultsHref = `/recommend?step=results${ratedQS}`;
+    const thumbs = (await Promise.all(rated.map((e) => getRatedTitle(db, e.kind, e.ref))))
+      .map((t, i) => ({ image: t?.image ?? null, name: t?.name ?? "", verdict: rated[i].verdict }))
+      .filter((t) => t.image);
+    c.header("Cache-Control", "no-store");
+    return c.html(
+      <Layout
+        title="Generating your next watch… | TV Nightly"
+        canonical={`${origin(c)}/recommend`}
+        noindex
+        refresh={{ delay: 4, url: resultsHref }}
+        scripts={["/js/recommend.js"]}
+      >
+        <div class="rec-page rec-center rec-room rec-synth" data-results={resultsHref}>
+          <div class="rec-synth-stage" style={`--n:${thumbs.length}`}>
+            {thumbs.map((t, i) => (
+              <span class={`rec-synth-chip v-${t.verdict}`} style={`--i:${i}`}>
+                <img src={t.image as string} alt="" loading="eager" decoding="async" />
+              </span>
+            ))}
+            <span class="rec-synth-core" aria-hidden="true">
+              <span class="rec-spinner"></span>
+            </span>
+          </div>
+          <h1 class="rec-h1 rec-synth-title">Generating your next watch</h1>
+          <p class="muted rec-synth-sub" role="status">
+            Reading your {rated.length} ratings against the catalog…
+          </p>
+          <noscript>
+            <p class="rec-synth-cont">
+              <a class="verdict-btn" href={resultsHref}>See your match</a>
+            </p>
+          </noscript>
+        </div>
+      </Layout>,
+    );
+  }
+
+  // ----- RATE (the title just chosen) -----
   if (kind && ref) {
     const title = await getRatedTitle(db, kind, ref);
     if (!title) return c.notFound();
-    const ratedStr = fmtRated(parseRated(c.req.query("rated")));
-    const Verdict = ({ value, label, icon }: { value: string; label: string; icon?: unknown }) => (
-      <form method="post" action="/recommend" class="verdict-form">
-        <input type="hidden" name="kind" value={kind} />
-        <input type="hidden" name="ref" value={ref} />
-        {ratedStr ? <input type="hidden" name="rated" value={ratedStr} /> : null}
-        <input type="hidden" name="verdict" value={value} />
-        <button type="submit" class="verdict-btn">
-          {icon}
-          {label}
-        </button>
-      </form>
-    );
+    // clean name + year for the on-poster caption (getRatedTitle bakes the year
+    // into movie names; the card wants them on separate lines)
+    const cardName = title.show ? title.show.name : title.movie ? title.movie.title : title.name;
+    const cardYear = title.show?.premiered ? title.show.premiered.slice(0, 4) : title.movie?.year != null ? String(title.movie.year) : null;
+    // undo (only when a trail exists) resumes the deck rather than dead-ends
+    const backHref = `/recommend?step=enrich&rated=${encodeURIComponent(fmtRated(rated))}`;
     c.header("Cache-Control", "public, max-age=3600");
     return c.html(
-      <Layout title={`How was ${title.name}? | TV Nightly`} canonical={`${origin(c)}/recommend`}>
-        <div class="pick-card">
-          {title.image ? (
-            <img class="poster" src={title.image} alt={title.name} />
-          ) : (
-            <div class="poster card-fallback">{title.name}</div>
-          )}
-          <div>
-            <h1>How was {title.name}?</h1>
-            <div class="verdicts">
-              <Verdict value="love" label="Loved it" icon={<FaceLove size={16} />} />
-              <Verdict value="like" label="Liked it" icon={<FaceLike size={16} />} />
-              <Verdict value="meh" label="Not for me" icon={<FaceMeh size={16} />} />
-            </div>
-            <p class="muted">One tap. We save the verdict (nothing else) and pick your next watch.</p>
+      <Layout title={`How was ${cardName}? | TV Nightly`} canonical={`${origin(c)}/recommend`} noindex scripts={["/js/recommend.js"]}>
+        <div class="rec-page rec-narrow rec-center rec-room">
+          {rated.length ? <RecProgress done={rated.length} target={5} /> : null}
+          <div class="rec-card-shell rec-rate-card">
+            {rated.length ? <RecUndo href={backHref} label="Back" /> : null}
+            <span class="rec-poster rec-poster-lg">
+              {title.image ? (
+                <img src={title.image} alt={cardName} />
+              ) : (
+                <span class="rec-poster-blank">{cardName}</span>
+              )}
+              <span class="rec-card-cap">
+                <span class="rec-card-title">{cardName}</span>
+                {cardYear ? <span class="rec-card-year">{cardYear}</span> : null}
+              </span>
+            </span>
           </div>
+          <RatingControl kind={kind} ref={ref} rated={ratedStr} />
+          <p class="muted rec-note">One tap — it teaches us your taste.</p>
         </div>
       </Layout>,
     );
   }
 
-  // Step 1b: searching for the title.
-  const ratedQS = (() => {
-    const s = fmtRated(parseRated(c.req.query("rated")));
-    return s ? `&rated=${encodeURIComponent(s)}` : "";
-  })();
+  // ----- SEARCH / DISAMBIGUATE -----
   if (q) {
     const [shows, movies] = await Promise.all([
       db
-        .prepare("SELECT id, name, premiered FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 5")
+        .prepare("SELECT id, name, premiered, COALESCE(poster_url, image_url) AS poster FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 6")
         .bind(q)
-        .all<{ id: number; name: string; premiered: string | null }>(),
+        .all<{ id: number; name: string; premiered: string | null; poster: string | null }>(),
       db
-        .prepare("SELECT imdb_id, title, year FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 5")
+        .prepare("SELECT imdb_id, title, year, poster_url AS poster FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 6")
         .bind(q)
-        .all<{ imdb_id: string; title: string; year: number | null }>(),
+        .all<{ imdb_id: string; title: string; year: number | null; poster: string | null }>(),
     ]);
+    // Carry kind+ref, never a bare name. A unique exact-name match skips ahead.
+    const ql = q.toLowerCase();
+    const exShows = shows.results.filter((s) => s.name.toLowerCase() === ql);
+    const exMovies = movies.results.filter((m) => m.title.toLowerCase() === ql);
+    if (exShows.length + exMovies.length === 1) {
+      const sel = exShows.length ? `kind=tv&ref=${exShows[0].id}` : `kind=movie&ref=${exMovies[0].imdb_id}`;
+      return c.redirect(`/recommend?${sel}${ratedQS}`, 302);
+    }
     c.header("Cache-Control", "public, max-age=300");
     return c.html(
-      <Layout title={`Which one did you watch? | TV Nightly`} canonical={`${origin(c)}/recommend`}>
-        <h1>Which one did you watch?</h1>
-        {shows.results.length === 0 && movies.results.length === 0 ? (
-          <p class="muted">
-            Nothing matched "{q}" — <a href="/recommend">try another search</a>.
-          </p>
-        ) : null}
-        <ul class="ep-list">
-          {shows.results.map((s) => (
-            <li>
-              <a href={`/recommend?kind=tv&ref=${s.id}${ratedQS}`}>
-                {s.name}
-                {s.premiered ? ` (${s.premiered.slice(0, 4)})` : ""}
-              </a>{" "}
-              <span class="muted">· TV show</span>
-            </li>
-          ))}
-          {movies.results.map((m) => (
-            <li>
-              <a href={`/recommend?kind=movie&ref=${m.imdb_id}${ratedQS}`}>
-                {m.title}
-                {m.year ? ` (${m.year})` : ""}
-              </a>{" "}
-              <span class="muted">· Movie</span>
-            </li>
-          ))}
-        </ul>
+      <Layout title="Which one did you watch? | TV Nightly" canonical={`${origin(c)}/recommend`} noindex>
+        <div class="rec-page rec-narrow">
+          <header class="chart-head">
+            <p class="section-eyebrow">Pick the right one</p>
+            <h1 class="chart-h1">Which "{q}"?</h1>
+          </header>
+          {shows.results.length === 0 && movies.results.length === 0 ? (
+            <p class="muted">Nothing matched "{q}" — <a href="/recommend">try another search</a>.</p>
+          ) : (
+            <ul class="rec-pick-list">
+              {shows.results.map((s) => (
+                <li>
+                  <a href={`/recommend?kind=tv&ref=${s.id}${ratedQS}`}>
+                    <span class="rec-pick-thumb">
+                      {s.poster ? <img src={s.poster} alt="" width="40" height="60" loading="lazy" /> : <span class="rec-pick-blank"></span>}
+                    </span>
+                    <span class="rec-pick-main">
+                      <span class="rec-pick-name">{s.name}{s.premiered ? ` (${s.premiered.slice(0, 4)})` : ""}</span>
+                      <span class="rec-pick-meta">TV show</span>
+                    </span>
+                    <span class="chev-icon" aria-hidden="true"></span>
+                  </a>
+                </li>
+              ))}
+              {movies.results.map((m) => (
+                <li>
+                  <a href={`/recommend?kind=movie&ref=${m.imdb_id}${ratedQS}`}>
+                    <span class="rec-pick-thumb">
+                      {m.poster ? <img src={m.poster} alt="" width="40" height="60" loading="lazy" /> : <span class="rec-pick-blank"></span>}
+                    </span>
+                    <span class="rec-pick-main">
+                      <span class="rec-pick-name">{m.title}{m.year ? ` (${m.year})` : ""}</span>
+                      <span class="rec-pick-meta">Movie</span>
+                    </span>
+                    <span class="chev-icon" aria-hidden="true"></span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </Layout>,
     );
   }
 
-  // Step 1: landing — search box + zero-typing quick picks.
-  const [{ results: topShows }, { results: topMovies }] = await Promise.all([
-    db.prepare("SELECT id, name FROM shows ORDER BY weight DESC LIMIT 8").all<{ id: number; name: string }>(),
-    db.prepare("SELECT imdb_id, title FROM movies ORDER BY popularity DESC LIMIT 4").all<{ imdb_id: string; title: string }>(),
-  ]);
-  c.header("Cache-Control", "public, max-age=3600");
+  // ----- LANDING -----
+  const picks = await landingPicks(db, 12);
+  c.header("Cache-Control", "public, max-age=1800");
   return c.html(
     <Layout
-      title="What should I watch next? Rate one thing, get your pick | TV Nightly"
-      description="Tell us the last show or movie you watched and how it landed — we'll pick your next watch. No account needed."
+      title="What should I watch next? Rate a few, get your pick | TV Nightly"
+      description="Tell us a few things you've watched and how they landed — we triangulate your taste and pick your next watch. No account needed."
       canonical={canonical(c)}
+      scripts={["/js/recommend.js"]}
     >
-      <h1>What should I watch next?</h1>
-      <p>Tell us the last thing you finished, and how it landed. We'll take it from there.</p>
-      <form method="get" action="/recommend" class="search">
-        <input type="search" name="q" placeholder="The last show or movie you watched…" required />
-        {ratedQS ? (
-          <input type="hidden" name="rated" value={fmtRated(parseRated(c.req.query("rated")))} />
-        ) : null}
-        <button type="submit" class="verdict-btn">Find it</button>
-      </form>
-      <h2>Or tap one you've seen</h2>
-      <div class="footer-picks">
-        {topShows.map((s) => (
-          <a class="footer-card" href={`/recommend?kind=tv&ref=${s.id}${ratedQS}`}>
-            {s.name}
-          </a>
-        ))}
-        {topMovies.map((m) => (
-          <a class="footer-card" href={`/recommend?kind=movie&ref=${m.imdb_id}${ratedQS}`}>
-            {m.title}
-          </a>
-        ))}
+      <div class="rec-page">
+        <header class="rec-center rec-land-head">
+          <p class="section-eyebrow">Personal picks</p>
+          <h1 class="rec-h1">What should I watch next?</h1>
+          <p class="section-lead rec-lead">
+            Tell us a thing or two you've seen and how they landed. We read the pattern — genre, era, even what you can't stand — and hand you one pick worth your night.
+          </p>
+          {/* No Start button: the live typeahead dropdown (recommend.js) is the
+              path — pick a suggestion to jump straight to rating. With no JS the
+              single field still submits on Enter to the disambiguation list. */}
+          <form method="get" action="/recommend" class="rec-search" role="search">
+            <span class="rec-search-field">
+              <input type="search" name="q" placeholder="A show or movie you've watched…" aria-label="A show or movie you've watched" autocomplete="off" required />
+            </span>
+            {ratedStr ? <input type="hidden" name="rated" value={ratedStr} /> : null}
+          </form>
+          <p class="rec-steps">Pick something you've seen <span aria-hidden="true">→</span> say how it landed <span aria-hidden="true">→</span> get your match</p>
+          <p class="rec-trust muted">No account — your taste lives in a shareable link.</p>
+        </header>
+        <section class="rec-sec">
+          <h2>Or tap one you've seen</h2>
+          <div class="grid">
+            {picks.map((p) => (
+              <PosterCard c={p} href={`/recommend?kind=${p.kind}&ref=${p.ref}${ratedQS}`} />
+            ))}
+          </div>
+        </section>
+        <p class="rec-center">
+          <a class="chev-after" href="/loved">See what the community loves</a>
+        </p>
       </div>
-      <p>
-        <a class="chev-after" href="/loved">See what the community loves</a>
-      </p>
     </Layout>,
   );
 });
+
+// ---- POST /recommend (save a verdict) -------------------------------------
 
 app.post("/recommend", async (c) => {
   const body = await c.req.parseBody();
   const kind = String(body.kind ?? "");
   const ref = String(body.ref ?? "").trim();
   const verdict = String(body.verdict ?? "");
-  const prior = fmtRated(parseRated(typeof body.rated === "string" ? body.rated : undefined));
+  const ajax = body.ajax != null;
   const col = VERDICTS[verdict];
-  if (!col || (kind !== "tv" && kind !== "movie")) return c.notFound();
+  if (!col || (kind !== "tv" && kind !== "movie")) return ajax ? c.body(null, 400) : c.notFound();
   const title = await getRatedTitle(c.env.DB, kind, ref);
-  if (!title) return c.notFound();
+  if (!title) return ajax ? c.body(null, 404) : c.notFound();
 
   const ip = c.req.header("cf-connecting-ip") ?? "0.0.0.0";
   const hash = await ipHash(c.env.SECRET ?? "anon-salt", ip);
-  const dup = await c.env.DB.prepare(
-    "SELECT 1 AS x FROM rate_log WHERE ip_hash = ? AND kind = ? AND ref = ?",
-  )
+  const dup = await c.env.DB.prepare("SELECT 1 AS x FROM rate_log WHERE ip_hash = ? AND kind = ? AND ref = ?")
     .bind(hash, kind, ref)
     .first();
   if (!dup) {
     await c.env.DB.batch([
+      c.env.DB.prepare("INSERT OR IGNORE INTO rate_log (ip_hash, kind, ref, created_at, verdict) VALUES (?,?,?,unixepoch(),?)").bind(hash, kind, ref, verdict),
       c.env.DB.prepare(
-        "INSERT OR IGNORE INTO rate_log (ip_hash, kind, ref, created_at, verdict) VALUES (?,?,?,unixepoch(),?)",
-      ).bind(hash, kind, ref, verdict),
-      c.env.DB.prepare(
-        `INSERT INTO title_ratings (kind, ref, loved, liked, meh) VALUES (?,?,?,?,?)
+        `INSERT INTO title_ratings (kind, ref, loved, liked, meh, awful) VALUES (?,?,?,?,?,?)
          ON CONFLICT(kind, ref) DO UPDATE SET
-           loved = loved + excluded.loved, liked = liked + excluded.liked, meh = meh + excluded.meh`,
-      ).bind(kind, ref, col === "loved" ? 1 : 0, col === "liked" ? 1 : 0, col === "meh" ? 1 : 0),
+           loved = loved + excluded.loved, liked = liked + excluded.liked,
+           meh = meh + excluded.meh, awful = awful + excluded.awful`,
+      ).bind(kind, ref, col === "loved" ? 1 : 0, col === "liked" ? 1 : 0, col === "meh" ? 1 : 0, col === "awful" ? 1 : 0),
     ]);
   }
-  return c.redirect(
-    `/recommend?kind=${kind}&ref=${encodeURIComponent(ref)}&v=${verdict}${prior ? `&rated=${encodeURIComponent(prior)}` : ""}`,
-    303,
-  );
-});
+  // JS deck records in the background and steers itself.
+  if (ajax) return c.body(null, 204);
 
-// --------------------------------------------------- directory & charts
+  // No-JS path. Collect TARGET ratings through the enrich deck, then the synth
+  // interstitial frames the "thinking" moment before the match is revealed.
+  const trail = parseRated(typeof body.rated === "string" ? body.rated : undefined);
+  if (!trail.some((e) => e.kind === kind && e.ref === ref)) {
+    trail.push({ kind: kind as RatedEntry["kind"], ref, verdict: verdict as RatedEntry["verdict"] });
+  }
+  // Collect TARGET ratings, then hand off to the synth interstitial → match.
+  const dest = trail.length >= TARGET ? "step=synth" : "step=enrich";
+  return c.redirect(`/recommend?${dest}&rated=${encodeURIComponent(fmtRated(trail))}`, 303);
+});
 
 // ------------------------------------------------- community loved charts
 
@@ -608,7 +804,5 @@ app.get("/loved", async (c) => {
     </Layout>,
   );
 });
-
-// ---------------------------------------------------------------- movies
 
 export default app;

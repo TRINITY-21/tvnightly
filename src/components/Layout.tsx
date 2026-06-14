@@ -81,6 +81,8 @@ export const Layout: FC<
     ogImage?: string;
     scripts?: string[];
     noindex?: boolean;
+    /** Meta-refresh auto-forward (no-JS path for the synth interstitial). */
+    refresh?: { delay: number; url: string };
     /** LCP insurance for full-bleed CSS-background heroes, which browsers
      *  discover late: preload the backdrop with a density srcset. */
     preloadImage?: { x1: string; x2: string };
@@ -106,6 +108,7 @@ export const Layout: FC<
       {props.description ? <meta name="description" content={props.description} /> : null}
       {props.canonical ? <link rel="canonical" href={props.canonical} /> : null}
       {props.noindex ? <meta name="robots" content="noindex" /> : null}
+      {props.refresh ? <meta http-equiv="refresh" content={`${props.refresh.delay};url=${props.refresh.url}`} /> : null}
       <meta name="theme-color" content="#121214" />
       {props.preloadImage ? (
         <link

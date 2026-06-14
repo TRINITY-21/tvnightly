@@ -1,0 +1,614 @@
+/* ============================================================
+   /recommend — rate a few, get one pick. Uses the app's own language:
+   chart-head intros, .card grids, a loved-hero-style backdrop hero, the
+   standard dark surface (no bespoke backgrounds). Accent = interaction only;
+   gold = ratings + the chosen verdict.
+   ============================================================ */
+
+.rec-page { max-width: 940px; margin: 0 auto; position: relative; }
+.rec-narrow { max-width: 34rem; }
+.rec-center { text-align: center; }
+
+/* headings match the chart pages: display voice, mixed case, no global tick */
+.rec-h1 {
+  font-family: var(--display);
+  font-stretch: 114%;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-size: clamp(1.6rem, 4vw, 2.25rem);
+  line-height: 1.12;
+  margin: 0.3rem 0 0.7rem;
+}
+/* in the rating room the question sits tight to its circles (compact cluster) */
+.rec-room .rec-h1 { margin: 0.6rem 0 0.2rem; }
+.rec-lead { max-width: 34rem; margin-left: auto; margin-right: auto; }
+
+/* landing search — same input vocabulary as the rest of the app */
+.rec-search { position: relative; display: flex; gap: 0.5rem; max-width: 30rem; margin: 1.3rem auto 0; text-align: left; }
+.rec-search-field { position: relative; flex: 1 1 auto; min-width: 0; }
+.rec-search input[type="search"] {
+  width: 100%;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  padding: 0.72rem 1.1rem;
+  font: inherit;
+  transition: border-color var(--speed) var(--ease);
+}
+.rec-search input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.rec-search input[type="search"]:focus-visible { outline: none; border-color: rgba(255, 169, 77, 0.5); }
+/* suggestion dropdown — mirrors the header search ta-box exactly */
+.rec-search .ta-box {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(35, 35, 40, 0.97);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  z-index: 70;
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.rec-search .ta-box[hidden] { display: none !important; }
+.rec-search .ta-box a {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0.7rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.rec-search .ta-box a:last-child { border-bottom: 0; }
+.rec-search .ta-box a:hover { text-decoration: none; }
+.rec-search .ta-box a.ta-active { background: rgba(255, 169, 77, 0.08); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .rec-search .ta-box { background: var(--surface-2); }
+}
+
+.rec-steps {
+  margin: 1.1rem 0 0;
+  font-family: var(--display);
+  font-stretch: 95%;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.rec-steps span { color: var(--accent); margin: 0 0.3rem; }
+.rec-trust { margin: 0.7rem 0 0; font-size: 0.82rem; }
+
+.rec-sec { margin-top: 2rem; }
+.rec-sec > .grid { margin-top: 0.6rem; }
+
+/* poster frame for the rate / deck screens */
+.rec-poster { position: relative; display: inline-block; }
+/* verdict chip stamped on the deck poster on tap, before sliding to the next */
+.rec-verdict-chip {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  padding: 0.32rem 0.85rem;
+  border-radius: 999px;
+  color: #fff;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 700;
+  font-size: 0.92rem;
+  letter-spacing: 0.01em;
+  border: 2px solid rgba(248, 246, 242, 0.92);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translate(-50%, -6px) scale(0.7);
+  animation: rec-chip-in 0.34s var(--ease) forwards;
+  pointer-events: none;
+}
+.rec-verdict-chip.v-awful { background: #7f93b0; color: #0e1320; }
+.rec-verdict-chip.v-meh { background: #9b8f78; color: #1b1b1f; }
+.rec-verdict-chip.v-like { background: #ecab3d; color: #2a1e06; }
+.rec-verdict-chip.v-love { background: #e3672f; color: #2a1004; }
+/* "Skipped" — neutral, not a verdict */
+.rec-verdict-chip.v-skip { background: #3c3c44; color: #efece7; }
+@keyframes rec-chip-in {
+  0% { opacity: 0; transform: translate(-50%, -6px) scale(0.7); }
+  60% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+.rec-poster img,
+.rec-poster-blank {
+  display: block;
+  width: clamp(222px, 66vw, 290px);
+  height: auto;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 14px;
+  /* no drop shadow — flat on the page, just a faint edge for definition */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  margin: 0 auto;
+  background: var(--surface-2);
+}
+.rec-poster-blank { display: flex; align-items: center; justify-content: center; padding: 1rem; text-align: center; color: var(--muted); font-weight: 600; }
+.rec-poster-lg { margin-bottom: 0; }
+.rec-note { margin-top: 1.4rem; font-size: 0.86rem; }
+
+/* rate card 1 matches the deck cards: the title + year ride the standard
+   bottom scrim (.rec-card-cap), the sentiment circles sit below the card */
+.rec-rate-card { display: inline-block; }
+.rec-rate-card .rec-poster img,
+.rec-rate-card .rec-poster-blank {
+  width: clamp(230px, 70vw, 300px);
+  border-radius: 14px;
+}
+
+/* ---- the rating "room": a focused, centered deck in the space below the
+   sticky header (no fixed/takeover — stays in document flow) ---- */
+.rec-room {
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100svh - 5.5rem);
+  /* wide enough that the spread-out circle cradle fits without clipping */
+  max-width: 26rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 2rem;
+}
+@media (max-height: 720px) {
+  .rec-room { min-height: auto; justify-content: flex-start; padding-top: 1.25rem; }
+}
+
+/* honest progress: ratings done / target — never moves on its own */
+.rec-prog { width: 100%; max-width: 21rem; margin: 0 auto 1.5rem; }
+.rec-prog-label {
+  display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 0.5rem;
+  font-family: var(--display); font-stretch: 96%; font-size: 0.92rem; font-weight: 650; color: var(--text);
+}
+.rec-prog-count { color: var(--text); font-variant-numeric: tabular-nums; }
+.rec-prog-track { height: 5px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.rec-prog-fill {
+  height: 100%; border-radius: 999px; background: var(--accent); box-shadow: 0 0 8px rgba(255, 169, 77, 0.4);
+  width: calc(var(--done, 0) / var(--target, 4) * 100%); transition: width 0.5s var(--ease);
+}
+
+/* poster shell (shrinks to the poster so the undo button pins beside it) */
+.rec-card-shell { position: relative; display: inline-block; }
+.rec-card-cap {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 1.4rem 0.8rem 5rem; border-radius: 0 0 14px 14px;
+  background: linear-gradient(to top, rgba(8, 8, 11, 0.92) 8%, rgba(8, 8, 11, 0.55) 55%, transparent 100%);
+}
+.rec-card-title { font-family: var(--display); font-stretch: 100%; font-weight: 650; font-size: 1rem; line-height: 1.18; color: var(--text); }
+.rec-card-year { display: block; font-family: var(--display); font-stretch: 88%; font-size: 0.8rem; color: var(--muted); }
+.rec-undo {
+  position: absolute; left: -3.4rem; top: 50%; transform: translateY(-50%);
+  width: 2.25rem; height: 2.25rem; display: grid; place-items: center; border-radius: 50%;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); box-shadow: var(--shadow-1);
+  transition: border-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+.rec-undo:hover { border-color: rgba(255, 169, 77, 0.45); color: var(--text); text-decoration: none; }
+
+/* ---- rating control: a fanned "smile" of sentiment circles, worst -> best ----
+   cool steel + taupe recede on the left; the brand's gold + amber bloom on the
+   right (the two positives ARE --warn/--accent). The two new literals (#7f93b0
+   steel, #9b8f78 taupe) are RECESSIVE, non-interactive sentiment fills — the
+   one-amber rule still holds: only the picked circle glows. */
+.rate-fan {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  /* tops roughly aligned; the bigger middle circles hang lower (a gentle cradle) */
+  align-items: flex-start;
+  gap: 0;
+  /* pulled up so the bigger circles cradle ("hug") the card's rounded bottom */
+  margin: -3.4rem auto 0;
+  max-width: 27rem;
+  --d: clamp(80px, 23vw, 118px);
+}
+.rate-fan .rate-opt { margin: 0 -3px; display: flex; }
+.rate-fan .rate-circle {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 3px solid rgba(248, 246, 242, 0.92);
+  background: var(--fill);
+  color: var(--label);
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-weight: 700;
+  font-size: clamp(0.82rem, 2.3vw, 0.98rem);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  transform: translateY(var(--lift));
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), opacity 0.2s var(--ease), filter 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.rc-awful { --fill: #7f93b0; --label: #0e1320; --lift: -12px; width: calc(var(--d) * 0.72); height: calc(var(--d) * 0.72); z-index: 1; }
+.rc-meh { --fill: #9b8f78; --label: #1b1b1f; --lift: 0px; width: var(--d); height: var(--d); z-index: 2; }
+.rc-like { --fill: #ecab3d; --label: #2a1e06; --lift: 0px; width: var(--d); height: var(--d); z-index: 2; }
+.rc-love { --fill: #e3672f; --label: #2a1004; --lift: -12px; width: calc(var(--d) * 0.72); height: calc(var(--d) * 0.72); z-index: 1; }
+.rate-fan .rate-circle:hover,
+.rate-fan .rate-circle:focus-visible {
+  transform: translateY(var(--lift)) scale(1.07);
+  border-color: #f8f6f2;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+  z-index: 3;
+}
+/* white focus ring so it never washes out on the amber Loved circle */
+.rate-fan .rate-circle:focus-visible { outline: 2px solid #f8f6f2; outline-offset: 3px; z-index: 5; }
+/* the chosen circle is the only thing on the screen that glows */
+.rate-fan .rate-circle.is-picked {
+  transform: translateY(var(--lift)) scale(1.12);
+  z-index: 4;
+  box-shadow:
+    0 0 0 3px rgba(248, 246, 242, 0.6),
+    0 0 0 6px color-mix(in srgb, var(--fill) 32%, transparent),
+    0 0 22px color-mix(in srgb, var(--fill) 45%, transparent),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.rate-fan.has-pick .rate-circle:not(.is-picked) { opacity: 0.45; filter: saturate(0.7); }
+@media (max-width: 480px) {
+  .rate-fan { --d: clamp(68px, 20vw, 94px); }
+}
+
+/* ---- enrich deck: one card at a time ---- */
+.rec-deck { width: 100%; display: flex; flex-direction: column; align-items: center; }
+.rec-deck-card { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.rec-deck-card[hidden] { display: none; }
+
+/* "Haven't seen" — a wide ghost pill that skips this title */
+.rec-room .rec-skip {
+  display: block;
+  width: 100%;
+  max-width: 21rem;
+  text-align: center;
+  margin: 1.5rem auto 0;
+  padding: 0.7rem 1.15rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--display);
+  font-stretch: 95%;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rec-room .rec-skip:hover { border-color: rgba(255, 255, 255, 0.22); color: var(--text); text-decoration: none; }
+
+/* ---- transition loader: an in-flight cover, lives only as long as the real
+   results request (engine + backdrop fetches) — NOT a timed fake ---- */
+.rec-loader { display: flex; flex-direction: column; align-items: center; gap: 0.7rem; text-align: center; }
+.rec-loader-title { font-family: var(--display); font-stretch: 95%; font-size: 1rem; font-weight: 650; color: var(--text); margin: 0.2rem 0 0; }
+.rec-loader-sub { font-size: 0.85rem; color: var(--muted); margin: 0; }
+.rec-spinner { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.1); border-top-color: var(--accent); animation: rec-spin 0.8s linear infinite; }
+@keyframes rec-spin { to { transform: rotate(360deg); } }
+
+/* ---- synth interstitial: the rated titles orbit a working spinner while the
+   match is "gathered" — each thumb ringed in its verdict colour ---- */
+.rec-synth-stage {
+  position: relative;
+  width: clamp(238px, 82vw, 292px);
+  height: clamp(238px, 82vw, 292px);
+  margin: 0 auto 0.4rem;
+}
+.rec-synth-chip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: clamp(46px, 14vw, 60px);
+  aspect-ratio: 2 / 3;
+  transform-origin: center;
+  /* seat on the orbit, then counter-rotate so the poster stays upright */
+  transform: translate(-50%, -50%)
+    rotate(calc(var(--i) / var(--n) * 1turn))
+    translateY(calc(-1 * clamp(95px, 32vw, 116px)))
+    rotate(calc(var(--i) / var(--n) * -1turn));
+}
+.rec-synth-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 2px solid var(--ring, rgba(255, 255, 255, 0.5));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.rec-synth-chip.v-awful { --ring: #7f93b0; }
+.rec-synth-chip.v-meh { --ring: #9b8f78; }
+.rec-synth-chip.v-like { --ring: #ecab3d; }
+.rec-synth-chip.v-love { --ring: #e3672f; }
+.rec-synth-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 78px;
+  height: 78px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(16, 16, 19, 0.72);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.rec-synth-core .rec-spinner { width: 42px; height: 42px; border-width: 3px; }
+.rec-synth-title { margin: 0.4rem 0 0.35rem; }
+.rec-synth-sub { margin: 0; font-size: 0.92rem; }
+.rec-synth-cont { margin-top: 1.3rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .rec-synth-chip img { animation: rec-pop 0.5s var(--ease) backwards; animation-delay: calc(var(--i) * 0.1s); }
+  @keyframes rec-pop { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: scale(1); } }
+  /* the whole orbit breathes inward — reads as data being pulled to the core */
+  .rec-synth-stage { animation: rec-breathe 2.6s var(--ease) infinite; }
+  @keyframes rec-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.965); } }
+}
+
+/* the cards themselves are static (no deal-in / arc-in) — only the synth
+   interstitial animates */
+@media (prefers-reduced-motion: reduce) { .rec-spinner { animation: none; border-top-color: var(--accent); } }
+
+/* ---- results match hero: the payoff frame wears the pick's own backdrop ----
+   the base .hero-backdrop renders at 0.25 opacity + a 56px blur (an ambient wash
+   for the show page); here we want the backdrop to actually READ, so we lift it
+   and swap the flat veil for a left->right scrim that darkens toward the info
+   column (poster sits on the light left; title/ledger sit on the dark right). */
+.rec-result-head { margin-bottom: 1.1rem; }
+.rec-match { position: relative; }
+/* sharp still, just darkened — same treatment as the show/episode frame-heroes
+   (filter:none, prominent opacity); a left->right scrim keeps the info column
+   readable while the backdrop reads clearly around the poster. */
+.rec-match .hero-backdrop { filter: none; opacity: 0.72; inset: 0; background-position: center 22%; }
+.rec-match.detail-hero::after {
+  background: linear-gradient(105deg, rgba(8, 8, 11, 0.4) 0%, rgba(8, 8, 11, 0.62) 45%, rgba(8, 8, 11, 0.82) 100%);
+}
+.rec-match-tag {
+  margin: 0 0 0.5rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* the confidence word, spent as the one bright cue; "from N ratings" stays quiet */
+.rec-conf { color: var(--accent); }
+.rec-from { color: var(--muted); }
+.rec-match-star { color: var(--warn); }
+.rec-match .detail-info h1 { margin: 0 0 0.7rem; }
+.rec-match-year { color: var(--muted); font-weight: 500; }
+.rec-match-reason { margin: 0 0 0.85rem; max-width: 38rem; font-size: 1.02rem; line-height: 1.5; color: var(--text); }
+.rec-match-cta { margin: 0.9rem 0 0; }
+
+/* match-% ring — the amber arc IS the score (fills to --pct); seated cleanly
+   inside the poster's top-right corner, not floating in the gutter */
+.rec-poster-wrap { position: relative; display: inline-block; }
+.rec-match-pct {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 3.4rem;
+  height: 3.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--pct, 74) * 1%), var(--surface-2) 0);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+}
+.rec-match-pct::before {
+  content: "";
+  position: absolute;
+  inset: 0.26rem;
+  border-radius: 50%;
+  background: var(--plate);
+}
+.rec-match-pct-num {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  font-family: var(--display);
+  font-stretch: 84%;
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text);
+}
+.rec-match-pct-sign { font-size: 0.6rem; color: var(--accent); margin-left: 1px; }
+
+/* ---- "Why this matches" ledger: the heart of the page ---- */
+.rec-why-ledger { margin: 0 0 0.4rem; max-width: 32rem; }
+.rec-why-head {
+  margin: 0 0 0.5rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rec-why-ledger ul { list-style: none; margin: 0; padding: 0; }
+.rwl {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.42rem 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.96rem;
+}
+.rwl:first-child { border-top: 0; }
+.rwl-mark {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.rwl-genre .rwl-mark, .rwl-era .rwl-mark { background: var(--warn); }
+.rwl-cf .rwl-mark { background: var(--warn); }
+.rwl-prov .rwl-mark { background: var(--muted); }
+.rwl-main { flex: 1 1 auto; min-width: 0; color: var(--text); }
+.rwl-main strong { font-weight: 700; }
+.rwl-sub {
+  flex: 0 0 auto;
+  font-family: var(--display);
+  font-stretch: 88%;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- taste chips in the result header ---- */
+.rec-taste { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.6rem; margin: 0.7rem 0 0; }
+.rec-taste-label {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rec-taste-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.taste-chip {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-family: var(--display);
+  font-stretch: 92%;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ---- sharpen bar: peek-then-sharpen's call to add more ratings ---- */
+.rec-sharpen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem 1.1rem;
+  margin: 1.4rem 0 0;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.rec-sharpen.is-primary { border-color: rgba(255, 169, 77, 0.5); background: rgba(255, 169, 77, 0.06); }
+.rec-sharpen-copy { font-size: 0.96rem; color: var(--text); }
+.rec-sharpen-btn { flex: 0 0 auto; }
+
+/* contender cards: landscape backdrop tiles — the title's own art is the card,
+   with the name + the single strongest signal overlaid on a bottom scrim */
+.rec-cont-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+  gap: 0.8rem;
+  margin-top: 0.7rem;
+}
+.rec-cont {
+  display: block;
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+.rec-cont:hover { border-color: rgba(255, 169, 77, 0.45); transform: translateY(-2px); text-decoration: none; }
+.rec-cont-art { position: relative; aspect-ratio: 16 / 9; background-size: cover; background-position: center; }
+.rec-cont-blank {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem;
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 600;
+}
+.rec-cont-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(8, 8, 11, 0.92) 6%, rgba(8, 8, 11, 0.4) 48%, rgba(8, 8, 11, 0.05) 100%);
+}
+.rec-cont-rating { position: absolute; top: 0.5rem; right: 0.5rem; }
+.rec-cont-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  padding: 0.55rem 0.7rem 0.6rem;
+}
+.rec-cont .card-title {
+  max-width: 100%;
+  color: var(--text);
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 650;
+  font-size: 0.96rem;
+  line-height: 1.2;
+  white-space: normal;
+}
+.rec-cont-chip {
+  align-self: flex-start;
+  padding: 0.1rem 0.46rem;
+  border-radius: 999px;
+  background: rgba(14, 14, 17, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-family: var(--display);
+  font-stretch: 88%;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* ---- footer: actions + explore doors + email ---- */
+.rec-foot { margin-top: 2.6rem; }
+.rec-foot-actions { display: flex; flex-wrap: wrap; gap: 0.7rem; justify-content: center; margin-bottom: 1.8rem; }
+.rec-copy.is-copied { color: var(--ok); border-color: rgba(60, 223, 142, 0.45); }
+.rec-doors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1.8rem; }
+.rec-foot .sub-form.inline { margin-top: 0; }
+
+/* ---- disambiguation rows ---- */
+.rec-pick-list { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.rec-pick-list a {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+  transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
+}
+.rec-pick-list a:hover { border-color: rgba(255, 169, 77, 0.4); background: var(--surface-2); text-decoration: none; }
+.rec-pick-thumb img, .rec-pick-blank { display: block; width: 40px; height: 60px; border-radius: var(--radius-sm); object-fit: cover; background: var(--surface-2); }
+.rec-pick-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.rec-pick-name { font-weight: 600; }
+.rec-pick-meta { font-family: var(--display); font-stretch: 80%; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.rec-pick-list .chev-icon { flex: 0 0 auto; color: var(--muted); }
+
+@media (max-width: 700px) {
+  .rec-doors { grid-template-columns: 1fr; }
+}

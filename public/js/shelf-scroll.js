@@ -43,9 +43,12 @@
   }
 
   function init() {
-    var shelves = document.querySelectorAll("ul.poster-shelf");
+    var shelves = document.querySelectorAll("ul.poster-shelf, ol.poster-shelf");
     for (var i = 0; i < shelves.length; i++) {
       var s = shelves[i];
+      // shelves inside a ShelfRail already have their own paging chevrons —
+      // don't add a second pair
+      if (s.closest(".poster-rail")) continue;
       if (s.scrollWidth > s.clientWidth + 4 && !s.dataset.scroller) {
         s.dataset.scroller = "1";
         build(s);

@@ -16,7 +16,7 @@
 }
 .card:hover {
   text-decoration: none;
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-2px);
   box-shadow: var(--shadow-2);
 }
@@ -62,6 +62,42 @@
   font-size: 0.84rem;
 }
 .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Every poster card drops its caption and reveals the title centred over the
+   art on hover, with a light scrim. Touch devices (no hover) keep the caption
+   below, so a title is never hidden where you can't hover. */
+.card-body { display: none; }
+.card-hover-title {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.7rem;
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 650;
+  font-size: 0.95rem;
+  line-height: 1.26;
+  color: var(--text);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  background: rgba(9, 9, 12, 0.5);
+  opacity: 0;
+  transition: opacity var(--speed) var(--ease);
+  overflow: hidden;
+  z-index: 2;
+}
+.card-rating { z-index: 3; }
+@media (hover: hover) {
+  .card:hover .card-hover-title,
+  .card:focus-visible .card-hover-title { opacity: 1; }
+}
+@media (hover: none) {
+  .card-body { display: flex; }
+  .card-hover-title { display: none; }
+}
 
 /* ---- badges: broadcast chyrons ---- */
 .badge {

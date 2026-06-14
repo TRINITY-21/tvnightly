@@ -1,14 +1,14 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
 import { ClampSummary, ExploreCard } from "../components/cards";
-import { VsCard } from "../components/compare";
+import { VsCard, VsSide } from "../components/compare";
 import { DossierRow } from "../components/dossier";
 import { FilterSelect, RateInline } from "../components/forms";
 import { IconPlay } from "../components/icons";
 import { MovieTabs } from "../components/nav";
 import { ProviderLine } from "../components/providers";
 import { buildMovieDossier } from "../lib/dossier";
-import { MONTHS, heroBg, longDate, movieComparePathFor, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
+import { MONTHS, heroBg, longDate, movieComparePathFor, premiereDateParts, slugifyName, stripHtml, fmtRuntime } from "../lib/format";
 import { franchiseOfMovie } from "../lib/franchises";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { crewLinkMap, similarMovies } from "../lib/queries";
@@ -65,17 +65,15 @@ app.get("/movies/upcoming", async (c) => {
   };
   const monthLabel = (ym: string) => `${MONTHS[Number(ym.slice(5, 7)) - 1] ?? ym} ${ym.slice(0, 4)}`;
 
-  // the page opens on the nearest wide release — promoted out of the board
+  // the nearest release supplies the hero backdrop; today's releases get the
+  // shelf, and everything after today groups by calendar month
   const head = results[0] ?? null;
-  const tail = head ? results.slice(1) : results;
-  const soonCutoff = new Date();
-  soonCutoff.setUTCDate(soonCutoff.getUTCDate() + 21);
-  const soonCut = soonCutoff.toISOString().slice(0, 10);
-  const openingSoon = tail.filter((m) => m.release_date <= soonCut);
-  const later = tail.filter((m) => m.release_date > soonCut);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const openingToday = results.filter((m) => m.release_date === todayStr);
+  const upcoming = results.filter((m) => m.release_date > todayStr);
 
   const byMonth = new Map<string, UpcomingRow[]>();
-  for (const m of later) {
+  for (const m of upcoming) {
     const month = m.release_date.slice(0, 7);
     if (!byMonth.has(month)) byMonth.set(month, []);
     byMonth.get(month)!.push(m);
@@ -93,13 +91,6 @@ app.get("/movies/upcoming", async (c) => {
     ambient = true;
   }
 
-  const span =
-    results.length > 1
-      ? `${MONTHS[Number(results[0].release_date.slice(5, 7)) - 1].slice(0, 3)} – ${MONTHS[Number(results[results.length - 1].release_date.slice(5, 7)) - 1]} ${results[results.length - 1].release_date.slice(0, 4)}`
-      : head
-        ? longDate(head.release_date)
-        : null;
-
   const Row = ({ m }: { m: UpcomingRow }) => {
     const { day, month } = premiereDateParts(m.release_date);
     const countdown = daysUntil(m.release_date);
@@ -113,10 +104,12 @@ app.get("/movies/upcoming", async (c) => {
         )}
         <span class="sched-main">
           <span class="sched-show">{m.title}</span>
-          <span class="sched-ep">{longDate(m.release_date)}</span>
+          <span class="sched-when">
+            <span class="sched-ep">{longDate(m.release_date)}</span>
+            {countdown ? <span class="upcoming-chip">{countdown}</span> : null}
+          </span>
           {m.overview ? <span class="sched-blurb">{stripHtml(m.overview)}</span> : null}
         </span>
-        {countdown ? <span class="upcoming-chip">{countdown}</span> : null}
       </>
     );
     return (
@@ -139,50 +132,15 @@ app.get("/movies/upcoming", async (c) => {
       description="Every major movie heading to theaters soon, in release order — with dates, posters, and what to watch while you wait."
       canonical={canonical(c)}
     >
-      <header class={`wo-hero${ambient ? " hub-ambient" : ""}`}>
+      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
           <p class="section-eyebrow">Release radar</p>
           <h1>Upcoming movies</h1>
           <p class="wo-intro">
-            The theatrical calendar, distilled — every wide release we are tracking from TMDB's
-            upcoming feed, in date order. Bookmark it before the trailers pile up.
+            Every wide theatrical release we're tracking, in date order — bookmark it before the
+            trailers pile up.
           </p>
-          {results.length ? (
-            <dl class="wo-stats">
-              <div>
-                <dt>On the board</dt>
-                <dd>{results.length}</dd>
-              </div>
-              {span ? (
-                <div>
-                  <dt>Window</dt>
-                  <dd>{span}</dd>
-                </div>
-              ) : null}
-              {head ? (
-                <div>
-                  <dt>Next up</dt>
-                  <dd>{daysUntil(head.release_date) ?? longDate(head.release_date)}</dd>
-                </div>
-              ) : null}
-            </dl>
-          ) : null}
-          {head ? (
-            <div class="upcoming-spotlight">
-              <p class="sched-kicker">
-                Next wide release · {daysUntil(head.release_date) ?? longDate(head.release_date)}
-              </p>
-              <h2 class="upcoming-spotlight-title">
-                {head.slug ? <a href={`/movie/${head.slug}`}>{head.title}</a> : head.title}
-              </h2>
-              <p class="sched-hero-ep">
-                <strong>{longDate(head.release_date)}</strong>
-                {head.slug ? <span class="muted"> · already in our catalog</span> : null}
-              </p>
-              {head.overview ? <p class="sched-dek">{stripHtml(head.overview)}</p> : null}
-            </div>
-          ) : null}
           <p class="hub-actions">
             <a class="verdict-btn" href="/what-to-watch?type=movie">
               Pick me a movie tonight
@@ -198,17 +156,17 @@ app.get("/movies/upcoming", async (c) => {
         <p class="muted">No upcoming snapshot loaded yet — the movie seed refreshes this chart.</p>
       ) : null}
 
-      {openingSoon.length ? (
+      {openingToday.length ? (
         <section class="upcoming-shelf">
           <h2>
-            Opening soon{" "}
+            Opening today{" "}
             <span class="sched-count">
-              {openingSoon.length} premiere{openingSoon.length === 1 ? "" : "s"}
+              {openingToday.length} premiere{openingToday.length === 1 ? "" : "s"}
             </span>
           </h2>
-          <p class="muted upcoming-lead">The next three weeks on the theatrical calendar.</p>
+          <p class="muted upcoming-lead">In theaters today.</p>
           <ul class="poster-shelf">
-            {openingSoon.map((m) => {
+            {openingToday.map((m) => {
               const { day, month } = premiereDateParts(m.release_date);
               const href = m.slug ? `/movie/${m.slug}` : null;
               const tile = (
@@ -260,14 +218,6 @@ app.get("/movies/upcoming", async (c) => {
           </ol>
         </section>
       ))}
-
-      <p class="wire-foot muted">
-        Dates come from TMDB's theatrical feed and can move — we refresh the snapshot when the movie
-        catalog syncs. Already in theaters?{" "}
-        <a class="chev-after" href="/what-to-watch?type=movie">
-          Spin the movie picker
-        </a>
-      </p>
 
       <section class="wo-doors">
         <h2>Keep exploring</h2>
@@ -403,7 +353,7 @@ app.get("/movies", async (c) => {
                       <span class="rating">★ {m.rating.toFixed(1)}</span>
                     ) : null}
                     {m.runtime ? (
-                      <span class="wo-mins">{m.runtime} min</span>
+                      <span class="wo-mins">{fmtRuntime(m.runtime)}</span>
                     ) : m.votes ? (
                       <span class="wo-mins">{fmtVotes(m.votes)} votes</span>
                     ) : null}
@@ -485,9 +435,6 @@ app.get("/movies/best", async (c) => {
     ambient = true;
   }
 
-  const years = results.map((m) => m.year).filter((y): y is number => y != null);
-  const span = years.length ? `${Math.min(...years)}–${Math.max(...years)}` : null;
-
   const heading = genre ? `The best ${genre.toLowerCase()} movies, ranked` : "The best movies of all time, ranked";
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -514,7 +461,7 @@ app.get("/movies/best", async (c) => {
         },
       ]}
     >
-      <header class={`wo-hero${ambient ? " hub-ambient" : ""}`}>
+      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
           <p class="section-eyebrow">The chart</p>
@@ -523,24 +470,6 @@ app.get("/movies/best", async (c) => {
             Ranked by viewer rating alone — every film here cleared a thousand votes, so nothing
             on the board is a fluke. Cut it by genre, or let the picker choose for you.
           </p>
-          {results.length ? (
-            <dl class="wo-stats">
-              <div>
-                <dt>Films</dt>
-                <dd>{results.length}</dd>
-              </div>
-              <div>
-                <dt>Top rating</dt>
-                <dd>★ {results[0].rating!.toFixed(1)}</dd>
-              </div>
-              {span ? (
-                <div>
-                  <dt>Years</dt>
-                  <dd>{span}</dd>
-                </div>
-              ) : null}
-            </dl>
-          ) : null}
           <p class="hub-actions">
             <a class="verdict-btn" href="/what-to-watch?type=movie">
               Pick me a movie
@@ -564,7 +493,7 @@ app.get("/movies/best", async (c) => {
         />
       </form>
       {results.length === 0 ? <p class="muted">No rated movies for that filter yet.</p> : null}
-      <ol class="wo-list">
+      <ol class="wo-list wo-ranked">
         {results.map((m, i) => {
           const provs = [...new Set(providersFor(m, region).names.map(providerBrand))];
           const gs: string[] = m.genres ? JSON.parse(m.genres) : [];
@@ -663,12 +592,19 @@ app.get("/movie/:slug", async (c) => {
 
   // the movie's real designed backdrop + billed cast (TMDB takes the IMDb id
   // directly; both ride one edge-cached bundle). Blurred poster = fallback.
-  const [backdrop, cast] = c.env.TMDB_API_KEY
+  const [backdrop, cast, crew] = c.env.TMDB_API_KEY
     ? await Promise.all([
         tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id),
         tmdbMovieCast(c.env.TMDB_API_KEY, movie.imdb_id, 8),
+        tmdbMovieCrew(c.env.TMDB_API_KEY, movie.imdb_id, 12),
       ])
-    : [null, []];
+    : [null, [], []];
+  // the director is the headline credit on a film — pulled from the same cached
+  // bundle as the cast, linked to a person page where we track them
+  const directors = crew.filter((p) => p.jobs.split(" · ").includes("Director"));
+  const directorLinks = directors.length
+    ? await crewLinkMap(c.env.DB, directors)
+    : new Map<number, number>();
   const heroFrame = backdrop ? heroBg(backdrop.x1, backdrop.x2) : null;
   // the rivals' backdrops for the head-to-head split cards (edge-cached)
   const rivalBackdrops = c.env.TMDB_API_KEY
@@ -741,7 +677,7 @@ app.get("/movie/:slug", async (c) => {
                 {movie.runtime ? (
                   <>
                     <span class="sep">·</span>
-                    <span>{movie.runtime} min</span>
+                    <span>{fmtRuntime(movie.runtime)}</span>
                   </>
                 ) : null}
                 {movie.rating != null ? (
@@ -749,6 +685,27 @@ app.get("/movie/:slug", async (c) => {
                     <span class="sep">·</span>
                     <span class="rating">★ {movie.rating.toFixed(1)}</span>
                     {movie.votes ? <span> ({movie.votes.toLocaleString()})</span> : null}
+                  </>
+                ) : null}
+                {directors.length ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span>
+                      Directed by{" "}
+                      {directors.map((d, i) => {
+                        const pid = directorLinks.get(d.id);
+                        return (
+                          <>
+                            {i > 0 ? ", " : ""}
+                            {pid ? (
+                              <a href={`/person/${slugifyName(d.name)}-${pid}`}>{d.name}</a>
+                            ) : (
+                              d.name
+                            )}
+                          </>
+                        );
+                      })}
+                    </span>
                   </>
                 ) : null}
               </p>
@@ -1558,15 +1515,60 @@ app.get("/movies/compare", async (c) => {
   if (ma && mb && ma.slug !== mb.slug)
     return c.redirect(movieComparePathFor(ma.slug, mb.slug), 301);
 
+  // featured matchups as versus cards — a picked film's neighbours, else the
+  // most-popular films paired off (mirrors the show compare landing)
+  const cmpAnchor = ma ?? mb ?? null;
+  let cmpPairs: [MovieRow, MovieRow][] = [];
+  if (cmpAnchor) {
+    const sims = await similarMovies(db, cmpAnchor);
+    cmpPairs = sims.slice(0, 6).map((m) => [cmpAnchor, m]);
+  } else {
+    const { results: tops } = await db
+      .prepare("SELECT * FROM movies WHERE rating IS NOT NULL ORDER BY popularity DESC LIMIT 7")
+      .all<MovieRow>();
+    cmpPairs = tops.slice(0, 6).map((m, i) => [m, tops[(i + 1) % tops.length]]);
+  }
+  const cmpInvolved = new Map<string, MovieRow>();
+  for (const [a, b] of cmpPairs) {
+    cmpInvolved.set(a.slug, a);
+    cmpInvolved.set(b.slug, b);
+  }
+  const cmpList = [...cmpInvolved.values()];
+  const cmpKey = c.env.TMDB_API_KEY;
+  const cmpBds = cmpKey
+    ? await Promise.all(cmpList.map((m) => tmdbMovieBackdrop(cmpKey, m.imdb_id)))
+    : cmpList.map(() => null);
+  const cmpSmall = (u: string) => u.replace("/w1280/", "/w780/");
+  const cmpSides = new Map<string, VsSide>(
+    cmpList.map((m, i) => [
+      m.slug,
+      { name: m.title, poster: m.poster_url, backdrop: cmpBds[i] ? cmpSmall(cmpBds[i]!.x1) : null },
+    ]),
+  );
+  const cmpHeading = cmpAnchor ? `${cmpAnchor.title} vs…` : "Popular matchups";
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title="Compare two movies — head-to-head | TV Nightly"
       description="Put two films side by side: ratings, votes, runtime and where to stream."
       canonical={`${origin(c)}/movies/compare`}
+      scripts={["/js/compare-typeahead.js"]}
     >
-      <h1>Compare two movies</h1>
-      <form method="get" action="/movies/compare" class="picker-form">
+      <header class="chart-head cmp-head">
+        <p class="chart-kicker">Head to head</p>
+        <h1>Compare movies</h1>
+        <p class="chart-intro">
+          Put two films side by side — rating, votes, runtime, and where each one streams in your
+          country, on a single card.
+        </p>
+        <p class="cmp-xlink">
+          <a class="chev-after" href="/compare">
+            Comparing TV shows instead?
+          </a>
+        </p>
+      </header>
+      <form method="get" action="/movies/compare" class="picker-form compare-form" data-cmp-kind="movie">
         <label>
           Movie A{" "}
           <input
@@ -1577,6 +1579,7 @@ app.get("/movies/compare", async (c) => {
             required
           />
         </label>
+        <span class="cmp-or" aria-hidden="true">vs</span>
         <label>
           Movie B <input type="search" name="b" value={qb} placeholder="Interstellar" required />
         </label>
@@ -1585,38 +1588,44 @@ app.get("/movies/compare", async (c) => {
       {(qa || qb) && (!ma || !mb) ? (
         <p class="muted">Couldn't find one of those movies — try different names.</p>
       ) : null}
-      {ma && !mb ? (
-        <section>
-          <h2>Compare {ma.title} with…</h2>
-          <div class="footer-picks">
-            {(await similarMovies(db, ma)).slice(0, 6).map((m) => (
-              <a class="footer-card" href={movieComparePathFor(ma.slug, m.slug)}>
-                {ma.title} vs {m.title}
-              </a>
+      {cmpPairs.length ? (
+        <section class="vsx-sec">
+          <h2 class="vsx-h2">{cmpHeading}</h2>
+          <div class="vs-grid">
+            {cmpPairs.map(([a, b]) => (
+              <VsCard
+                href={movieComparePathFor(a.slug, b.slug)}
+                a={cmpSides.get(a.slug)!}
+                b={cmpSides.get(b.slug)!}
+                cta="Side by side"
+              />
             ))}
           </div>
         </section>
       ) : null}
-      {!ma && !mb ? (
-        <section>
-          <h2>Popular matchups</h2>
-          <div class="footer-picks">
-            {await (async () => {
-              const { results: tops } = await db
-                .prepare("SELECT slug, title FROM movies ORDER BY popularity DESC LIMIT 8")
-                .all<{ slug: string; title: string }>();
-              return tops.slice(0, 6).map((m, i) => {
-                const other = tops[(i + 1) % tops.length];
-                return (
-                  <a class="footer-card" href={movieComparePathFor(m.slug, other.slug)}>
-                    {m.title} vs {other.title}
-                  </a>
-                );
-              });
-            })()}
-          </div>
-        </section>
-      ) : null}
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="Film"
+            title="The best movies of all time"
+            desc="Every movie ranked by rating, with where to stream."
+            href="/movies/best"
+          />
+          <ExploreCard
+            icon="Community"
+            title="Loved by this community"
+            desc="The chart built from real one-tap reader verdicts."
+            href="/loved"
+          />
+          <ExploreCard
+            icon="Guides"
+            title="Watch every saga in order"
+            desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
+            href="/watch-orders"
+          />
+        </div>
+      </section>
     </Layout>,
   );
 });
@@ -1719,41 +1728,61 @@ app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
   };
   const genresOf = (m: MovieRow): string[] => (m.genres ? JSON.parse(m.genres) : []);
   const site = origin(c);
-  const rows: { label: string; a: string | null; b: string | null }[] = [
+  const key = c.env.TMDB_API_KEY;
+
+  // backdrops for the versus hero + the rival mesh, on one round trip
+  const [simA, simB, bdA, bdB] = await Promise.all([
+    similarMovies(c.env.DB, a, 5),
+    similarMovies(c.env.DB, b, 5),
+    key ? tmdbMovieBackdrop(key, a.imdb_id) : Promise.resolve(null),
+    key ? tmdbMovieBackdrop(key, b.imdb_id) : Promise.resolve(null),
+  ]);
+  const artA = bdA?.x1 ?? a.poster_url ?? null;
+  const artB = bdB?.x1 ?? b.poster_url ?? null;
+  const bgUrl = (u: string) => u.replace(/'/g, "%27");
+
+  // the tale of the tape: win is +1 for A, -1 for B, 0 = neutral. Only the
+  // rating settles a winner; the rest are facts, not verdicts.
+  const cmp = (x: number | null, y: number | null) =>
+    x == null || y == null ? 0 : x > y ? 1 : x < y ? -1 : 0;
+  const tape: { label: string; a: unknown; b: unknown; win: number; minor?: boolean }[] = [
     {
       label: "Rating",
-      a: a.rating != null ? `★ ${a.rating.toFixed(1)}` : null,
-      b: b.rating != null ? `★ ${b.rating.toFixed(1)}` : null,
+      a: a.rating != null ? `★ ${a.rating.toFixed(1)}` : "—",
+      b: b.rating != null ? `★ ${b.rating.toFixed(1)}` : "—",
+      win: cmp(a.rating, b.rating),
     },
     {
       label: "Votes",
-      a: a.votes ? a.votes.toLocaleString() : null,
-      b: b.votes ? b.votes.toLocaleString() : null,
+      a: a.votes ? a.votes.toLocaleString("en-US") : "—",
+      b: b.votes ? b.votes.toLocaleString("en-US") : "—",
+      win: 0,
     },
-    { label: "Year", a: a.year ? String(a.year) : null, b: b.year ? String(b.year) : null },
+    { label: "Year", a: a.year ?? "—", b: b.year ?? "—", win: 0 },
     {
       label: "Runtime",
-      a: a.runtime ? `${a.runtime} min` : null,
-      b: b.runtime ? `${b.runtime} min` : null,
+      a: a.runtime ? fmtRuntime(a.runtime) : "—",
+      b: b.runtime ? fmtRuntime(b.runtime) : "—",
+      win: 0,
     },
     {
       label: "Genres",
-      a: genresOf(a).slice(0, 3).join(", ") || null,
-      b: genresOf(b).slice(0, 3).join(", ") || null,
+      a: genresOf(a).slice(0, 3).join(", ") || "—",
+      b: genresOf(b).slice(0, 3).join(", ") || "—",
+      win: 0,
+      minor: true,
     },
     {
       label: `Streaming (${region})`,
       a: provs(a).slice(0, 3).join(", ") || "Not streaming",
       b: provs(b).slice(0, 3).join(", ") || "Not streaming",
+      win: 0,
+      minor: true,
     },
   ];
+  const cls = (win: number, side: "a" | "b") =>
+    win === 0 ? "tape-val" : (side === "a" ? win > 0 : win < 0) ? "tape-val tape-win" : "tape-val tape-lose";
 
-  // The same mesh the show duel earns: each side's closest matches become
-  // the next matchup, deduped so shared rivals appear once.
-  const [simA, simB] = await Promise.all([
-    similarMovies(c.env.DB, a, 5),
-    similarMovies(c.env.DB, b, 5),
-  ]);
   const seen = new Set([a.slug, b.slug]);
   const moreFor = (anchor: MovieRow, sims: MovieRow[]) =>
     sims
@@ -1761,6 +1790,23 @@ app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
       .slice(0, 4)
       .map((m) => ({ anchor, other: m }));
   const more = [...moreFor(a, simA), ...moreFor(b, simB)];
+  // posters + backdrops for the versus cards (each backdrop is 7-day cached)
+  const involvedMovies = new Map<string, MovieRow>([
+    [a.slug, a],
+    [b.slug, b],
+  ]);
+  for (const { other } of more) involvedMovies.set(other.slug, other);
+  const mList = [...involvedMovies.values()];
+  const mBds = key
+    ? await Promise.all(mList.map((m) => tmdbMovieBackdrop(key, m.imdb_id)))
+    : mList.map(() => null);
+  const smallBd = (u: string) => u.replace("/w1280/", "/w780/");
+  const movieSides = new Map<string, VsSide>(
+    mList.map((m, i) => [
+      m.slug,
+      { name: m.title, poster: m.poster_url, backdrop: mBds[i] ? smallBd(mBds[i]!.x1) : null },
+    ]),
+  );
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -1781,73 +1827,76 @@ app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
         },
       ]}
     >
-      <h1>
-        <a href={`/movie/${a.slug}`}>{a.title}</a> <span class="vs-v">vs</span>{" "}
-        <a href={`/movie/${b.slug}`}>{b.title}</a>
-      </h1>
-      <form method="get" action="/movies/compare" class="picker-form">
-        <label>
-          Movie A <input type="search" name="a" value={a.title} required />
-        </label>
-        <label>
-          Movie B <input type="search" name="b" value={b.title} required />
-        </label>
-        <button type="submit">Compare</button>
-      </form>
-      <div class="duel-board">
-        <div class="duel-head">
-          <a class="duel-side" href={`/movie/${a.slug}`}>
-            {a.poster_url ? (
-              <img src={a.poster_url} alt={a.title} width="120" height="180" loading="lazy" />
-            ) : null}
-            <strong>{a.title}</strong>
-          </a>
-          <span class="vs-badge" aria-hidden="true">
-            VS
-          </span>
-          <a class="duel-side" href={`/movie/${b.slug}`}>
-            {b.poster_url ? (
-              <img src={b.poster_url} alt={b.title} width="120" height="180" loading="lazy" />
-            ) : null}
-            <strong>{b.title}</strong>
-          </a>
+      <header class="vsx-hero">
+        <div class="vsx-art" aria-hidden="true">
+          {artA ? <span class="vsx-art-a" style={`background-image:url('${bgUrl(artA)}')`}></span> : null}
+          {artB ? <span class="vsx-art-b" style={`background-image:url('${bgUrl(artB)}')`}></span> : null}
+          <span class="vsx-seam"></span>
         </div>
-        <dl class="duel-ledger">
-          {rows.map((r) => (
-            <div class="duel-row">
-              <dd class="duel-a">{r.a ?? <span class="muted">—</span>}</dd>
-              <dt>{r.label}</dt>
-              <dd class="duel-b">{r.b ?? <span class="muted">—</span>}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
+        <h1 class="sr-only">
+          {a.title} versus {b.title}
+        </h1>
+        <span class="vsx-badge" aria-hidden="true">VS</span>
+        <a class="vsx-name vsx-name-a" href={`/movie/${a.slug}`}>{a.title}</a>
+        <a class="vsx-name vsx-name-b" href={`/movie/${b.slug}`}>{b.title}</a>
+      </header>
+
+      <section class="vsx-sec">
+        <h2 class="vsx-h2">By the numbers</h2>
+        <table class="tape">
+          <caption class="sr-only">
+            {a.title} versus {b.title}, head-to-head stats
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col" class="tape-team">
+                <span class="tape-dot tape-dot-a" aria-hidden="true"></span>
+                {a.title}
+              </th>
+              <th scope="col" class="tape-vs" aria-hidden="true"></th>
+              <th scope="col" class="tape-team tape-team-b">
+                {b.title}
+                <span class="tape-dot tape-dot-b" aria-hidden="true"></span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {tape.map((r) => (
+              <tr>
+                <td class={`${cls(r.win, "a")}${r.minor ? " tape-minor" : ""}`}>{r.a}</td>
+                <th scope="row" class="tape-metric">
+                  {r.label}
+                </th>
+                <td class={`${cls(r.win, "b")}${r.minor ? " tape-minor" : ""}`}>{r.b}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
       {more.length > 0 ? (
-        <section>
-          <h2>More comparisons</h2>
-          <div class="footer-picks">
+        <section class="vsx-sec">
+          <h2 class="vsx-h2">More comparisons</h2>
+          <div class="vs-grid">
             {more.map(({ anchor, other }) => (
-              <a class="footer-card" href={movieComparePathFor(anchor.slug, other.slug)}>
-                {anchor.title} vs {other.title}
-              </a>
+              <VsCard
+                href={movieComparePathFor(anchor.slug, other.slug)}
+                a={movieSides.get(anchor.slug)!}
+                b={movieSides.get(other.slug)!}
+                cta="Side by side"
+              />
             ))}
           </div>
         </section>
       ) : null}
-      <section>
-        <h2>Keep going</h2>
-        <div class="footer-picks">
-          <a class="footer-card" href={`/movie/${a.slug}`}>
-            {a.title} overview
-          </a>
-          <a class="footer-card" href={`/movie/${b.slug}`}>
-            {b.title} overview
-          </a>
-          <a class="footer-card" href={`/movie/${a.slug}/compare`}>
-            More {a.title} matchups
-          </a>
-        </div>
-      </section>
+      <div class="vsx-actions">
+        <a class="btn-ghost" href="/movies/compare">
+          Compare a different pair
+        </a>
+        <a class="btn-ghost" href="/compare">
+          Compare TV shows instead
+        </a>
+      </div>
     </Layout>,
   );
 });

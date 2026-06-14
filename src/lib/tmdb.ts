@@ -4,6 +4,7 @@
 type RawBundle = {
   backdrop_path?: string | null;
   poster_path?: string | null;
+  created_by?: { id: number; name: string }[];
   images?: {
     posters?: { file_path: string; iso_639_1: string | null; vote_count: number }[];
     backdrops?: { file_path: string; iso_639_1: string | null; vote_count: number }[];
@@ -211,6 +212,16 @@ export async function tmdbMovieCrew(
     .sort(([, a], [, b]) => a.rank - b.rank || a.name.localeCompare(b.name))
     .slice(0, limit)
     .map(([id, p]) => ({ id, name: p.name, profile_path: p.profile_path, jobs: p.jobs.join(" · ") }));
+}
+
+/** A series' creator(s) — the TV headline credit, read straight off the same
+ *  cached show bundle as the backdrop (it rides the base /tv record). */
+export async function tmdbShowCreators(
+  key: string,
+  tmdbId: number,
+): Promise<{ id: number; name: string }[]> {
+  const data = await bundle(key, "tv", tmdbId);
+  return (data?.created_by ?? []).map((p) => ({ id: p.id, name: p.name })).slice(0, 3);
 }
 
 /** Movie hero backdrop, same selection rules, keyed on the IMDb id. */

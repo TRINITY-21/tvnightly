@@ -80,7 +80,7 @@
     background var(--speed) var(--ease);
 }
 .browse-search:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   color: var(--text);
   background: var(--surface);
   text-decoration: none;
@@ -127,7 +127,7 @@
     box-shadow var(--speed) var(--ease);
 }
 .browse-tile:hover {
-  border-color: rgba(255, 169, 77, 0.45);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-2px);
   box-shadow: var(--shadow-2);
   text-decoration: none;
@@ -335,16 +335,6 @@
   margin-bottom: 1.1rem;
   border-bottom: 1px solid var(--line);
 }
-.browse-nets-eyebrow {
-  font-family: var(--display);
-  font-stretch: 80%;
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-  margin: 0 0 0.35rem;
-}
 .browse-nets-head h2 {
   margin: 0;
 }
@@ -438,22 +428,16 @@
   margin-bottom: 1rem;
   border-bottom: 1px solid var(--line);
 }
-.browse-genre-eyebrow {
-  font-family: var(--display);
-  font-stretch: 80%;
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-  margin: 0 0 0.35rem;
-}
-.browse-genre-head h2 {
+/* pane subhead — deliberately below the section h2 so the hierarchy reads
+   parent (Genres) → child (TV genres / Movie genres) */
+.browse-subhead {
   margin: 0;
-  font-size: clamp(1.15rem, 2vw, 1.35rem);
-}
-.browse-genre-head h2::after {
-  display: none;
+  font-family: var(--display);
+  font-stretch: 92%;
+  font-weight: 700;
+  font-size: 1.02rem;
+  letter-spacing: 0.01em;
+  color: var(--text);
 }
 .browse-genre-count {
   font-size: 0.82rem;
@@ -489,7 +473,7 @@
     transform var(--speed) var(--ease);
 }
 .browse-genre-tile:hover {
-  border-color: rgba(255, 169, 77, 0.42);
+  border-color: rgba(255, 255, 255, 0.18);
   background: var(--surface-2);
   box-shadow: var(--shadow-2);
   transform: translateY(-1px);
@@ -550,7 +534,7 @@
   z-index: 1;
 }
 .browse-hub-card:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-1px);
   box-shadow: var(--shadow-2);
   text-decoration: none;

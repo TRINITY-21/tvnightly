@@ -3,6 +3,8 @@ import { FC, PropsWithChildren } from "hono/jsx";
 import { raw } from "hono/html";
 import { jsonLd } from "../lib/seo";
 import { VERTICALS } from "../lib/verticals";
+import { networkLogo } from "../lib/providers";
+import { slugifyName } from "../lib/format";
 
 // Live countdown band: four stat blocks ticking once a second. Renders "—"
 // placeholders until JS lands; flips to "Airing now" past zero.
@@ -42,36 +44,69 @@ const BROWSE_PATHS = [
   "/classics",
 ];
 
-const BROWSE_MENU = [
+// Browse is a tall, scrollable drawer: grouped link sections, then network
+// logo tiles and genre chips drawn from the same data as the /lists directory.
+const BROWSE_SECTIONS: { kicker: string; links: [string, string][] }[] = [
   {
-    label: "TV charts",
+    kicker: "Top charts",
     links: [
       ["Top TV shows", "/top/tv"],
+      ["Top movies", "/movies/best"],
       ["Best episodes", "/best-episodes"],
       ["Top seasons", "/top/seasons"],
       ["Most loved", "/loved"],
-      ["Compare shows", "/compare"],
     ],
   },
   {
-    label: "Movies",
+    kicker: "Compare",
     links: [
-      ["Best movies", "/movies/best"],
-      ["Popular movies", "/movies"],
-      ["Upcoming movies", "/movies/upcoming"],
+      ["Compare shows", "/compare"],
       ["Compare movies", "/movies/compare"],
+    ],
+  },
+  {
+    kicker: "Upcoming & new",
+    links: [
+      ["Upcoming TV", "/premieres"],
+      ["Upcoming movies", "/movies/upcoming"],
+      ["New on streaming", "/whats-new"],
+      ["Renewals & dates", "/renewals"],
+    ],
+  },
+  {
+    kicker: "Find your next watch",
+    links: [
+      ["What to watch", "/what-to-watch"],
+      ["Get a recommendation", "/recommend"],
       ["Watch orders", "/watch-orders"],
     ],
   },
-  {
-    label: "Directory",
-    links: [
-      ["Browse everything", "/lists"],
-      ["Top networks", "/top/networks"],
-      ["Search", "/search"],
-    ],
-  },
-] as const;
+];
+
+// [display label, logo lookup name, /network slug] — all three verified to
+// resolve to a real logo and a live network page.
+const BROWSE_NETWORKS: [string, string, string][] = [
+  ["Netflix", "Netflix", "netflix"],
+  ["Max", "HBO Max", "hbo-max"],
+  ["Prime Video", "Amazon Prime Video", "prime-video"],
+  ["Disney+", "Disney+", "disney-plus"],
+  ["Hulu", "Hulu", "hulu"],
+  ["Apple TV+", "Apple TV", "apple-tv"],
+  ["Peacock", "Peacock Premium", "peacock"],
+  ["Paramount+", "Paramount Plus", "paramount-plus"],
+];
+
+// [display label, genre name as stored] — Sci-Fi shown short, slug from full.
+const BROWSE_TV_GENRES: [string, string][] = [
+  ["Drama", "Drama"], ["Comedy", "Comedy"], ["Crime", "Crime"], ["Sci-Fi", "Science-Fiction"],
+  ["Fantasy", "Fantasy"], ["Horror", "Horror"], ["Mystery", "Mystery"], ["Thriller", "Thriller"],
+  ["Action", "Action"], ["Romance", "Romance"], ["Supernatural", "Supernatural"], ["Anime", "Anime"],
+];
+const BROWSE_MOVIE_GENRES: [string, string][] = [
+  ["Action", "Action"], ["Adventure", "Adventure"], ["Animation", "Animation"], ["Comedy", "Comedy"],
+  ["Crime", "Crime"], ["Drama", "Drama"], ["Fantasy", "Fantasy"], ["Horror", "Horror"],
+  ["Mystery", "Mystery"], ["Romance", "Romance"], ["Sci-Fi", "Science Fiction"], ["Thriller", "Thriller"],
+];
 
 export const Layout: FC<
   PropsWithChildren<{
@@ -134,7 +169,7 @@ export const Layout: FC<
       {(props.ld ?? []).map((d) => jsonLd(d))}
     </head>
     <body>
-      <div class="nprogress" aria-hidden="true"><span class="nprogress-bar"></span></div>
+      <div class="nprogress" aria-hidden="true"><span class="nprogress-bar"></span><span class="nprogress-spin"></span></div>
       <header class="site-header">
         {/* inner rail centers on the same 948px column as main content */}
         <div class="header-inner">
@@ -165,15 +200,68 @@ export const Layout: FC<
                 <span class="nav-mega-chev" aria-hidden="true"></span>
               </button>
               <div id="browse-panel" class="nav-mega-panel" hidden>
-                <div class="nav-mega-grid">
-                  {BROWSE_MENU.map((col) => (
-                    <div class="nav-mega-col">
-                      <p class="nav-mega-kicker">{col.label}</p>
-                      {col.links.map(([label, href]) => (
-                        <a href={href}>{label}</a>
-                      ))}
+                <div class="nav-mega-scroll">
+                  {BROWSE_SECTIONS.map((sec) => (
+                    <div class="nm-sec">
+                      <p class="nav-mega-kicker">{sec.kicker}</p>
+                      <div class="nm-rows">
+                        {sec.links.map(([label, href]) => (
+                          <a class="nm-row" href={href}>
+                            {label}
+                          </a>
+                        ))}
+                      </div>
                     </div>
                   ))}
+                  <div class="nm-sec">
+                    <p class="nav-mega-kicker">Networks</p>
+                    <div class="nm-nets">
+                      {BROWSE_NETWORKS.map(([label, logoName, slug]) => {
+                        const logo = networkLogo(logoName);
+                        return (
+                          <a class="nm-net" href={`/network/${slug}`} title={label} aria-label={label}>
+                            {logo ? (
+                              <img
+                                src={logo}
+                                alt={label}
+                                width="28"
+                                height="28"
+                                loading="lazy"
+                                decoding="async"
+                              />
+                            ) : (
+                              <span class="nm-net-fallback" aria-hidden="true">
+                                {label.slice(0, 2)}
+                              </span>
+                            )}
+                          </a>
+                        );
+                      })}
+                    </div>
+                    <a class="nm-all chev-after" href="/top/networks">
+                      All networks
+                    </a>
+                  </div>
+                  <div class="nm-sec">
+                    <p class="nav-mega-kicker">TV genres</p>
+                    <div class="nm-chips">
+                      {BROWSE_TV_GENRES.map(([label, g]) => (
+                        <a class="nm-chip" href={`/genre/${slugifyName(g)}`}>
+                          {label}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                  <div class="nm-sec">
+                    <p class="nav-mega-kicker">Movie genres</p>
+                    <div class="nm-chips">
+                      {BROWSE_MOVIE_GENRES.map(([label, g]) => (
+                        <a class="nm-chip" href={`/genre/${slugifyName(g)}/movies`}>
+                          {label}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <a class="nav-mega-all chev-after" href="/lists">
                   Browse everything
@@ -191,18 +279,64 @@ export const Layout: FC<
               spellcheck={false}
               required
             />
+            <kbd class="search-key" aria-hidden="true">/</kbd>
           </form>
+        </div>
+        <button
+          type="button"
+          class="nav-toggle"
+          aria-label="Open menu"
+          aria-controls="mobile-menu"
+          aria-expanded="false"
+        >
+          <span class="nav-toggle-bars" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+        </button>
+        <div id="mobile-menu" class="mobile-menu" hidden>
+          <div class="mobile-menu-inner" role="navigation" aria-label="Browse">
+            <a class={`mm-link ${navClass(["/tonight", "/calendar", "/premieres"])}`} href="/tonight">
+              Tonight
+            </a>
+            <a class={`mm-link ${navClass(["/what-to-watch", "/recommend"])}`} href="/what-to-watch">
+              What to watch
+            </a>
+            <a class={`mm-link ${navClass(["/whats-new", "/renewals"])}`} href="/whats-new">
+              What&apos;s new
+            </a>
+            {BROWSE_SECTIONS.map((sec) => (
+              <div class="mm-sec">
+                <p class="mm-kicker">{sec.kicker}</p>
+                {sec.links.map(([label, href]) => (
+                  <a class="mm-row" href={href}>
+                    {label}
+                  </a>
+                ))}
+              </div>
+            ))}
+            <a class="mm-all chev-after" href="/lists">
+              Browse everything
+            </a>
+          </div>
         </div>
       </header>
       <main>{props.children}</main>
       <footer class="site-footer">
         <div class="footer-inner">
         <div class="footer-cols">
-          <div>
-            <p class="tagline">
+          <div class="footer-brand">
+            <a class="footer-logo" href="/">
+              <LogoMark size={24} />
+              <span class="logo-word">
+                TV NIGHTLY<span class="logo-dot"></span>
+              </span>
+            </a>
+            <p class="footer-tagline">
               Tonight, decided<span class="logo-dot"></span>
             </p>
-            <p>
+            <p class="footer-blurb">
               Episode rankings, release dates, and where to stream — checked around the clock,
               localized to your country.
             </p>
@@ -223,57 +357,52 @@ export const Layout: FC<
             ))}
             <a href="/loved">Community loved</a>
           </div>
-          <div>
+          <div class="footer-stay">
             <h3>Stay updated</h3>
             <p>Today's TV, renewals and premieres in your inbox every evening.</p>
-            <form action="/subscribe" method="post" class="sub-form">
+            <form action="/subscribe" method="post" class="footer-sub">
               <input type="hidden" name="kind" value="daily" />
               <input
                 type="email"
                 name="email"
-                placeholder="Enter your email"
+                placeholder="you@email.com"
                 aria-label="Email address"
                 required
               />
               <button type="submit">Subscribe</button>
             </form>
+            <p class="footer-sub-note">One evening email. No spam — unsubscribe anytime.</p>
           </div>
         </div>
-        <p class="disclaimer">
-          <strong>Disclaimer:</strong> TV Nightly is independent and is not affiliated with any TV
-          shows, networks, or data sources. While we aim to provide reliable information, the data
-          presented on this site is not guaranteed to be accurate, complete, or current.
-        </p>
-        <p class="footer-attribution">
-          TV information from{" "}
-          <a href="https://www.tvmaze.com" rel="noopener">
-            TVmaze.com
-          </a>{" "}
-          (CC BY-SA).{" "}
-          <a href="https://www.themoviedb.org" rel="noopener">
-            <img
-              class="tmdb-logo"
-              src="https://files.readme.io/29c6fee-blue_short.svg"
-              alt="TMDB"
-              height="11"
-            />
-          </a>{" "}
-          This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise
-          approved by TMDB. Streaming availability data from{" "}
-          <a href="https://www.justwatch.com" rel="noopener">
-            JustWatch
-          </a>{" "}
-          via TMDB.
-        </p>
-        <p class="footer-legal">
-          <span>
-            <a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a>
+        <div class="footer-fine">
+          <p class="disclaimer">
+            <strong>Disclaimer:</strong> TV Nightly is independent and is not affiliated with any TV
+            shows, movies, networks, or data sources. While we aim to provide reliable information,
+            the data presented on this site is not guaranteed to be accurate, complete, or current.
+          </p>
+          <p class="footer-attribution">
+            TV and film information from{" "}
+            <a href="https://www.tvmaze.com" rel="noopener">
+              TVmaze
+            </a>{" "}
+            and{" "}
+            <a href="https://www.themoviedb.org" rel="noopener">
+              TMDB
+            </a>{" "}
+            APIs.
+          </p>
+        </div>
+        <div class="footer-base">
+          <span class="footer-base-links">
+            <a href="/terms">Terms of Service</a>
+            <span class="footer-sep" aria-hidden="true">·</span>
+            <a href="/privacy">Privacy Policy</a>
           </span>
-          <span>© 2026 TV Nightly. All rights reserved.</span>
-        </p>
+          <span class="footer-copy">© 2026 TV Nightly. All rights reserved.</span>
+        </div>
         </div>
       </footer>
-      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/shelf-scroll.js", ...(props.scripts ?? [])].map((s) => (
+      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>
       ))}
     </body>

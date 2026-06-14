@@ -7,7 +7,7 @@ import { SubscribeForm } from "../components/forms";
 import { ChevDown, ChevUp, IconCal } from "../components/icons";
 import { SeasonTabs, ShowTabs } from "../components/nav";
 import { buildDossier } from "../lib/dossier";
-import { epCode, epHref, heroBg, largeStill, longDate, posterSrc, stripHtml } from "../lib/format";
+import { epCode, epHref, heroBg, largeStill, longDate, posterSrc, stripHtml, fmtRuntime } from "../lib/format";
 import { visitorRegion } from "../lib/providers";
 import { getShow, similarShows } from "../lib/queries";
 import { breadcrumbLd, canonical, origin } from "../lib/seo";
@@ -216,7 +216,7 @@ app.get("/show/:slug/essential", async (c) => {
                       {ep.runtime ? (
                         <>
                           <span class="sep"> · </span>
-                          <span class="epreg-rt">{ep.runtime} min</span>
+                          <span class="epreg-rt">{fmtRuntime(ep.runtime)}</span>
                         </>
                       ) : null}
                     </p>
@@ -625,7 +625,7 @@ const rankedPage =
                     {e.runtime ? (
                       <>
                         <span class="sep"> · </span>
-                        <span class="epreg-rt">{e.runtime} min</span>
+                        <span class="epreg-rt">{fmtRuntime(e.runtime)}</span>
                       </>
                     ) : null}
                   </p>

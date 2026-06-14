@@ -103,3 +103,10 @@ export const movieComparePathFor = (a: string, b: string) =>
   a.localeCompare(b) <= 0 ? `/compare/movie/${a}-vs-${b}` : `/compare/movie/${b}-vs-${a}`;
 
 export const fmtMarathon = (mins: number) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
+
+/** Runtime in the films idiom: "2h 22m", "2h", "47m" — drops the empty part. */
+export const fmtRuntime = (mins: number) => {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+};

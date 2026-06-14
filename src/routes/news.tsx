@@ -22,6 +22,12 @@ type WireRow = EventRow & {
   network: string | null;
 };
 
+// a status outcome carries the system's good/bad/uncertain colour — the same
+// language as the show-status badge — so a greenlight and a cancellation on
+// the same wire never look alike
+const statusTone = (v: string | null) =>
+  v === "Running" ? "ok" : v === "Ended" || v === "Canceled" || v === "Cancelled" ? "bad" : "warn";
+
 // what each event means, in one quiet line under the show's name; the
 // old→new glyph gets a spoken "to" so the direction survives a screen reader
 const wireLine = (ev: WireRow) => {
@@ -48,7 +54,8 @@ const wireLine = (ev: WireRow) => {
         <>
           {ev.old_value ?? "?"}{" "}
           <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
-          <span class="sr-only"> to </span> {ev.new_value ?? "?"}
+          <span class="sr-only"> to </span>{" "}
+          <span class={`wire-to t-${statusTone(ev.new_value)}`}>{ev.new_value ?? "?"}</span>
         </>
       );
   }
@@ -138,12 +145,11 @@ app.get("/renewals", async (c) => {
       canonical={canonical(c)}
     >
       <SubNav items={NEWS_TABS} current="/renewals" />
-      <p class="section-eyebrow">The wire</p>
       <h1>Renewals, cancellations & premiere dates</h1>
       {results.length ? (
         <p class="sched-sum">
-          <strong>{results.length}</strong> event{results.length === 1 ? "" : "s"} on the wire ·
-          detected hourly from schedule data
+          <strong>{results.length}</strong> event{results.length === 1 ? "" : "s"} · detected hourly
+          from schedule data
         </p>
       ) : (
         <p class="muted">No events detected yet — the sync job updates this hourly.</p>
@@ -340,7 +346,7 @@ app.get("/whats-new", async (c) => {
       <section class="shuffle-doors" aria-label="More on the schedule wire">
         <div class="explore-grid shuffle-door-grid">
           <ExploreCard
-            icon="The wire"
+            icon="Live"
             title="Renewals & cancellations"
             desc="New seasons confirmed, ended runs, and status moves — detected hourly."
             href="/renewals"

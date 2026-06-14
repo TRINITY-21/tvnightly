@@ -149,7 +149,7 @@ a.dossier-name:hover {
   transition: border-color var(--speed) var(--ease);
 }
 .dossier-receipt .prov-go:hover .prov-mini {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 .dossier-receipt .sep,
 .dossier-era .sep {

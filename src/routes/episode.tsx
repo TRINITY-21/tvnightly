@@ -3,7 +3,7 @@
 // the edge cache so the D1 mirror stays lean.
 import { Hono } from "hono";
 import { Bindings, EpisodeRow } from "../types";
-import { stripHtml, epCode, epHref, hiRes, retinaSet, posterSrc, longDate, slugifyName } from "../lib/format";
+import { stripHtml, epCode, epHref, hiRes, retinaSet, posterSrc, longDate, slugifyName, fmtRuntime } from "../lib/format";
 import { origin, canonical } from "../lib/seo";
 import { getShow } from "../lib/queries";
 import { visitorRegion } from "../lib/providers";
@@ -253,7 +253,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
                 {ep.runtime ? (
                   <>
                     <span class="sep">·</span>
-                    <span>{ep.runtime} min</span>
+                    <span>{fmtRuntime(ep.runtime)}</span>
                   </>
                 ) : null}
                 {show.network || show.web_channel ? (

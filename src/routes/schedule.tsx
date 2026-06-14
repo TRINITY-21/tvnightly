@@ -321,7 +321,7 @@ app.get("/premieres", async (c) => {
             href="/calendar"
           />
           <ExploreCard
-            icon="The wire"
+            icon="Live"
             title="Renewals & cancellations"
             desc="Which shows got picked up, which got the axe."
             href="/renewals"

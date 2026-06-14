@@ -160,8 +160,9 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
       title={`${v.pageTitle} | TV Nightly`}
       description={v.description}
       canonical={`${origin(c)}/${v.slug}`}
+      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
     >
-      <header class={`wo-hero${ambient ? " hub-ambient" : ""}`}>
+      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
           <p class="section-eyebrow">{v.tvGenres?.length ? "Fandom hub" : "Film hub"}</p>

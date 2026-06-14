@@ -79,7 +79,9 @@
 .spot-head {
   position: relative;
   z-index: 1;
-  max-width: 948px;
+  /* match main's geometry (980px box, 1rem gutter) so the content box lands
+     on the same 948px column as everything below the hero */
+  max-width: 980px;
   margin: 0 auto;
   padding: 0 1rem;
   display: flex;
@@ -135,6 +137,13 @@
 .spot-ep {
   margin: 0 0 0.3rem;
 }
+/* the network is a door too — keep it chyron-quiet, amber on hover */
+.spot-ep a {
+  color: inherit;
+}
+.spot-ep a:hover {
+  color: var(--accent);
+}
 .spot-actions {
   margin: 0.9rem 0 0;
 }
@@ -183,11 +192,8 @@
 .evening-aside {
   border-bottom-left-radius: 48px;
 }
-/* align the aside's h2 with the main card's (which carries the eyebrow) */
-.evening-aside .evening-head { margin-top: 1.55rem; }
 @media (max-width: 760px) {
   .evening-grid { grid-template-columns: 1fr; gap: 1rem; }
-  .evening-aside .evening-head { margin-top: 0; }
   .evening-card { padding-bottom: 1.5rem; }
   .evening-aside { padding-bottom: 3.6rem; }
   /* single column: no seam to carve, both cards keep the normal radius */
@@ -239,7 +245,7 @@
   transform: scale(1.05);
 }
 .shelf-tile:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 .shelf-fallback {
   display: flex;
@@ -312,7 +318,7 @@
   transform: translateY(-50%) scale(1);
 }
 .shelf-nav:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   background: rgba(14, 14, 17, 0.92);
   color: var(--accent);
 }
@@ -444,15 +450,41 @@
   font-size: 0.98rem;
 }
 .evening-cta .verdict-btn {
-  box-shadow: 0 8px 34px rgba(255, 169, 77, 0.3);
+  box-shadow: 0 3px 12px rgba(255, 169, 77, 0.14);
+}
+/* keep a one-line lead from wrapping on roomy viewports */
+.nowrap-wide {
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .nowrap-wide {
+    white-space: normal;
+  }
 }
 .evening-cta .btn-ghost {
   background: var(--bg);
 }
 
+/* band heads carry the page: bigger + heavier than the in-card heads so each
+   section reads as its own spine (the amber tick under them is the section voice) */
+.discover-head h2,
+.lanes-head h2,
+.home-tools h2 {
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+@media (max-width: 600px) {
+  .discover-head h2,
+  .lanes-head h2,
+  .home-tools h2 { font-size: 1.35rem; }
+}
+
 /* discover: tabbed poster rails */
 .home-discover h2 { margin: 0; }
 .discover-head { margin-bottom: 0.85rem; }
+/* let the dek run the full column so it sits on one row (wraps only on narrow) */
+.discover-head .section-lead { max-width: none; }
 .discover-input {
   position: absolute;
   opacity: 0;
@@ -467,18 +499,26 @@
   border-bottom: 1px solid var(--line);
 }
 .discover-tablist label {
-  padding: 0.45rem 0.9rem;
-  color: var(--muted);
+  padding: 0.5rem 0.95rem;
+  /* brighter than --muted so the inactive tab reads as a peer control, not a
+     caption — semibold + size give it button-weight so Movies isn't missed */
+  color: #d2cec6;
   border-bottom: 2px solid transparent;
-  font-size: 0.9rem;
+  font-size: 0.96rem;
+  font-weight: 600;
   cursor: pointer;
   margin-bottom: -1px;
   transition: color var(--speed) var(--ease), border-color var(--speed) var(--ease);
 }
-.discover-tablist label:hover { color: var(--text); }
+/* amber-underline preview on hover = "click to switch" (amber == interactivity) */
+.discover-tablist label:hover {
+  color: var(--text);
+  border-bottom-color: rgba(255, 255, 255, 0.18);
+}
 #discover-tv:checked ~ .discover-tablist label[for="discover-tv"],
 #discover-movies:checked ~ .discover-tablist label[for="discover-movies"] {
   color: var(--text);
+  font-weight: 700;
   border-bottom-color: var(--accent);
 }
 .discover-more { margin-left: auto; }
@@ -494,6 +534,7 @@
 #trend-tv:checked ~ .discover-tablist label[for="trend-tv"],
 #trend-movies:checked ~ .discover-tablist label[for="trend-movies"] {
   color: var(--text);
+  font-weight: 700;
   border-bottom-color: var(--accent);
 }
 #trend-tv:checked ~ .panel-tv,
@@ -602,7 +643,12 @@
   background: var(--surface-2);
   margin-left: -9px;
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.55);
+  /* monochrome at rest so the palette stays disciplined; brand colour blooms
+     back on hover, where it reads as a reward, not noise */
+  filter: grayscale(1) opacity(0.82);
+  transition: filter var(--speed) var(--ease);
 }
+.tool-tile-lg:hover .tool-tile-provs img { filter: none; }
 /* the large tiles park the chevron top-right so the art owns the lower band */
 .tool-tile-lg .chev-icon {
   top: 1.15rem;
@@ -644,6 +690,32 @@
 .tool-tile-sm:hover .tool-tile-glyph-sm {
   transform: translateY(-50%) scale(1.06);
 }
+/* a small stack of network logos in the glyph slot (Top networks) */
+.tool-tile-logos {
+  position: absolute;
+  right: 2.1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+  transition: transform var(--speed) var(--ease);
+}
+.tool-tile-logos img {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+  filter: grayscale(1) opacity(0.82);
+  transition: filter var(--speed) var(--ease);
+}
+.tool-tile-logos img + img {
+  margin-left: -9px;
+}
+.tool-tile-sm:hover .tool-tile-logos {
+  transform: translateY(-50%) scale(1.04);
+}
+.tool-tile-sm:hover .tool-tile-logos img { filter: none; }
 .tool-tile-sm .chev-icon-sm {
   position: absolute;
   right: 0.8rem;
@@ -657,11 +729,19 @@
 @media (max-width: 520px) {
   .tools-bento-rest { grid-template-columns: 1fr; }
 }
+@media (min-width: 761px) {
+  /* a lone tile on the final row (count ≡ 1 mod 3) centers instead of
+     orphaning to the left edge — only in the 3-col desktop layout */
+  .tools-bento-rest > a:last-child:nth-child(3n + 1) {
+    grid-column: 2;
+  }
+}
 
 /* browse lanes — hub and genre doors wearing their pages' own #1 art.
    Art rests dim behind the plate scrim and breathes on hover; the tile
    never depends on it (no key, no art → quiet plate tile). */
 .home-lanes { margin-top: 3rem; }
+.lanes-head { margin-bottom: 1.5rem; }
 .lanes-head h2 { display: flex; align-items: baseline; gap: 0.75rem; }
 .lane-grid {
   display: grid;
@@ -815,7 +895,7 @@
     background-color var(--speed) var(--ease), transform var(--speed) var(--ease);
 }
 .rail-btn:hover {
-  border-color: rgba(255, 169, 77, 0.5);
+  border-color: rgba(255, 255, 255, 0.18);
   background: rgba(26, 26, 30, 0.95);
 }
 .rail-btn:hover .chev-icon { color: var(--accent); }
@@ -830,12 +910,21 @@
 .poster-rail.can-scroll-right .rail-btn-next .chev-icon {
   animation: rail-nudge 2.8s ease-in-out infinite;
 }
+/* mirror the nudge on the prev arrow — leftward, matching the hover convention */
+.poster-rail.can-scroll-left .rail-btn-prev .chev-icon {
+  animation: rail-nudge-prev 2.8s ease-in-out infinite;
+}
 @keyframes rail-nudge {
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(2px); }
 }
+@keyframes rail-nudge-prev {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-2px); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .poster-rail.can-scroll-right .rail-btn-next .chev-icon { animation: none; }
+  .poster-rail.can-scroll-right .rail-btn-next .chev-icon,
+  .poster-rail.can-scroll-left .rail-btn-prev .chev-icon { animation: none; }
 }
 .poster-row {
   display: flex;
@@ -876,9 +965,9 @@
     box-shadow var(--speed) var(--ease);
 }
 .poster-row > .card:hover .card-media {
-  border-color: rgba(255, 169, 77, 0.5);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-4px);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 169, 77, 0.12);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 .poster-row > .card:active .card-media { transform: translateY(-2px); }
 .poster-row .card img,
@@ -907,4 +996,61 @@
   padding: 0.18rem 0.48rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
+/* tuned to the narrower rail posters */
+.poster-row .card-hover-title {
+  font-size: 0.86rem;
+  padding: 0.55rem;
+  border-radius: var(--radius-lg);
+}
 
+/* ranked rail (Trending) — a Top-N chart, not a second popular shelf: a big
+   numeral anchors each poster over a foot-scrim so it reads at a glance */
+.poster-row-ranked { counter-reset: rank; }
+.poster-row-ranked > .card { counter-increment: rank; }
+.poster-row-ranked .card-media { position: relative; }
+.poster-row-ranked .card-media::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0));
+  pointer-events: none;
+  z-index: 1;
+}
+.poster-row-ranked .card-media::after {
+  content: counter(rank);
+  position: absolute;
+  left: 7px;
+  bottom: 0;
+  z-index: 2;
+  font-family: var(--display);
+  font-stretch: 75%;
+  font-weight: 800;
+  font-size: 2.7rem;
+  line-height: 0.92;
+  color: var(--text);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+
+/* ---- mobile refinements (phones) — collapse multi-col grids, tame type and
+   padding that were sized for desktop ---- */
+@media (max-width: 600px) {
+  /* the spotlight meta line was full-size and crowded on a phone */
+  .spotlight .meta-strip { font-size: 0.84rem; gap: 0.3rem 0.45rem; }
+}
+@media (max-width: 560px) {
+  /* hub lanes carry a dek — give them the full row; genre lanes stay 2-up */
+  .lane-grid-hubs { grid-template-columns: 1fr; }
+  .lane-tile strong { font-size: 1.1rem; }
+  .lane-tile-lg strong { font-size: 1.25rem; }
+  /* the big "Go deeper" tiles had desktop-sized right padding crushing the text */
+  .tool-tile-lg { padding: 1.1rem 1.4rem 1.1rem 1.1rem; min-height: 7rem; }
+  /* CTA pill: let it use the full width and shrink the buttons a touch */
+  .evening-cta { width: auto; max-width: 100%; }
+  .evening-cta .verdict-btn,
+  .evening-cta .btn-ghost { padding: 0.65rem 0.9rem; font-size: 0.92rem; }
+}

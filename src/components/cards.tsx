@@ -30,6 +30,7 @@ export const ShowCard: FC<{ show: ShowRow }> = ({ show }) => (
         );
       })()}
       {show.rating != null ? <span class="card-rating">★ {show.rating.toFixed(1)}</span> : null}
+      <span class="card-hover-title" aria-hidden="true">{show.name}</span>
     </div>
     <div class="card-body">
       <span class="card-title">{show.name}</span>
@@ -46,6 +47,7 @@ export const MovieCard: FC<{ movie: MovieRow }> = ({ movie }) => (
         <div class="card-fallback">{movie.title}</div>
       )}
       {movie.rating != null ? <span class="card-rating">★ {movie.rating.toFixed(1)}</span> : null}
+      <span class="card-hover-title" aria-hidden="true">{movie.title}</span>
     </div>
     <div class="card-body">
       <span class="card-title">{movie.title}</span>

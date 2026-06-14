@@ -6,7 +6,19 @@ import { origin, canonical, breadcrumbLd } from "../lib/seo";
 import { getShow, crewLinkMap } from "../lib/queries";
 import { Layout } from "../components/Layout";
 import { ShowTabs, SeasonTabs } from "../components/nav";
-import { ClampSummary } from "../components/cards";
+import { ClampSummary, ExploreCard } from "../components/cards";
+import { IconInstagram, IconX, IconGlobe } from "../components/icons";
+
+/** genres are stored as a JSON string array on shows & movies */
+const parseGenres = (j: string | null): string[] => {
+  if (!j) return [];
+  try {
+    const a = JSON.parse(j);
+    return Array.isArray(a) ? a.filter((g): g is string => typeof g === "string") : [];
+  } catch {
+    return [];
+  }
+};
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -421,6 +433,25 @@ app.get("/person/:slug", async (c) => {
     person.birthday && person.deathday
       ? `${person.birthday.slice(0, 4)}–${person.deathday.slice(0, 4)}`
       : null;
+
+  // the genres this person actually works in, ranked by how often they recur
+  // across their credits — real signal, derived from the catalogue
+  const genreTally = new Map<string, number>();
+  for (const r of roles) for (const g of parseGenres(r.genres)) genreTally.set(g, (genreTally.get(g) ?? 0) + 1);
+  for (const m of films) for (const g of parseGenres(m.genres)) genreTally.set(g, (genreTally.get(g) ?? 0) + 1);
+  const topGenres = [...genreTally.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g).slice(0, 4);
+  const firstGenre = (g: string | null) => parseGenres(g)[0] ?? null;
+
+  // the person's defining work, for the lateral doors at the foot of the page
+  const bestShow = roles.find((r) => r.rating != null) ?? null;
+  const bestMovie = films.find((m) => m.rating != null) ?? null;
+  const bestTitle = (() => {
+    const s = bestShow ? { name: bestShow.name, href: `/show/${bestShow.slug}`, rating: bestShow.rating! } : null;
+    const m = bestMovie ? { name: bestMovie.title, href: `/movie/${bestMovie.slug}`, rating: bestMovie.rating! } : null;
+    if (s && m) return s.rating >= m.rating ? s : m;
+    return s ?? m;
+  })();
+
   const ld = {
     "@context": "https://schema.org",
     "@type": "Person",
@@ -445,7 +476,7 @@ app.get("/person/:slug", async (c) => {
       ld={[ld]}
     >
       <article class="show-hub">
-        <header class="detail-hero">
+        <header class="detail-hero person-hero">
           {person.image_url ? (
             <div class="hero-backdrop" style={`background-image:url('${person.image_url}')`}></div>
           ) : null}
@@ -456,6 +487,43 @@ app.get("/person/:slug", async (c) => {
               ) : (
                 <div class="poster card-fallback">{person.name}</div>
               )}
+              {socials.ig || socials.tw || person.homepage ? (
+                <div class="soc-links">
+                  {socials.ig ? (
+                    <a
+                      class="soc-link"
+                      href={`https://www.instagram.com/${socials.ig}/`}
+                      rel="noopener"
+                      aria-label={`${person.name} on Instagram`}
+                      title="Instagram"
+                    >
+                      <IconInstagram />
+                    </a>
+                  ) : null}
+                  {socials.tw ? (
+                    <a
+                      class="soc-link"
+                      href={`https://x.com/${socials.tw}`}
+                      rel="noopener"
+                      aria-label={`${person.name} on X`}
+                      title="X"
+                    >
+                      <IconX />
+                    </a>
+                  ) : null}
+                  {person.homepage ? (
+                    <a
+                      class="soc-link"
+                      href={person.homepage}
+                      rel="noopener"
+                      aria-label="Official website"
+                      title="Website"
+                    >
+                      <IconGlobe />
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             <div class="detail-info">
               <h1>{person.name}</h1>
@@ -483,16 +551,6 @@ app.get("/person/:slug", async (c) => {
                     <span>{person.birthplace ?? person.country}</span>
                   </>
                 ) : null}
-                {roles.length ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>
-                      {roles.length} show{roles.length === 1 ? "" : "s"}
-                      {films.length ? ` & ${films.length} film${films.length === 1 ? "" : "s"}` : ""}{" "}
-                      on TV Nightly
-                    </span>
-                  </>
-                ) : null}
               </p>
               {person.bio ? (
                 stripHtml(person.bio).length > 280 ? (
@@ -502,7 +560,7 @@ app.get("/person/:slug", async (c) => {
                 )
               ) : roles.length ? (
                 <p class="summary">
-                  Best known around here for{" "}
+                  Best known for{" "}
                   {roles.slice(0, 2).map((r, i) => (
                     <>
                       {i > 0 ? " and " : ""}
@@ -513,36 +571,15 @@ app.get("/person/:slug", async (c) => {
                   .
                 </p>
               ) : null}
-              <div class="footer-picks">
-                {person.imdb_id ? (
-                  <a
-                    class="footer-card"
-                    href={`https://www.imdb.com/name/${person.imdb_id}/`}
-                    rel="noopener"
-                  >
-                    IMDb
-                  </a>
-                ) : null}
-                {socials.ig ? (
-                  <a
-                    class="footer-card"
-                    href={`https://www.instagram.com/${socials.ig}/`}
-                    rel="noopener"
-                  >
-                    Instagram
-                  </a>
-                ) : null}
-                {socials.tw ? (
-                  <a class="footer-card" href={`https://x.com/${socials.tw}`} rel="noopener">
-                    X
-                  </a>
-                ) : null}
-                {person.homepage ? (
-                  <a class="footer-card" href={person.homepage} rel="noopener">
-                    Website
-                  </a>
-                ) : null}
-              </div>
+              {topGenres.length ? (
+                <p class="person-genres" aria-label="Works in">
+                  {topGenres.map((g) => (
+                    <a class="genre-chip" href={`/genre/${slugifyName(g)}`}>
+                      {g}
+                    </a>
+                  ))}
+                </p>
+              ) : null}
             </div>
           </div>
         </header>
@@ -550,14 +587,16 @@ app.get("/person/:slug", async (c) => {
           <section class="stat-band">
             <div class="stat">
               <span class="stat-num">{roles.length + films.length}</span>
-              <span class="stat-label">Tracked credits</span>
-              <span class="stat-sub muted">TV & film on TV Nightly</span>
+              <span class="stat-label">Credits</span>
+              <span class="stat-sub muted">
+                {roles.length} TV · {films.length} film{films.length === 1 ? "" : "s"}
+              </span>
             </div>
             {yearsActive ? (
               <div class="stat">
                 <span class="stat-num">{yearsActive}</span>
                 <span class="stat-label">Years active</span>
-                <span class="stat-sub muted">across tracked work</span>
+                <span class="stat-sub muted">first to latest</span>
               </div>
             ) : null}
             {topRated ? (
@@ -565,7 +604,7 @@ app.get("/person/:slug", async (c) => {
                 <span class="stat-num">
                   {topRated.rating.toFixed(1)} <span class="rating">★</span>
                 </span>
-                <span class="stat-label">Top-rated</span>
+                <span class="stat-label">Highest rated</span>
                 <span class="stat-sub muted">{topRated.name}</span>
               </div>
             ) : null}
@@ -574,17 +613,28 @@ app.get("/person/:slug", async (c) => {
                 <span class="stat-num">
                   {avgRating} <span class="rating">★</span>
                 </span>
-                <span class="stat-label">Avg rating</span>
-                <span class="stat-sub muted">across {ratedCredits.length} rated</span>
+                <span class="stat-label">Average rating</span>
+                <span class="stat-sub muted">across {ratedCredits.length} titles</span>
               </div>
             ) : null}
           </section>
         ) : null}
         {roles.length ? (
-          <section>
-            <h2>Top TV shows</h2>
+          <section class="credit-sec">
+            <h2 class="credit-head">
+              Top TV shows <span class="credit-count">{roles.length}</span>
+            </h2>
             <ol class="rank-list">
-              {roles.map((r, i) => (
+              {roles.map((r, i) => {
+                const g = firstGenre(r.genres);
+                const facts = [
+                  r.character ? `${r.character}${r.voice ? " (voice)" : ""}` : null,
+                  r.episodes ? `${r.episodes} ep${r.episodes === 1 ? "" : "s"}` : null,
+                  showYears(r),
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
                 <li class="rank-row">
                   <span class="rank-num">{i + 1}</span>
                   {(r.poster_url ?? r.image_url) ? (
@@ -595,13 +645,15 @@ app.get("/person/:slug", async (c) => {
                   <span class="rank-main">
                     <a href={`/show/${r.slug}`}>{r.name}</a>
                     <span class="rank-sub muted">
-                      {[
-                        r.character ? `${r.character}${r.voice ? " (voice)" : ""}` : null,
-                        r.episodes ? `${r.episodes} ep${r.episodes === 1 ? "" : "s"}` : null,
-                        showYears(r),
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
+                      {facts}
+                      {g ? (
+                        <>
+                          {facts ? " · " : ""}
+                          <a class="rank-genre" href={`/genre/${slugifyName(g)}`}>
+                            {g}
+                          </a>
+                        </>
+                      ) : null}
                     </span>
                   </span>
                   {r.rating != null ? (
@@ -610,17 +662,23 @@ app.get("/person/:slug", async (c) => {
                     </span>
                   ) : null}
                 </li>
-              ))}
+                );
+              })}
             </ol>
           </section>
         ) : (
-          <p class="muted">No tracked roles yet — the sync adds shows hourly.</p>
+          <p class="muted">No TV roles on record yet — check back soon.</p>
         )}
         {films.length ? (
-          <section>
-            <h2>Top movies</h2>
+          <section class="credit-sec">
+            <h2 class="credit-head">
+              Top movies <span class="credit-count">{films.length}</span>
+            </h2>
             <ol class="rank-list">
-              {films.map((m, i) => (
+              {films.map((m, i) => {
+                const g = firstGenre(m.genres);
+                const facts = [m.character, m.year ? String(m.year) : null].filter(Boolean).join(" · ");
+                return (
                 <li class="rank-row">
                   <span class="rank-num">{i + 1}</span>
                   {m.poster_url ? (
@@ -631,7 +689,15 @@ app.get("/person/:slug", async (c) => {
                   <span class="rank-main">
                     <a href={`/movie/${m.slug}`}>{m.title}</a>
                     <span class="rank-sub muted">
-                      {[m.character, m.year ? String(m.year) : null].filter(Boolean).join(" · ")}
+                      {facts}
+                      {g ? (
+                        <>
+                          {facts ? " · " : ""}
+                          <a class="rank-genre" href={`/genre/${slugifyName(g)}`}>
+                            {g}
+                          </a>
+                        </>
+                      ) : null}
                     </span>
                   </span>
                   {m.rating != null ? (
@@ -640,8 +706,39 @@ app.get("/person/:slug", async (c) => {
                     </span>
                   ) : null}
                 </li>
-              ))}
+                );
+              })}
             </ol>
+          </section>
+        ) : null}
+        {bestTitle || topGenres.length ? (
+          <section class="wo-doors">
+            <h2>Keep exploring</h2>
+            <div class="explore-grid">
+              {bestTitle ? (
+                <ExploreCard
+                  icon="Highest rated"
+                  title={bestTitle.name}
+                  desc={`${person.name.split(" ")[0]}'s best-reviewed title — ratings and where to watch.`}
+                  href={bestTitle.href}
+                  rating={bestTitle.rating}
+                />
+              ) : null}
+              {topGenres[0] ? (
+                <ExploreCard
+                  icon="Genre"
+                  title={`The best of ${topGenres[0]}`}
+                  desc={`Top-rated ${topGenres[0].toLowerCase()} shows and films, ranked.`}
+                  href={`/genre/${slugifyName(topGenres[0])}`}
+                />
+              ) : null}
+              <ExploreCard
+                icon="Directory"
+                title="Browse everything"
+                desc="Networks, genres, fandom hubs, and every chart in one place."
+                href="/lists"
+              />
+            </div>
           </section>
         ) : null}
       </article>

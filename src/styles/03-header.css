@@ -18,6 +18,7 @@
 }
 /* header & footer ride the same 948px column as main's content box */
 .header-inner {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 1.1rem;
@@ -70,7 +71,9 @@
 .logo-mark { display: block; }
 .search {
   position: relative;
-  margin-left: auto;
+  /* zero the UA <form> bottom margin: in the grid header it inflated the row's
+     margin box and shoved the pill ~8px above the nav baseline */
+  margin: 0 0 0 auto;
   flex: 0 1 14.5rem;
   min-width: 11.5rem;
   max-width: 14.5rem;
@@ -101,7 +104,7 @@
   border: 1px solid rgba(43, 43, 50, 0.95);
   border-radius: 999px;
   color: var(--text);
-  padding: 0.48rem 0.95rem 0.48rem 2.35rem;
+  padding: 0.5rem 2rem 0.5rem 2.35rem;
   font: inherit;
   font-size: 0.84rem;
   letter-spacing: 0.01em;
@@ -109,12 +112,40 @@
   transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease),
     box-shadow var(--speed) var(--ease);
 }
+/* keyboard-shortcut chip: signals "press / to search"; fades as you type, and
+   is bound for real in typeahead.js. Hidden on touch where it has no meaning. */
+.search-key {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.3rem;
+  font-family: var(--body);
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  pointer-events: none;
+  transition: opacity var(--speed) var(--ease);
+}
+.search:focus-within .search-key { opacity: 0; }
+@media (pointer: coarse) {
+  .search-key { display: none; }
+}
 .search input::placeholder {
   color: var(--muted);
   opacity: 0.8;
 }
 .search input:hover {
-  border-color: rgba(255, 169, 77, 0.28);
+  border-color: rgba(255, 255, 255, 0.18);
   background: rgba(22, 22, 26, 0.88);
 }
 .search input:focus-visible {
@@ -145,36 +176,28 @@
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: var(--text);
+  /* idle labels sit a step under the brand white, then brighten on hover —
+     hierarchy and feedback without a heavy all-white row */
+  opacity: 0.72;
   padding: 0.3rem 0;
+  transition: opacity var(--speed) var(--ease);
 }
-.site-header nav a::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -3px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: translateX(-50%) scale(0);
-  transition: transform var(--speed) var(--ease);
-}
-.site-header nav a:hover { color: var(--text); text-decoration: none; }
-.site-header nav a.active { color: var(--text); }
-.site-header nav a.active::after {
-  transform: translateX(-50%) scale(1);
-  box-shadow: var(--glow);
-}
+/* active section shown by full brightness only — no underline/dot marker */
+.site-header nav a:hover { opacity: 1; color: var(--text); text-decoration: none; }
+.site-header nav a.active { opacity: 1; color: var(--text); }
 
 /* browse mega-menu */
 .nav-mega {
-  position: relative;
+  /* static so the panel's containing block becomes .header-inner — letting the
+     drawer's right edge dock to the search/content edge, not the button.
+     The button's own dot/pill pseudo-elements stay relative to .nav-mega-btn. */
+  position: static;
 }
 .nav-mega-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.32rem;
+  gap: 0.34rem;
   background: none;
   border: 0;
   padding: 0.3rem 0;
@@ -187,50 +210,71 @@
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: var(--text);
+  opacity: 0.72;
+  transition: opacity var(--speed) var(--ease);
 }
-.nav-mega-btn::after {
+/* Browse is a menu control, not a link: a soft pill appears on hover/open so
+   the affordance reads — sized off the text box so layout never shifts, and
+   absent at rest so the bar stays clean. */
+.nav-mega-btn::before {
   content: "";
   position: absolute;
-  left: 50%;
-  bottom: -3px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: translateX(-50%) scale(0);
-  transition: transform var(--speed) var(--ease);
+  inset: -0.32rem -0.62rem;
+  z-index: -1;
+  border-radius: 9px;
+  background: transparent;
+  transition: background-color var(--speed) var(--ease);
 }
-.nav-mega.active .nav-mega-btn::after {
-  transform: translateX(-50%) scale(1);
-  box-shadow: var(--glow);
-}
+.nav-mega:hover .nav-mega-btn,
+.nav-mega.open .nav-mega-btn,
+.nav-mega.active .nav-mega-btn { opacity: 1; }
+.nav-mega:hover .nav-mega-btn::before,
+.nav-mega.open .nav-mega-btn::before { background: rgba(255, 255, 255, 0.06); }
 .nav-mega-chev {
-  width: 0.38rem;
-  height: 0.38rem;
+  width: 0.36rem;
+  height: 0.36rem;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg) translateY(-0.08em);
-  opacity: 0.72;
+  transform: rotate(45deg) translateY(-0.09em);
+  /* dimming rides on the button's opacity — chevron tracks the label exactly */
+  opacity: 0.85;
   transition: transform var(--speed) var(--ease), opacity var(--speed) var(--ease);
 }
 .nav-mega.open .nav-mega-chev {
-  transform: rotate(-135deg) translateY(0.08em);
-  opacity: 0.95;
+  transform: rotate(-135deg) translateY(0.11em);
+  opacity: 1;
 }
+/* a tall, scrollable drawer — right-anchored to Browse so a narrow column
+   never runs off the right edge of the bar */
 .nav-mega-panel {
   position: absolute;
-  top: calc(100% + 0.65rem);
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(36rem, calc(100vw - 2rem));
-  padding: 0.85rem 0.95rem 0.75rem;
-  background: rgba(30, 30, 34, 0.98);
+  top: calc(100% + 0.6rem);
+  right: 0;
+  left: auto;
+  width: min(17.5rem, calc(100vw - 1.5rem));
+  display: flex;
+  flex-direction: column;
+  max-height: min(78vh, 40rem);
+  overflow: hidden;
+  /* fully opaque — a content-dense drawer must not let bright hero art ghost
+     through it; the frosted look is for the slim header bar, not this panel */
+  background: #1c1c21;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
   z-index: 60;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+}
+/* author display:flex above beats the UA [hidden]{display:none}; restore it so
+   the JS can actually close the panel */
+.nav-mega-panel[hidden] { display: none; }
+/* the panel settles in rather than snapping — runs on display:none→block, so
+   no JS change needed; reduced-motion clamps it via the global rule */
+@keyframes navMegaIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.nav-mega.open .nav-mega-panel {
+  animation: navMegaIn var(--speed) var(--ease);
 }
 /* invisible bridge over the gap — panel is position:absolute so .nav-mega
    doesn't grow; this keeps the pointer path from the button to the links */
@@ -245,13 +289,39 @@
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .nav-mega-panel { background: var(--surface-2); }
 }
-.nav-mega-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.85rem 1.1rem;
+@media (max-width: 700px) {
+  .nav-mega-panel { right: auto; left: 0; }
+}
+.nav-mega-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.8rem 0.7rem 0.6rem;
+  /* reserve the scrollbar track on BOTH edges so the row hover-pills stay
+     centered in the panel — the scrollbar no longer eats only the right side */
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.nav-mega-scroll::-webkit-scrollbar { width: 9px; }
+.nav-mega-scroll::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+  border: 2.5px solid transparent;
+  background-clip: padding-box;
+}
+.nav-mega-scroll::-webkit-scrollbar-thumb:hover { background: #3a3a44; background-clip: padding-box; }
+.nm-sec { padding: 0.1rem 0 0.55rem; }
+.nm-sec + .nm-sec {
+  margin-top: 0.55rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 .nav-mega-kicker {
-  margin: 0 0 0.45rem;
+  margin: 0 0 0.4rem;
+  /* aligns with .nm-row text so a hovered row lines up under its heading */
+  padding: 0 0.6rem;
   font-family: var(--display);
   font-stretch: 80%;
   font-size: 0.62rem;
@@ -260,27 +330,120 @@
   text-transform: uppercase;
   color: var(--muted);
 }
-.nav-mega-col a {
-  display: block;
-  padding: 0.38rem 0.15rem;
-  margin: 0 -0.15rem;
-  font-size: 0.88rem;
-  font-weight: 600;
+.nm-rows { display: flex; flex-direction: column; gap: 2px; }
+/* Higher specificity than `.site-header nav a` on purpose: the dropdown rows
+   must shed the top-nav treatment (uppercase, letter-spacing, dimmed opacity,
+   underline pseudo) and read as a refined menu list — not a stack of nav
+   buttons. This is what made the panel feel "basic". */
+.nav-mega-panel .nm-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-size: 0.9rem;
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--text);
-  border-radius: var(--radius-sm);
-  transition: color var(--speed) var(--ease), background-color var(--speed) var(--ease);
+  opacity: 1;
+  transition: background-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
 }
-.nav-mega-col a:hover {
-  color: var(--accent);
-  background: rgba(255, 169, 77, 0.08);
+/* drop the inherited top-nav hover-underline pseudo-element */
+.nav-mega-panel .nm-row::after { content: none; }
+.nav-mega-panel .nm-row:hover {
+  background: rgba(255, 169, 77, 0.09);
   text-decoration: none;
 }
-.nav-mega-all {
+/* network logos only — white chip so dark marks (Apple, Paramount) stay visible */
+.nm-nets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+}
+.nm-net {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  background: #fff;
+  transition: transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+.nm-net:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+  text-decoration: none;
+}
+.nm-net img {
+  width: 62%;
+  height: 62%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.nm-net-fallback {
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #15151a;
+}
+.nm-chips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem;
+}
+/* higher specificity than `.site-header nav a` so the genre chips shed the
+   inherited top-nav caps/letter-spacing and sit compact, not bulky */
+.nav-mega-panel .nm-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.5rem;
+  line-height: 1.2;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 550;
+  font-size: 0.82rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
+  opacity: 1;
+  text-align: center;
+  transition: background-color var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+.nav-mega-panel .nm-chip::after { content: none; }
+.nav-mega-panel .nm-chip:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.18);
+  text-decoration: none;
+}
+.nm-all {
   display: inline-block;
-  margin-top: 0.75rem;
-  padding-top: 0.65rem;
+  margin-top: 0.6rem;
+  padding: 0 0.1rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.nm-all:hover { text-decoration: none; }
+/* pinned footer below the scroll region */
+.nav-mega-all {
+  flex: 0 0 auto;
+  display: block;
+  padding: 0.7rem 0.95rem;
   border-top: 1px solid var(--line);
-  width: 100%;
+  background: rgba(255, 255, 255, 0.015);
+  text-align: center;
   font-family: var(--display);
   font-stretch: 80%;
   font-size: 0.66rem;
@@ -289,7 +452,138 @@
   text-transform: uppercase;
   color: var(--accent);
 }
-.nav-mega-all:hover { text-decoration: none; }
+.nav-mega-all:hover { text-decoration: none; background: rgba(255, 169, 77, 0.06); }
+
+/* ---- mobile nav: hamburger + full-height drawer (≤700px) ---- */
+.nav-toggle {
+  display: none; /* desktop uses the inline nav; shown only ≤700px */
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+.nav-toggle:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.18); }
+.nav-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nav-toggle-bars { position: relative; display: block; width: 18px; height: 12px; }
+.nav-toggle-bars span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text);
+  transition: transform var(--speed) var(--ease), opacity var(--speed) var(--ease);
+}
+.nav-toggle-bars span:nth-child(1) { top: 0; }
+.nav-toggle-bars span:nth-child(2) { top: 5px; }
+.nav-toggle-bars span:nth-child(3) { top: 10px; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars span:nth-child(1) { transform: translateY(5px) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars span:nth-child(2) { opacity: 0; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars span:nth-child(3) { transform: translateY(-5px) rotate(-45deg); }
+
+.mobile-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: calc(100dvh - 100%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: #15151a;
+  border-top: 1px solid var(--line);
+  z-index: 49;
+  padding: 0.5rem 1rem 2.5rem;
+  animation: navMegaIn var(--speed) var(--ease);
+}
+.mobile-menu[hidden] { display: none; }
+.mobile-menu-inner { max-width: 948px; margin: 0 auto; display: flex; flex-direction: column; }
+.mm-link {
+  display: flex;
+  align-items: center;
+  padding: 0.85rem 0.3rem;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-size: 1.12rem;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.mm-link.active { color: var(--accent); }
+.mm-link:active { background: rgba(255, 255, 255, 0.04); }
+.mm-sec { padding: 1rem 0 0.1rem; }
+.mm-kicker {
+  margin: 0 0 0.35rem;
+  padding: 0 0.3rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.mm-row {
+  display: block;
+  padding: 0.62rem 0.3rem;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.mm-row:active { background: rgba(255, 255, 255, 0.04); }
+.mm-all {
+  margin-top: 1.1rem;
+  padding: 0.85rem 0.3rem;
+  border-top: 1px solid var(--line);
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+body.nav-open { overflow: hidden; }
+@media (max-width: 700px) {
+  /* logo + full-width search stacked; hamburger pinned to the header's top-right.
+     The toggle lives directly under .site-header (not .header-inner) so its
+     absolute box anchors to the sticky header — same as the drawer. */
+  .header-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    padding-right: 3rem;
+  }
+  .site-header nav { display: none; } /* replaced by the hamburger drawer */
+  .logo { align-self: flex-start; }
+  .nav-toggle {
+    display: inline-flex;
+    position: absolute;
+    top: 0.6rem;
+    right: 1rem;
+    z-index: 60;
+  }
+  .search {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    margin: 0;
+  }
+}
+@media (min-width: 701px) {
+  .mobile-menu { display: none !important; }
+}
 
 .search .ta-box {
   position: absolute;

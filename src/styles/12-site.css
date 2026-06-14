@@ -17,8 +17,8 @@
 
 /* ---- footer ---- */
 .site-footer {
-  margin-top: 3rem;
-  padding: 1.6rem 1rem 2rem;
+  margin-top: 4rem;
+  padding: 2.75rem 1rem 1.6rem;
   background: var(--surface);
   border-top: 1px solid var(--line);
   color: var(--muted);
@@ -26,11 +26,11 @@
 }
 .footer-cols {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1.4fr;
+  grid-template-columns: 1.5fr 1fr 1fr 1.5fr;
   gap: 3rem;
   border-bottom: 1px solid var(--line);
-  padding-bottom: 2rem;
-  margin-bottom: 1.4rem;
+  padding-bottom: 2.25rem;
+  margin-bottom: 1.75rem;
 }
 .footer-cols > div {
   min-width: 0;
@@ -42,7 +42,7 @@
   }
   .footer-cols > div {
     border-top: 1px solid var(--line);
-    padding: 1.25rem 1rem;
+    padding: 1.5rem 1.25rem;
   }
   .footer-cols > div:nth-child(-n+2) { border-top: 0; }
   .footer-cols > div:nth-child(even) { border-left: 1px solid var(--line); }
@@ -56,7 +56,7 @@
   .footer-cols > div:nth-child(even) {
     border-left: 0;
     border-top: 1px solid var(--line);
-    padding: 1rem 0;
+    padding: 1.25rem 0;
   }
   .footer-cols > div:first-child { border-top: 0; }
 }
@@ -68,7 +68,7 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--muted);
-  margin: 0 0 0.7rem;
+  margin: 0 0 0.9rem;
   padding-left: 0.75rem;
   position: relative;
 }
@@ -83,37 +83,122 @@
   background: var(--accent);
   box-shadow: var(--glow);
 }
-.footer-cols a { display: block; color: var(--muted); padding: 0.18rem 0; font-size: 0.88rem; }
+.footer-cols a { display: block; color: var(--muted); padding: 0.2rem 0; font-size: 0.88rem; }
 .footer-cols a:hover { color: var(--text); text-decoration: none; }
 .footer-cols p { margin: 0 0 0.6rem; }
-.site-footer .tagline {
+
+/* brand column: the header lockup, restated, with the tagline beneath */
+.footer-brand { display: flex; flex-direction: column; }
+.footer-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-family: var(--display);
   font-stretch: 120%;
   font-weight: 650;
-  text-transform: uppercase;
   letter-spacing: 0.02em;
-  font-size: 1rem;
+  font-size: 0.98rem;
   color: var(--text);
-  margin: 0 0 0.5rem;
+  margin-bottom: 0.85rem;
+}
+.footer-logo:hover { text-decoration: none; }
+.footer-tagline {
+  font-family: var(--display);
+  font-stretch: 110%;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.78rem;
+  color: var(--accent);
+  margin: 0 0 0.6rem;
+}
+.footer-blurb { max-width: 32ch; line-height: 1.55; margin: 0; }
+
+/* joined subscribe control: input flush against the button in one pill */
+.footer-stay p { line-height: 1.5; }
+.footer-sub {
+  display: flex;
+  margin-top: 0.9rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+.footer-sub:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--glow);
+}
+.footer-sub input[type="email"] {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+  font-size: 0.86rem;
+}
+.footer-sub input[type="email"]:focus { outline: 0; }
+.footer-sub input::placeholder { color: var(--muted); }
+.footer-sub button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 0;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 0.86rem;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+}
+.footer-sub button:hover { filter: brightness(1.1); }
+.footer-sub button:active { filter: brightness(0.95); }
+.footer-sub-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+  opacity: 0.85;
 }
 
-.site-footer .disclaimer {
-  max-width: 90ch;
-  margin: 0 0 0.75rem;
+/* fine print: the legally-required text, deliberately quiet */
+.footer-fine {
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: var(--muted);
+  opacity: 0.8;
 }
-.footer-attribution {
-  margin: 0 0 1rem;
+.footer-fine .disclaimer {
+  max-width: 92ch;
+  margin: 0 0 0.7rem;
 }
-.footer-legal {
+.footer-attribution { margin: 0; }
+.footer-fine a { color: var(--muted); text-decoration: none; }
+.footer-fine a:hover { color: var(--text); }
+
+/* base bar: the calm anchor — links left, copyright right */
+.footer-base {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
   border-top: 1px solid var(--line);
-  padding-top: 0.85rem;
-  margin: 0;
+  margin-top: 1.5rem;
+  padding-top: 1.1rem;
 }
-.tmdb-logo { height: 11px; vertical-align: baseline; }
+.footer-base-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.footer-base-links a { color: var(--muted); font-weight: 400; }
+.footer-base-links a:hover { color: var(--text); text-decoration: none; }
+.footer-sep { color: var(--line); }
+.footer-copy { color: var(--muted); opacity: 0.85; }
+@media (max-width: 520px) {
+  .footer-base { flex-direction: column-reverse; align-items: flex-start; gap: 0.7rem; }
+}
 
 /* ---- mobile pass ---- */
 @media (max-width: 600px) {
@@ -187,7 +272,7 @@
   transition: color var(--speed) var(--ease), border-color var(--speed) var(--ease);
 }
 .region-line button:hover,
-.region-line button:focus-visible { color: var(--accent); border-color: var(--accent); }
+.region-line button:focus-visible { color: var(--accent); border-color: rgba(255, 255, 255, 0.18); }
 
 .shuffle { margin-top: 2.1rem; }
 .shuffle h2 { margin: 0; display: flex; align-items: baseline; gap: 0.8rem; }
@@ -202,31 +287,54 @@
   font-variant-numeric: tabular-nums;
 }
 .shuffle-note { margin: 0.35rem 0 0; font-size: 0.85rem; }
-.shuffle-board { margin-top: 1.5rem; }
+.shuffle-board { margin-top: 1.75rem; }
 .shuffle-head {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding-bottom: 0.55rem;
+  gap: 0.7rem;
+  padding-bottom: 0.7rem;
   border-bottom: 1px solid var(--line);
 }
-.shuffle-head img { display: block; border-radius: 8px; }
+/* the service mark sits in a defined badge so wordmark + icon logos read alike */
+.shuffle-head img {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
 .shuffle-title {
   margin: 0;
   font-family: var(--display);
   font-stretch: 105%;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.shuffle-title strong { color: var(--text); font-weight: 700; }
+/* the service name is the board's title — let it carry the strip */
+.shuffle-title strong {
+  color: var(--text);
+  font-weight: 800;
+  font-size: 0.96rem;
+  letter-spacing: 0.03em;
+}
 .shuffle-count {
   margin-left: auto;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.22rem 0.6rem;
+  background: var(--bg);
 }
 /* departures wait in gray until you ask about them */
 .shuffle-out .shelf-tile img {
@@ -244,6 +352,13 @@
 @media (max-width: 640px) {
   .shuffle-door-grid { grid-template-columns: 1fr; }
 }
+
+/* the wire's status outcome wears the system's status colour (same tokens as
+   the show-status badge) so a greenlight and a cancellation read apart */
+.wire-to { font-weight: 600; color: var(--text); }
+.wire-to.t-ok { color: var(--ok); }
+.wire-to.t-bad { color: var(--bad); }
+.wire-to.t-warn { color: var(--warn); }
 
 /* renewals wire: the door line before the inbox capture */
 .wire-foot { margin-top: 2.2rem; max-width: 56ch; }

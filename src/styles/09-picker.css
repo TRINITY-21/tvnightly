@@ -26,7 +26,7 @@
     transform var(--speed) var(--ease);
 }
 .chip:hover {
-  border-color: rgba(255, 169, 77, 0.42);
+  border-color: rgba(255, 255, 255, 0.18);
   box-shadow: var(--shadow-2);
   transform: translateY(-1px);
   text-decoration: none;
@@ -149,8 +149,12 @@
   transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
 }
 .watch-bar select:hover,
+.watch-field select:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background-color: rgba(18, 18, 20, 0.85);
+}
+/* keyboard focus keeps the amber ring (this control owns its focus indicator) */
 .watch-bar select:focus,
-.watch-field select:hover,
 .watch-field select:focus {
   border-color: rgba(255, 169, 77, 0.45);
   background-color: rgba(18, 18, 20, 0.85);
@@ -191,7 +195,7 @@
 }
 .dd-btn:hover,
 .dd.open .dd-btn {
-  border-color: rgba(255, 169, 77, 0.45);
+  border-color: rgba(255, 255, 255, 0.18);
   background-color: rgba(18, 18, 20, 0.85);
 }
 .dd-list {
@@ -349,7 +353,7 @@
 .shortlist-duo .shortlist-card--b { animation-delay: 0.14s; }
 .shortlist-duo .shortlist-or { animation: deal-in 0.35s var(--ease) 0.26s backwards; }
 .shortlist-card:hover {
-  border-color: rgba(255, 169, 77, 0.38);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-2px);
   box-shadow: var(--shadow-2);
 }
@@ -514,30 +518,52 @@
 .watch-primer-duo {
   display: flex;
   flex-direction: column;
-  margin: 0 auto 1.15rem;
+  margin: 0 auto 1.25rem;
+  text-align: left;
 }
-.watch-primer-card {
-  height: 8.5rem;
+/* ghost contenders: the empty state previews the result layout, so the
+   outcome — two cards, one decision — reads before the first spin */
+.watch-ghost {
+  display: flex;
+  flex-direction: row;
+  gap: 1.15rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  border: 1px dashed rgba(255, 255, 255, 0.07);
-  background: linear-gradient(
-    110deg,
-    rgba(28, 28, 32, 0.55) 0%,
-    rgba(40, 40, 46, 0.65) 45%,
-    rgba(28, 28, 32, 0.55) 90%
-  );
-  background-size: 220% 100%;
-  animation: watch-shimmer 2.6s ease-in-out infinite;
+  padding: 1.1rem;
+  box-shadow: var(--shadow-1);
 }
-@keyframes watch-shimmer {
-  0%, 100% { background-position: 100% 0; }
-  50% { background-position: 0% 0; }
+.watch-ghost .watch-ghost-poster {
+  flex: 0 0 104px;
+  width: 104px;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius);
+}
+.watch-ghost-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.62rem;
+  padding-top: 0.4rem;
+}
+.watch-ghost-line { height: 0.72rem; border-radius: 5px; }
+.watch-ghost-line.l-title { height: 1.05rem; width: 60%; }
+.watch-ghost-line.l-meta { width: 42%; }
+.watch-ghost-line.l-wide { width: 92%; }
+.watch-ghost-line.l-mid { width: 74%; }
+.watch-ghost .watch-ghost-btn {
+  height: 2rem;
+  width: 8.5rem;
+  border-radius: var(--radius);
+  margin-top: 0.5rem;
 }
 .watch-primer-copy {
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.55;
 }
+.watch-primer-copy strong { color: var(--text); font-weight: 650; }
 .watch-miss {
   max-width: 28rem;
   margin: 0 auto;
@@ -565,7 +591,7 @@
   }
   .shortlist-body { padding: 0.8rem 0.9rem 0.9rem; }
   .shortlist-blurb { display: none; }
-  .watch-primer-card { height: 7rem; }
+  .watch-ghost .watch-ghost-poster { flex-basis: 84px; width: 84px; }
 }
 @media (max-width: 560px) {
   .watch-bar-actions {
@@ -601,7 +627,7 @@
   transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
 }
 .prov-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
-a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
+a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translateY(-1px); }
 .prov {
   background: rgba(255, 169, 77, 0.1);
   border: 1px solid rgba(255, 169, 77, 0.35);

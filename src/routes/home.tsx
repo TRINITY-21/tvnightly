@@ -9,10 +9,11 @@ import {
   IconDial,
   IconClapper,
   IconHearts,
-  IconAudience,
   IconTvPlay,
   IconVs,
   IconCal,
+  IconSparkle,
+  IconRoute,
 } from "../components/icons";
 import { canonical } from "../lib/seo";
 import { Layout } from "../components/Layout";
@@ -64,13 +65,14 @@ async function laneArts(c: { env: Bindings }): Promise<({ x1: string; x2: string
   }
 }
 
-// a scrollable poster row with its paging chevrons — the discover rails
-const Rail: FC<PropsWithChildren<{ label: string }>> = ({ label, children }) => (
+// a scrollable poster row with its paging chevrons — the discover rails.
+// `ranked` stamps a Top-N numeral on each poster (the trending chart voice).
+const Rail: FC<PropsWithChildren<{ label: string; ranked?: boolean }>> = ({ label, ranked, children }) => (
   <div class="poster-rail">
     <button type="button" class="rail-btn rail-btn-prev" aria-label={`Scroll ${label} left`}>
       <span class="chev-icon chev-icon-prev" aria-hidden="true"></span>
     </button>
-    <div class="poster-row">{children}</div>
+    <div class={ranked ? "poster-row poster-row-ranked" : "poster-row"}>{children}</div>
     <button type="button" class="rail-btn rail-btn-next" aria-label={`Scroll ${label} right`}>
       <span class="chev-icon" aria-hidden="true"></span>
     </button>
@@ -212,6 +214,7 @@ app.get("/", async (c) => {
       : "Tonight's pick";
   const spotAirTime = spotTonight?.ep_airstamp ? airTime(spotTonight.ep_airstamp) : null;
   const spotGenres: string[] = spot?.genres ? JSON.parse(spot.genres) : [];
+  const spotNet: string | null = spot?.network ?? spot?.web_channel ?? null;
   const alsoTonight = spotTonight ? tonight.filter((e) => e.show_slug !== spotTonight.slug) : tonight;
   // a trending rail needs enough matched titles to read as a rail at all
   const hasTrendTv = trendTv.length >= 4;
@@ -282,12 +285,25 @@ app.get("/", async (c) => {
                   <a href={`/show/${spot.slug}`}>{spot.name}</a>
                 </h1>
                 <p class="meta-strip">
+                  {/* lead with the media type so it's unmistakable what the
+                      spotlight is — the hero is always a TV title here */}
+                  <span>
+                    <a href="/top/tv" title="The top TV shows, ranked">TV</a>
+                  </span>
+                  <span class="sep">·</span>
                   <StatusBadge status={spot.status} />
                   {spot.premiered ? <span>{spot.premiered.slice(0, 4)}</span> : null}
                   {spotGenres.length ? (
                     <>
                       <span class="sep">·</span>
-                      <span>{spotGenres.slice(0, 3).join(", ")}</span>
+                      <span>
+                        {spotGenres.slice(0, 3).map((g, i) => (
+                          <>
+                            {i > 0 ? ", " : ""}
+                            <a href={`/genre/${slugifyName(g)}/shows`}>{g}</a>
+                          </>
+                        ))}
+                      </span>
                     </>
                   ) : null}
                   {spot.rating != null ? (
@@ -303,8 +319,11 @@ app.get("/", async (c) => {
                     S{String(spot.ep_season).padStart(2, "0")}E
                     {String(spot.ep_number ?? 0).padStart(2, "0")}
                     {spot.ep_name ? ` — ${spot.ep_name}` : ""}
-                    {spot.network || spot.web_channel ? (
-                      <span class="muted"> · {spot.network ?? spot.web_channel}</span>
+                    {spotNet ? (
+                      <span class="muted">
+                        {" · "}
+                        <a href={`/network/${slugifyName(spotNet)}`}>{spotNet}</a>
+                      </span>
                     ) : null}
                   </p>
                 ) : null}
@@ -324,7 +343,6 @@ app.get("/", async (c) => {
         <section class="evening">
           <div class="evening-grid">
             <div class="evening-card evening-main">
-              <p class="section-eyebrow">Your evening</p>
               <div class="evening-head">
                 <h2>
                   {spotTonight ? (
@@ -429,22 +447,21 @@ app.get("/", async (c) => {
           </div>
           <div class="evening-cta">
             <a class="verdict-btn" href="/what-to-watch">
-              What should I watch tonight?
+              Find something to watch tonight
             </a>
             <a class="btn-ghost" href="/recommend">
-              Rate one thing, get a personal pick
+              Rate your taste, get a personal pick
             </a>
           </div>
         </section>
 
         <section class="home-discover">
-          <p class="section-eyebrow">Discover</p>
           <div class="discover-tabs">
             <input type="radio" name="discover" id="discover-tv" class="discover-input" checked />
             <input type="radio" name="discover" id="discover-movies" class="discover-input" />
             <div class="discover-head">
               <h2>Popular TV &amp; movies</h2>
-              <p class="section-lead muted">Ranked by what people search and return to most.</p>
+              <p class="section-lead muted">Ranked by popularity, not ratings — see top-rated for the critical picks.</p>
             </div>
             <div class="discover-tablist">
               <label for="discover-tv">TV shows</label>
@@ -486,8 +503,8 @@ app.get("/", async (c) => {
                 </>
               ) : null}
               <div class="discover-head">
-                <h2>Trending right now</h2>
-                <p class="section-lead muted">What the world is watching this week.</p>
+                <h2>Trending this week</h2>
+                <p class="section-lead muted">What the world is watching.</p>
               </div>
               {hasTrendTv && hasTrendMovies ? (
                 <div class="discover-tablist">
@@ -497,7 +514,7 @@ app.get("/", async (c) => {
               ) : null}
               {hasTrendTv ? (
                 <div class={hasTrendMovies ? "discover-panel panel-tv" : undefined}>
-                  <Rail label="trending shows">
+                  <Rail label="trending shows" ranked>
                     {trendTv.map((s) => (
                       <ShowCard show={s} />
                     ))}
@@ -506,7 +523,7 @@ app.get("/", async (c) => {
               ) : null}
               {hasTrendMovies ? (
                 <div class={hasTrendTv ? "discover-panel panel-movies" : undefined}>
-                  <Rail label="trending movies">
+                  <Rail label="trending movies" ranked>
                     {trendMovies.map((m) => (
                       <MovieCard movie={m} />
                     ))}
@@ -519,7 +536,6 @@ app.get("/", async (c) => {
 
         {/* the doors out — hub and genre lanes wearing their pages' own art */}
         <section class="home-lanes">
-          <p class="section-eyebrow">Browse</p>
           <div class="lanes-head">
             <h2>
               Pick a lane{" "}
@@ -527,7 +543,7 @@ app.get("/", async (c) => {
                 every chart &amp; list
               </a>
             </h2>
-            <p class="section-lead muted">
+            <p class="section-lead muted nowrap-wide">
               Hubs and genres — each ranked by real ratings, with where to stream.
             </p>
           </div>
@@ -569,7 +585,6 @@ app.get("/", async (c) => {
         </section>
 
         <section class="home-tools">
-          <p class="section-eyebrow">Tools</p>
           <h2>Go deeper</h2>
           <div class="tools-bento">
             {/* the tiles wear their own pages' real content: the current #1
@@ -593,26 +608,27 @@ app.get("/", async (c) => {
               </span>
               <span class="chev-icon" aria-hidden="true"></span>
             </a>
-            <a class="tool-tile tool-tile-lg" href="/what-to-watch">
+            <a class="tool-tile tool-tile-lg" href="/recommend">
               <span class="tool-tile-glyph" aria-hidden="true">
-                <IconDial size={132} />
+                <IconSparkle size={120} />
               </span>
-              <strong>Tonight's picker</strong>
-              <p class="muted">Filter by genre, runtime, and streaming service — then spin.</p>
+              <strong>What should I watch next?</strong>
+              <p class="muted">Rate a few you've seen — we read your taste and pick your next watch.</p>
               <span class="chev-icon" aria-hidden="true"></span>
             </a>
             <div class="tools-bento-rest">
+              {/* tonight/utility */}
+              <a class="tool-tile tool-tile-sm" href="/what-to-watch">
+                <span>Tonight's picker</span>
+                <span class="tool-tile-glyph-sm" aria-hidden="true">
+                  <IconDial size={46} />
+                </span>
+                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
+              </a>
               <a class="tool-tile tool-tile-sm" href="/tonight">
                 <span>Tonight's full schedule</span>
                 <span class="tool-tile-glyph-sm" aria-hidden="true">
                   <IconCal size={38} />
-                </span>
-                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
-              </a>
-              <a class="tool-tile tool-tile-sm" href="/movies/best">
-                <span>Top movies</span>
-                <span class="tool-tile-glyph-sm" aria-hidden="true">
-                  <IconReel size={62} />
                 </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>
@@ -623,10 +639,18 @@ app.get("/", async (c) => {
                 </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>
-              <a class="tool-tile tool-tile-sm" href="/loved">
-                <span>Loved by this community</span>
+              {/* rankings, grouped */}
+              <a class="tool-tile tool-tile-sm" href="/top/tv">
+                <span>Top TV shows</span>
                 <span class="tool-tile-glyph-sm" aria-hidden="true">
-                  <IconHearts size={56} />
+                  <IconTvPlay size={54} />
+                </span>
+                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
+              </a>
+              <a class="tool-tile tool-tile-sm" href="/movies/best">
+                <span>Top movies</span>
+                <span class="tool-tile-glyph-sm" aria-hidden="true">
+                  <IconReel size={62} />
                 </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>
@@ -639,15 +663,34 @@ app.get("/", async (c) => {
               </a>
               <a class="tool-tile tool-tile-sm" href="/top/networks">
                 <span>Top networks</span>
-                <span class="tool-tile-glyph-sm" aria-hidden="true">
-                  <IconAudience size={50} />
+                <span class="tool-tile-logos" aria-hidden="true">
+                  {["HBO Max", "Netflix", "Hulu", "Disney Plus"].map((n) =>
+                    PROVIDER_LOGOS[n] ? (
+                      <img src={PROVIDER_LOGOS[n]} alt="" width="32" height="32" loading="lazy" />
+                    ) : null,
+                  )}
                 </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>
-              <a class="tool-tile tool-tile-sm" href="/top/tv">
-                <span>Top TV shows</span>
+              {/* discover */}
+              <a class="tool-tile tool-tile-sm" href="/loved">
+                <span>Loved by this community</span>
                 <span class="tool-tile-glyph-sm" aria-hidden="true">
-                  <IconTvPlay size={54} />
+                  <IconHearts size={56} />
+                </span>
+                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
+              </a>
+              <a class="tool-tile tool-tile-sm" href="/whats-new">
+                <span>What's new on streaming</span>
+                <span class="tool-tile-glyph-sm" aria-hidden="true">
+                  <IconSparkle size={48} />
+                </span>
+                <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
+              </a>
+              <a class="tool-tile tool-tile-sm" href="/watch-orders">
+                <span>Watch-order guides</span>
+                <span class="tool-tile-glyph-sm" aria-hidden="true">
+                  <IconRoute size={50} />
                 </span>
                 <span class="chev-icon chev-icon-sm" aria-hidden="true"></span>
               </a>

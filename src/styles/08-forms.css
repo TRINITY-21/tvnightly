@@ -49,11 +49,54 @@ button, .verdict-btn {
   padding: 0.28rem 0.7rem;
   cursor: pointer;
 }
-.vote-btn:hover { border-color: var(--accent); text-decoration: none; }
+.vote-btn:hover { border-color: rgba(255, 255, 255, 0.18); text-decoration: none; }
 .vote.voted .vote-btn { opacity: 0.6; cursor: default; }
 .vote.voted .vote-count { opacity: 1; color: var(--text); }
 .rate-inline { display: flex; gap: 0.4rem; align-items: center; margin: 0.6rem 0; flex-wrap: wrap; }
 .rate-inline .vote-btn { font-size: 1rem; }
+.rate-inline .verdict-form { position: relative; }
+
+/* hover/focus tooltip naming each verdict (Loved it / Good / Meh / Awful) */
+.rate-inline .vote-btn::after {
+  content: attr(data-label);
+  position: absolute;
+  bottom: calc(100% + 0.45rem);
+  left: 50%;
+  transform: translateX(-50%) translateY(3px);
+  padding: 0.25rem 0.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+  color: var(--text);
+  font-family: var(--display);
+  font-stretch: 85%;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--speed) var(--ease), transform var(--speed) var(--ease);
+  z-index: 30;
+}
+.rate-inline .vote-btn:hover::after,
+.rate-inline .vote-btn:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* the "Seen it?" / stat label sits on its own row above the emoji buttons */
+.rate-inline-label { flex-basis: 100%; transition: color var(--speed) var(--ease); }
+/* once a verdict is tapped: the chosen face lights up, the rest recede */
+.rate-inline.is-rated .verdict-form { opacity: 0.32; pointer-events: none; transition: opacity var(--speed) var(--ease); }
+.rate-inline.is-rated .verdict-form.is-chosen { opacity: 1; }
+.rate-inline.is-rated .verdict-form.is-chosen .vote-btn {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(255, 169, 77, 0.14);
+}
 
 .picker-form {
   display: flex;

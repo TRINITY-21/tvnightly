@@ -17,7 +17,7 @@
   transition: border-color var(--speed) var(--ease), background var(--speed) var(--ease);
 }
 .explore-card:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   background: var(--surface-2);
   text-decoration: none;
 }
@@ -133,6 +133,43 @@
 }
 .wo-hero-bare .wo-hero-body { padding: 0; }
 .wo-hero h1 { margin: 0.2rem 0 0.6rem; }
+
+/* full-bleed variant (/top/tv, /movies/best): no card chrome — the #1's still
+   runs up to the nav and edge-to-edge, the lockup rides the page column over
+   a scrim that resolves to --bg, so the chart below just becomes the page */
+.wo-hero-bleed {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  margin: -1rem calc(50% - 50vw) 1.6rem;
+}
+.wo-hero-bleed .wo-frame {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(100%, 1280px);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
+}
+.wo-hero-bleed .wo-frame::after {
+  background:
+    linear-gradient(to right, rgba(18, 18, 20, 0.94), rgba(18, 18, 20, 0.6) 40%, rgba(18, 18, 20, 0.16) 70%, rgba(18, 18, 20, 0)),
+    linear-gradient(to bottom, rgba(18, 18, 20, 0.1), rgba(18, 18, 20, 0.45) 55%, rgba(18, 18, 20, 0.86) 84%, var(--bg) 100%);
+}
+.wo-hero-bleed .wo-hero-body {
+  position: relative;
+  z-index: 1;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 4rem 1rem 1.7rem;
+}
+.wo-hero-bleed h1 {
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+@media (max-width: 600px) {
+  .wo-hero-bleed .wo-hero-body { padding-top: 2.75rem; }
+}
 .wo-intro { margin: 0; max-width: 58ch; color: var(--text); }
 .wo-stats {
   display: flex;
@@ -197,6 +234,18 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* ranking charts (/top/*): the rank is the spine, and the podium carries the
+   tier — gold #1, bright #2-3, muted for the rest. Scoped so watch-order
+   sequence lists (where the number is "watch first", not "best") stay plain. */
+.wo-ranked .wo-row { grid-template-columns: 2.3rem 46px minmax(0, 1fr) auto; }
+.wo-ranked .wo-num { font-size: 1.1rem; font-weight: 800; }
+.wo-ranked li:nth-child(1) .wo-num { color: var(--warn); }
+.wo-ranked li:nth-child(2) .wo-num,
+.wo-ranked li:nth-child(3) .wo-num { color: var(--text); }
+@media (max-width: 520px) {
+  .wo-ranked .wo-row { grid-template-columns: 1.9rem 40px minmax(0, 1fr) auto; }
+}
+
 .wo-poster {
   width: 46px;
   height: 69px;
@@ -228,6 +277,38 @@
 }
 .wo-provs a:hover {
   color: var(--accent);
+}
+/* watch-order rows show where-to-watch as clickable network logos */
+.wo-poster-link { display: block; }
+.wo-provs-logos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.32rem;
+  margin-top: 0.18rem;
+}
+.wo-prov {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--speed) var(--ease);
+}
+.wo-prov:hover {
+  transform: translateY(-1px);
+}
+.wo-prov img { width: 1.45rem; height: 1.45rem; object-fit: contain; display: block; border-radius: 5px; }
+.wo-prov-text {
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
 }
 .wo-side {
   display: flex;
@@ -300,7 +381,7 @@
     transform var(--speed) var(--ease);
 }
 .footer-card:hover {
-  border-color: rgba(255, 169, 77, 0.42);
+  border-color: rgba(255, 255, 255, 0.18);
   box-shadow: var(--shadow-2);
   transform: translateY(-1px);
   text-decoration: none;

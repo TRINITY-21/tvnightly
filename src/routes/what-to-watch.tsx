@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { Bindings, ShowRow, MovieRow } from "../types";
 import { visitorRegion } from "../lib/providers";
-import { stripHtml, posterSrc, heroBg } from "../lib/format";
+import { stripHtml, posterSrc, heroBg, fmtRuntime, slugifyName } from "../lib/format";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { origin, canonical } from "../lib/seo";
 import { PICKER_MIN_WEIGHT } from "../lib/queries";
@@ -387,14 +387,23 @@ app.get("/what-to-watch", async (c) => {
                             <>
                               {type === "tv" ? <span class="sep">·</span> : null}
                               <span>
-                                {type === "movie" ? `${pick.runtime} min` : `~${pick.runtime} min/ep`}
+                                {type === "movie" ? fmtRuntime(pick.runtime) : `~${fmtRuntime(pick.runtime)}/ep`}
                               </span>
                             </>
                           ) : null}
                           {pick.genres.length ? (
                             <>
                               <span class="sep">·</span>
-                              <span>{pick.genres.slice(0, 2).join(", ")}</span>
+                              <span>
+                                {pick.genres.slice(0, 2).map((g, i) => (
+                                  <>
+                                    {i > 0 ? ", " : ""}
+                                    <a href={`/genre/${slugifyName(g)}${type === "movie" ? "/movies" : "/shows"}`}>
+                                      {g}
+                                    </a>
+                                  </>
+                                ))}
+                              </span>
                             </>
                           ) : null}
                         </p>
@@ -438,14 +447,33 @@ app.get("/what-to-watch", async (c) => {
                 <span class="shortlist-rule" aria-hidden="true"></span>
               </div>
               <div class="watch-primer-duo" aria-hidden="true">
-                <span class="watch-primer-card"></span>
+                <span class="watch-ghost">
+                  <span class="watch-ghost-poster skeleton"></span>
+                  <span class="watch-ghost-lines">
+                    <span class="watch-ghost-line l-title skeleton"></span>
+                    <span class="watch-ghost-line l-meta skeleton"></span>
+                    <span class="watch-ghost-line l-wide skeleton"></span>
+                    <span class="watch-ghost-line l-mid skeleton"></span>
+                    <span class="watch-ghost-btn skeleton"></span>
+                  </span>
+                </span>
                 <span class="shortlist-or">
                   <span class="or-badge">or</span>
                 </span>
-                <span class="watch-primer-card"></span>
+                <span class="watch-ghost">
+                  <span class="watch-ghost-poster skeleton"></span>
+                  <span class="watch-ghost-lines">
+                    <span class="watch-ghost-line l-title skeleton"></span>
+                    <span class="watch-ghost-line l-meta skeleton"></span>
+                    <span class="watch-ghost-line l-wide skeleton"></span>
+                    <span class="watch-ghost-line l-mid skeleton"></span>
+                    <span class="watch-ghost-btn skeleton"></span>
+                  </span>
+                </span>
               </div>
               <p class="watch-primer-copy muted">
-                Your two contenders land here — pick whichever feels like tonight.
+                Set your filters and hit <strong>Find my picks</strong> — your two contenders land
+                here, and you pick whichever feels like tonight.
               </p>
             </div>
           )}

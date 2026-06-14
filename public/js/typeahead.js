@@ -8,6 +8,36 @@
   input.parentNode.appendChild(box);
   input.setAttribute("autocomplete", "off");
 
+  // --- keep the page still while searching ---------------------------------
+  // The field lives in a position:sticky header. Chromium re-scrolls the focused
+  // field "into view" on focus and on every keystroke, and — fighting the sticky
+  // offset — that drags the whole page upward a header's-height at a time. Hold
+  // the position the user was at; release it the instant they scroll on purpose.
+  var lockY = null;
+  function lockScroll() {
+    lockY = window.scrollY;
+  }
+  function releaseScroll() {
+    lockY = null;
+  }
+  input.addEventListener("pointerdown", lockScroll, true);
+  input.addEventListener("focus", function () {
+    if (lockY === null) lockScroll();
+  });
+  input.addEventListener("keydown", function () {
+    if (lockY === null) lockScroll();
+  });
+  input.addEventListener("blur", releaseScroll);
+  window.addEventListener("wheel", releaseScroll, { passive: true });
+  window.addEventListener("touchmove", releaseScroll, { passive: true });
+  window.addEventListener(
+    "scroll",
+    function () {
+      if (lockY !== null && window.scrollY !== lockY) window.scrollTo(0, lockY);
+    },
+    { passive: true },
+  );
+
   var active = -1;
   var QUICK = [
     ["Top TV shows", "/top/tv"],
@@ -198,5 +228,16 @@
   document.addEventListener("click", function (e) {
     if (ignoreClose) return;
     if (e.target !== input && !box.contains(e.target)) close();
+  });
+
+  // "/" jumps to search from anywhere on the page (the .search-key chip
+  // advertises it) — but never while the user is already typing somewhere.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target;
+    var tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+    if (tag === "input" || tag === "textarea" || tag === "select" || (t && t.isContentEditable)) return;
+    e.preventDefault();
+    input.focus({ preventScroll: true });
   });
 })();

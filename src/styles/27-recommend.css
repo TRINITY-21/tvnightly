@@ -123,7 +123,8 @@
 .rec-poster img,
 .rec-poster-blank {
   display: block;
-  width: clamp(222px, 66vw, 290px);
+  /* one card width, shared with the progress bar so they line up */
+  width: clamp(230px, 70vw, 300px);
   height: auto;
   aspect-ratio: 2 / 3;
   object-fit: cover;
@@ -165,9 +166,10 @@
 }
 
 /* honest progress: ratings done / target — never moves on its own */
-.rec-prog { width: 100%; max-width: 21rem; margin: 0 auto 1.5rem; }
+/* same width as the poster card, centered under it */
+.rec-prog { width: clamp(230px, 70vw, 300px); margin: 0 auto 1.5rem; }
 .rec-prog-label {
-  display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 0.5rem;
+  display: flex; justify-content: center; align-items: baseline; gap: 0.5rem; margin: 0 0 0.5rem;
   font-family: var(--display); font-stretch: 96%; font-size: 0.92rem; font-weight: 650; color: var(--text);
 }
 .rec-prog-count { color: var(--text); font-variant-numeric: tabular-nums; }
@@ -191,7 +193,7 @@
   background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); box-shadow: var(--shadow-1);
   transition: border-color var(--speed) var(--ease), color var(--speed) var(--ease);
 }
-.rec-undo:hover { border-color: rgba(255, 169, 77, 0.45); color: var(--text); text-decoration: none; }
+.rec-undo:hover { border-color: rgba(255, 255, 255, 0.18); color: var(--text); text-decoration: none; }
 
 /* ---- rating control: a fanned "smile" of sentiment circles, worst -> best ----
    cool steel + taupe recede on the left; the brand's gold + amber bloom on the
@@ -526,7 +528,7 @@
   box-shadow: var(--shadow-1);
   transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
 }
-.rec-cont:hover { border-color: rgba(255, 169, 77, 0.45); transform: translateY(-2px); text-decoration: none; }
+.rec-cont:hover { border-color: rgba(255, 255, 255, 0.18); transform: translateY(-2px); text-decoration: none; }
 .rec-cont-art { position: relative; aspect-ratio: 16 / 9; background-size: cover; background-position: center; }
 .rec-cont-blank {
   position: absolute;
@@ -602,7 +604,7 @@
   color: var(--text);
   transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
 }
-.rec-pick-list a:hover { border-color: rgba(255, 169, 77, 0.4); background: var(--surface-2); text-decoration: none; }
+.rec-pick-list a:hover { border-color: rgba(255, 255, 255, 0.18); background: var(--surface-2); text-decoration: none; }
 .rec-pick-thumb img, .rec-pick-blank { display: block; width: 40px; height: 60px; border-radius: var(--radius-sm); object-fit: cover; background: var(--surface-2); }
 .rec-pick-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
 .rec-pick-name { font-weight: 600; }

@@ -9,12 +9,12 @@ import { IconPlay } from "../components/icons";
 import { SeasonTabs, ShowTabs } from "../components/nav";
 import { ProviderLine } from "../components/providers";
 import { buildDossier } from "../lib/dossier";
-import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml } from "../lib/format";
+import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml, fmtRuntime } from "../lib/format";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, visitorRegion } from "../lib/providers";
-import { getShow, similarShows } from "../lib/queries";
+import { getShow, similarShows, crewLinkMap } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
 import { breadcrumbLd, canonical, origin } from "../lib/seo";
-import { tmdbBackdrop, tmdbMedia } from "../lib/tmdb";
+import { tmdbBackdrop, tmdbMedia, tmdbShowCreators } from "../lib/tmdb";
 import { hubForGenres } from "../lib/verticals";
 import { Bindings, EpisodeRow, ShowRow } from "../types";
 
@@ -85,6 +85,15 @@ app.get("/show/:slug", async (c) => {
     show.tmdb_id && c.env.TMDB_API_KEY
       ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id)
       : null;
+  // the creator(s) are the TV headline credit — same cached bundle as the
+  // backdrop, linked to a person page where we track them
+  const creators =
+    show.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbShowCreators(c.env.TMDB_API_KEY, show.tmdb_id)
+      : [];
+  const creatorLinks = creators.length
+    ? await crewLinkMap(c.env.DB, creators)
+    : new Map<number, number>();
   const posterBg = hiRes(show.image_url);
   const heroFrame = backdrop
     ? heroBg(backdrop.x1, backdrop.x2)
@@ -183,13 +192,34 @@ app.get("/show/:slug", async (c) => {
                 {show.runtime ? (
                   <>
                     <span class="sep">·</span>
-                    <span>{show.runtime} min</span>
+                    <span>{fmtRuntime(show.runtime)}</span>
                   </>
                 ) : null}
                 {show.rating != null ? (
                   <>
                     <span class="sep">·</span>
                     <span class="rating">★ {show.rating.toFixed(1)}</span>
+                  </>
+                ) : null}
+                {creators.length ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span>
+                      Created by{" "}
+                      {creators.map((p, i) => {
+                        const pid = creatorLinks.get(p.id);
+                        return (
+                          <>
+                            {i > 0 ? ", " : ""}
+                            {pid ? (
+                              <a href={`/person/${slugifyName(p.name)}-${pid}`}>{p.name}</a>
+                            ) : (
+                              p.name
+                            )}
+                          </>
+                        );
+                      })}
+                    </span>
                   </>
                 ) : null}
               </p>
@@ -1155,7 +1185,7 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
                     <p class="epreg-meta">
                       {e.airdate ? <span>{longDate(e.airdate)}</span> : null}
                       {e.airdate && e.runtime ? <span class="sep"> · </span> : null}
-                      {e.runtime ? <span class="epreg-rt">{e.runtime} min</span> : null}
+                      {e.runtime ? <span class="epreg-rt">{fmtRuntime(e.runtime)}</span> : null}
                     </p>
                   ) : null}
                   <p class="epreg-line">

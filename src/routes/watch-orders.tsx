@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard } from "../components/cards";
-import { fmtMarathon, heroBg, slugifyName } from "../lib/format";
+import { fmtMarathon, fmtRuntime, heroBg, slugifyName } from "../lib/format";
 import { FRANCHISES, FRANCHISE_BY_SLUG, FranchiseEntry } from "../lib/franchises";
-import { providersFor } from "../lib/providers";
+import { providersFor, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
 import { similarMovies } from "../lib/queries";
 import { canonical } from "../lib/seo";
 import { tmdbMovieBackdrop } from "../lib/tmdb";
@@ -89,7 +89,6 @@ app.get("/watch-orders", async (c) => {
       description="How to watch every big movie franchise in order: Marvel, Star Wars, Harry Potter and more — release and chronological orders with runtimes and streaming info."
       canonical={canonical(c)}
     >
-      <p class="section-eyebrow">Guides</p>
       <h1>Watch-order guides</h1>
       <p class="muted wo-lead">
         Release order and chronological order for every major franchise — with ratings, runtimes,
@@ -237,7 +236,9 @@ app.get("/watch-order/:slug", async (c) => {
           {String(idx + 1).padStart(2, "0")}
         </span>
         {m?.poster_url ? (
-          <img class="wo-poster" src={m.poster_url} alt="" width="46" height="69" loading="lazy" decoding="async" />
+          <a class="wo-poster-link" href={`/movie/${m.slug}`} tabindex={-1} aria-hidden="true">
+            <img class="wo-poster" src={m.poster_url} alt="" width="46" height="69" loading="lazy" decoding="async" />
+          </a>
         ) : (
           <span class="wo-poster wo-poster-blank" aria-hidden="true"></span>
         )}
@@ -247,11 +248,27 @@ app.get("/watch-order/:slug", async (c) => {
             <span class="muted">({e.year})</span>
             {e.note ? <span class="why-tag">{e.note}</span> : null}
           </span>
-          {provs.length ? <span class="wo-provs">{provs.slice(0, 3).join(" · ")}</span> : null}
+          {provs.length ? (
+            <span class="wo-provs wo-provs-logos">
+              {provs.slice(0, 5).map((name) => {
+                const logo = PROVIDER_LOGOS[name];
+                const href = `/network/${slugifyName(providerBrand(name))}/movies`;
+                return (
+                  <a class="wo-prov" href={href} title={`Watch on ${name}`} aria-label={`Watch on ${name}`}>
+                    {logo ? (
+                      <img src={logo} alt={name} width="20" height="20" loading="lazy" decoding="async" />
+                    ) : (
+                      <span class="wo-prov-text">{name}</span>
+                    )}
+                  </a>
+                );
+              })}
+            </span>
+          ) : null}
         </span>
         <span class="wo-side">
           {m?.rating != null ? <span class="rating">★ {m.rating.toFixed(1)}</span> : null}
-          {m?.runtime ? <span class="wo-mins">{m.runtime} min</span> : null}
+          {m?.runtime ? <span class="wo-mins">{fmtRuntime(m.runtime)}</span> : null}
         </span>
       </li>
     );
@@ -264,6 +281,7 @@ app.get("/watch-order/:slug", async (c) => {
       description={`${fr.name} watch order: all ${fr.entries.length} films in release and chronological order, with runtimes and streaming availability.`}
       canonical={canonical(c)}
       ogImage={opener?.poster_url ?? undefined}
+      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
       ld={[
         {
           "@context": "https://schema.org",
@@ -277,7 +295,7 @@ app.get("/watch-order/:slug", async (c) => {
         },
       ]}
     >
-      <header class={art ? "wo-hero" : "wo-hero wo-hero-bare"}>
+      <header class={art ? "wo-hero wo-hero-bleed" : "wo-hero wo-hero-bare"}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
           <p class="section-eyebrow">Watch-order guide</p>

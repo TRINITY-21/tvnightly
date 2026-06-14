@@ -337,9 +337,9 @@ const NetworkHero: FC<{
   intro: string;
   stats?: { label: string; value: string }[];
   children?: unknown;
-}> = ({ name, art, ambient, eyebrow, title, intro, stats, children }) => (
+}> = ({ name, art, ambient, eyebrow, title, intro, children }) => (
   <header
-    class={`net-hero wo-hero${ambient ? " hub-ambient" : ""}${art ? "" : " net-hero-glow-only"}`}
+    class={`net-hero wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}${art ? "" : " net-hero-glow-only"}`}
     style={`--net-glow: ${networkGlow(name)}`}
   >
     <span class="net-hero-glow" aria-hidden="true"></span>
@@ -355,16 +355,6 @@ const NetworkHero: FC<{
           <p class="wo-intro">{intro}</p>
         </div>
       </div>
-      {stats?.length ? (
-        <dl class="wo-stats">
-          {stats.map(({ label, value }) => (
-            <div>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
       {children ? <p class="hub-actions">{children}</p> : null}
     </div>
   </header>
@@ -502,10 +492,8 @@ const NetLogo: FC<{ name: string; size?: "lg" | "md" | "sm"; wordmark?: boolean 
 
 const NetBrandCard: FC<{ name: string; href: string }> = ({ name, href }) => (
   <a class="net-brand" href={href} style={`--net-brand: ${networkGlow(name)}`}>
-    <span class="net-brand-shine" aria-hidden="true"></span>
     <span class="net-brand-copy">
       <h2 class="net-brand-name">{name}</h2>
-      <span class="net-brand-tick" aria-hidden="true"></span>
     </span>
     <span class="net-brand-logo">
       <NetLogo name={name} wordmark />
@@ -610,7 +598,7 @@ app.get("/lists", async (c) => {
               </div>
             </dl>
             <a class="browse-search" href="/search">
-              Search the canon
+              Search all titles
               <span class="chev-icon" aria-hidden="true"></span>
             </a>
           </div>
@@ -670,7 +658,6 @@ app.get("/lists", async (c) => {
         <section class="browse-sec browse-nets">
           <div class="browse-nets-head">
             <div>
-              <p class="browse-nets-eyebrow">Television</p>
               <h2>TV networks</h2>
             </div>
             <div class="browse-nets-meta">
@@ -699,10 +686,7 @@ app.get("/lists", async (c) => {
           <div class="browse-genre-stack">
             <div class="browse-genre-pane">
               <div class="browse-genre-head">
-                <div>
-                  <p class="browse-genre-eyebrow">Television</p>
-                  <h2>TV genres</h2>
-                </div>
+                <h3 class="browse-subhead">TV genres</h3>
                 <span class="browse-genre-count muted">
                   {genres.tv.length} {genres.tv.length === 1 ? "genre" : "genres"}
                 </span>
@@ -717,10 +701,7 @@ app.get("/lists", async (c) => {
             </div>
             <div class="browse-genre-pane">
               <div class="browse-genre-head">
-                <div>
-                  <p class="browse-genre-eyebrow">Movies</p>
-                  <h2>Movie genres</h2>
-                </div>
+                <h3 class="browse-subhead">Movie genres</h3>
                 <span class="browse-genre-count muted">
                   {genres.movie.length} {genres.movie.length === 1 ? "genre" : "genres"}
                 </span>
@@ -773,12 +754,29 @@ app.get("/top/tv", async (c) => {
   const showYear = (s: ShowRow) => (s.premiered ? s.premiered.slice(0, 4) : null);
   const showHome = (s: ShowRow) => s.network ?? s.web_channel ?? null;
 
+  // the chart opens on its own #1 — the reigning show's real backdrop in the
+  // hero card, with a blurred-poster ambient fallback when there's no still
+  const champ = results[0] ?? null;
+  let art: { x1: string; x2?: string } | null = null;
+  let ambient = false;
+  if (champ?.tmdb_id && c.env.TMDB_API_KEY) {
+    art = await tmdbBackdrop(c.env.TMDB_API_KEY, champ.tmdb_id);
+  }
+  if (!art && champ) {
+    const p = posterSrc(champ);
+    if (p) {
+      art = { x1: p.src };
+      ambient = true;
+    }
+  }
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title="The 100 top-rated TV shows | TV Nightly"
       description={`The best TV shows ranked by viewer rating${results[0] ? `, starting with ${results[0].name}` : ""}.`}
       canonical={canonical(c)}
+      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
       ld={[
         {
           "@context": "https://schema.org",
@@ -793,34 +791,30 @@ app.get("/top/tv", async (c) => {
         },
       ]}
     >
-      <header class="chart-head">
-        <p class="chart-kicker">The All-Time 100</p>
-        <h1>The top-rated TV shows</h1>
-        <p class="chart-intro">
-          Ranked by viewer rating on shows we actually track — weight and popularity gate the
-          board so a three-episode fluke never outranks a decade of consensus.
-        </p>
-        {results.length ? (
-          <p class="chart-statline">
-            <span class="chart-statline-main">
-              <strong>{results.length}</strong> series
-            </span>
-            <span class="chart-statline-links">
-              <a class="chev-after" href="/best-episodes">
-                Best episodes
-              </a>
-              <a class="chev-after" href="/compare">
-                Compare shows
-              </a>
-            </span>
+      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
+        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
+        <div class="wo-hero-body">
+          <p class="section-eyebrow">The all-time 100</p>
+          <h1>The top-rated TV shows</h1>
+          <p class="wo-intro">
+            Ranked by viewer rating on shows we actually track — weight and popularity gate the
+            board so a three-episode fluke never outranks a decade of consensus.
           </p>
-        ) : null}
+          <p class="hub-actions">
+            <a class="verdict-btn" href="/what-to-watch?type=tv">
+              Pick me a show
+            </a>
+            <a class="btn-ghost" href="/premieres">
+              What&apos;s coming next
+            </a>
+          </p>
+        </div>
       </header>
 
       {!results.length ? (
         <p class="muted">Ratings are still loading — check back soon.</p>
       ) : (
-        <ol class="wo-list">
+        <ol class="wo-list wo-ranked">
           {results.map((s, i) => {
             const art = posterSrc(s);
             const provLinks = showProvLinks(s);
@@ -905,7 +899,7 @@ app.get("/top/seasons", async (c) => {
     `SELECT * FROM (
        SELECT e.show_id, e.season, COUNT(*) AS eps, AVG(e.rating) AS avg_r,
               (AVG(e.rating) + 2.0 * s.rating) / 3.0 AS score, s.name, s.slug,
-              s.genres, s.network, s.web_channel, s.poster_url, s.image_url,
+              s.genres, s.network, s.web_channel, s.poster_url, s.image_url, s.tmdb_id,
               ROW_NUMBER() OVER (PARTITION BY e.show_id ORDER BY AVG(e.rating) DESC) AS rn
        FROM episodes e JOIN shows s ON s.id = e.show_id
        WHERE e.rating IS NOT NULL AND s.rating IS NOT NULL AND s.weight >= 75
@@ -924,7 +918,24 @@ app.get("/top/seasons", async (c) => {
     web_channel: string | null;
     poster_url: string | null;
     image_url: string | null;
+    tmdb_id: number | null;
   }>();
+
+  // the chart opens on its #1 season's show — its real backdrop in the hero,
+  // with a blurred-poster ambient fallback when there's no designed still
+  const champ = results[0] ?? null;
+  let art: { x1: string; x2?: string } | null = null;
+  let ambient = false;
+  if (champ?.tmdb_id && c.env.TMDB_API_KEY) {
+    art = await tmdbBackdrop(c.env.TMDB_API_KEY, champ.tmdb_id);
+  }
+  if (!art && champ) {
+    const p = posterSrc(champ);
+    if (p) {
+      art = { x1: p.src };
+      ambient = true;
+    }
+  }
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -932,6 +943,7 @@ app.get("/top/seasons", async (c) => {
       title="The 50 best TV seasons of all time | TV Nightly"
       description="Whole seasons ranked by their average episode rating — the greatest single runs in TV history."
       canonical={canonical(c)}
+      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
       ld={[
         {
           "@context": "https://schema.org",
@@ -947,37 +959,30 @@ app.get("/top/seasons", async (c) => {
       ]}
     >
       <article class="chart-page">
-        <header class="chart-head">
-          <p class="section-eyebrow">The all-time 50</p>
-          <h1 class="chart-h1">The best TV seasons of all time</h1>
-          <p class="section-lead">
-            Ranked by average episode rating, pulled toward each show&apos;s overall score.
-            Seasons need at least six rated episodes; maximum two per show.
-          </p>
-          {results.length ? (
-            <p class="chart-statline">
-              <span class="chart-statline-main">
-                <strong>{results.length}</strong> seasons
-              </span>
-              <span class="chart-statline-links">
-                <a class="chev-after" href="/top/tv">
-                  Top TV shows
-                </a>
-                <a class="chev-after" href="/best-episodes">
-                  Best episodes
-                </a>
-                <a class="chev-after" href="/compare">
-                  Compare shows
-                </a>
-              </span>
+        <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
+          {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
+          <div class="wo-hero-body">
+            <p class="section-eyebrow">The all-time 50</p>
+            <h1>The best TV seasons of all time</h1>
+            <p class="wo-intro">
+              Ranked by average episode rating, pulled toward each show&apos;s overall score.
+              Seasons need at least six rated episodes; maximum two per show.
             </p>
-          ) : null}
+            <p class="hub-actions">
+              <a class="verdict-btn" href="/what-to-watch?type=tv">
+                Pick me a show
+              </a>
+              <a class="btn-ghost" href="/premieres">
+                What&apos;s coming next
+              </a>
+            </p>
+          </div>
         </header>
 
         {!results.length ? (
           <p class="muted">Ratings are still loading — check back soon.</p>
         ) : (
-          <ol class="wo-list">
+          <ol class="wo-list wo-ranked">
             {results.map((r, i) => {
               const art = posterSrc(r);
               const provLinks = showProvLinks(r);
@@ -1072,16 +1077,47 @@ app.get("/top/networks", async (c) => {
      ) ORDER BY score DESC LIMIT 30`,
   ).all<{ n: string; c: number; r: number; score: number }>();
 
+  // Full-bleed hero backdrop from the top network's single best show — the same
+  // champion-frame the chart pages use, with a blurred-poster ambient fallback.
+  const topNet = results[0]?.n ?? null;
+  let art: { x1: string; x2?: string } | null = null;
+  let ambient = false;
+  if (topNet) {
+    const champShow = await c.env.DB.prepare(
+      `SELECT * FROM shows WHERE (network = ? OR web_channel = ?) AND rating IS NOT NULL
+       ORDER BY rating DESC, weight DESC LIMIT 1`,
+    )
+      .bind(topNet, topNet)
+      .first<ShowRow>();
+    if (champShow?.tmdb_id && c.env.TMDB_API_KEY) {
+      art = await tmdbBackdrop(c.env.TMDB_API_KEY, champShow.tmdb_id);
+    }
+    if (!art && champShow) {
+      const p = posterSrc(champShow);
+      if (p) {
+        art = { x1: p.src };
+        ambient = true;
+      }
+    }
+  }
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title="Top TV networks & streamers | TV Nightly"
       description="Netflix, Hulu, HBO, Disney+, and every major network and streamer — browse the best shows on each."
       canonical={canonical(c)}
+      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
     >
       <div class="nets">
-        <header class="nets-hero net-hero wo-hero net-hero-glow-only">
-          <span class="net-hero-glow" aria-hidden="true"></span>
+        <header
+          class={`nets-hero net-hero wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}${art ? "" : " net-hero-glow-only"}`}
+        >
+          {art ? (
+            <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div>
+          ) : (
+            <span class="net-hero-glow" aria-hidden="true"></span>
+          )}
           <div class="wo-hero-body">
             <p class="section-eyebrow">Networks &amp; streamers</p>
             <h1>Top TV networks</h1>
@@ -1571,8 +1607,9 @@ app.get("/genre/:slug", async (c) => {
       title={`The best ${label.toLowerCase()} shows & movies | TV Nightly`}
       description={`Top-rated ${label.toLowerCase()} TV series and films, with streaming availability.`}
       canonical={canonical(c)}
+      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
     >
-      <header class={`wo-hero${ambient ? " hub-ambient" : ""}`}>
+      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
           <p class="section-eyebrow">Genre</p>
@@ -1707,10 +1744,6 @@ app.get("/genre/:slug/shows", async (c) => {
     }
   }
 
-  const years = rows
-    .map((s) => (s.premiered ? Number(s.premiered.slice(0, 4)) : null))
-    .filter((y): y is number => y != null && y > 0);
-  const span = years.length ? `${Math.min(...years)}–${Math.max(...years)}` : null;
   const hub = hubForGenres([tvGenre], null);
   const siblings = dir.tv.filter((g) => g !== tvGenre).slice(0, 16);
 
@@ -1720,8 +1753,9 @@ app.get("/genre/:slug/shows", async (c) => {
       title={`Top ${lower} shows — ranked | TV Nightly`}
       description={`The best ${lower} TV shows, ranked by viewer rating, with streaming availability.`}
       canonical={canonical(c)}
+      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
     >
-      <header class={`wo-hero${ambient ? " hub-ambient" : ""}`}>
+      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
           <p class="section-eyebrow">Genre chart</p>
@@ -1730,24 +1764,6 @@ app.get("/genre/:slug/shows", async (c) => {
             Every {lower} series we track with a real rating, ranked — no editors, no
             sponsorships, just the numbers.
           </p>
-          {rows.length ? (
-            <dl class="wo-stats">
-              <div>
-                <dt>Series</dt>
-                <dd>{rows.length}</dd>
-              </div>
-              <div>
-                <dt>Top rating</dt>
-                <dd>★ {rows[0].rating!.toFixed(1)}</dd>
-              </div>
-              {span ? (
-                <div>
-                  <dt>Years</dt>
-                  <dd>{span}</dd>
-                </div>
-              ) : null}
-            </dl>
-          ) : null}
           <p class="hub-actions">
             <a class="verdict-btn" href={`/what-to-watch?genre=${encodeURIComponent(tvGenre)}`}>
               Pick me {aOrAn(lower)} {lower} show
@@ -1846,8 +1862,6 @@ app.get("/genre/:slug/movies", async (c) => {
     ambient = true;
   }
 
-  const years = rows.map((m) => m.year).filter((y): y is number => y != null);
-  const span = years.length ? `${Math.min(...years)}–${Math.max(...years)}` : null;
   const hub = hubForGenres([movieGenre], null);
   const siblings = dir.movie.filter((g) => g !== movieGenre).slice(0, 16);
 
@@ -1857,8 +1871,9 @@ app.get("/genre/:slug/movies", async (c) => {
       title={`Top ${lower} movies — ranked | TV Nightly`}
       description={`The best ${lower} films, ranked by viewer rating, with streaming availability.`}
       canonical={canonical(c)}
+      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
     >
-      <header class={`wo-hero${ambient ? " hub-ambient" : ""}`}>
+      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
           <p class="section-eyebrow">Genre chart</p>
@@ -1867,24 +1882,6 @@ app.get("/genre/:slug/movies", async (c) => {
             Every {lower} film we track with a real rating, ranked — no editors, no sponsorships,
             just the numbers.
           </p>
-          {rows.length ? (
-            <dl class="wo-stats">
-              <div>
-                <dt>Films</dt>
-                <dd>{rows.length}</dd>
-              </div>
-              <div>
-                <dt>Top rating</dt>
-                <dd>★ {rows[0].rating!.toFixed(1)}</dd>
-              </div>
-              {span ? (
-                <div>
-                  <dt>Years</dt>
-                  <dd>{span}</dd>
-                </div>
-              ) : null}
-            </dl>
-          ) : null}
           <p class="hub-actions">
             <a
               class="verdict-btn"

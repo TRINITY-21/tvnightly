@@ -53,20 +53,31 @@
 .sched-row .sched-main { gap: 0.08rem; }
 
 /* countdown chyron where sched-net would sit on TV rows */
+/* the countdown sits beside the date as a neutral tag — the same pill as the
+   network chyron on the schedule rows */
+.sched-when {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
 .upcoming-chip {
   font-family: var(--display);
   font-stretch: 80%;
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--muted);
   white-space: nowrap;
-  padding: 0.28rem 0.55rem;
-  border: 1px solid rgba(255, 169, 77, 0.35);
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(255, 169, 77, 0.08);
+  background: var(--bg);
 }
+/* calendar rows carry a logline, so they run tall — top-align them and seat the
+   date rail up beside the title instead of stranding it mid-row */
+.sched-row:has(.sched-blurb) { align-items: start; }
+.sched-row:has(.sched-blurb) .sched-rail { margin-top: 0.2rem; }
 
 .shelf-tile-static {
   cursor: default;

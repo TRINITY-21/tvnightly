@@ -223,6 +223,7 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 }
 /* header & footer ride the same 948px column as main's content box */
 .header-inner {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 1.1rem;
@@ -275,7 +276,9 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 .logo-mark { display: block; }
 .search {
   position: relative;
-  margin-left: auto;
+  /* zero the UA <form> bottom margin: in the grid header it inflated the row's
+     margin box and shoved the pill ~8px above the nav baseline */
+  margin: 0 0 0 auto;
   flex: 0 1 14.5rem;
   min-width: 11.5rem;
   max-width: 14.5rem;
@@ -306,7 +309,7 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   border: 1px solid rgba(43, 43, 50, 0.95);
   border-radius: 999px;
   color: var(--text);
-  padding: 0.48rem 0.95rem 0.48rem 2.35rem;
+  padding: 0.5rem 2rem 0.5rem 2.35rem;
   font: inherit;
   font-size: 0.84rem;
   letter-spacing: 0.01em;
@@ -314,12 +317,40 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease),
     box-shadow var(--speed) var(--ease);
 }
+/* keyboard-shortcut chip: signals "press / to search"; fades as you type, and
+   is bound for real in typeahead.js. Hidden on touch where it has no meaning. */
+.search-key {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.3rem;
+  font-family: var(--body);
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  pointer-events: none;
+  transition: opacity var(--speed) var(--ease);
+}
+.search:focus-within .search-key { opacity: 0; }
+@media (pointer: coarse) {
+  .search-key { display: none; }
+}
 .search input::placeholder {
   color: var(--muted);
   opacity: 0.8;
 }
 .search input:hover {
-  border-color: rgba(255, 169, 77, 0.28);
+  border-color: rgba(255, 255, 255, 0.18);
   background: rgba(22, 22, 26, 0.88);
 }
 .search input:focus-visible {
@@ -350,36 +381,28 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: var(--text);
+  /* idle labels sit a step under the brand white, then brighten on hover —
+     hierarchy and feedback without a heavy all-white row */
+  opacity: 0.72;
   padding: 0.3rem 0;
+  transition: opacity var(--speed) var(--ease);
 }
-.site-header nav a::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -3px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: translateX(-50%) scale(0);
-  transition: transform var(--speed) var(--ease);
-}
-.site-header nav a:hover { color: var(--text); text-decoration: none; }
-.site-header nav a.active { color: var(--text); }
-.site-header nav a.active::after {
-  transform: translateX(-50%) scale(1);
-  box-shadow: var(--glow);
-}
+/* active section shown by full brightness only — no underline/dot marker */
+.site-header nav a:hover { opacity: 1; color: var(--text); text-decoration: none; }
+.site-header nav a.active { opacity: 1; color: var(--text); }
 
 /* browse mega-menu */
 .nav-mega {
-  position: relative;
+  /* static so the panel's containing block becomes .header-inner — letting the
+     drawer's right edge dock to the search/content edge, not the button.
+     The button's own dot/pill pseudo-elements stay relative to .nav-mega-btn. */
+  position: static;
 }
 .nav-mega-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.32rem;
+  gap: 0.34rem;
   background: none;
   border: 0;
   padding: 0.3rem 0;
@@ -392,50 +415,71 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: var(--text);
+  opacity: 0.72;
+  transition: opacity var(--speed) var(--ease);
 }
-.nav-mega-btn::after {
+/* Browse is a menu control, not a link: a soft pill appears on hover/open so
+   the affordance reads — sized off the text box so layout never shifts, and
+   absent at rest so the bar stays clean. */
+.nav-mega-btn::before {
   content: "";
   position: absolute;
-  left: 50%;
-  bottom: -3px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: translateX(-50%) scale(0);
-  transition: transform var(--speed) var(--ease);
+  inset: -0.32rem -0.62rem;
+  z-index: -1;
+  border-radius: 9px;
+  background: transparent;
+  transition: background-color var(--speed) var(--ease);
 }
-.nav-mega.active .nav-mega-btn::after {
-  transform: translateX(-50%) scale(1);
-  box-shadow: var(--glow);
-}
+.nav-mega:hover .nav-mega-btn,
+.nav-mega.open .nav-mega-btn,
+.nav-mega.active .nav-mega-btn { opacity: 1; }
+.nav-mega:hover .nav-mega-btn::before,
+.nav-mega.open .nav-mega-btn::before { background: rgba(255, 255, 255, 0.06); }
 .nav-mega-chev {
-  width: 0.38rem;
-  height: 0.38rem;
+  width: 0.36rem;
+  height: 0.36rem;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg) translateY(-0.08em);
-  opacity: 0.72;
+  transform: rotate(45deg) translateY(-0.09em);
+  /* dimming rides on the button's opacity — chevron tracks the label exactly */
+  opacity: 0.85;
   transition: transform var(--speed) var(--ease), opacity var(--speed) var(--ease);
 }
 .nav-mega.open .nav-mega-chev {
-  transform: rotate(-135deg) translateY(0.08em);
-  opacity: 0.95;
+  transform: rotate(-135deg) translateY(0.11em);
+  opacity: 1;
 }
+/* a tall, scrollable drawer — right-anchored to Browse so a narrow column
+   never runs off the right edge of the bar */
 .nav-mega-panel {
   position: absolute;
-  top: calc(100% + 0.65rem);
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(36rem, calc(100vw - 2rem));
-  padding: 0.85rem 0.95rem 0.75rem;
-  background: rgba(30, 30, 34, 0.98);
+  top: calc(100% + 0.6rem);
+  right: 0;
+  left: auto;
+  width: min(17.5rem, calc(100vw - 1.5rem));
+  display: flex;
+  flex-direction: column;
+  max-height: min(78vh, 40rem);
+  overflow: hidden;
+  /* fully opaque — a content-dense drawer must not let bright hero art ghost
+     through it; the frosted look is for the slim header bar, not this panel */
+  background: #1c1c21;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
   z-index: 60;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+}
+/* author display:flex above beats the UA [hidden]{display:none}; restore it so
+   the JS can actually close the panel */
+.nav-mega-panel[hidden] { display: none; }
+/* the panel settles in rather than snapping — runs on display:none→block, so
+   no JS change needed; reduced-motion clamps it via the global rule */
+@keyframes navMegaIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.nav-mega.open .nav-mega-panel {
+  animation: navMegaIn var(--speed) var(--ease);
 }
 /* invisible bridge over the gap — panel is position:absolute so .nav-mega
    doesn't grow; this keeps the pointer path from the button to the links */
@@ -450,13 +494,39 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .nav-mega-panel { background: var(--surface-2); }
 }
-.nav-mega-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.85rem 1.1rem;
+@media (max-width: 700px) {
+  .nav-mega-panel { right: auto; left: 0; }
+}
+.nav-mega-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.8rem 0.7rem 0.6rem;
+  /* reserve the scrollbar track on BOTH edges so the row hover-pills stay
+     centered in the panel — the scrollbar no longer eats only the right side */
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.nav-mega-scroll::-webkit-scrollbar { width: 9px; }
+.nav-mega-scroll::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+  border: 2.5px solid transparent;
+  background-clip: padding-box;
+}
+.nav-mega-scroll::-webkit-scrollbar-thumb:hover { background: #3a3a44; background-clip: padding-box; }
+.nm-sec { padding: 0.1rem 0 0.55rem; }
+.nm-sec + .nm-sec {
+  margin-top: 0.55rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 .nav-mega-kicker {
-  margin: 0 0 0.45rem;
+  margin: 0 0 0.4rem;
+  /* aligns with .nm-row text so a hovered row lines up under its heading */
+  padding: 0 0.6rem;
   font-family: var(--display);
   font-stretch: 80%;
   font-size: 0.62rem;
@@ -465,27 +535,120 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   text-transform: uppercase;
   color: var(--muted);
 }
-.nav-mega-col a {
-  display: block;
-  padding: 0.38rem 0.15rem;
-  margin: 0 -0.15rem;
-  font-size: 0.88rem;
-  font-weight: 600;
+.nm-rows { display: flex; flex-direction: column; gap: 2px; }
+/* Higher specificity than `.site-header nav a` on purpose: the dropdown rows
+   must shed the top-nav treatment (uppercase, letter-spacing, dimmed opacity,
+   underline pseudo) and read as a refined menu list — not a stack of nav
+   buttons. This is what made the panel feel "basic". */
+.nav-mega-panel .nm-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-size: 0.9rem;
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--text);
-  border-radius: var(--radius-sm);
-  transition: color var(--speed) var(--ease), background-color var(--speed) var(--ease);
+  opacity: 1;
+  transition: background-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
 }
-.nav-mega-col a:hover {
-  color: var(--accent);
-  background: rgba(255, 169, 77, 0.08);
+/* drop the inherited top-nav hover-underline pseudo-element */
+.nav-mega-panel .nm-row::after { content: none; }
+.nav-mega-panel .nm-row:hover {
+  background: rgba(255, 169, 77, 0.09);
   text-decoration: none;
 }
-.nav-mega-all {
+/* network logos only — white chip so dark marks (Apple, Paramount) stay visible */
+.nm-nets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+}
+.nm-net {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  background: #fff;
+  transition: transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+.nm-net:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+  text-decoration: none;
+}
+.nm-net img {
+  width: 62%;
+  height: 62%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.nm-net-fallback {
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #15151a;
+}
+.nm-chips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem;
+}
+/* higher specificity than `.site-header nav a` so the genre chips shed the
+   inherited top-nav caps/letter-spacing and sit compact, not bulky */
+.nav-mega-panel .nm-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.5rem;
+  line-height: 1.2;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 550;
+  font-size: 0.82rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
+  opacity: 1;
+  text-align: center;
+  transition: background-color var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+.nav-mega-panel .nm-chip::after { content: none; }
+.nav-mega-panel .nm-chip:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.18);
+  text-decoration: none;
+}
+.nm-all {
   display: inline-block;
-  margin-top: 0.75rem;
-  padding-top: 0.65rem;
+  margin-top: 0.6rem;
+  padding: 0 0.1rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.nm-all:hover { text-decoration: none; }
+/* pinned footer below the scroll region */
+.nav-mega-all {
+  flex: 0 0 auto;
+  display: block;
+  padding: 0.7rem 0.95rem;
   border-top: 1px solid var(--line);
-  width: 100%;
+  background: rgba(255, 255, 255, 0.015);
+  text-align: center;
   font-family: var(--display);
   font-stretch: 80%;
   font-size: 0.66rem;
@@ -494,7 +657,138 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   text-transform: uppercase;
   color: var(--accent);
 }
-.nav-mega-all:hover { text-decoration: none; }
+.nav-mega-all:hover { text-decoration: none; background: rgba(255, 169, 77, 0.06); }
+
+/* ---- mobile nav: hamburger + full-height drawer (≤700px) ---- */
+.nav-toggle {
+  display: none; /* desktop uses the inline nav; shown only ≤700px */
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+.nav-toggle:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.18); }
+.nav-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nav-toggle-bars { position: relative; display: block; width: 18px; height: 12px; }
+.nav-toggle-bars span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text);
+  transition: transform var(--speed) var(--ease), opacity var(--speed) var(--ease);
+}
+.nav-toggle-bars span:nth-child(1) { top: 0; }
+.nav-toggle-bars span:nth-child(2) { top: 5px; }
+.nav-toggle-bars span:nth-child(3) { top: 10px; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars span:nth-child(1) { transform: translateY(5px) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars span:nth-child(2) { opacity: 0; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars span:nth-child(3) { transform: translateY(-5px) rotate(-45deg); }
+
+.mobile-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: calc(100dvh - 100%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: #15151a;
+  border-top: 1px solid var(--line);
+  z-index: 49;
+  padding: 0.5rem 1rem 2.5rem;
+  animation: navMegaIn var(--speed) var(--ease);
+}
+.mobile-menu[hidden] { display: none; }
+.mobile-menu-inner { max-width: 948px; margin: 0 auto; display: flex; flex-direction: column; }
+.mm-link {
+  display: flex;
+  align-items: center;
+  padding: 0.85rem 0.3rem;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-size: 1.12rem;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.mm-link.active { color: var(--accent); }
+.mm-link:active { background: rgba(255, 255, 255, 0.04); }
+.mm-sec { padding: 1rem 0 0.1rem; }
+.mm-kicker {
+  margin: 0 0 0.35rem;
+  padding: 0 0.3rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.mm-row {
+  display: block;
+  padding: 0.62rem 0.3rem;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.mm-row:active { background: rgba(255, 255, 255, 0.04); }
+.mm-all {
+  margin-top: 1.1rem;
+  padding: 0.85rem 0.3rem;
+  border-top: 1px solid var(--line);
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+body.nav-open { overflow: hidden; }
+@media (max-width: 700px) {
+  /* logo + full-width search stacked; hamburger pinned to the header's top-right.
+     The toggle lives directly under .site-header (not .header-inner) so its
+     absolute box anchors to the sticky header — same as the drawer. */
+  .header-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    padding-right: 3rem;
+  }
+  .site-header nav { display: none; } /* replaced by the hamburger drawer */
+  .logo { align-self: flex-start; }
+  .nav-toggle {
+    display: inline-flex;
+    position: absolute;
+    top: 0.6rem;
+    right: 1rem;
+    z-index: 60;
+  }
+  .search {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    margin: 0;
+  }
+}
+@media (min-width: 701px) {
+  .mobile-menu { display: none !important; }
+}
 
 .search .ta-box {
   position: absolute;
@@ -622,7 +916,7 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 }
 .card:hover {
   text-decoration: none;
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-2px);
   box-shadow: var(--shadow-2);
 }
@@ -668,6 +962,42 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   font-size: 0.84rem;
 }
 .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Every poster card drops its caption and reveals the title centred over the
+   art on hover, with a light scrim. Touch devices (no hover) keep the caption
+   below, so a title is never hidden where you can't hover. */
+.card-body { display: none; }
+.card-hover-title {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.7rem;
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 650;
+  font-size: 0.95rem;
+  line-height: 1.26;
+  color: var(--text);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  background: rgba(9, 9, 12, 0.5);
+  opacity: 0;
+  transition: opacity var(--speed) var(--ease);
+  overflow: hidden;
+  z-index: 2;
+}
+.card-rating { z-index: 3; }
+@media (hover: hover) {
+  .card:hover .card-hover-title,
+  .card:focus-visible .card-hover-title { opacity: 1; }
+}
+@media (hover: none) {
+  .card-body { display: flex; }
+  .card-hover-title { display: none; }
+}
 
 /* ---- badges: broadcast chyrons ---- */
 .badge {
@@ -765,6 +1095,9 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   font-size: 0.95rem;
   color: var(--muted);
 }
+/* in the detail hero the meta row matches the synopsis body type (1rem) so the
+   whole block reads as one family, not a smaller chyron */
+.detail-info .meta-strip { font-size: 1rem; }
 .meta-strip .sep { opacity: 0.45; }
 /* every meta token is a door now (TV, seasons, network, genres) — keep the
    strip chyron-quiet; amber only answers the hover */
@@ -807,7 +1140,7 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
     transform var(--speed) var(--ease);
 }
 .pill-nav a:hover {
-  border-color: rgba(255, 169, 77, 0.42);
+  border-color: rgba(255, 255, 255, 0.18);
   box-shadow: var(--shadow-2);
   transform: translateY(-1px);
   text-decoration: none;
@@ -999,6 +1332,7 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   margin: 0;
   font-size: 0.8rem;
 }
+.detail-side .rate-inline-label { text-align: center; }
 @media (max-width: 600px) {
   .detail-side { flex-basis: 128px; width: 128px; }
 }
@@ -1064,7 +1398,7 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 a.cast-card { color: var(--text); }
 a.cast-card:hover { text-decoration: none; }
 a.cast-card:hover .cast-name { color: var(--accent); }
-a.cast-card:hover img { border-color: var(--accent); }
+a.cast-card:hover img { border-color: rgba(255, 255, 255, 0.18); }
 a.cast-tile { display: block; color: var(--text); }
 a.cast-tile:hover { text-decoration: none; }
 .credit-as { font-size: 0.76rem; text-align: center; line-height: 1.3; }
@@ -1150,7 +1484,7 @@ a.cast-tile:hover { text-decoration: none; }
   transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
 }
 .ep-pager-card:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   text-decoration: none;
   transform: translateY(-1px);
 }
@@ -1436,6 +1770,10 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
 }
 
 /* ---- person pages: stat band + ranked credit lists ---- */
+/* the show hero forces overflow:visible so its region picker can pop out; the
+   person hero has no such dropdown, so re-clip it and keep the -48px ambient
+   backdrop from spilling a horizontal scrollbar */
+.detail-hero.person-hero { overflow: hidden; }
 .stat-band {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
@@ -1472,14 +1810,46 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   text-overflow: ellipsis;
 }
 
+/* credit section headings — title + a quiet count, same beat as search */
+.credit-sec { margin-top: 2rem; }
+.credit-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0 0 0.6rem;
+  font-family: var(--display);
+  font-stretch: 95%;
+  font-size: 1.32rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.credit-count {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 0.16rem 0.6rem;
+  position: relative;
+  top: -0.16rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .rank-list { list-style: none; padding: 0; margin: 0; }
 .rank-row {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.55rem 0.25rem;
+  gap: 0.9rem;
+  padding: 0.6rem 0.5rem;
+  border-radius: var(--radius);
   border-bottom: 1px solid var(--line);
+  transition: background var(--speed) var(--ease);
 }
+.rank-row:last-child { border-bottom: 0; }
+.rank-row:hover { background: rgba(255, 255, 255, 0.025); }
 .rank-num {
   flex: 0 0 1.7rem;
   text-align: right;
@@ -1488,11 +1858,16 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   font-weight: 750;
   font-size: 1.05rem;
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
+/* same podium grammar as every other ranked list on the site */
+.rank-list li:nth-child(1) .rank-num { color: var(--warn); font-weight: 850; }
+.rank-list li:nth-child(2) .rank-num,
+.rank-list li:nth-child(3) .rank-num { color: var(--text); }
 .rank-thumb {
-  flex: 0 0 40px;
-  width: 40px;
-  height: 56px;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 66px;
   object-fit: cover;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
@@ -1507,8 +1882,72 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* the genre in the sub-line is a door, but stays quiet like the rest of it —
+   overrides .rank-main a (white/bold) back to muted, amber only on hover */
+.rank-sub .rank-genre { color: inherit; font-weight: inherit; }
+.rank-sub .rank-genre:hover { color: var(--accent); text-decoration: none; }
 .rank-score { display: flex; align-items: center; flex: 0 0 auto; }
 .rank-score .rating { font-size: 0.84rem; font-weight: 600; min-width: 3.1rem; text-align: right; }
+
+/* genres this person works in — quiet pills under the bio, each a door */
+.person-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.9rem 0 0;
+}
+.genre-chip {
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.74rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.28rem 0.72rem;
+  transition: color var(--speed) var(--ease), border-color var(--speed) var(--ease),
+    background var(--speed) var(--ease);
+}
+.genre-chip:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+}
+
+/* external profiles as brand icon buttons (replaces the old text cards) */
+.soc-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.15rem 0 0;
+}
+.soc-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.6rem;
+  min-width: 2.6rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  transition: color var(--speed) var(--ease), border-color var(--speed) var(--ease),
+    background var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+.soc-link:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+/* under the poster: the column already spaces its children, so trim the top gap */
+.detail-side .soc-links { margin-top: 0.4rem; }
+
 @media (max-width: 560px) {
   .stat-num { font-size: 1.4rem; }
 }
@@ -1760,11 +2199,54 @@ button, .verdict-btn {
   padding: 0.28rem 0.7rem;
   cursor: pointer;
 }
-.vote-btn:hover { border-color: var(--accent); text-decoration: none; }
+.vote-btn:hover { border-color: rgba(255, 255, 255, 0.18); text-decoration: none; }
 .vote.voted .vote-btn { opacity: 0.6; cursor: default; }
 .vote.voted .vote-count { opacity: 1; color: var(--text); }
 .rate-inline { display: flex; gap: 0.4rem; align-items: center; margin: 0.6rem 0; flex-wrap: wrap; }
 .rate-inline .vote-btn { font-size: 1rem; }
+.rate-inline .verdict-form { position: relative; }
+
+/* hover/focus tooltip naming each verdict (Loved it / Good / Meh / Awful) */
+.rate-inline .vote-btn::after {
+  content: attr(data-label);
+  position: absolute;
+  bottom: calc(100% + 0.45rem);
+  left: 50%;
+  transform: translateX(-50%) translateY(3px);
+  padding: 0.25rem 0.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+  color: var(--text);
+  font-family: var(--display);
+  font-stretch: 85%;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--speed) var(--ease), transform var(--speed) var(--ease);
+  z-index: 30;
+}
+.rate-inline .vote-btn:hover::after,
+.rate-inline .vote-btn:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* the "Seen it?" / stat label sits on its own row above the emoji buttons */
+.rate-inline-label { flex-basis: 100%; transition: color var(--speed) var(--ease); }
+/* once a verdict is tapped: the chosen face lights up, the rest recede */
+.rate-inline.is-rated .verdict-form { opacity: 0.32; pointer-events: none; transition: opacity var(--speed) var(--ease); }
+.rate-inline.is-rated .verdict-form.is-chosen { opacity: 1; }
+.rate-inline.is-rated .verdict-form.is-chosen .vote-btn {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(255, 169, 77, 0.14);
+}
 
 .picker-form {
   display: flex;
@@ -1878,7 +2360,7 @@ button, .verdict-btn {
     transform var(--speed) var(--ease);
 }
 .chip:hover {
-  border-color: rgba(255, 169, 77, 0.42);
+  border-color: rgba(255, 255, 255, 0.18);
   box-shadow: var(--shadow-2);
   transform: translateY(-1px);
   text-decoration: none;
@@ -2001,8 +2483,12 @@ button, .verdict-btn {
   transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
 }
 .watch-bar select:hover,
+.watch-field select:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background-color: rgba(18, 18, 20, 0.85);
+}
+/* keyboard focus keeps the amber ring (this control owns its focus indicator) */
 .watch-bar select:focus,
-.watch-field select:hover,
 .watch-field select:focus {
   border-color: rgba(255, 169, 77, 0.45);
   background-color: rgba(18, 18, 20, 0.85);
@@ -2043,7 +2529,7 @@ button, .verdict-btn {
 }
 .dd-btn:hover,
 .dd.open .dd-btn {
-  border-color: rgba(255, 169, 77, 0.45);
+  border-color: rgba(255, 255, 255, 0.18);
   background-color: rgba(18, 18, 20, 0.85);
 }
 .dd-list {
@@ -2201,7 +2687,7 @@ button, .verdict-btn {
 .shortlist-duo .shortlist-card--b { animation-delay: 0.14s; }
 .shortlist-duo .shortlist-or { animation: deal-in 0.35s var(--ease) 0.26s backwards; }
 .shortlist-card:hover {
-  border-color: rgba(255, 169, 77, 0.38);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-2px);
   box-shadow: var(--shadow-2);
 }
@@ -2366,30 +2852,52 @@ button, .verdict-btn {
 .watch-primer-duo {
   display: flex;
   flex-direction: column;
-  margin: 0 auto 1.15rem;
+  margin: 0 auto 1.25rem;
+  text-align: left;
 }
-.watch-primer-card {
-  height: 8.5rem;
+/* ghost contenders: the empty state previews the result layout, so the
+   outcome — two cards, one decision — reads before the first spin */
+.watch-ghost {
+  display: flex;
+  flex-direction: row;
+  gap: 1.15rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  border: 1px dashed rgba(255, 255, 255, 0.07);
-  background: linear-gradient(
-    110deg,
-    rgba(28, 28, 32, 0.55) 0%,
-    rgba(40, 40, 46, 0.65) 45%,
-    rgba(28, 28, 32, 0.55) 90%
-  );
-  background-size: 220% 100%;
-  animation: watch-shimmer 2.6s ease-in-out infinite;
+  padding: 1.1rem;
+  box-shadow: var(--shadow-1);
 }
-@keyframes watch-shimmer {
-  0%, 100% { background-position: 100% 0; }
-  50% { background-position: 0% 0; }
+.watch-ghost .watch-ghost-poster {
+  flex: 0 0 104px;
+  width: 104px;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius);
+}
+.watch-ghost-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.62rem;
+  padding-top: 0.4rem;
+}
+.watch-ghost-line { height: 0.72rem; border-radius: 5px; }
+.watch-ghost-line.l-title { height: 1.05rem; width: 60%; }
+.watch-ghost-line.l-meta { width: 42%; }
+.watch-ghost-line.l-wide { width: 92%; }
+.watch-ghost-line.l-mid { width: 74%; }
+.watch-ghost .watch-ghost-btn {
+  height: 2rem;
+  width: 8.5rem;
+  border-radius: var(--radius);
+  margin-top: 0.5rem;
 }
 .watch-primer-copy {
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.55;
 }
+.watch-primer-copy strong { color: var(--text); font-weight: 650; }
 .watch-miss {
   max-width: 28rem;
   margin: 0 auto;
@@ -2417,7 +2925,7 @@ button, .verdict-btn {
   }
   .shortlist-body { padding: 0.8rem 0.9rem 0.9rem; }
   .shortlist-blurb { display: none; }
-  .watch-primer-card { height: 7rem; }
+  .watch-ghost .watch-ghost-poster { flex-basis: 84px; width: 84px; }
 }
 @media (max-width: 560px) {
   .watch-bar-actions {
@@ -2453,7 +2961,7 @@ button, .verdict-btn {
   transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
 }
 .prov-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
-a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
+a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translateY(-1px); }
 .prov {
   background: rgba(255, 169, 77, 0.1);
   border: 1px solid rgba(255, 169, 77, 0.35);
@@ -2483,7 +2991,7 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   transition: border-color var(--speed) var(--ease), background var(--speed) var(--ease);
 }
 .explore-card:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   background: var(--surface-2);
   text-decoration: none;
 }
@@ -2599,6 +3107,43 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 }
 .wo-hero-bare .wo-hero-body { padding: 0; }
 .wo-hero h1 { margin: 0.2rem 0 0.6rem; }
+
+/* full-bleed variant (/top/tv, /movies/best): no card chrome — the #1's still
+   runs up to the nav and edge-to-edge, the lockup rides the page column over
+   a scrim that resolves to --bg, so the chart below just becomes the page */
+.wo-hero-bleed {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  margin: -1rem calc(50% - 50vw) 1.6rem;
+}
+.wo-hero-bleed .wo-frame {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(100%, 1280px);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
+}
+.wo-hero-bleed .wo-frame::after {
+  background:
+    linear-gradient(to right, rgba(18, 18, 20, 0.94), rgba(18, 18, 20, 0.6) 40%, rgba(18, 18, 20, 0.16) 70%, rgba(18, 18, 20, 0)),
+    linear-gradient(to bottom, rgba(18, 18, 20, 0.1), rgba(18, 18, 20, 0.45) 55%, rgba(18, 18, 20, 0.86) 84%, var(--bg) 100%);
+}
+.wo-hero-bleed .wo-hero-body {
+  position: relative;
+  z-index: 1;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 4rem 1rem 1.7rem;
+}
+.wo-hero-bleed h1 {
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+@media (max-width: 600px) {
+  .wo-hero-bleed .wo-hero-body { padding-top: 2.75rem; }
+}
 .wo-intro { margin: 0; max-width: 58ch; color: var(--text); }
 .wo-stats {
   display: flex;
@@ -2663,6 +3208,18 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* ranking charts (/top/*): the rank is the spine, and the podium carries the
+   tier — gold #1, bright #2-3, muted for the rest. Scoped so watch-order
+   sequence lists (where the number is "watch first", not "best") stay plain. */
+.wo-ranked .wo-row { grid-template-columns: 2.3rem 46px minmax(0, 1fr) auto; }
+.wo-ranked .wo-num { font-size: 1.1rem; font-weight: 800; }
+.wo-ranked li:nth-child(1) .wo-num { color: var(--warn); }
+.wo-ranked li:nth-child(2) .wo-num,
+.wo-ranked li:nth-child(3) .wo-num { color: var(--text); }
+@media (max-width: 520px) {
+  .wo-ranked .wo-row { grid-template-columns: 1.9rem 40px minmax(0, 1fr) auto; }
+}
+
 .wo-poster {
   width: 46px;
   height: 69px;
@@ -2694,6 +3251,38 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 }
 .wo-provs a:hover {
   color: var(--accent);
+}
+/* watch-order rows show where-to-watch as clickable network logos */
+.wo-poster-link { display: block; }
+.wo-provs-logos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.32rem;
+  margin-top: 0.18rem;
+}
+.wo-prov {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--speed) var(--ease);
+}
+.wo-prov:hover {
+  transform: translateY(-1px);
+}
+.wo-prov img { width: 1.45rem; height: 1.45rem; object-fit: contain; display: block; border-radius: 5px; }
+.wo-prov-text {
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
 }
 .wo-side {
   display: flex;
@@ -2766,7 +3355,7 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
     transform var(--speed) var(--ease);
 }
 .footer-card:hover {
-  border-color: rgba(255, 169, 77, 0.42);
+  border-color: rgba(255, 255, 255, 0.18);
   box-shadow: var(--shadow-2);
   transform: translateY(-1px);
   text-decoration: none;
@@ -2852,7 +3441,9 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 .spot-head {
   position: relative;
   z-index: 1;
-  max-width: 948px;
+  /* match main's geometry (980px box, 1rem gutter) so the content box lands
+     on the same 948px column as everything below the hero */
+  max-width: 980px;
   margin: 0 auto;
   padding: 0 1rem;
   display: flex;
@@ -2908,6 +3499,13 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 .spot-ep {
   margin: 0 0 0.3rem;
 }
+/* the network is a door too — keep it chyron-quiet, amber on hover */
+.spot-ep a {
+  color: inherit;
+}
+.spot-ep a:hover {
+  color: var(--accent);
+}
 .spot-actions {
   margin: 0.9rem 0 0;
 }
@@ -2956,11 +3554,8 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 .evening-aside {
   border-bottom-left-radius: 48px;
 }
-/* align the aside's h2 with the main card's (which carries the eyebrow) */
-.evening-aside .evening-head { margin-top: 1.55rem; }
 @media (max-width: 760px) {
   .evening-grid { grid-template-columns: 1fr; gap: 1rem; }
-  .evening-aside .evening-head { margin-top: 0; }
   .evening-card { padding-bottom: 1.5rem; }
   .evening-aside { padding-bottom: 3.6rem; }
   /* single column: no seam to carve, both cards keep the normal radius */
@@ -3012,7 +3607,7 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   transform: scale(1.05);
 }
 .shelf-tile:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 .shelf-fallback {
   display: flex;
@@ -3085,7 +3680,7 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   transform: translateY(-50%) scale(1);
 }
 .shelf-nav:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   background: rgba(14, 14, 17, 0.92);
   color: var(--accent);
 }
@@ -3217,15 +3812,41 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   font-size: 0.98rem;
 }
 .evening-cta .verdict-btn {
-  box-shadow: 0 8px 34px rgba(255, 169, 77, 0.3);
+  box-shadow: 0 3px 12px rgba(255, 169, 77, 0.14);
+}
+/* keep a one-line lead from wrapping on roomy viewports */
+.nowrap-wide {
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .nowrap-wide {
+    white-space: normal;
+  }
 }
 .evening-cta .btn-ghost {
   background: var(--bg);
 }
 
+/* band heads carry the page: bigger + heavier than the in-card heads so each
+   section reads as its own spine (the amber tick under them is the section voice) */
+.discover-head h2,
+.lanes-head h2,
+.home-tools h2 {
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+@media (max-width: 600px) {
+  .discover-head h2,
+  .lanes-head h2,
+  .home-tools h2 { font-size: 1.35rem; }
+}
+
 /* discover: tabbed poster rails */
 .home-discover h2 { margin: 0; }
 .discover-head { margin-bottom: 0.85rem; }
+/* let the dek run the full column so it sits on one row (wraps only on narrow) */
+.discover-head .section-lead { max-width: none; }
 .discover-input {
   position: absolute;
   opacity: 0;
@@ -3240,18 +3861,26 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   border-bottom: 1px solid var(--line);
 }
 .discover-tablist label {
-  padding: 0.45rem 0.9rem;
-  color: var(--muted);
+  padding: 0.5rem 0.95rem;
+  /* brighter than --muted so the inactive tab reads as a peer control, not a
+     caption — semibold + size give it button-weight so Movies isn't missed */
+  color: #d2cec6;
   border-bottom: 2px solid transparent;
-  font-size: 0.9rem;
+  font-size: 0.96rem;
+  font-weight: 600;
   cursor: pointer;
   margin-bottom: -1px;
   transition: color var(--speed) var(--ease), border-color var(--speed) var(--ease);
 }
-.discover-tablist label:hover { color: var(--text); }
+/* amber-underline preview on hover = "click to switch" (amber == interactivity) */
+.discover-tablist label:hover {
+  color: var(--text);
+  border-bottom-color: rgba(255, 255, 255, 0.18);
+}
 #discover-tv:checked ~ .discover-tablist label[for="discover-tv"],
 #discover-movies:checked ~ .discover-tablist label[for="discover-movies"] {
   color: var(--text);
+  font-weight: 700;
   border-bottom-color: var(--accent);
 }
 .discover-more { margin-left: auto; }
@@ -3267,6 +3896,7 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 #trend-tv:checked ~ .discover-tablist label[for="trend-tv"],
 #trend-movies:checked ~ .discover-tablist label[for="trend-movies"] {
   color: var(--text);
+  font-weight: 700;
   border-bottom-color: var(--accent);
 }
 #trend-tv:checked ~ .panel-tv,
@@ -3375,7 +4005,12 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   background: var(--surface-2);
   margin-left: -9px;
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.55);
+  /* monochrome at rest so the palette stays disciplined; brand colour blooms
+     back on hover, where it reads as a reward, not noise */
+  filter: grayscale(1) opacity(0.82);
+  transition: filter var(--speed) var(--ease);
 }
+.tool-tile-lg:hover .tool-tile-provs img { filter: none; }
 /* the large tiles park the chevron top-right so the art owns the lower band */
 .tool-tile-lg .chev-icon {
   top: 1.15rem;
@@ -3417,6 +4052,32 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 .tool-tile-sm:hover .tool-tile-glyph-sm {
   transform: translateY(-50%) scale(1.06);
 }
+/* a small stack of network logos in the glyph slot (Top networks) */
+.tool-tile-logos {
+  position: absolute;
+  right: 2.1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+  transition: transform var(--speed) var(--ease);
+}
+.tool-tile-logos img {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+  filter: grayscale(1) opacity(0.82);
+  transition: filter var(--speed) var(--ease);
+}
+.tool-tile-logos img + img {
+  margin-left: -9px;
+}
+.tool-tile-sm:hover .tool-tile-logos {
+  transform: translateY(-50%) scale(1.04);
+}
+.tool-tile-sm:hover .tool-tile-logos img { filter: none; }
 .tool-tile-sm .chev-icon-sm {
   position: absolute;
   right: 0.8rem;
@@ -3430,11 +4091,19 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 @media (max-width: 520px) {
   .tools-bento-rest { grid-template-columns: 1fr; }
 }
+@media (min-width: 761px) {
+  /* a lone tile on the final row (count ≡ 1 mod 3) centers instead of
+     orphaning to the left edge — only in the 3-col desktop layout */
+  .tools-bento-rest > a:last-child:nth-child(3n + 1) {
+    grid-column: 2;
+  }
+}
 
 /* browse lanes — hub and genre doors wearing their pages' own #1 art.
    Art rests dim behind the plate scrim and breathes on hover; the tile
    never depends on it (no key, no art → quiet plate tile). */
 .home-lanes { margin-top: 3rem; }
+.lanes-head { margin-bottom: 1.5rem; }
 .lanes-head h2 { display: flex; align-items: baseline; gap: 0.75rem; }
 .lane-grid {
   display: grid;
@@ -3588,7 +4257,7 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
     background-color var(--speed) var(--ease), transform var(--speed) var(--ease);
 }
 .rail-btn:hover {
-  border-color: rgba(255, 169, 77, 0.5);
+  border-color: rgba(255, 255, 255, 0.18);
   background: rgba(26, 26, 30, 0.95);
 }
 .rail-btn:hover .chev-icon { color: var(--accent); }
@@ -3603,12 +4272,21 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 .poster-rail.can-scroll-right .rail-btn-next .chev-icon {
   animation: rail-nudge 2.8s ease-in-out infinite;
 }
+/* mirror the nudge on the prev arrow — leftward, matching the hover convention */
+.poster-rail.can-scroll-left .rail-btn-prev .chev-icon {
+  animation: rail-nudge-prev 2.8s ease-in-out infinite;
+}
 @keyframes rail-nudge {
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(2px); }
 }
+@keyframes rail-nudge-prev {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-2px); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .poster-rail.can-scroll-right .rail-btn-next .chev-icon { animation: none; }
+  .poster-rail.can-scroll-right .rail-btn-next .chev-icon,
+  .poster-rail.can-scroll-left .rail-btn-prev .chev-icon { animation: none; }
 }
 .poster-row {
   display: flex;
@@ -3649,9 +4327,9 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
     box-shadow var(--speed) var(--ease);
 }
 .poster-row > .card:hover .card-media {
-  border-color: rgba(255, 169, 77, 0.5);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-4px);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 169, 77, 0.12);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 .poster-row > .card:active .card-media { transform: translateY(-2px); }
 .poster-row .card img,
@@ -3680,7 +4358,64 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   padding: 0.18rem 0.48rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
+/* tuned to the narrower rail posters */
+.poster-row .card-hover-title {
+  font-size: 0.86rem;
+  padding: 0.55rem;
+  border-radius: var(--radius-lg);
+}
 
+/* ranked rail (Trending) — a Top-N chart, not a second popular shelf: a big
+   numeral anchors each poster over a foot-scrim so it reads at a glance */
+.poster-row-ranked { counter-reset: rank; }
+.poster-row-ranked > .card { counter-increment: rank; }
+.poster-row-ranked .card-media { position: relative; }
+.poster-row-ranked .card-media::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0));
+  pointer-events: none;
+  z-index: 1;
+}
+.poster-row-ranked .card-media::after {
+  content: counter(rank);
+  position: absolute;
+  left: 7px;
+  bottom: 0;
+  z-index: 2;
+  font-family: var(--display);
+  font-stretch: 75%;
+  font-weight: 800;
+  font-size: 2.7rem;
+  line-height: 0.92;
+  color: var(--text);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+
+/* ---- mobile refinements (phones) — collapse multi-col grids, tame type and
+   padding that were sized for desktop ---- */
+@media (max-width: 600px) {
+  /* the spotlight meta line was full-size and crowded on a phone */
+  .spotlight .meta-strip { font-size: 0.84rem; gap: 0.3rem 0.45rem; }
+}
+@media (max-width: 560px) {
+  /* hub lanes carry a dek — give them the full row; genre lanes stay 2-up */
+  .lane-grid-hubs { grid-template-columns: 1fr; }
+  .lane-tile strong { font-size: 1.1rem; }
+  .lane-tile-lg strong { font-size: 1.25rem; }
+  /* the big "Go deeper" tiles had desktop-sized right padding crushing the text */
+  .tool-tile-lg { padding: 1.1rem 1.4rem 1.1rem 1.1rem; min-height: 7rem; }
+  /* CTA pill: let it use the full width and shrink the buttons a touch */
+  .evening-cta { width: auto; max-width: 100%; }
+  .evening-cta .verdict-btn,
+  .evening-cta .btn-ghost { padding: 0.65rem 0.9rem; font-size: 0.92rem; }
+}
 /* ---- sub-nav tabs ---- */
 .subnav {
   display: flex;
@@ -3700,8 +4435,8 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 
 /* ---- footer ---- */
 .site-footer {
-  margin-top: 3rem;
-  padding: 1.6rem 1rem 2rem;
+  margin-top: 4rem;
+  padding: 2.75rem 1rem 1.6rem;
   background: var(--surface);
   border-top: 1px solid var(--line);
   color: var(--muted);
@@ -3709,11 +4444,11 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 }
 .footer-cols {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1.4fr;
+  grid-template-columns: 1.5fr 1fr 1fr 1.5fr;
   gap: 3rem;
   border-bottom: 1px solid var(--line);
-  padding-bottom: 2rem;
-  margin-bottom: 1.4rem;
+  padding-bottom: 2.25rem;
+  margin-bottom: 1.75rem;
 }
 .footer-cols > div {
   min-width: 0;
@@ -3725,7 +4460,7 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   }
   .footer-cols > div {
     border-top: 1px solid var(--line);
-    padding: 1.25rem 1rem;
+    padding: 1.5rem 1.25rem;
   }
   .footer-cols > div:nth-child(-n+2) { border-top: 0; }
   .footer-cols > div:nth-child(even) { border-left: 1px solid var(--line); }
@@ -3739,7 +4474,7 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   .footer-cols > div:nth-child(even) {
     border-left: 0;
     border-top: 1px solid var(--line);
-    padding: 1rem 0;
+    padding: 1.25rem 0;
   }
   .footer-cols > div:first-child { border-top: 0; }
 }
@@ -3751,7 +4486,7 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--muted);
-  margin: 0 0 0.7rem;
+  margin: 0 0 0.9rem;
   padding-left: 0.75rem;
   position: relative;
 }
@@ -3766,37 +4501,122 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   background: var(--accent);
   box-shadow: var(--glow);
 }
-.footer-cols a { display: block; color: var(--muted); padding: 0.18rem 0; font-size: 0.88rem; }
+.footer-cols a { display: block; color: var(--muted); padding: 0.2rem 0; font-size: 0.88rem; }
 .footer-cols a:hover { color: var(--text); text-decoration: none; }
 .footer-cols p { margin: 0 0 0.6rem; }
-.site-footer .tagline {
+
+/* brand column: the header lockup, restated, with the tagline beneath */
+.footer-brand { display: flex; flex-direction: column; }
+.footer-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-family: var(--display);
   font-stretch: 120%;
   font-weight: 650;
-  text-transform: uppercase;
   letter-spacing: 0.02em;
-  font-size: 1rem;
+  font-size: 0.98rem;
   color: var(--text);
-  margin: 0 0 0.5rem;
+  margin-bottom: 0.85rem;
+}
+.footer-logo:hover { text-decoration: none; }
+.footer-tagline {
+  font-family: var(--display);
+  font-stretch: 110%;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.78rem;
+  color: var(--accent);
+  margin: 0 0 0.6rem;
+}
+.footer-blurb { max-width: 32ch; line-height: 1.55; margin: 0; }
+
+/* joined subscribe control: input flush against the button in one pill */
+.footer-stay p { line-height: 1.5; }
+.footer-sub {
+  display: flex;
+  margin-top: 0.9rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+.footer-sub:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--glow);
+}
+.footer-sub input[type="email"] {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+  font-size: 0.86rem;
+}
+.footer-sub input[type="email"]:focus { outline: 0; }
+.footer-sub input::placeholder { color: var(--muted); }
+.footer-sub button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 0;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 0.86rem;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+}
+.footer-sub button:hover { filter: brightness(1.1); }
+.footer-sub button:active { filter: brightness(0.95); }
+.footer-sub-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+  opacity: 0.85;
 }
 
-.site-footer .disclaimer {
-  max-width: 90ch;
-  margin: 0 0 0.75rem;
+/* fine print: the legally-required text, deliberately quiet */
+.footer-fine {
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: var(--muted);
+  opacity: 0.8;
 }
-.footer-attribution {
-  margin: 0 0 1rem;
+.footer-fine .disclaimer {
+  max-width: 92ch;
+  margin: 0 0 0.7rem;
 }
-.footer-legal {
+.footer-attribution { margin: 0; }
+.footer-fine a { color: var(--muted); text-decoration: none; }
+.footer-fine a:hover { color: var(--text); }
+
+/* base bar: the calm anchor — links left, copyright right */
+.footer-base {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
   border-top: 1px solid var(--line);
-  padding-top: 0.85rem;
-  margin: 0;
+  margin-top: 1.5rem;
+  padding-top: 1.1rem;
 }
-.tmdb-logo { height: 11px; vertical-align: baseline; }
+.footer-base-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.footer-base-links a { color: var(--muted); font-weight: 400; }
+.footer-base-links a:hover { color: var(--text); text-decoration: none; }
+.footer-sep { color: var(--line); }
+.footer-copy { color: var(--muted); opacity: 0.85; }
+@media (max-width: 520px) {
+  .footer-base { flex-direction: column-reverse; align-items: flex-start; gap: 0.7rem; }
+}
 
 /* ---- mobile pass ---- */
 @media (max-width: 600px) {
@@ -3870,7 +4690,7 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   transition: color var(--speed) var(--ease), border-color var(--speed) var(--ease);
 }
 .region-line button:hover,
-.region-line button:focus-visible { color: var(--accent); border-color: var(--accent); }
+.region-line button:focus-visible { color: var(--accent); border-color: rgba(255, 255, 255, 0.18); }
 
 .shuffle { margin-top: 2.1rem; }
 .shuffle h2 { margin: 0; display: flex; align-items: baseline; gap: 0.8rem; }
@@ -3885,31 +4705,54 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   font-variant-numeric: tabular-nums;
 }
 .shuffle-note { margin: 0.35rem 0 0; font-size: 0.85rem; }
-.shuffle-board { margin-top: 1.5rem; }
+.shuffle-board { margin-top: 1.75rem; }
 .shuffle-head {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding-bottom: 0.55rem;
+  gap: 0.7rem;
+  padding-bottom: 0.7rem;
   border-bottom: 1px solid var(--line);
 }
-.shuffle-head img { display: block; border-radius: 8px; }
+/* the service mark sits in a defined badge so wordmark + icon logos read alike */
+.shuffle-head img {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
 .shuffle-title {
   margin: 0;
   font-family: var(--display);
   font-stretch: 105%;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.shuffle-title strong { color: var(--text); font-weight: 700; }
+/* the service name is the board's title — let it carry the strip */
+.shuffle-title strong {
+  color: var(--text);
+  font-weight: 800;
+  font-size: 0.96rem;
+  letter-spacing: 0.03em;
+}
 .shuffle-count {
   margin-left: auto;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.22rem 0.6rem;
+  background: var(--bg);
 }
 /* departures wait in gray until you ask about them */
 .shuffle-out .shelf-tile img {
@@ -3927,6 +4770,13 @@ a.prov-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 @media (max-width: 640px) {
   .shuffle-door-grid { grid-template-columns: 1fr; }
 }
+
+/* the wire's status outcome wears the system's status colour (same tokens as
+   the show-status badge) so a greenlight and a cancellation read apart */
+.wire-to { font-weight: 600; color: var(--text); }
+.wire-to.t-ok { color: var(--ok); }
+.wire-to.t-bad { color: var(--bad); }
+.wire-to.t-warn { color: var(--warn); }
 
 /* renewals wire: the door line before the inbox capture */
 .wire-foot { margin-top: 2.2rem; max-width: 56ch; }
@@ -4169,7 +5019,7 @@ a.dossier-name:hover {
   transition: border-color var(--speed) var(--ease);
 }
 .dossier-receipt .prov-go:hover .prov-mini {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 .dossier-receipt .sep,
 .dossier-era .sep {
@@ -4547,7 +5397,7 @@ a.media-art {
   transition: border-color var(--speed) var(--ease);
 }
 a.media-art:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 a.media-art img {
   display: block;
@@ -4684,7 +5534,7 @@ a.media-art img {
   cursor: pointer;
 }
 .fv-btn:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   color: var(--accent);
 }
 .fv-close {
@@ -4876,6 +5726,8 @@ li.epreg-plate .epreg-num {
   color: var(--text);
   opacity: 1;
 }
+/* the champion goes gold — the same podium voice as the other leaderboards */
+.epreg li.epreg-plate:first-child .epreg-num { color: var(--warn); }
 .epreg-still-link {
   display: block;
   line-height: 0;
@@ -4893,7 +5745,7 @@ li.epreg-plate .epreg-num {
 }
 .epreg-still-link:hover .epreg-still,
 .epreg-still-link:focus-visible .epreg-still {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 li.epreg-plate .epreg-still {
   width: 256px;
@@ -5789,6 +6641,8 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .seg-loved { background: var(--warn); }
 .seg-liked { background: rgba(248, 246, 242, 0.45); }
 .seg-meh { background: rgba(248, 246, 242, 0.16); }
+/* the negative tail: a muted red so the haters read apart from the indifferent */
+.seg-awful { background: rgba(255, 107, 107, 0.5); }
 
 .loved-board { margin-top: 2.4rem; }
 .loved-board h2 {
@@ -5989,18 +6843,19 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 
 .sched-list {
   list-style: none;
-  margin: 1rem 0 0;
+  margin: 1.1rem 0 0;
   padding: 0;
 }
 .sched-row {
   display: grid;
-  grid-template-columns: 3.4rem 46px minmax(0, 1fr) auto;
+  grid-template-columns: 3.6rem 46px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.5rem 0.7rem;
+  gap: 0.95rem;
+  padding: 0.62rem 0.55rem 0.62rem 0.7rem;
   border-radius: var(--radius);
   color: var(--text);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
   transition: background-color var(--speed) var(--ease);
 }
 .sched-list li:last-child .sched-row { border-bottom: 0; }
@@ -6013,10 +6868,11 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   font-family: var(--display);
   font-stretch: 80%;
   font-weight: 700;
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--muted);
+  /* the time is the index of the list — it should read, not whisper */
+  color: var(--text);
   font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
@@ -6049,16 +6905,23 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* network reads as a tag pinned to the row's right edge, not floating text */
 .sched-net {
   font-family: var(--display);
   font-stretch: 80%;
   font-size: 0.62rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   color: var(--muted);
   white-space: nowrap;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.22rem 0.6rem;
+  background: var(--bg);
 }
+.sched-row:hover .sched-net,
+.sched-row:focus-visible .sched-net { color: var(--text); }
 
 @media (max-width: 520px) {
   .sched-row { grid-template-columns: 2.9rem 40px minmax(0, 1fr); gap: 0.6rem; }
@@ -6122,20 +6985,31 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .sched-row .sched-main { gap: 0.08rem; }
 
 /* countdown chyron where sched-net would sit on TV rows */
+/* the countdown sits beside the date as a neutral tag — the same pill as the
+   network chyron on the schedule rows */
+.sched-when {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
 .upcoming-chip {
   font-family: var(--display);
   font-stretch: 80%;
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--muted);
   white-space: nowrap;
-  padding: 0.28rem 0.55rem;
-  border: 1px solid rgba(255, 169, 77, 0.35);
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(255, 169, 77, 0.08);
+  background: var(--bg);
 }
+/* calendar rows carry a logline, so they run tall — top-align them and seat the
+   date rail up beside the title instead of stranding it mid-row */
+.sched-row:has(.sched-blurb) { align-items: start; }
+.sched-row:has(.sched-blurb) .sched-rail { margin-top: 0.2rem; }
 
 .shelf-tile-static {
   cursor: default;
@@ -6228,7 +7102,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
     background var(--speed) var(--ease);
 }
 .browse-search:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   color: var(--text);
   background: var(--surface);
   text-decoration: none;
@@ -6275,7 +7149,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
     box-shadow var(--speed) var(--ease);
 }
 .browse-tile:hover {
-  border-color: rgba(255, 169, 77, 0.45);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-2px);
   box-shadow: var(--shadow-2);
   text-decoration: none;
@@ -6483,16 +7357,6 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   margin-bottom: 1.1rem;
   border-bottom: 1px solid var(--line);
 }
-.browse-nets-eyebrow {
-  font-family: var(--display);
-  font-stretch: 80%;
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-  margin: 0 0 0.35rem;
-}
 .browse-nets-head h2 {
   margin: 0;
 }
@@ -6586,22 +7450,16 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   margin-bottom: 1rem;
   border-bottom: 1px solid var(--line);
 }
-.browse-genre-eyebrow {
-  font-family: var(--display);
-  font-stretch: 80%;
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-  margin: 0 0 0.35rem;
-}
-.browse-genre-head h2 {
+/* pane subhead — deliberately below the section h2 so the hierarchy reads
+   parent (Genres) → child (TV genres / Movie genres) */
+.browse-subhead {
   margin: 0;
-  font-size: clamp(1.15rem, 2vw, 1.35rem);
-}
-.browse-genre-head h2::after {
-  display: none;
+  font-family: var(--display);
+  font-stretch: 92%;
+  font-weight: 700;
+  font-size: 1.02rem;
+  letter-spacing: 0.01em;
+  color: var(--text);
 }
 .browse-genre-count {
   font-size: 0.82rem;
@@ -6637,7 +7495,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
     transform var(--speed) var(--ease);
 }
 .browse-genre-tile:hover {
-  border-color: rgba(255, 169, 77, 0.42);
+  border-color: rgba(255, 255, 255, 0.18);
   background: var(--surface-2);
   box-shadow: var(--shadow-2);
   transform: translateY(-1px);
@@ -6698,7 +7556,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   z-index: 1;
 }
 .browse-hub-card:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-1px);
   box-shadow: var(--shadow-2);
   text-decoration: none;
@@ -6774,9 +7632,6 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
    Compact brand tiles: name + amber tick left, logo pill right.
    ============================================================ */
 
-.nets-hero .wo-hero-body {
-  max-width: none;
-}
 .nets-hero h1 {
   margin: 0.2rem 0 0.55rem;
   font-size: clamp(1.75rem, 3.8vw, 2.35rem);
@@ -6831,55 +7686,28 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   border: 0;
   border-radius: var(--radius-lg);
   color: #fff;
-  background:
-    radial-gradient(ellipse 90% 80% at 0% 0%, rgba(255, 255, 255, 0.11), transparent 52%),
-    linear-gradient(
-      152deg,
-      color-mix(in srgb, var(--net-brand) 78%, #fff 22%) 0%,
-      var(--net-brand) 38%,
-      color-mix(in srgb, var(--net-brand) 90%, #000 10%) 100%
-    );
+  /* one clean brand wash — a slight top-light, bottom-shade for depth, no
+     reflections or edge highlights (that's what read as glassy) */
+  background: linear-gradient(
+    170deg,
+    color-mix(in srgb, var(--net-brand) 86%, #fff 14%) 0%,
+    var(--net-brand) 54%,
+    color-mix(in srgb, var(--net-brand) 88%, #000 12%) 100%
+  );
   box-shadow: var(--shadow-1);
   overflow: hidden;
   transition:
     transform var(--speed) var(--ease),
     box-shadow var(--speed) var(--ease);
 }
-.net-brand::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 8%;
-  right: 8%;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.35) 45%,
-    rgba(255, 255, 255, 0.08) 72%,
-    transparent
-  );
-  pointer-events: none;
-  z-index: 2;
-}
-.net-brand-shine {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: radial-gradient(ellipse 70% 55% at 8% 12%, rgba(255, 255, 255, 0.09), transparent 58%);
-}
+/* subtle bottom vignette so every brand colour grounds the same way */
 .net-brand::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background: linear-gradient(
-    125deg,
-    transparent 42%,
-    rgba(0, 0, 0, 0.14) 100%
-  );
+  background: linear-gradient(180deg, transparent 54%, rgba(0, 0, 0, 0.14));
 }
 .net-brand:hover {
   transform: translateY(-2px);
@@ -6889,9 +7717,6 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .net-brand-copy {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.38rem;
   min-width: 0;
 }
 .net-brand-name {
@@ -6903,20 +7728,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   line-height: 1.14;
   letter-spacing: 0.015em;
   text-wrap: balance;
-  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.28);
-}
-.net-brand-tick {
-  display: block;
-  width: 1.4rem;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--accent);
-  opacity: 0.88;
-  transition: width var(--speed) var(--ease), opacity var(--speed) var(--ease);
-}
-.net-brand:hover .net-brand-tick {
-  width: 1.85rem;
-  opacity: 1;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.22);
 }
 .net-brand-logo {
   position: relative;
@@ -6929,7 +7741,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   padding: 0.55rem 0.4rem;
   border-radius: 11px;
   background: #fff;
-  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
   transition: transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
 }
@@ -6944,8 +7756,8 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   font-size: 0.72rem;
 }
 .net-brand:hover .net-brand-logo {
-  transform: scale(1.04);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+  transform: scale(1.03);
+  box-shadow: 0 7px 18px rgba(0, 0, 0, 0.26);
 }
 
 
@@ -7071,4 +7883,1287 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
     height: 4.5rem;
     border-radius: 14px;
   }
+}
+/* ---- compare: head-to-head detail -----------------------------------
+   The versus hero splits both titles' backdrops down a center seam with a
+   VS badge; the "tale of the tape" table carries the winner in gold; the
+   chart legend dots match the SVG series colors (amber A, pink B). Those
+   two colors are data identity, not decoration — they must match the lines. */
+
+.vsx-hero {
+  position: relative;
+  overflow: hidden;
+  min-height: 16.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--plate);
+  box-shadow: var(--shadow-1);
+  margin-bottom: 1.5rem;
+}
+.vsx-art {
+  position: absolute;
+  inset: 0;
+}
+/* each still covers its OWN half (≈56% wide) so the image reads at a sane
+   zoom; the two halves overlap across the centre and meet on the seam
+   diagonal (hero 53% at top → 47% at bottom, symmetric so VS sits centred).
+   The odd clip percentages are those hero points expressed in each 56%-wide
+   box: 53%/56% = 94.6, 47%/56% = 83.9; B's left edge = (53-44)/56 = 16.1 etc. */
+.vsx-art-a,
+.vsx-art-b {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 56%;
+  background-size: cover;
+  background-position: center 18%;
+}
+.vsx-art-a {
+  left: 0;
+  clip-path: polygon(0 0, 94.6% 0, 83.9% 100%, 0 100%);
+}
+.vsx-art-b {
+  right: 0;
+  clip-path: polygon(16.1% 0, 100% 0, 100% 100%, 5.4% 100%);
+}
+.vsx-art-a::after,
+.vsx-art-b::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.vsx-art-a::after {
+  background:
+    linear-gradient(to top, rgba(14, 14, 17, 0.95), rgba(14, 14, 17, 0.5) 55%, rgba(14, 14, 17, 0.18)),
+    linear-gradient(115deg, rgba(255, 169, 77, 0.16), rgba(255, 169, 77, 0) 58%);
+}
+.vsx-art-b::after {
+  background:
+    linear-gradient(to top, rgba(14, 14, 17, 0.95), rgba(14, 14, 17, 0.5) 55%, rgba(14, 14, 17, 0.18)),
+    linear-gradient(245deg, rgba(255, 92, 138, 0.18), rgba(255, 92, 138, 0) 58%);
+}
+/* the seam — a bright blade clipped to the SAME diagonal as the B still, so
+   it always rides exactly on the image division. drop-shadow hugs the strip
+   for the glow (box-shadow would be clipped away). */
+.vsx-seam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 56%;
+  z-index: 1;
+  clip-path: polygon(16.1% 0, calc(16.1% + 3px) 0, calc(5.4% + 3px) 100%, 5.4% 100%);
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 169, 77, 0.95),
+    rgba(248, 246, 242, 0.98) 38%,
+    rgba(255, 92, 138, 0.85) 72%,
+    rgba(255, 92, 138, 0.55)
+  );
+  filter: drop-shadow(0 0 6px rgba(248, 246, 242, 0.5)) drop-shadow(0 0 14px rgba(255, 169, 77, 0.32));
+}
+/* the two titles anchor the bottom corners, facing their own side of the
+   split; the VS medallion rides the center of the diagonal seam */
+.vsx-name {
+  position: absolute;
+  bottom: 1.25rem;
+  z-index: 2;
+  max-width: 42%;
+  font-family: var(--display);
+  font-stretch: 95%;
+  font-weight: 800;
+  font-size: clamp(1.2rem, 3vw, 2.1rem);
+  line-height: 1.02;
+  color: var(--text);
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6);
+}
+.vsx-name:hover,
+.vsx-name:focus-visible {
+  color: var(--accent);
+  text-decoration: none;
+}
+.vsx-name-a {
+  left: 1.6rem;
+  text-align: left;
+}
+.vsx-name-b {
+  right: 1.6rem;
+  text-align: right;
+}
+/* the cinematic medallion, dead-center on the seam */
+.vsx-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.9rem;
+  height: 2.9rem;
+  border-radius: 999px;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-weight: 800;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  /* opaque plate base under the tint so the seam can't bleed through; a solid
+     plate ring hides the line across the badge too (it still shows above/below) */
+  background: linear-gradient(135deg, rgba(255, 169, 77, 0.45), rgba(255, 92, 138, 0.45)), var(--plate);
+  border: 1.5px solid rgba(248, 246, 242, 0.7);
+  box-shadow:
+    0 0 0 7px var(--plate),
+    0 6px 24px rgba(0, 0, 0, 0.6),
+    0 0 26px rgba(255, 169, 77, 0.28);
+}
+
+/* cross-link to the other medium's compare tool — a pill in the header's
+   top-right, like a quiet medium switch */
+.cmp-head {
+  position: relative;
+}
+.cmp-head .cmp-xlink {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 0;
+}
+.cmp-xlink a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.cmp-xlink a:hover,
+.cmp-xlink a:focus-visible {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--accent);
+  background: var(--surface-2);
+  text-decoration: none;
+}
+@media (max-width: 700px) {
+  .cmp-head .cmp-xlink {
+    position: static;
+    margin: 0.8rem 0 0;
+  }
+}
+
+/* detail-page footer: two ghost buttons, no separator dot */
+.vsx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.9rem;
+}
+
+/* the picker reads as a matchup: long fields flanking a "vs", centered on
+   the card so it feels balanced rather than bunched at the left */
+.compare-form {
+  justify-content: center;
+  gap: 1rem 1.4rem;
+}
+.compare-form label {
+  flex: 1 1 16rem;
+  max-width: 24rem;
+}
+.compare-form .cmp-or {
+  align-self: end;
+  padding-bottom: 0.55rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* the title-picker dropdown — mirrors the header search's .ta look */
+.compare-form label {
+  position: relative;
+}
+.cmp-ac {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 19rem;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  padding: 0.25rem;
+}
+.cmp-ac[hidden] {
+  display: none;
+}
+.cmp-ac .ta-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.4rem 0.45rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.cmp-ac .ta-opt.ta-active,
+.cmp-ac .ta-opt:hover {
+  background: rgba(255, 169, 77, 0.1);
+}
+
+.vsx-sec {
+  margin-top: 2.1rem;
+}
+.vsx-h2 {
+  margin: 0 0 0.85rem;
+}
+
+/* tale of the tape — fixed columns so the two sides sit symmetric about the
+   centered metric label, not bunched at the left */
+.tape {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.tape th:nth-child(1),
+.tape td:nth-child(1) {
+  width: 42%;
+}
+.tape th:nth-child(2),
+.tape td:nth-child(2) {
+  width: 16%;
+}
+.tape th:nth-child(3),
+.tape td:nth-child(3) {
+  width: 42%;
+}
+.tape thead th {
+  padding: 0.2rem 0.6rem 0.85rem;
+  font-family: var(--display);
+  font-stretch: 95%;
+  font-weight: 800;
+  font-size: clamp(0.82rem, 1.5vw, 1rem);
+  color: var(--text);
+}
+/* keep the th a real table cell (no flex — that drops it out of the fixed
+   columns and breaks alignment with the values below); text-align lines each
+   name up with its value column. nowrap keeps the title on one row. */
+.tape-team {
+  text-align: right;
+  white-space: nowrap;
+}
+.tape-team-b {
+  text-align: left;
+}
+.tape-dot {
+  display: inline-block;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.tape-team .tape-dot {
+  margin-right: 0.45rem;
+}
+.tape-team-b .tape-dot {
+  margin-left: 0.45rem;
+}
+.tape-dot-a {
+  background: #ffa94d;
+}
+.tape-dot-b {
+  background: #ff5c8a;
+}
+.tape tbody tr {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.tape td,
+.tape tbody th {
+  padding: 0.72rem 0.6rem;
+  vertical-align: middle;
+}
+.tape-metric {
+  text-align: center;
+  white-space: nowrap;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-weight: 700;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tape-val {
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-weight: 700;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.tape td.tape-val:first-child {
+  text-align: right;
+}
+.tape td.tape-val:last-child {
+  text-align: left;
+}
+.tape-win {
+  color: var(--warn);
+}
+.tape-lose {
+  color: var(--muted);
+  font-weight: 600;
+}
+/* text-heavy values (genres, streaming) ride smaller in the body face */
+.tape-minor {
+  font-family: var(--body);
+  font-stretch: normal;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.tape-sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-family: var(--body);
+  font-stretch: normal;
+  font-weight: 500;
+  font-size: 0.72rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+}
+
+/* chart card */
+.vsx-chart {
+  margin-top: 2.1rem;
+}
+.vsx-chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.7rem;
+}
+.vsx-legend {
+  display: flex;
+  gap: 1.1rem;
+  margin: 0;
+}
+.vsx-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* the plot: a framed card; the line chart fills the width, the cursor group
+   and tooltip are driven by compare-chart.js */
+.vsx-graph {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  padding: 0.6rem 0.7rem 0.4rem;
+}
+.vsx-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+.vsx-cross {
+  stroke: rgba(248, 246, 242, 0.28);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.vsx-dot {
+  stroke: var(--plate);
+  stroke-width: 2.5;
+}
+.vsx-dot-a {
+  fill: #ffa94d;
+}
+.vsx-dot-b {
+  fill: #ff5c8a;
+}
+.vsx-tip {
+  position: absolute;
+  top: 0.6rem;
+  left: 0;
+  display: none;
+  width: min(20rem, 80%);
+  background: rgba(14, 14, 17, 0.94);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  padding: 0.5rem 0.6rem;
+  pointer-events: none;
+  z-index: 4;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.vsx-tip-head {
+  display: block;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-weight: 700;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+.vsx-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+}
+.vsx-tip-img {
+  width: 46px;
+  height: 28px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.vsx-tip-img--none {
+  display: inline-block;
+}
+.vsx-tip-meta {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: var(--text);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.vsx-tip-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+  margin-right: 0.35rem;
+}
+.vsx-tip-rate {
+  flex-shrink: 0;
+  font-family: var(--display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--warn);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 560px) {
+  .vsx-hero {
+    min-height: 12rem;
+  }
+  .vsx-body {
+    padding: 2rem 1rem 1.2rem;
+  }
+  .tape-val {
+    font-size: 0.95rem;
+  }
+  .tape-sub {
+    display: none;
+  }
+  .vsx-chart-head {
+    margin-bottom: 0.5rem;
+  }
+}
+/* ============================================================
+   /recommend — rate a few, get one pick. Uses the app's own language:
+   chart-head intros, .card grids, a loved-hero-style backdrop hero, the
+   standard dark surface (no bespoke backgrounds). Accent = interaction only;
+   gold = ratings + the chosen verdict.
+   ============================================================ */
+
+.rec-page { max-width: 940px; margin: 0 auto; position: relative; }
+.rec-narrow { max-width: 34rem; }
+.rec-center { text-align: center; }
+
+/* headings match the chart pages: display voice, mixed case, no global tick */
+.rec-h1 {
+  font-family: var(--display);
+  font-stretch: 114%;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-size: clamp(1.6rem, 4vw, 2.25rem);
+  line-height: 1.12;
+  margin: 0.3rem 0 0.7rem;
+}
+/* in the rating room the question sits tight to its circles (compact cluster) */
+.rec-room .rec-h1 { margin: 0.6rem 0 0.2rem; }
+.rec-lead { max-width: 34rem; margin-left: auto; margin-right: auto; }
+
+/* landing search — same input vocabulary as the rest of the app */
+.rec-search { position: relative; display: flex; gap: 0.5rem; max-width: 30rem; margin: 1.3rem auto 0; text-align: left; }
+.rec-search-field { position: relative; flex: 1 1 auto; min-width: 0; }
+.rec-search input[type="search"] {
+  width: 100%;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  padding: 0.72rem 1.1rem;
+  font: inherit;
+  transition: border-color var(--speed) var(--ease);
+}
+.rec-search input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.rec-search input[type="search"]:focus-visible { outline: none; border-color: rgba(255, 169, 77, 0.5); }
+/* suggestion dropdown — mirrors the header search ta-box exactly */
+.rec-search .ta-box {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(35, 35, 40, 0.97);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  z-index: 70;
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.rec-search .ta-box[hidden] { display: none !important; }
+.rec-search .ta-box a {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0.7rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.rec-search .ta-box a:last-child { border-bottom: 0; }
+.rec-search .ta-box a:hover { text-decoration: none; }
+.rec-search .ta-box a.ta-active { background: rgba(255, 169, 77, 0.08); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .rec-search .ta-box { background: var(--surface-2); }
+}
+
+.rec-steps {
+  margin: 1.1rem 0 0;
+  font-family: var(--display);
+  font-stretch: 95%;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.rec-steps span { color: var(--accent); margin: 0 0.3rem; }
+.rec-trust { margin: 0.7rem 0 0; font-size: 0.82rem; }
+
+.rec-sec { margin-top: 2rem; }
+.rec-sec > .grid { margin-top: 0.6rem; }
+
+/* poster frame for the rate / deck screens */
+.rec-poster { position: relative; display: inline-block; }
+/* verdict chip stamped on the deck poster on tap, before sliding to the next */
+.rec-verdict-chip {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  padding: 0.32rem 0.85rem;
+  border-radius: 999px;
+  color: #fff;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 700;
+  font-size: 0.92rem;
+  letter-spacing: 0.01em;
+  border: 2px solid rgba(248, 246, 242, 0.92);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translate(-50%, -6px) scale(0.7);
+  animation: rec-chip-in 0.34s var(--ease) forwards;
+  pointer-events: none;
+}
+.rec-verdict-chip.v-awful { background: #7f93b0; color: #0e1320; }
+.rec-verdict-chip.v-meh { background: #9b8f78; color: #1b1b1f; }
+.rec-verdict-chip.v-like { background: #ecab3d; color: #2a1e06; }
+.rec-verdict-chip.v-love { background: #e3672f; color: #2a1004; }
+/* "Skipped" — neutral, not a verdict */
+.rec-verdict-chip.v-skip { background: #3c3c44; color: #efece7; }
+@keyframes rec-chip-in {
+  0% { opacity: 0; transform: translate(-50%, -6px) scale(0.7); }
+  60% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+.rec-poster img,
+.rec-poster-blank {
+  display: block;
+  /* one card width, shared with the progress bar so they line up */
+  width: clamp(230px, 70vw, 300px);
+  height: auto;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 14px;
+  /* no drop shadow — flat on the page, just a faint edge for definition */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  margin: 0 auto;
+  background: var(--surface-2);
+}
+.rec-poster-blank { display: flex; align-items: center; justify-content: center; padding: 1rem; text-align: center; color: var(--muted); font-weight: 600; }
+.rec-poster-lg { margin-bottom: 0; }
+.rec-note { margin-top: 1.4rem; font-size: 0.86rem; }
+
+/* rate card 1 matches the deck cards: the title + year ride the standard
+   bottom scrim (.rec-card-cap), the sentiment circles sit below the card */
+.rec-rate-card { display: inline-block; }
+.rec-rate-card .rec-poster img,
+.rec-rate-card .rec-poster-blank {
+  width: clamp(230px, 70vw, 300px);
+  border-radius: 14px;
+}
+
+/* ---- the rating "room": a focused, centered deck in the space below the
+   sticky header (no fixed/takeover — stays in document flow) ---- */
+.rec-room {
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100svh - 5.5rem);
+  /* wide enough that the spread-out circle cradle fits without clipping */
+  max-width: 26rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 2rem;
+}
+@media (max-height: 720px) {
+  .rec-room { min-height: auto; justify-content: flex-start; padding-top: 1.25rem; }
+}
+
+/* honest progress: ratings done / target — never moves on its own */
+/* same width as the poster card, centered under it */
+.rec-prog { width: clamp(230px, 70vw, 300px); margin: 0 auto 1.5rem; }
+.rec-prog-label {
+  display: flex; justify-content: center; align-items: baseline; gap: 0.5rem; margin: 0 0 0.5rem;
+  font-family: var(--display); font-stretch: 96%; font-size: 0.92rem; font-weight: 650; color: var(--text);
+}
+.rec-prog-count { color: var(--text); font-variant-numeric: tabular-nums; }
+.rec-prog-track { height: 5px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.rec-prog-fill {
+  height: 100%; border-radius: 999px; background: var(--accent); box-shadow: 0 0 8px rgba(255, 169, 77, 0.4);
+  width: calc(var(--done, 0) / var(--target, 4) * 100%); transition: width 0.5s var(--ease);
+}
+
+/* poster shell (shrinks to the poster so the undo button pins beside it) */
+.rec-card-shell { position: relative; display: inline-block; }
+.rec-card-cap {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 1.4rem 0.8rem 5rem; border-radius: 0 0 14px 14px;
+  background: linear-gradient(to top, rgba(8, 8, 11, 0.92) 8%, rgba(8, 8, 11, 0.55) 55%, transparent 100%);
+}
+.rec-card-title { font-family: var(--display); font-stretch: 100%; font-weight: 650; font-size: 1rem; line-height: 1.18; color: var(--text); }
+.rec-card-year { display: block; font-family: var(--display); font-stretch: 88%; font-size: 0.8rem; color: var(--muted); }
+.rec-undo {
+  position: absolute; left: -3.4rem; top: 50%; transform: translateY(-50%);
+  width: 2.25rem; height: 2.25rem; display: grid; place-items: center; border-radius: 50%;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); box-shadow: var(--shadow-1);
+  transition: border-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+.rec-undo:hover { border-color: rgba(255, 255, 255, 0.18); color: var(--text); text-decoration: none; }
+
+/* ---- rating control: a fanned "smile" of sentiment circles, worst -> best ----
+   cool steel + taupe recede on the left; the brand's gold + amber bloom on the
+   right (the two positives ARE --warn/--accent). The two new literals (#7f93b0
+   steel, #9b8f78 taupe) are RECESSIVE, non-interactive sentiment fills — the
+   one-amber rule still holds: only the picked circle glows. */
+.rate-fan {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  /* tops roughly aligned; the bigger middle circles hang lower (a gentle cradle) */
+  align-items: flex-start;
+  gap: 0;
+  /* pulled up so the bigger circles cradle ("hug") the card's rounded bottom */
+  margin: -3.4rem auto 0;
+  max-width: 27rem;
+  --d: clamp(80px, 23vw, 118px);
+}
+.rate-fan .rate-opt { margin: 0 -3px; display: flex; }
+.rate-fan .rate-circle {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 3px solid rgba(248, 246, 242, 0.92);
+  background: var(--fill);
+  color: var(--label);
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-weight: 700;
+  font-size: clamp(0.82rem, 2.3vw, 0.98rem);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  transform: translateY(var(--lift));
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), opacity 0.2s var(--ease), filter 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.rc-awful { --fill: #7f93b0; --label: #0e1320; --lift: -12px; width: calc(var(--d) * 0.72); height: calc(var(--d) * 0.72); z-index: 1; }
+.rc-meh { --fill: #9b8f78; --label: #1b1b1f; --lift: 0px; width: var(--d); height: var(--d); z-index: 2; }
+.rc-like { --fill: #ecab3d; --label: #2a1e06; --lift: 0px; width: var(--d); height: var(--d); z-index: 2; }
+.rc-love { --fill: #e3672f; --label: #2a1004; --lift: -12px; width: calc(var(--d) * 0.72); height: calc(var(--d) * 0.72); z-index: 1; }
+.rate-fan .rate-circle:hover,
+.rate-fan .rate-circle:focus-visible {
+  transform: translateY(var(--lift)) scale(1.07);
+  border-color: #f8f6f2;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+  z-index: 3;
+}
+/* white focus ring so it never washes out on the amber Loved circle */
+.rate-fan .rate-circle:focus-visible { outline: 2px solid #f8f6f2; outline-offset: 3px; z-index: 5; }
+/* the chosen circle is the only thing on the screen that glows */
+.rate-fan .rate-circle.is-picked {
+  transform: translateY(var(--lift)) scale(1.12);
+  z-index: 4;
+  box-shadow:
+    0 0 0 3px rgba(248, 246, 242, 0.6),
+    0 0 0 6px color-mix(in srgb, var(--fill) 32%, transparent),
+    0 0 22px color-mix(in srgb, var(--fill) 45%, transparent),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.rate-fan.has-pick .rate-circle:not(.is-picked) { opacity: 0.45; filter: saturate(0.7); }
+@media (max-width: 480px) {
+  .rate-fan { --d: clamp(68px, 20vw, 94px); }
+}
+
+/* ---- enrich deck: one card at a time ---- */
+.rec-deck { width: 100%; display: flex; flex-direction: column; align-items: center; }
+.rec-deck-card { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.rec-deck-card[hidden] { display: none; }
+
+/* "Haven't seen" — a wide ghost pill that skips this title */
+.rec-room .rec-skip {
+  display: block;
+  width: 100%;
+  max-width: 21rem;
+  text-align: center;
+  margin: 1.5rem auto 0;
+  padding: 0.7rem 1.15rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--display);
+  font-stretch: 95%;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rec-room .rec-skip:hover { border-color: rgba(255, 255, 255, 0.22); color: var(--text); text-decoration: none; }
+
+/* ---- transition loader: an in-flight cover, lives only as long as the real
+   results request (engine + backdrop fetches) — NOT a timed fake ---- */
+.rec-loader { display: flex; flex-direction: column; align-items: center; gap: 0.7rem; text-align: center; }
+.rec-loader-title { font-family: var(--display); font-stretch: 95%; font-size: 1rem; font-weight: 650; color: var(--text); margin: 0.2rem 0 0; }
+.rec-loader-sub { font-size: 0.85rem; color: var(--muted); margin: 0; }
+.rec-spinner { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.1); border-top-color: var(--accent); animation: rec-spin 0.8s linear infinite; }
+@keyframes rec-spin { to { transform: rotate(360deg); } }
+
+/* ---- synth interstitial: the rated titles orbit a working spinner while the
+   match is "gathered" — each thumb ringed in its verdict colour ---- */
+.rec-synth-stage {
+  position: relative;
+  width: clamp(238px, 82vw, 292px);
+  height: clamp(238px, 82vw, 292px);
+  margin: 0 auto 0.4rem;
+}
+.rec-synth-chip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: clamp(46px, 14vw, 60px);
+  aspect-ratio: 2 / 3;
+  transform-origin: center;
+  /* seat on the orbit, then counter-rotate so the poster stays upright */
+  transform: translate(-50%, -50%)
+    rotate(calc(var(--i) / var(--n) * 1turn))
+    translateY(calc(-1 * clamp(95px, 32vw, 116px)))
+    rotate(calc(var(--i) / var(--n) * -1turn));
+}
+.rec-synth-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 2px solid var(--ring, rgba(255, 255, 255, 0.5));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.rec-synth-chip.v-awful { --ring: #7f93b0; }
+.rec-synth-chip.v-meh { --ring: #9b8f78; }
+.rec-synth-chip.v-like { --ring: #ecab3d; }
+.rec-synth-chip.v-love { --ring: #e3672f; }
+.rec-synth-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 78px;
+  height: 78px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(16, 16, 19, 0.72);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.rec-synth-core .rec-spinner { width: 42px; height: 42px; border-width: 3px; }
+.rec-synth-title { margin: 0.4rem 0 0.35rem; }
+.rec-synth-sub { margin: 0; font-size: 0.92rem; }
+.rec-synth-cont { margin-top: 1.3rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .rec-synth-chip img { animation: rec-pop 0.5s var(--ease) backwards; animation-delay: calc(var(--i) * 0.1s); }
+  @keyframes rec-pop { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: scale(1); } }
+  /* the whole orbit breathes inward — reads as data being pulled to the core */
+  .rec-synth-stage { animation: rec-breathe 2.6s var(--ease) infinite; }
+  @keyframes rec-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.965); } }
+}
+
+/* the cards themselves are static (no deal-in / arc-in) — only the synth
+   interstitial animates */
+@media (prefers-reduced-motion: reduce) { .rec-spinner { animation: none; border-top-color: var(--accent); } }
+
+/* ---- results match hero: the payoff frame wears the pick's own backdrop ----
+   the base .hero-backdrop renders at 0.25 opacity + a 56px blur (an ambient wash
+   for the show page); here we want the backdrop to actually READ, so we lift it
+   and swap the flat veil for a left->right scrim that darkens toward the info
+   column (poster sits on the light left; title/ledger sit on the dark right). */
+.rec-result-head { margin-bottom: 1.1rem; }
+.rec-match { position: relative; }
+/* sharp still, just darkened — same treatment as the show/episode frame-heroes
+   (filter:none, prominent opacity); a left->right scrim keeps the info column
+   readable while the backdrop reads clearly around the poster. */
+.rec-match .hero-backdrop { filter: none; opacity: 0.72; inset: 0; background-position: center 22%; }
+.rec-match.detail-hero::after {
+  background: linear-gradient(105deg, rgba(8, 8, 11, 0.4) 0%, rgba(8, 8, 11, 0.62) 45%, rgba(8, 8, 11, 0.82) 100%);
+}
+.rec-match-tag {
+  margin: 0 0 0.5rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* the confidence word, spent as the one bright cue; "from N ratings" stays quiet */
+.rec-conf { color: var(--accent); }
+.rec-from { color: var(--muted); }
+.rec-match-star { color: var(--warn); }
+.rec-match .detail-info h1 { margin: 0 0 0.7rem; }
+.rec-match-year { color: var(--muted); font-weight: 500; }
+.rec-match-reason { margin: 0 0 0.85rem; max-width: 38rem; font-size: 1.02rem; line-height: 1.5; color: var(--text); }
+.rec-match-cta { margin: 0.9rem 0 0; }
+
+/* match-% ring — the amber arc IS the score (fills to --pct); seated cleanly
+   inside the poster's top-right corner, not floating in the gutter */
+.rec-poster-wrap { position: relative; display: inline-block; }
+.rec-match-pct {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 3.4rem;
+  height: 3.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--pct, 74) * 1%), var(--surface-2) 0);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+}
+.rec-match-pct::before {
+  content: "";
+  position: absolute;
+  inset: 0.26rem;
+  border-radius: 50%;
+  background: var(--plate);
+}
+.rec-match-pct-num {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  font-family: var(--display);
+  font-stretch: 84%;
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text);
+}
+.rec-match-pct-sign { font-size: 0.6rem; color: var(--accent); margin-left: 1px; }
+
+/* ---- "Why this matches" ledger: the heart of the page ---- */
+.rec-why-ledger { margin: 0 0 0.4rem; max-width: 32rem; }
+.rec-why-head {
+  margin: 0 0 0.5rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rec-why-ledger ul { list-style: none; margin: 0; padding: 0; }
+.rwl {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.42rem 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.96rem;
+}
+.rwl:first-child { border-top: 0; }
+.rwl-mark {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.rwl-genre .rwl-mark, .rwl-era .rwl-mark { background: var(--warn); }
+.rwl-cf .rwl-mark { background: var(--warn); }
+.rwl-prov .rwl-mark { background: var(--muted); }
+.rwl-main { flex: 1 1 auto; min-width: 0; color: var(--text); }
+.rwl-main strong { font-weight: 700; }
+.rwl-sub {
+  flex: 0 0 auto;
+  font-family: var(--display);
+  font-stretch: 88%;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- taste chips in the result header ---- */
+.rec-taste { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.6rem; margin: 0.7rem 0 0; }
+.rec-taste-label {
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rec-taste-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.taste-chip {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-family: var(--display);
+  font-stretch: 92%;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ---- sharpen bar: peek-then-sharpen's call to add more ratings ---- */
+.rec-sharpen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem 1.1rem;
+  margin: 1.4rem 0 0;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.rec-sharpen.is-primary { border-color: rgba(255, 169, 77, 0.5); background: rgba(255, 169, 77, 0.06); }
+.rec-sharpen-copy { font-size: 0.96rem; color: var(--text); }
+.rec-sharpen-btn { flex: 0 0 auto; }
+
+/* contender cards: landscape backdrop tiles — the title's own art is the card,
+   with the name + the single strongest signal overlaid on a bottom scrim */
+.rec-cont-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+  gap: 0.8rem;
+  margin-top: 0.7rem;
+}
+.rec-cont {
+  display: block;
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+.rec-cont:hover { border-color: rgba(255, 255, 255, 0.18); transform: translateY(-2px); text-decoration: none; }
+.rec-cont-art { position: relative; aspect-ratio: 16 / 9; background-size: cover; background-position: center; }
+.rec-cont-blank {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem;
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 600;
+}
+.rec-cont-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(8, 8, 11, 0.92) 6%, rgba(8, 8, 11, 0.4) 48%, rgba(8, 8, 11, 0.05) 100%);
+}
+.rec-cont-rating { position: absolute; top: 0.5rem; right: 0.5rem; }
+.rec-cont-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  padding: 0.55rem 0.7rem 0.6rem;
+}
+.rec-cont .card-title {
+  max-width: 100%;
+  color: var(--text);
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 650;
+  font-size: 0.96rem;
+  line-height: 1.2;
+  white-space: normal;
+}
+.rec-cont-chip {
+  align-self: flex-start;
+  padding: 0.1rem 0.46rem;
+  border-radius: 999px;
+  background: rgba(14, 14, 17, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-family: var(--display);
+  font-stretch: 88%;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* ---- footer: actions + explore doors + email ---- */
+.rec-foot { margin-top: 2.6rem; }
+.rec-foot-actions { display: flex; flex-wrap: wrap; gap: 0.7rem; justify-content: center; margin-bottom: 1.8rem; }
+.rec-copy.is-copied { color: var(--ok); border-color: rgba(60, 223, 142, 0.45); }
+.rec-doors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1.8rem; }
+.rec-foot .sub-form.inline { margin-top: 0; }
+
+/* ---- disambiguation rows ---- */
+.rec-pick-list { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.rec-pick-list a {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+  transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
+}
+.rec-pick-list a:hover { border-color: rgba(255, 255, 255, 0.18); background: var(--surface-2); text-decoration: none; }
+.rec-pick-thumb img, .rec-pick-blank { display: block; width: 40px; height: 60px; border-radius: var(--radius-sm); object-fit: cover; background: var(--surface-2); }
+.rec-pick-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.rec-pick-name { font-weight: 600; }
+.rec-pick-meta { font-family: var(--display); font-stretch: 80%; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.rec-pick-list .chev-icon { flex: 0 0 auto; color: var(--muted); }
+
+@media (max-width: 700px) {
+  .rec-doors { grid-template-columns: 1fr; }
+}
+/* ============================================================
+   Loading system — three pieces, all progressive-enhancement:
+   1. .nprogress  a top bar that fills while a navigation is in flight
+   2. .card-media shimmer  a skeleton behind poster art until it decodes
+   3. .spinner / .skeleton  reusable primitives for genuine client fetches
+   The site is server-rendered, so none of this gates content — every
+   screen is fully usable with JS off (the shimmer/bar simply never appear).
+   ============================================================ */
+
+/* ---- 1. top navigation progress bar ---- */
+/* sits above the sticky header; a click/submit/unload starts it, the next
+   page paint replaces it. No "complete" needed for a multi-page app. */
+.nprogress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 200;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s var(--ease);
+}
+.nprogress.is-active {
+  opacity: 1;
+}
+.nprogress-bar {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  box-shadow: 0 0 4px rgba(255, 169, 77, 0.35);
+  border-radius: 0 2px 2px 0;
+}
+/* the trickle: rush to ~25% then crawl toward 92%, so it always feels like
+   something is happening without ever pretending to be finished */
+.nprogress.is-active .nprogress-bar {
+  width: 92%;
+  transition: width 9s cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nprogress.is-active .nprogress-bar { width: 40%; transition: none; }
+}
+/* a brand-ring spinner that rides alongside the bar, pinned to the header's
+   top-right — visible only while a navigation is in flight (parent opacity) */
+.nprogress-spin {
+  position: fixed;
+  top: 1.05rem;
+  right: 1rem;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 169, 77, 0.25);
+  border-top-color: var(--accent);
+  pointer-events: none;
+}
+.nprogress.is-active .nprogress-spin {
+  animation: spin 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nprogress.is-active .nprogress-spin { animation: none; }
+}
+/* clear the hamburger on the mobile header */
+@media (max-width: 700px) {
+  .nprogress-spin { right: 3.6rem; }
+}
+
+/* ---- 2. poster skeleton: a shimmer behind the art until it loads ----
+   The image paints on top and covers it; JS adds .is-loaded to stop the
+   animation once decoded. Scoped to .js so a no-JS page (which can never
+   add .is-loaded) just shows the flat surface, never an endless shimmer. */
+.card-media { background: var(--surface-2); }
+.js .card-media:not(.is-loaded) {
+  background-image: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 28%,
+    rgba(255, 255, 255, 0.06) 48%,
+    rgba(255, 255, 255, 0) 68%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: skel-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes skel-shimmer {
+  from { background-position: 160% 0; }
+  to { background-position: -60% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .js .card-media:not(.is-loaded) { animation: none; }
+}
+
+/* ---- 3. reusable primitives ---- */
+/* spinner: the brand ring, sized by --spin-size (default 28px) */
+.spinner {
+  display: inline-block;
+  width: var(--spin-size, 28px);
+  height: var(--spin-size, 28px);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+  flex: 0 0 auto;
+}
+.spinner-sm { --spin-size: 18px; }
+.spinner-lg { --spin-size: 40px; border-width: 3px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; border-top-color: var(--accent); }
+}
+
+/* a centered "loading…" stack for an empty panel while it fetches */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 1.6rem 1rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+/* skeleton block/line: a shimmering placeholder for text or media blocks */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.skeleton-line { height: 0.8em; margin: 0.35em 0; border-radius: 4px; }
+.skeleton-line.is-short { width: 55%; }
+.js .skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 28%,
+    rgba(255, 255, 255, 0.07) 48%,
+    rgba(255, 255, 255, 0) 68%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: skel-shimmer 1.3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .js .skeleton::after { animation: none; }
+}
+
+/* typeahead loading row: a spinner while /api/search is in flight */
+.ta-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  color: var(--muted);
+  font-size: 0.85rem;
 }

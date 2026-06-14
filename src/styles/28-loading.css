@@ -29,7 +29,7 @@
   height: 100%;
   width: 0;
   background: var(--accent);
-  box-shadow: 0 0 10px rgba(255, 169, 77, 0.7), 0 0 4px rgba(255, 169, 77, 0.9);
+  box-shadow: 0 0 4px rgba(255, 169, 77, 0.35);
   border-radius: 0 2px 2px 0;
 }
 /* the trickle: rush to ~25% then crawl toward 92%, so it always feels like
@@ -40,6 +40,29 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .nprogress.is-active .nprogress-bar { width: 40%; transition: none; }
+}
+/* a brand-ring spinner that rides alongside the bar, pinned to the header's
+   top-right — visible only while a navigation is in flight (parent opacity) */
+.nprogress-spin {
+  position: fixed;
+  top: 1.05rem;
+  right: 1rem;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 169, 77, 0.25);
+  border-top-color: var(--accent);
+  pointer-events: none;
+}
+.nprogress.is-active .nprogress-spin {
+  animation: spin 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nprogress.is-active .nprogress-spin { animation: none; }
+}
+/* clear the hamburger on the mobile header */
+@media (max-width: 700px) {
+  .nprogress-spin { right: 3.6rem; }
 }
 
 /* ---- 2. poster skeleton: a shimmer behind the art until it loads ----

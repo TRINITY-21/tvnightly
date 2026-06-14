@@ -95,7 +95,7 @@ a.media-art {
   transition: border-color var(--speed) var(--ease);
 }
 a.media-art:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 a.media-art img {
   display: block;
@@ -232,7 +232,7 @@ a.media-art img {
   cursor: pointer;
 }
 .fv-btn:hover {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.18);
   color: var(--accent);
 }
 .fv-close {

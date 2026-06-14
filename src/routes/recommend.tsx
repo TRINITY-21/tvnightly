@@ -45,6 +45,7 @@ const PosterCard: FC<{ c: DeckCard; href: string }> = ({ c, href }) => (
       ) : (
         <div class="card-fallback">{c.name}</div>
       )}
+      <span class="card-hover-title" aria-hidden="true">{c.name}</span>
     </div>
     <div class="card-body">
       <span class="card-title">{c.name}</span>
@@ -520,7 +521,6 @@ app.get("/recommend", async (c) => {
     >
       <div class="rec-page">
         <header class="rec-center rec-land-head">
-          <p class="section-eyebrow">Personal picks</p>
           <h1 class="rec-h1">What should I watch next?</h1>
           <p class="section-lead rec-lead">
             Tell us a thing or two you've seen and how they landed. We read the pattern — genre, era, even what you can't stand — and hand you one pick worth your night.
@@ -603,12 +603,12 @@ app.get("/loved", async (c) => {
   const { results: rows } = await db
     .prepare(
       `SELECT * FROM (
-         SELECT kind, ref, loved, liked, meh, (loved + liked + meh) AS total,
-                (loved + 0.5 * liked) / CAST(loved + liked + meh AS REAL) AS score
+         SELECT kind, ref, loved, liked, meh, awful, (loved + liked + meh + awful) AS total,
+                (loved + 0.5 * liked) / CAST(loved + liked + meh + awful AS REAL) AS score
          FROM title_ratings
        ) WHERE total >= 2 ORDER BY score DESC, total DESC LIMIT 40`,
     )
-    .all<{ kind: string; ref: string; loved: number; liked: number; meh: number; total: number; score: number }>();
+    .all<{ kind: string; ref: string; loved: number; liked: number; meh: number; awful: number; total: number; score: number }>();
 
   const showIds = rows.filter((r) => r.kind === "tv").map((r) => Number(r.ref));
   const movieIds = rows.filter((r) => r.kind === "movie").map((r) => r.ref);
@@ -675,15 +675,16 @@ app.get("/loved", async (c) => {
   );
 
   const pct = (r: { score: number }) => `${Math.round(r.score * 100)}%`;
-  const VerdictBar = ({ r }: { r: { loved: number; liked: number; meh: number; total: number } }) => (
+  const VerdictBar = ({ r }: { r: { loved: number; liked: number; meh: number; awful: number; total: number } }) => (
     <span
       class="loved-bar"
       role="img"
-      aria-label={`${r.loved} loved, ${r.liked} liked, ${r.meh} meh`}
+      aria-label={`${r.awful} awful, ${r.meh} meh, ${r.liked} good, ${r.loved} loved`}
     >
-      {r.loved ? <span class="loved-seg seg-loved" style={`flex-grow:${r.loved}`}></span> : null}
-      {r.liked ? <span class="loved-seg seg-liked" style={`flex-grow:${r.liked}`}></span> : null}
+      {r.awful ? <span class="loved-seg seg-awful" style={`flex-grow:${r.awful}`}></span> : null}
       {r.meh ? <span class="loved-seg seg-meh" style={`flex-grow:${r.meh}`}></span> : null}
+      {r.liked ? <span class="loved-seg seg-liked" style={`flex-grow:${r.liked}`}></span> : null}
+      {r.loved ? <span class="loved-seg seg-loved" style={`flex-grow:${r.loved}`}></span> : null}
     </span>
   );
 
@@ -709,7 +710,7 @@ app.get("/loved", async (c) => {
               </span>
               <span class="chart-statline-links">
                 <a class="chev-after" href="/recommend">
-                  Rate a title
+                  Rate &amp; get a pick
                 </a>
                 <a class="chev-after" href="/top/tv">
                   Top TV shows
@@ -794,12 +795,37 @@ app.get("/loved", async (c) => {
 
         {board.length ? (
           <p class="loved-foot muted">
-            Score weights loved at full credit and liked at half.{" "}
-            <span class="loved-key"><span class="loved-dot seg-loved"></span> loved</span>{" "}
-            <span class="loved-key"><span class="loved-dot seg-liked"></span> liked</span>{" "}
-            <span class="loved-key"><span class="loved-dot seg-meh"></span> meh</span>
+            Score weights loved at full credit and good at half.{" "}
+            <span class="loved-key"><span class="loved-dot seg-awful"></span> awful</span>{" "}
+            <span class="loved-key"><span class="loved-dot seg-meh"></span> meh</span>{" "}
+            <span class="loved-key"><span class="loved-dot seg-liked"></span> good</span>{" "}
+            <span class="loved-key"><span class="loved-dot seg-loved"></span> loved</span>
           </p>
         ) : null}
+
+        <section class="wo-doors">
+          <h2>Keep exploring</h2>
+          <div class="explore-grid">
+            <ExploreCard
+              icon="Tailored"
+              title="Rate &amp; get a pick"
+              desc="Rate a few you've seen — we read your taste and hand you your next watch."
+              href="/recommend"
+            />
+            <ExploreCard
+              icon="Charts"
+              title="Top TV shows"
+              desc="The highest-rated series we track — weight and popularity gate the board."
+              href="/top/tv"
+            />
+            <ExploreCard
+              icon="Charts"
+              title="Best movies"
+              desc="The 50 best films of all time, ranked by viewer rating."
+              href="/movies/best"
+            />
+          </div>
+        </section>
       </article>
     </Layout>,
   );

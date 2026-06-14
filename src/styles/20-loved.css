@@ -98,6 +98,8 @@
 .seg-loved { background: var(--warn); }
 .seg-liked { background: rgba(248, 246, 242, 0.45); }
 .seg-meh { background: rgba(248, 246, 242, 0.16); }
+/* the negative tail: a muted red so the haters read apart from the indifferent */
+.seg-awful { background: rgba(255, 107, 107, 0.5); }
 
 .loved-board { margin-top: 2.4rem; }
 .loved-board h2 {

@@ -18,20 +18,20 @@ app.get("/api/search", async (c) => {
   const includeMovies = q.length >= 3;
   const [shows, movies, people] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT name, slug, premiered, rating, COALESCE(poster_url, image_url) AS poster
+      `SELECT id, name, slug, premiered, rating, COALESCE(poster_url, image_url) AS poster
        FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 6`,
     )
       .bind(q)
-      .all<{ name: string; slug: string; premiered: string | null; rating: number | null; poster: string | null }>(),
+      .all<{ id: number; name: string; slug: string; premiered: string | null; rating: number | null; poster: string | null }>(),
     includeMovies
       ? c.env.DB.prepare(
-          `SELECT title, slug, year, rating, poster_url AS poster
+          `SELECT imdb_id, title, slug, year, rating, poster_url AS poster
            FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 4`,
         )
           .bind(q)
-          .all<{ title: string; slug: string; year: number | null; rating: number | null; poster: string | null }>()
+          .all<{ imdb_id: string; title: string; slug: string; year: number | null; rating: number | null; poster: string | null }>()
       : Promise.resolve({
-          results: [] as { title: string; slug: string; year: number | null; rating: number | null; poster: string | null }[],
+          results: [] as { imdb_id: string; title: string; slug: string; year: number | null; rating: number | null; poster: string | null }[],
         }),
     includeMovies
       ? c.env.DB.prepare(
@@ -49,6 +49,7 @@ app.get("/api/search", async (c) => {
       ...shows.results.map((r) => ({
         name: r.name,
         slug: r.slug,
+        ref: String(r.id), // recommend flow keys titles by kind+ref, never name
         year: r.premiered?.slice(0, 4) ?? null,
         kind: "tv",
         rating: r.rating,
@@ -57,6 +58,7 @@ app.get("/api/search", async (c) => {
       ...movies.results.map((r) => ({
         name: r.title,
         slug: r.slug,
+        ref: r.imdb_id,
         year: r.year ? String(r.year) : null,
         kind: "movie",
         rating: r.rating,
@@ -65,6 +67,7 @@ app.get("/api/search", async (c) => {
       ...people.results.map((r) => ({
         name: r.name,
         slug: `${slugifyName(r.name)}-${r.id}`,
+        ref: null,
         year: null,
         kind: "person",
         rating: null,

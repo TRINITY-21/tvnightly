@@ -156,6 +156,9 @@ h3 {
   letter-spacing: 0;
   font-stretch: 100%;
   margin-left: 0.5rem;
+  /* a "see all" affordance must never break across lines ("full / schedule") —
+     it wraps whole, with its chevron, or not at all */
+  white-space: nowrap;
 }
 /* chevron arrows — one system for links, buttons, and icons */
 .chev-after::after,
@@ -232,17 +235,23 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   max-width: 948px;
   margin: 0 auto;
 }
-@media (min-width: 701px) {
+@media (min-width: 901px) {
   .header-inner {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) 14.5rem;
     align-items: center;
     flex-wrap: nowrap;
   }
+  /* The inline nav only appears once it genuinely fits beside the logo + search
+     (~860px of content). nowrap stops it from ever collapsing into the lopsided
+     two-row block the 701–900px tablet range used to show; below 901px the
+     hamburger drawer takes over instead. */
   .site-header nav {
     justify-content: center;
     gap: 1.1rem;
+    flex-wrap: nowrap;
   }
+  .site-header nav a { white-space: nowrap; }
   .search {
     margin-left: 0;
     width: 100%;
@@ -349,6 +358,8 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
    search force-zooms the viewport. Absolute px (not rem) so it lands exactly on
    the threshold regardless of the 16.5px root; desktop 0.84rem look is untouched. */
 @media (max-width: 600px) {
+  /* 16px dodges iOS focus-zoom — the field is the header's main control on a
+     phone. Its height is set with the other controls in the ≤900 one-row block. */
   .search input { font-size: 16px; }
 }
 .search input::placeholder {
@@ -500,7 +511,7 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .nav-mega-panel { background: var(--surface-2); }
 }
-@media (max-width: 700px) {
+@media (max-width: 900px) {
   .nav-mega-panel { right: auto; left: 0; }
 }
 .nav-mega-scroll {
@@ -665,9 +676,9 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
 }
 .nav-mega-all:hover { text-decoration: none; background: rgba(255, 169, 77, 0.06); }
 
-/* ---- mobile nav: hamburger + full-height drawer (≤700px) ---- */
+/* ---- mobile nav: hamburger + full-height drawer (≤900px) ---- */
 .nav-toggle {
-  display: none; /* desktop uses the inline nav; shown only ≤700px */
+  display: none; /* desktop uses the inline nav; shown only ≤900px */
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
@@ -765,34 +776,64 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   color: var(--accent);
 }
 body.nav-open { overflow: hidden; }
-@media (max-width: 700px) {
-  /* logo + full-width search stacked; hamburger pinned to the header's top-right.
+@media (max-width: 900px) {
+  /* One-row header: logo mark · search (fills the middle) · hamburger pinned
+     right. The wordmark collapses to the mark to buy the search its width — the
+     full "TV NIGHTLY." returns at ≥901px. Search is the header's primary control
+     on phone and tablet and stays always-visible; navigation lives in the drawer.
      The toggle lives directly under .site-header (not .header-inner) so its
      absolute box anchors to the sticky header — same as the drawer. */
   .header-inner {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.6rem;
-    padding-right: 3rem;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.7rem;
+    padding-right: 3.1rem; /* clear the absolutely-pinned toggle */
   }
-  .site-header nav { display: none; } /* replaced by the hamburger drawer */
-  .logo { align-self: flex-start; }
+  .site-header nav { display: none; } /* nav links live in the hamburger drawer */
+  .logo {
+    flex: 0 0 auto;
+    gap: 0;
+    padding: 0.4rem 0; /* enlarge the home-link tap area without adding width */
+  }
+  /* the three controls share one rhythm: the search field and hamburger sit at
+     an identical 2.5rem height, and the brand mark scales up to read as their
+     peer (≈64% their height) rather than a tiny glyph beside two big controls.
+     Height is set with the other controls in this ≤900px one-row block. */
+  .logo-mark { width: 2.3rem; height: auto; }
+  .search input { height: 2.5rem; }
+  .nav-toggle { width: 2.5rem; height: 2.5rem; }
+  /* mark-only on phones, but keep the wordmark in the a11y tree so the home link
+     still has an accessible name ("TV NIGHTLY") — don't display:none it */
+  .logo-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
   .nav-toggle {
     display: inline-flex;
     position: absolute;
-    top: 0.6rem;
+    top: 50%;
     right: 1rem;
+    transform: translateY(-50%);
     z-index: 60;
   }
   .search {
-    width: 100%;
+    flex: 1 1 auto;
+    width: auto;
     min-width: 0;
     max-width: none;
     margin: 0;
   }
 }
-@media (min-width: 701px) {
+@media (min-width: 901px) {
   .mobile-menu { display: none !important; }
 }
 
@@ -1110,8 +1151,9 @@ body.nav-open { overflow: hidden; }
 .frame-hero .summary,
 .frame-hero .provs,
 .frame-hero .ep-eyebrow,
-.frame-hero .blurb {
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+.frame-hero .blurb,
+.frame-hero .rate-inline-label {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 .detail-info { flex: 1 1 320px; min-width: 0; }
 .meta-strip {
@@ -1138,6 +1180,14 @@ body.nav-open { overflow: hidden; }
 }
 /* the headline score is the answer the page exists to give — let it lead */
 .meta-strip .rating { font-size: 1.1rem; font-weight: 700; }
+
+/* person hero: on a narrow screen the birthplace always wraps under the
+   birth date, which would strand its "·" at the end of the first line. Drop
+   the separator and give the birthplace its own clean row instead. */
+@media (max-width: 560px) {
+  .meta-strip .sep-loc { display: none; }
+  .meta-strip .ms-birthplace { flex-basis: 100%; }
+}
 
 /* money-page links — rectangular footer cards, not pills */
 .pill-nav {
@@ -1476,6 +1526,69 @@ a.cast-tile:hover { text-decoration: none; }
 }
 @media (max-width: 600px) {
   .show-hub .frame-hero { padding-top: 5rem; }
+  /* on a phone the poster, rate widget, title and meta all stack down into the
+     middle of the frame — where the desktop scrim is still light. Tone the
+     backdrop down and bring the dark up earlier so the muted text reads, while
+     the top band still shows the still. */
+  .show-hub .frame-hero .hero-backdrop { opacity: 0.48; }
+  .show-hub .frame-hero::after {
+    /* a left+right vignette darkens the edges where each line of text starts and
+       ends, layered over a deeper top-down scrim — the poster-fed full-bleed was
+       washing the muted meta / genres / summary out through the bright middle */
+    background:
+      linear-gradient(
+        to right,
+        rgba(18, 18, 20, 0.84) 0%,
+        rgba(18, 18, 20, 0.2) 26%,
+        rgba(18, 18, 20, 0.2) 74%,
+        rgba(18, 18, 20, 0.84) 100%
+      ),
+      linear-gradient(
+        to bottom,
+        rgba(18, 18, 20, 0.44) 0%,
+        rgba(18, 18, 20, 0.66) 30%,
+        rgba(18, 18, 20, 0.92) 66%,
+        var(--bg) 100%
+      );
+  }
+  /* backdrop-led: drop the poster, and show the FULL still as a 16:9 banner across
+     the top of the panel (cover fills a 16:9 box exactly, so nothing crops). It
+     fades into the dark below, where the title/meta/summary sit on the surface —
+     the still finally reads at full strength instead of dimmed behind the text. */
+  .show-hub.hub-backdrop .frame-hero { padding-top: calc(56.25vw - 3.5rem); }
+  .show-hub.hub-backdrop .frame-hero .hero-backdrop {
+    top: 0;
+    bottom: auto;
+    left: 0;
+    transform: none;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    opacity: 0.95;
+    background-position: center;
+    -webkit-mask-image: linear-gradient(to bottom, #000 64%, transparent);
+    mask-image: linear-gradient(to bottom, #000 64%, transparent);
+  }
+  .show-hub.hub-backdrop .frame-hero::after { background: transparent; }
+  .show-hub.hub-backdrop .detail-side .poster { display: none; }
+  /* the rate widget drops to the bottom of the hero (after title/meta/summary)
+     as a centered "rate this" footer, separated by a hairline */
+  .show-hub.hub-backdrop .detail-side {
+    flex-basis: 100%;
+    width: 100%;
+    order: 2;
+    margin-top: 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .show-hub.hub-backdrop .detail-side .rate-inline { justify-content: center; }
+  /* the subpage heroes (where-to-watch, similar, media) carry only a poster in
+     the side column — no rate widget. Once the backdrop banner drops the poster
+     there's nothing left to show as a footer, so collapse the empty column
+     instead of leaving a stray hairline-bordered box. */
+  .show-hub.hub-backdrop .detail-side:not(:has(.rate-inline)) {
+    display: none;
+  }
 }
 .ep-eyebrow {
   margin: 0.1rem 0 0.2rem;
@@ -1591,19 +1704,21 @@ a.cast-tile:hover { text-decoration: none; }
 }
 .watch-list { list-style: none; padding: 0; margin: 0; }
 .watch-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "logo name more";
   align-items: center;
-  gap: 0.85rem;
+  column-gap: 0.85rem;
   padding: 0.65rem 0.25rem;
   border-bottom: 1px solid var(--line);
 }
 .watch-logo {
+  grid-area: logo;
   width: 44px;
   height: 44px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
   object-fit: cover;
-  flex: 0 0 auto;
 }
 .watch-logo-fallback {
   display: flex;
@@ -1614,8 +1729,21 @@ a.cast-tile:hover { text-decoration: none; }
   font-weight: 700;
   color: var(--muted);
 }
-.watch-name { font-weight: 600; font-size: 1.02rem; min-width: 0; }
-.watch-more { margin-left: auto; font-size: 0.88rem; font-weight: 600; white-space: nowrap; }
+.watch-name { grid-area: name; font-weight: 600; font-size: 1.02rem; min-width: 0; }
+.watch-more { grid-area: more; font-size: 0.88rem; font-weight: 600; white-space: nowrap; }
+/* phones: long provider names ("Paramount Plus Apple TV Channel") collided with
+   the inline "More on …" link. Stack the link under the full-width name; the logo
+   stays centered alongside both rows. */
+@media (max-width: 560px) {
+  .watch-row {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "logo name"
+      "logo more";
+    row-gap: 0.1rem;
+  }
+  .watch-more { justify-self: start; }
+}
 .watch-elsewhere-eyebrow {
   margin: 1rem 0 0.65rem;
   font-size: 0.68rem;
@@ -1640,6 +1768,48 @@ a.cast-tile:hover { text-decoration: none; }
    calmed to a quiet duotone at rest and bloom to full colour on hover,
    so ten different photo shoots read as one cast — not a scrape.
    ============================================================ */
+/* every show-page section heading with a "see all" link: title anchors left, the
+   link floats to the right edge (Cast, Highest-rated episodes, Shows-like,
+   Head-to-head — all consistent) */
+.show-hub h2:has(.more) {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+}
+.show-hub h2:has(.more) .more { margin-left: auto; }
+/* the amber tick sits on its own line under the title, but paints only its first
+   2rem — so it underlines just the heading text, matching every other section */
+.show-hub h2:has(.more)::after {
+  order: 1;
+  flex-basis: 100%;
+  background: linear-gradient(90deg, var(--accent) 2rem, transparent 2rem);
+}
+/* on a phone the heading takes the full row on its own; the tick and the link
+   then drop together onto row 2 — tick under the heading on the left, link
+   right-aligned across from it. (.h2-label lets the title claim the whole row
+   instead of being squeezed to half-width by the link's column.) */
+@media (max-width: 560px) {
+  .show-hub h2:has(.more) {
+    row-gap: 0.5rem;
+  }
+  .show-hub h2:has(.more) > .h2-label {
+    flex: 1 1 100%;
+  }
+  .show-hub h2:has(.more)::after {
+    order: 1;
+    flex-basis: auto;
+    width: 2rem;
+    margin-top: 0;
+    background: var(--accent);
+    align-self: center;
+  }
+  .show-hub h2:has(.more) .more {
+    order: 2;
+    margin-left: auto;
+  }
+}
+
 .cast-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
@@ -1888,7 +2058,10 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
 .rank-row:last-child { border-bottom: 0; }
 .rank-row:hover { background: rgba(255, 255, 255, 0.025); }
 .rank-num {
-  flex: 0 0 1.7rem;
+  /* shrink to the digit so the number starts at the row's left inset — the
+     fixed 1.7rem box was right-aligning single digits, leaving a left margin
+     far bigger than the rating's right margin */
+  flex: 0 0 auto;
   text-align: right;
   font-family: var(--display);
   font-stretch: 110%;
@@ -1996,7 +2169,35 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
 .detail-side .soc-links { margin-top: 0.4rem; }
 
 @media (max-width: 560px) {
-  .stat-num { font-size: 1.4rem; }
+  /* keep the band horizontal (2×2) instead of collapsing to one tall column */
+  .stat-band {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.1rem 1.2rem;
+    padding: 1.1rem 0.25rem;
+  }
+  .stat-num { font-size: 1.35rem; }
+
+  /* person hero: float the poster column (image + socials) so the name, birth
+     line and bio fill the empty space to its right instead of wrapping under
+     the image; the long bio reflows full-width once it clears the float. */
+  .person-hero .detail-head { display: flow-root; }
+  .person-hero .detail-side {
+    float: left;
+    width: 128px;
+    margin: 0 1.1rem 0.7rem 0;
+  }
+  .person-hero .detail-head h1 { font-size: 1.7rem; }
+  /* name + birth line ride beside the image; the about + genres drop below the
+     whole poster column and run full width */
+  .person-hero .detail-info .summary,
+  .person-hero .detail-info .person-genres { clear: left; }
+  /* the 2.6rem buttons read chunky under the small poster — trim them down */
+  .person-hero .soc-links { gap: 0.4rem; }
+  .person-hero .soc-link {
+    height: 2.1rem;
+    min-width: 2.1rem;
+    padding: 0 0.5rem;
+  }
 }
 
 /* top-3 episodes: editorial ranking numerals */
@@ -2028,6 +2229,9 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
 }
 .top3-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.12rem; }
 .top3-name { min-width: 0; font-weight: 600; }
+/* code + rating ride a line under the title, so the title gets the full width
+   instead of being squeezed by a right-hand rating ("Half / Measures") */
+.top3-meta { color: var(--muted); font-size: 0.9rem; }
 .top3-sub {
   font-size: 0.84rem;
   line-height: 1.45;
@@ -2181,7 +2385,9 @@ a.ep-name:hover { color: var(--accent); text-decoration: none; }
   .fold-body .ep-code { flex: 0 0 2.4rem; font-size: 0.72rem; }
   .fold-body .still-wrap { flex-basis: 48px; }
   .fold-body .ep-leader { display: none; }
-  .fold-body .ep-rate { flex-basis: 2.9rem; }
+  /* with the dotted leader gone, margin-auto carries the rating to the right edge
+     so the stars line up in a column instead of scattering after each title */
+  .fold-body .ep-rate { flex-basis: 2.9rem; margin-left: auto; }
   /* the 48px mobile still is too small for the "Season's best" chyron — it just
      clips; the season's-best episode still reads from the gold spark + "Best
      season" tag above, so drop the overlay label here */
@@ -2278,6 +2484,27 @@ button, .verdict-btn {
 .vote-btn:hover { border-color: rgba(255, 255, 255, 0.18); text-decoration: none; }
 .vote.voted .vote-btn { opacity: 0.6; cursor: default; }
 .vote.voted .vote-count { opacity: 1; color: var(--text); }
+/* in-flight: lock the pair and spin the tapped pill (POST /api/vote has no
+   navigation, so the top progress bar can't speak for this click) */
+.vote.is-voting .vote-btn { pointer-events: none; opacity: 0.5; }
+.vote-btn[aria-busy="true"] { position: relative; opacity: 1; }
+.vote-btn[aria-busy="true"] svg,
+.vote-btn[aria-busy="true"] .vote-count { visibility: hidden; }
+.vote-btn[aria-busy="true"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vote-btn[aria-busy="true"]::before { animation: none; }
+}
 .rate-inline { display: flex; gap: 0.4rem; align-items: center; margin: 0.6rem 0; flex-wrap: wrap; }
 .rate-inline .vote-btn { font-size: 1rem; }
 .rate-inline .verdict-form { position: relative; }
@@ -2426,11 +2653,17 @@ button, .verdict-btn {
     flex: 1 1 100%;
     min-width: 0;
   }
-  /* the alerts-card controls (.sub-form.inline > .sub-controls) hold a flex input
-     with a 100% basis; without min-width:0 the wrapper keeps its content size and
-     the "Notify me" button rides ~10px past the 320px viewport edge */
+  /* the alerts-card controls are a nowrap row, so the input's 100% basis just
+     compressed it beside the button — the email field narrowed past its own
+     placeholder and "Notify me" wrapped to two lines. Let the row wrap and drop
+     the button to its own full-width line under the full-width input. */
   .sub-controls {
+    flex-wrap: wrap;
     min-width: 0;
+  }
+  .sub-form.inline .sub-controls button {
+    flex: 1 1 100%;
+    width: 100%;
   }
 }
 
@@ -2562,6 +2795,16 @@ button, .verdict-btn {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
+}
+/* In the picker grid the fields sit two/three to a row. A label that wraps to a
+   second line ("Streaming on (US)") is taller than its neighbour, which would
+   drop its own select below the one beside it and break the row. Reserve two
+   lines for every label so the controls in a row always line up. Scoped to the
+   grid so single FilterSelects elsewhere (region picker, /movies/best) are
+   unaffected. */
+.watch-bar-fields .watch-field-label {
+  min-height: 2.5em;
+  line-height: 1.25;
 }
 /* the native <select> base — shared by the picker's own fields and any
    FilterSelect (.watch-field), so the no-JS fallback is styled everywhere,
@@ -3025,6 +3268,14 @@ button, .verdict-btn {
     width: 112px;
     min-height: 168px;
   }
+  /* hero cards set their own (wider) poster via .shortlist-hero .shortlist-poster,
+     which out-specifies the rule above — narrow it here too, or the facts column
+     stays cramped and the CTA wraps */
+  .shortlist-hero .shortlist-poster {
+    flex-basis: 104px;
+    width: 104px;
+    margin: 0.9rem 0 0.9rem 0.9rem;
+  }
   .shortlist-body { padding: 0.8rem 0.9rem 0.9rem; }
   .shortlist-blurb { display: none; }
   .watch-ghost .watch-ghost-poster { flex-basis: 84px; width: 84px; }
@@ -3055,6 +3306,56 @@ button, .verdict-btn {
   .watch-head h1 {
     font-size: 1.55rem;
   }
+  /* On a phone the landscape card crushes the facts column (the CTA wrapped to
+     two lines, the faces folded to 2×2). Stack it instead: poster on top, then
+     title / facts / CTA / rating in a full-width column beneath. The backdrop
+     stays as faint ambient texture under a heavier scrim so centered text reads. */
+  .shortlist-card { flex-direction: column; }
+  .shortlist-frame::after {
+    background: linear-gradient(to bottom, rgba(14, 14, 17, 0.82), rgba(14, 14, 17, 0.93));
+  }
+  /* (0,2,0) beats the base poster rule and ties—then-wins the hero override */
+  .shortlist-card .shortlist-poster {
+    flex: 0 0 auto;
+    width: 150px;
+    min-height: 0;
+    aspect-ratio: 2 / 3;
+    align-self: center;
+    margin: 1.2rem auto 0;
+    border-radius: var(--radius);
+  }
+  .shortlist-body {
+    align-items: center;
+    text-align: center;
+    padding: 0.85rem 1.1rem 1.2rem;
+  }
+  .shortlist-meta,
+  .shortlist-provs { justify-content: center; }
+  /* full-width CTA over a centered rating row */
+  .shortlist-foot {
+    flex-direction: column;
+    align-items: stretch;
+    align-self: stretch;
+    gap: 0.8rem;
+  }
+  .shortlist-btn { width: 100%; white-space: nowrap; }
+  .shortlist-foot .rate-inline { justify-content: center; }
+  .shortlist-foot .rate-inline-label { text-align: center; }
+  /* the pre-search skeleton previews the result layout, so stack it to match */
+  .watch-ghost {
+    flex-direction: column;
+    align-items: center;
+  }
+  .watch-ghost .watch-ghost-poster {
+    flex-basis: auto;
+    width: 150px;
+  }
+  .watch-ghost-lines {
+    width: 100%;
+    align-items: center;
+    padding-top: 0;
+  }
+  .watch-ghost .watch-ghost-btn { width: 100%; }
 }
 
 .provs { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; }
@@ -3252,7 +3553,56 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 @media (max-width: 600px) {
-  .wo-hero-bleed .wo-hero-body { padding-top: 2.75rem; }
+  /* The full still as a clean 16:9 banner — cover fills a 16:9 box exactly, so
+     nothing crops at the sides — with the lockup riding its darkened lower edge.
+     (Overlaid on the bright middle of the scene, the muted eyebrow + title were
+     getting lost against the desert.) The banner's foot resolves into the page. */
+  .wo-hero-bleed .wo-frame {
+    -webkit-mask-image: none;
+    mask-image: none;
+    bottom: auto;
+    height: 56.25vw; /* 16:9 at the full-bleed viewport width */
+    background-size: cover;
+    background-position: center;
+  }
+  .wo-hero-bleed .wo-frame::after {
+    /* desktop voice, on the banner: darken the left (where the left-aligned lockup
+       sits) and the foot, leaving the scene reading through on the upper-right —
+       then resolve into the page so the copy + buttons continue on flat dark */
+    background:
+      linear-gradient(
+        to right,
+        rgba(18, 18, 20, 0.92),
+        rgba(18, 18, 20, 0.58) 46%,
+        rgba(18, 18, 20, 0.14) 78%,
+        rgba(18, 18, 20, 0)
+      ),
+      linear-gradient(
+        to bottom,
+        transparent 32%,
+        rgba(18, 18, 20, 0.5) 72%,
+        var(--bg) 100%
+      );
+  }
+  /* lay the eyebrow + title onto the banner's darkened lower-left */
+  .wo-hero-bleed .wo-hero-body { padding-top: calc(56.25vw - 6rem); }
+  .wo-hero-bleed .section-eyebrow,
+  .wo-hero-bleed .wo-intro {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  }
+  /* hero actions: full-width, centered, stacked */
+  .wo-hero .hub-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .wo-hero .hub-actions .verdict-btn,
+  .wo-hero .hub-actions .btn-ghost {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding-top: 0.72rem;
+    padding-bottom: 0.72rem;
+  }
 }
 .wo-intro { margin: 0; max-width: 58ch; color: var(--text); }
 .wo-stats {
@@ -3260,8 +3610,9 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   flex-wrap: wrap;
   gap: 2rem;
   margin: 1.15rem 0 0;
-  padding-top: 0.85rem;
+  padding: 0.85rem 0;
   border-top: 1px solid rgba(248, 246, 242, 0.14);
+  border-bottom: 1px solid rgba(248, 246, 242, 0.14);
 }
 .wo-stats dt {
   font-family: var(--display);
@@ -3327,7 +3678,37 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 .wo-ranked li:nth-child(2) .wo-num,
 .wo-ranked li:nth-child(3) .wo-num { color: var(--text); }
 @media (max-width: 520px) {
-  .wo-ranked .wo-row { grid-template-columns: 1.9rem 40px minmax(0, 1fr) auto; }
+  /* trim the rank column + left padding so the row's left margin matches its
+     right: the right-aligned rank left dead space on its left edge, pushing the
+     whole row in more than the rating sits in from the right. */
+  .wo-ranked .wo-row {
+    grid-template-columns: 1.7rem 40px minmax(0, 1fr) auto;
+    padding-left: 0.25rem;
+  }
+  /* the "best episodes" deep-link sized the side column to ~90px, squeezing the
+     name to half width so even "Breaking Bad" wrapped. Drop it on phones (still
+     one tap away on the show page): the name leads, the rating stays prominent. */
+  .wo-ranked .wo-mins { display: none; }
+}
+
+/* meta-rating variant (/top/tv, /movies/best, /top/seasons): on PHONES the rating
+   drops onto the genre line and the title takes the full row width. Desktop keeps
+   its scannable right-hand rating column untouched — the rating is rendered in
+   both spots and each viewport shows only one. */
+.wo-ranked-meta .wo-provs > .rating,
+.wo-ranked-meta .wo-provs-sep { display: none; }
+@media (max-width: 520px) {
+  .wo-ranked-meta .wo-row { grid-template-columns: 1.7rem 40px minmax(0, 1fr); }
+  .wo-ranked-meta .wo-side { display: none; }
+  .wo-ranked-meta .wo-provs-sep { display: inline; opacity: 0.45; }
+  /* the rating reads as the gold stat on the line, not a tiny chyron token */
+  .wo-ranked-meta .wo-provs > .rating {
+    display: inline;
+    font-size: 0.95rem;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+  }
 }
 
 .wo-poster {
@@ -3346,6 +3727,14 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 }
 .wo-title { overflow-wrap: anywhere; }
 .wo-title a { font-weight: 600; }
+/* "Season N" rides inline after the show, a muted middot before it. With the
+   title now spanning the full row width (meta-rating layout) it fits on one line. */
+.wo-season::before {
+  content: "·";
+  margin: 0 0.4rem;
+  color: var(--muted);
+  font-weight: 400;
+}
 .wo-provs {
   font-family: var(--display);
   font-stretch: 80%;
@@ -3409,7 +3798,13 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 }
 .wo-back { margin-top: 1.8rem; }
 @media (max-width: 520px) {
-  .wo-row { grid-template-columns: 1.5rem 40px minmax(0, 1fr) auto; gap: 0.6rem; }
+  /* trim the rank column + left pad so the row's left margin matches its right
+     (the right-aligned number was leaving dead space on its left edge) */
+  .wo-row {
+    grid-template-columns: 1.3rem 40px minmax(0, 1fr) auto;
+    gap: 0.6rem;
+    padding-left: 0.3rem;
+  }
   .wo-poster { width: 40px; height: 60px; }
 }
 
@@ -3486,6 +3881,9 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   margin: 0 0 0.4rem;
 }
 .eyebrow-sep { opacity: 0.55; margin: 0 0.35rem; }
+/* keep the airtime glued to its separator so "· 00:00 UTC" never breaks apart
+   and strands "UTC" on a line of its own on narrow phones */
+.eyebrow-time { white-space: nowrap; }
 
 .section-eyebrow {
   font-family: var(--display);
@@ -3620,12 +4018,38 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 .spot-actions {
   margin: 0.9rem 0 0;
 }
+/* genres + their leading separator travel as one meta token: identical to the
+   old two-child layout on desktop (inline-flex re-creates the parent's gap), but
+   now a single unit we can drop onto its own line on phones — see the ≤480 rule */
+.mi-genres {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
 .spotlight + .evening {
   margin-top: 1.75rem;
 }
 @media (max-width: 600px) {
   .spotlight {
     padding: 3.6rem 0 1.4rem;
+  }
+  /* Backdrop-led hero on phones: one cinematic still carries it, the text rides
+     the lower third. The floating poster fought the backdrop for the same narrow
+     space, so it's dropped when a real backdrop exists — and kept only in the
+     ambient (no-backdrop) fallback below, where it's the only crisp image. */
+  .spotlight:not(.spot-ambient) {
+    padding-top: 8.5rem; /* clear image zone above the lower-third */
+  }
+  .spotlight:not(.spot-ambient) .spot-poster {
+    display: none;
+  }
+  /* edge-to-edge and a touch brighter — it's THE hero now, not a strip beside a
+     poster, so drop the side-fade that blended the 1280px desktop plate */
+  .spotlight:not(.spot-ambient) .hero-backdrop {
+    -webkit-mask-image: none;
+    mask-image: none;
+    opacity: 0.88;
   }
   .spot-ambient {
     padding-top: 2.4rem;
@@ -3641,7 +4065,7 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
     gap: 0.85rem;
   }
   .spot-poster {
-    width: 108px;
+    width: 108px; /* ambient (no-backdrop) fallback — the only crisp image there */
   }
   .spot-info {
     width: 100%;
@@ -3653,6 +4077,31 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   }
   .spot-dek {
     -webkit-line-clamp: 3;
+  }
+  /* primary hero action goes full-width as a comfortable thumb target */
+  .spot-actions .btn-ghost {
+    display: block;
+    text-align: center;
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+  }
+}
+@media (max-width: 480px) {
+  /* tighten the chyron so the dateline reads as one calm line, not a shout */
+  .spotlight .eyebrow {
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+  }
+  /* Deliberate two-line meta: identity + the rating (the answer) on top, genres
+     given their own line below. Reordering genres past the rating means the line
+     break itself replaces a separator — so no middot ever strands at a line end. */
+  .spotlight .mi-genres {
+    order: 9;
+    flex-basis: 100%;
+    margin-top: 0.1rem;
+  }
+  .spotlight .mi-genres .sep-genres {
+    display: none;
   }
 }
 
@@ -3681,14 +4130,30 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 }
 @media (max-width: 760px) {
   .evening-grid { grid-template-columns: 1fr; gap: 1rem; }
+  /* Single column: drop the carve entirely. The "cards curve around the floating
+     CTA" is a desktop two-column flourish — stacked, the CTA's dark moat landed
+     on the aside card's shelf names ("American Horror Sto…"). So both cards keep
+     a normal radius and bottom padding, and the CTA sits cleanly BELOW them. */
   .evening-card { padding-bottom: 1.5rem; }
-  .evening-aside { padding-bottom: 3.6rem; }
-  /* single column: no seam to carve, both cards keep the normal radius */
-  .evening-main { border-bottom-right-radius: var(--radius-lg); }
-  .evening-aside { border-bottom-left-radius: 48px; border-bottom-right-radius: 48px; }
-  .evening-cta { margin-top: -2.6rem; }
+  .evening-main,
+  .evening-aside {
+    border-bottom-left-radius: var(--radius-lg);
+    border-bottom-right-radius: var(--radius-lg);
+  }
+  /* .evening-cta spacing comes from its base rule (margin-top: 1.25rem); the
+     desktop-only carve override lives at ≥761px, so nothing to undo here. */
 }
 .evening-head h2 { margin: 0; }
+/* title + its "see all" link share a baseline row. On a phone the link can no
+   longer break mid-phrase ("full / schedule") — it drops whole to the next line
+   under the title. Desktop is unchanged: link sits inline just after the title. */
+.evening-head-top {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+}
+.evening-head-top .more { margin-left: 0; }
 
 /* ---- the evening shelves: posters with airtime / date chips ---- */
 /* Schedule as a shelf of one-sheets — the chip (a legibility scrim over
@@ -3922,10 +4387,16 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   align-items: center;
   width: 440px;
   max-width: 88%;
-  margin: -4.6rem auto 0;
+  /* default: sit cleanly below the cards (the mobile/stacked case). The desktop
+     carve — pulling the pill up into the cards' notched bottoms — is layered on
+     only at ≥761px, just below, so source order can't let it leak onto phones. */
+  margin: 1.25rem auto 0;
   background: var(--bg);
   padding: 0.65rem;
   border-radius: 26px;
+}
+@media (min-width: 761px) {
+  .evening-cta { margin-top: -4.6rem; }
 }
 .evening-cta .verdict-btn,
 .evening-cta .btn-ghost {
@@ -3935,6 +4406,9 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   padding: 0.75rem 1.1rem;
   border-radius: 13px;
   font-size: 0.98rem;
+  /* when a label wraps (e.g. "Rate your taste, get a personal pick"), split it
+     evenly instead of stranding a lone "pick" on the second line */
+  text-wrap: balance;
 }
 .evening-cta .verdict-btn {
   box-shadow: 0 3px 12px rgba(255, 169, 77, 0.14);
@@ -3985,6 +4459,10 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   margin-bottom: 0.85rem;
   border-bottom: 1px solid var(--line);
 }
+/* desktop: dissolve the wrapper so the labels + "see all" link share one row and
+   one divider, exactly as before. Mobile (below) makes it a real row so the
+   underline divider stays welded to the tabs and the link drops beneath it. */
+.discover-tabrow { display: contents; }
 .discover-tablist label {
   padding: 0.5rem 0.95rem;
   /* brighter than --muted so the inactive tab reads as a peer control, not a
@@ -4015,6 +4493,26 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 .discover-panel { display: none; }
 #discover-tv:checked ~ .panel-tv,
 #discover-movies:checked ~ .panel-movies { display: block; }
+@media (max-width: 600px) {
+  /* the tab labels + their underline divider stay one welded unit; the "see all"
+     link drops to its own line beneath the divider, right-aligned — no more
+     stranded link floating between the tabs and a disconnected rule */
+  .discover-tablist {
+    display: block;
+    border-bottom: none;
+  }
+  .discover-tabrow {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .discover-more {
+    display: block;
+    margin: 0.5rem 0 0;
+    text-align: right;
+  }
+}
 
 /* the trending unit sits below the popular one inside the same section */
 .discover-tabs + .discover-tabs { margin-top: 2.2rem; }
@@ -4230,6 +4728,14 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 .home-lanes { margin-top: 3rem; }
 .lanes-head { margin-bottom: 1.5rem; }
 .lanes-head h2 { display: flex; align-items: baseline; gap: 0.75rem; }
+@media (max-width: 600px) {
+  /* the head is a flex row [title][link][tick]; with no wrap the link squeezed
+     the title until "Pick a lane" broke mid-phrase ("Pick a" / "lane"). Let it
+     wrap and order the link last, so line 1 keeps the title + its amber tick and
+     the "see all" link drops cleanly onto its own line beneath. */
+  .lanes-head h2 { flex-wrap: wrap; row-gap: 0.3rem; }
+  .lanes-head h2 .more { order: 1; }
+}
 .lane-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -4563,13 +5069,25 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   gap: 0.25rem;
   margin: 0.75rem 0 0.25rem;
   border-bottom: 1px solid var(--line);
+  /* a tab label must never break ("This / week") or shrink into two lines; if a
+     set is ever wider than the screen it scrolls sideways instead of wrapping */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.subnav::-webkit-scrollbar { display: none; }
 .subnav a {
   padding: 0.45rem 0.9rem;
   color: var(--muted);
   border-bottom: 2px solid transparent;
   font-size: 0.95rem;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* phones: trim the tab padding so the short schedule/news sets sit on one row
+   at 320px without needing to scroll at all */
+@media (max-width: 480px) {
+  .subnav a { padding: 0.45rem 0.6rem; font-size: 0.9rem; }
 }
 .subnav a:hover { color: var(--text); text-decoration: none; }
 .subnav a.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 700; }
@@ -4836,7 +5354,7 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 .region-line button:focus-visible { color: var(--accent); border-color: rgba(255, 255, 255, 0.18); }
 
 .shuffle { margin-top: 2.1rem; }
-.shuffle h2 { margin: 0; display: flex; align-items: baseline; gap: 0.8rem; }
+.shuffle h2 { margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.2rem 0.8rem; }
 .shuffle-sum {
   font-family: var(--display);
   font-stretch: 105%;
@@ -4853,9 +5371,19 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.5rem 0.7rem;
   padding-bottom: 0.7rem;
   border-bottom: 1px solid var(--line);
+}
+/* logo + "NEW ON <service>" stay welded as one unit, so a long service name
+   ("Amazon Prime Video") can wrap the title internally — but never strand the
+   logo on its own line. Only the count drops beneath when space is tight. */
+.shuffle-head-id {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 /* the service mark sits in a defined badge so wordmark + icon logos read alike */
 .shuffle-head img {
@@ -4887,6 +5415,7 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 }
 .shuffle-count {
   margin-left: auto;
+  flex: 0 0 auto;
   color: var(--muted);
   font-family: var(--display);
   font-stretch: 80%;
@@ -5032,11 +5561,22 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 .dossier-row {
   display: grid;
   grid-template-columns: auto auto 1fr auto;
-  gap: 0 0.9rem;
+  /* genres ride as a chyron above the title in the title column on desktop;
+     mobile re-points the "genres" area to a full-width band across the top */
+  grid-template-areas:
+    "num poster genres score"
+    "num poster main   score";
+  column-gap: 0.9rem;
+  row-gap: 0.2rem;
   align-items: center;
   padding: 0.75rem 0.35rem;
   border-top: 1px solid var(--line);
 }
+.dossier-num { grid-area: num; }
+.dossier-poster { grid-area: poster; }
+.dossier-genres { grid-area: genres; }
+.dossier-main { grid-area: main; }
+.dossier-score { grid-area: score; }
 .dossier-row:last-child {
   border-bottom: 1px solid var(--line);
 }
@@ -5204,7 +5744,7 @@ a.dossier-compare {
 }
 @media (max-width: 700px) {
   .dossier-row {
-    gap: 0 0.7rem;
+    column-gap: 0.7rem;
     padding: 0.65rem 0.1rem;
   }
   .dossier-poster img,
@@ -5221,6 +5761,22 @@ a.dossier-compare {
   }
 }
 @media (max-width: 560px) {
+  /* the title column is too narrow for the chyron here, so the genres stacked
+     one-per-line; lift them to a full-width band across the top of the row */
+  .dossier-row {
+    grid-template-areas:
+      ".   .      genres genres"
+      "num poster main   score";
+    row-gap: 0.2rem;
+  }
+  /* always one line, full width — clip any overflow with a fade instead of
+     wrapping or cutting a letter hard */
+  .dossier-genres {
+    flex-wrap: nowrap;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to right, #000 88%, transparent);
+    mask-image: linear-gradient(to right, #000 88%, transparent);
+  }
   .dossier-leader,
   .dossier-era {
     display: none;
@@ -5949,6 +6505,11 @@ li.epreg-plate .epreg-still--empty {
 .epreg-meta .epreg-code {
   color: var(--text);
 }
+/* keep the air date whole so a wrap drops "May 2, 2010" together, never an
+   orphaned "2010" on its own line */
+.epreg-date {
+  white-space: nowrap;
+}
 .epreg-meta .sep {
   opacity: 0.5;
 }
@@ -6069,19 +6630,37 @@ li.epreg-plate .epreg-sum {
   .epreg-cells {
     gap: 1px;
   }
+  /* stack every row: still full-width on top, then rank + text beneath — the
+     same reflow the top-3 plates already used, now applied to all rows. The
+     full-width text column also ends the chyron wrapping + stranded rating. */
   .epreg li {
-    grid-template-columns: 1.9rem auto 1fr;
-    column-gap: 0.6rem;
-  }
-  .epreg--textonly li {
     grid-template-columns: 1.9rem 1fr;
+    grid-template-areas:
+      "still still"
+      "num   main";
+    column-gap: 0.6rem;
+    row-gap: 0.55rem;
   }
-  .epreg-num {
-    font-size: 1.05rem;
+  .epreg-still-link,
+  .epreg-still--empty {
+    grid-area: still;
   }
   .epreg-still,
   .epreg-still--empty {
-    width: 104px;
+    width: 100%;
+  }
+  .epreg-num {
+    grid-area: num;
+    font-size: 1.15rem;
+    align-self: start;
+  }
+  .epreg-main {
+    grid-area: main;
+  }
+  /* the text-only register carries no stills — just rank + text */
+  .epreg--textonly li {
+    grid-template-columns: 1.9rem 1fr;
+    grid-template-areas: "num main";
   }
   .epreg-leader,
   .epreg-rt {
@@ -6096,28 +6675,9 @@ li.epreg-plate .epreg-sum {
   .epreg-sum {
     -webkit-line-clamp: 2;
   }
-  /* the plate reflows: full-width still, numeral spine beside the text */
-  li.epreg-plate {
-    grid-template-columns: 1.9rem 1fr;
-    grid-template-areas:
-      "still still"
-      "num main";
-    row-gap: 0.5rem;
-  }
-  li.epreg-plate .epreg-still-link {
-    grid-area: still;
-  }
-  li.epreg-plate .epreg-still,
-  li.epreg-plate .epreg-still--empty {
-    width: 100%;
-  }
+  /* plates stay louder than the rest: bigger numeral + a fuller summary */
   li.epreg-plate .epreg-num {
-    grid-area: num;
-    font-size: 1.3rem;
-    align-self: start;
-  }
-  li.epreg-plate .epreg-main {
-    grid-area: main;
+    font-size: 1.6rem;
   }
   li.epreg-plate .epreg-sum {
     display: -webkit-box;
@@ -6173,6 +6733,8 @@ li.epreg-plate .epreg-sum {
 .slate-hero {
   position: relative;
   background: var(--plate);
+  /* backdrop card: the image defines the top edge, so drop the hairline outline */
+  border: 0;
 }
 .slate-hero .slate-frame {
   position: absolute;
@@ -6330,8 +6892,28 @@ li.epreg-plate .epreg-sum {
   .slate-media img { max-height: 220px; }
   .count-band { gap: 1.4rem; }
   .count-num { font-size: 1.7rem; }
-  /* phones: a clean viewing band up top, the text settles low on the scrim */
-  .slate-hero .slate-body { min-height: 0; padding-top: 4.6rem; justify-content: flex-end; }
+  /* real backdrop/still: show it IN FULL as a 16:9 banner up top, then stack the
+     answer + countdown on the plate below. The absolute-fill `cover` crop hid
+     most of the image on a tall, narrow phone card. (position:relative — not
+     static — so the scrim ::after still clips to the banner, not the whole card.) */
+  .slate-hero:not(.slate-ambient) .slate-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background-position: center;
+  }
+  .slate-hero:not(.slate-ambient) .slate-frame::after {
+    /* short fade only at the very bottom — keep the backdrop crisp, then a clean
+       hand-off to the plate so the image and the answer read as one card */
+    background: linear-gradient(to bottom, transparent 76%, var(--plate));
+  }
+  .slate-hero:not(.slate-ambient) .slate-body {
+    min-height: 0;
+    padding-top: 0.7rem;
+    justify-content: flex-start;
+  }
+  /* poster-fed ambient glow has no real art to reveal — keep it behind the text */
+  .slate-ambient .slate-body { min-height: 0; padding-top: 4.6rem; justify-content: flex-end; }
 }
 
 @media (max-width: 600px) {
@@ -6457,6 +7039,9 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
    or zero-result page hands the reader somewhere real to go. */
 
 .srch h1 { margin-bottom: 0.4rem; }
+/* the live-search spinner rides beside the heading while a slow fetch is in
+   flight (.spinner supplies the ring + reduced-motion handling) */
+.srch-spin { margin-left: 0.6rem; vertical-align: middle; }
 
 .srch-bar {
   display: grid;
@@ -6710,12 +7295,65 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   .srch-form {
     height: 2.75rem;
   }
+  /* browse + filter fill the row as two equal columns */
   .srch-tools {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
     height: 2.75rem;
   }
-  .srch-hero-body { min-height: 0; padding-top: 4.2rem; justify-content: flex-end; }
+  .srch-filter-dd { min-width: 0; }
+
+  /* real-backdrop top match: same grammar as the /top/tv bleed hero — show the
+     whole 16:9 still (cover on a 16:9 box crops nothing at the sides), then lay
+     the kicker + title onto its darkened lower-left; meta + dek + CTA resolve
+     onto the plate below. The scene reads through on the upper-right. */
+  .srch-hero:not(.srch-ambient) .srch-frame {
+    bottom: auto;
+    aspect-ratio: 16 / 9;
+    background-position: center;
+  }
+  .srch-hero:not(.srch-ambient) .srch-frame::after {
+    background:
+      linear-gradient(
+        to right,
+        rgba(14, 14, 17, 0.92),
+        rgba(14, 14, 17, 0.56) 48%,
+        rgba(14, 14, 17, 0.14) 80%,
+        rgba(14, 14, 17, 0)
+      ),
+      linear-gradient(
+        to bottom,
+        transparent 34%,
+        rgba(14, 14, 17, 0.5) 72%,
+        var(--plate) 100%
+      );
+  }
+  .srch-hero:not(.srch-ambient) .srch-hero-body {
+    min-height: 0;
+    /* 56.25% of the card width == the banner's height; back off 5.5rem so the
+       kicker + title sit on its foot */
+    padding: calc(56.25% - 5.5rem) 1.4rem 1.4rem;
+    justify-content: flex-start;
+  }
+  .srch-hero:not(.srch-ambient) .srch-kicker,
+  .srch-hero:not(.srch-ambient) .srch-hero-title,
+  .srch-hero:not(.srch-ambient) .meta-strip {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  }
+  /* the poster-as-ambient variant keeps the text-over-light overlay */
+  .srch-ambient .srch-hero-body {
+    min-height: 0;
+    padding-top: 4.2rem;
+    justify-content: flex-end;
+  }
   .srch-hero-title { font-size: 1.5rem; }
+  /* keep the CTA label and its chevron together, vertically aligned —
+     inline flow was orphaning the arrow onto its own line */
+  .srch-hero-actions .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+  }
 }
 /* ---- /loved: the community verdict board --------------------------------
    The one chart no other site can copy. Top three wear their real
@@ -7015,6 +7653,11 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   display: flex;
   align-items: baseline;
   gap: 0.6rem;
+  /* [date][count][tick] is a flex row; without wrap the count squeezed the date
+     until "Sunday · June 14" broke to "Sunday · June / 14". Let it wrap so the
+     date keeps its own line and the count drops cleanly beneath. */
+  flex-wrap: wrap;
+  row-gap: 0.15rem;
 }
 .sched-count {
   font-family: var(--display);
@@ -7110,7 +7753,9 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .sched-row:focus-visible .sched-net { color: var(--text); }
 
 @media (max-width: 520px) {
-  .sched-row { grid-template-columns: 2.9rem 40px minmax(0, 1fr); gap: 0.6rem; }
+  /* rail widened from 2.9rem: localized 12-hour times ("10:30 PM") need more
+     room than the tidy "18:00" the UTC rail used to show */
+  .sched-row { grid-template-columns: 3.6rem 40px minmax(0, 1fr); gap: 0.55rem; }
   .sched-row img,
   .sched-thumb-blank { width: 40px; height: 60px; }
   .sched-net { display: none; }
@@ -7207,10 +7852,22 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   border-radius: 999px;
   background: var(--bg);
 }
-/* calendar rows carry a logline, so they run tall — top-align them and seat the
-   date rail up beside the title instead of stranding it mid-row */
-.sched-row:has(.sched-blurb) { align-items: start; }
-.sched-row:has(.sched-blurb) .sched-rail { margin-top: 0.2rem; }
+/* rows carry a logline: date + poster + title ride the top line, then the
+   logline drops onto its own full-width row right under the poster — so the
+   "about" gets the whole column instead of being squeezed beside the poster */
+.sched-row:has(.sched-blurb) {
+  grid-template-columns: 3.6rem auto minmax(0, 1fr);
+  grid-template-areas:
+    "rail poster main"
+    ".    blurb  blurb";
+  align-items: start;
+  row-gap: 0.55rem;
+}
+.sched-row:has(.sched-blurb) .sched-rail { grid-area: rail; margin-top: 0.2rem; }
+.sched-row:has(.sched-blurb) > img,
+.sched-row:has(.sched-blurb) > .sched-thumb-blank { grid-area: poster; }
+.sched-row:has(.sched-blurb) > .sched-main { grid-area: main; }
+.sched-row:has(.sched-blurb) > .sched-blurb { grid-area: blurb; margin-top: 0; }
 
 .shelf-tile-static {
   cursor: default;
@@ -7218,8 +7875,17 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 }
 
 @media (max-width: 520px) {
-  .sched-row .sched-blurb { -webkit-line-clamp: 1; }
+  /* full-width under the poster now — room for two lines of logline */
+  .sched-row .sched-blurb { -webkit-line-clamp: 2; }
   .upcoming-chip { font-size: 0.58rem; padding: 0.22rem 0.45rem; }
+  /* the date + countdown share a narrow column here; in a row the date gets
+     squeezed and breaks mid-date ("June 19," / "2026") beside the chip. Stack
+     them so the date keeps one line and the chip sits beneath it. */
+  .sched-when {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+  }
 }
 /* ---- browse directory (/lists) ---- */
 .browse > section + section,
@@ -7825,8 +8491,28 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   .browse-tile-hero { grid-column: span 1; min-height: 10rem; }
   .browse-tile { min-height: 8.5rem; }
   .browse-hero-foot { flex-direction: column; align-items: flex-start; }
-  .browse-netgrid { grid-template-columns: repeat(2, 1fr); }
+  /* the logo tiles are a fixed ~55px, so a 2-col grid floats each in a huge
+     half-width cell (sparse, 15 long rows for 30 networks); 3-up packs them */
+  .browse-netgrid { grid-template-columns: repeat(3, 1fr); }
   .browse-genre-grid { grid-template-columns: repeat(2, 1fr); }
+  /* the flex row falls to a sparse 2-per-line with HUBS stranded; pack the five
+     counts into a tidy 3-column grid (3 + 2) with tighter gaps */
+  .browse-stats {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    justify-content: start;
+    gap: 1.1rem 1.7rem;
+  }
+  .browse-search {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+  }
+  /* keep the heading + meta on one row: "TV networks" left, "30 networks" over
+     "ranked by quality" on the right — don't drop the meta to its own line */
+  .browse-nets-head { flex-wrap: nowrap; }
+  .browse-nets-head > div:first-child { min-width: 0; }
+  .browse-nets-meta { flex: 0 0 auto; align-items: flex-end; text-align: right; }
 }
 /* ============================================================
    NETWORKS — /top/networks
@@ -8251,9 +8937,12 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   text-decoration: none;
 }
 @media (max-width: 700px) {
+  /* the pill drops out of the header's top-right corner and stacks below the
+     intro — it needs a real gap beneath it or the form card butts right up
+     against it and it looks like it's sitting on the card */
   .cmp-head .cmp-xlink {
     position: static;
-    margin: 0.8rem 0 0;
+    margin: 0.9rem 0 1.4rem;
   }
 }
 
@@ -8263,6 +8952,16 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   flex-wrap: wrap;
   gap: 0.6rem;
   margin-top: 1.9rem;
+}
+@media (max-width: 560px) {
+  /* stack the footer actions full-width, matching the other mobile CTAs */
+  .vsx-actions {
+    flex-direction: column;
+  }
+  .vsx-actions .btn-ghost {
+    width: 100%;
+    text-align: center;
+  }
 }
 
 /* the picker reads as a matchup: long fields flanking a "vs", centered on
@@ -8285,6 +8984,32 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
+}
+/* phones: stop relying on flex-wrap (a desktop side-by-side construct). The
+   wrapped flow left the centered "vs" floating with lopsided gaps — pinned near
+   field A with a void beneath it. Force a real vertical column so the two fields
+   and the CTA go full-width with the "vs" snug and symmetric between them.
+   Covers /compare and /movies/compare. */
+@media (max-width: 560px) {
+  .compare-form {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+  .compare-form label {
+    flex: none;
+    max-width: none;
+  }
+  /* drop the desktop baseline nudge (align-self:end + padding-bottom) that made
+     it hang to one side; center it between the stacked fields instead */
+  .compare-form .cmp-or {
+    align-self: center;
+    padding: 0;
+  }
+  .compare-form button {
+    width: 100%;
+    margin-top: 0.4rem;
+  }
 }
 
 /* the title-picker dropdown — mirrors the header search's .ta look */
@@ -8484,12 +9209,33 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   box-shadow: var(--shadow-1);
   padding: 0.6rem 0.7rem 0.4rem;
 }
+/* horizontal scroll for dense runs: the SVG carries a min-width (≈7px/episode,
+   set inline), so when there are more episodes than the screen can show the plot
+   overflows into this scroller instead of cramming. A thin scrollbar doubles as
+   the "there's more" affordance. Short runs fit and never scroll. */
+.vsx-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.vsx-scroll::-webkit-scrollbar {
+  height: 7px;
+}
+.vsx-scroll::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
 .vsx-svg {
   display: block;
   width: 100%;
   height: auto;
   cursor: crosshair;
-  touch-action: pan-y;
+  /* allow horizontal swipe to scroll the plot (and vertical to scroll the page);
+     a tap still drops the crosshair + tooltip on the nearest episode */
+  touch-action: pan-x pan-y;
 }
 .vsx-cross {
   stroke: rgba(248, 246, 242, 0.28);
@@ -8718,7 +9464,9 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   font-weight: 600;
   color: var(--muted);
 }
-.rec-steps span { color: var(--accent); margin: 0 0.3rem; }
+/* keep each step on one line so a wrap lands on an arrow, never mid-phrase */
+.rec-step { white-space: nowrap; }
+.rec-steps .rec-arrow { color: var(--accent); margin: 0 0.3rem; }
 .rec-trust { margin: 0.7rem 0 0; font-size: 0.82rem; }
 
 .rec-sec { margin-top: 2rem; }
@@ -9040,6 +9788,29 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .rec-match-year { color: var(--muted); font-weight: 500; }
 .rec-match-reason { margin: 0 0 0.85rem; max-width: 38rem; font-size: 1.02rem; line-height: 1.5; color: var(--text); }
 .rec-match-cta { margin: 0.9rem 0 0; }
+@media (max-width: 600px) {
+  /* stack like the what-to-watch shortlist: poster centered on top, the rest
+     beneath it. Backdrop darkened a touch (and a vertical scrim that goes
+     darkest over the text below) so the copy stays legible on a phone. */
+  .rec-match .detail-head {
+    flex-direction: column;
+    align-items: center;
+  }
+  .rec-match .detail-side {
+    flex: 0 0 auto;
+    width: 150px;
+  }
+  .rec-match .detail-info {
+    width: 100%;
+    text-align: center;
+  }
+  /* the reason ledger stays a left-aligned list under the centered title */
+  .rec-match .rec-why-ledger { text-align: left; }
+  .rec-match .hero-backdrop { opacity: 0.6; }
+  .rec-match.detail-hero::after {
+    background: linear-gradient(180deg, rgba(8, 8, 11, 0.45) 0%, rgba(8, 8, 11, 0.7) 48%, rgba(8, 8, 11, 0.88) 100%);
+  }
+}
 
 /* match-% ring — the amber arc IS the score (fills to --pct); seated cleanly
    inside the poster's top-right corner, not floating in the gutter */
@@ -9120,6 +9891,23 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--muted);
+}
+@media (max-width: 560px) {
+  /* phones: stack the kicker over the reason so the reason gets the full width
+     instead of wrapping to 3 lines beside the right-pinned label */
+  .rwl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "mark sub"
+      ".    main";
+    column-gap: 0.5rem;
+    row-gap: 0.1rem;
+    align-items: center;
+  }
+  .rwl-mark { grid-area: mark; }
+  .rwl-sub { grid-area: sub; }
+  .rwl-main { grid-area: main; align-self: start; }
 }
 
 /* ---- taste chips in the result header ---- */
@@ -9329,9 +10117,10 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   .nprogress.is-active .nprogress-spin { animation: none; }
 }
-/* clear the hamburger on the mobile header */
+/* the mobile header is tight (toggle · field · hamburger) — drop the ring and
+   let the top bar carry the loading signal on its own */
 @media (max-width: 700px) {
-  .nprogress-spin { right: 3.6rem; }
+  .nprogress-spin { display: none; }
 }
 
 /* ---- 2. poster skeleton: a shimmer behind the art until it loads ----

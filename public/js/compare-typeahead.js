@@ -66,6 +66,13 @@
       close();
       input.focus();
     }
+    // spinner row while /api/search is in flight — matches the house typeaheads
+    function showLoading() {
+      box.innerHTML =
+        '<div class="ta-loading"><span class="spinner spinner-sm" role="status" aria-label="Searching"></span><span>Searching…</span></div>';
+      box.hidden = false;
+      active = -1;
+    }
 
     input.addEventListener("input", function () {
       var q = input.value.trim();
@@ -75,6 +82,7 @@
       }
       clearTimeout(timer);
       timer = setTimeout(function () {
+        showLoading();
         fetch("/api/search?q=" + encodeURIComponent(q))
           .then(function (r) {
             return r.json();

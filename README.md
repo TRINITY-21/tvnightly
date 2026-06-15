@@ -37,7 +37,7 @@ during styling work). `npm run dev`/`deploy` rebuild it automatically.
 
 ```sh
 npm install
-npm run db:schema:local        # create tables in local D1
+npm run db:migrate:local       # apply all migrations to local D1 (tracked, run-once)
 npm run seed:fetch             # pull shows from TVmaze -> seed/seed.sql (rate-limited)
 npm run seed:load:local        # load into local D1
 npm run dev                    # http://localhost:8787
@@ -61,9 +61,10 @@ Backend is selected by `EMAIL_PROVIDER` (`console` | `gmail` | `resend`), see
 
 1. Google Account → Security → enable **2-Step Verification**
 2. Security → **App passwords** → create one for "Mail"
-3. Set secrets: `npx wrangler secret put GMAIL_USER`,
-   `npx wrangler secret put GMAIL_APP_PASSWORD`, and set
-   `EMAIL_PROVIDER` to `gmail` in `wrangler.jsonc` vars.
+3. Set secrets: `npx wrangler secret put SMTP_USER` (your Gmail address),
+   `npx wrangler secret put SMTP_PASS` (the 16-char app password). `EMAIL_PROVIDER`
+   is already `gmail` in `wrangler.jsonc`. Defaults to `smtp.gmail.com:465`; set
+   `SMTP_HOST`/`SMTP_PORT` only for a non-Gmail host.
 
 Gmail limits: ~500 emails/day; the From address is always your Gmail. To switch
 to Resend later (custom From domain): set `RESEND_API_KEY` + `EMAIL_PROVIDER=resend`.
@@ -88,11 +89,12 @@ Refresh monthly-ish for new releases and rating drift. For more movies:
 
 1. `npx wrangler login`
 2. `npx wrangler d1 create tvnightly` → paste `database_id` into `wrangler.jsonc`
-3. `npm run db:schema:remote` and
-   `npx wrangler d1 execute tvnightly --remote --file=migrations/0002_email_blurbs.sql`
+3. `npm run db:migrate:remote` — applies **every** migration in order, tracked in a
+   `d1_migrations` table (run-once; safe to re-run as new migrations land).
+   Check status anytime with `npm run db:migrate:list`.
 4. `PAGES=350 EPISODES_TOP=5000 npm run seed:fetch` (full mirror, takes ~1h, rate-limited)
 5. `npm run seed:load:remote`
-6. Secrets: `npx wrangler secret put SECRET` (+ Gmail secrets, see above)
+6. Secrets: `npx wrangler secret put SECRET` (+ SMTP secrets, see above)
 7. `npm run deploy`
 
 ## After deploy: Google Search Console
@@ -102,6 +104,13 @@ Refresh monthly-ish for new releases and rating drift. For more movies:
 3. Submit the sitemap: `https://tvnightly.com/sitemap.xml`
 4. Watch Performance → Queries to see what's ranking; that data drives which
    shows get editorial blurbs (`UPDATE shows SET blurb = '...' WHERE slug = '...'`).
+
+## After deploy: analytics
+
+Cloudflare dashboard → Web Analytics → Add a site → tvnightly.com. Copy the
+beacon **token** and set `CF_BEACON_TOKEN` in `wrangler.jsonc` vars (it's public,
+not a secret), then redeploy. The beacon snippet renders only when the token is
+set, so local/dev pages stay clean. This is what the Privacy page references.
 
 ## Attribution
 

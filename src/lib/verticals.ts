@@ -38,7 +38,7 @@ export const VERTICALS: Vertical[] = [
     description:
       "The anime hub: top-rated series with streaming availability, upcoming premieres, what just hit your services, and a picker when you can't decide.",
     intro:
-      "Everything anime in one place — bookmark this page. Rankings from real ratings, availability checked around the clock, localized to your country.",
+      "Everything anime in one place — ranked from real ratings, with streaming availability for your country.",
     tvGenres: ["Anime"],
     movieGenres: ["Animation"],
     movieSectionTitle: "Top animation & anime films",
@@ -51,7 +51,7 @@ export const VERTICALS: Vertical[] = [
     description:
       "The horror hub: the best horror shows and films with streaming availability, upcoming premieres, and what just arrived on your services.",
     intro:
-      "For the people who watch through their fingers — bookmark this page. The best of the genre, where it's streaming, and what's new, updated daily.",
+      "For the people who watch through their fingers — the best of horror and where to stream it.",
     tvGenres: ["Horror"],
     movieGenres: ["Horror"],
     movieSectionTitle: "Top horror films",
@@ -65,7 +65,7 @@ export const VERTICALS: Vertical[] = [
     description:
       "The classic-film hub: the greatest pre-1980 movies ranked by rating, with current streaming availability in your country.",
     intro:
-      "The canon, minus the dust — bookmark this page. Every classic ranked by rating, with live streaming availability so you can actually watch them tonight.",
+      "The canon, minus the dust — every classic ranked by rating, with live streaming availability.",
     movieYearMax: 1979,
     movieSectionTitle: "The greatest films before 1980",
     pickerQS: "?type=movie&min=8",
@@ -77,7 +77,7 @@ export const VERTICALS: Vertical[] = [
     description:
       "The sci-fi & fantasy hub: the best series and films with streaming availability, upcoming premieres, and what just arrived on your services.",
     intro:
-      "Other worlds, one page — bookmark it. The best of both genres, where to stream them in your country, and every upcoming premiere.",
+      "Other worlds, one page — the best of both genres and where to stream them.",
     tvGenres: ["Science-Fiction", "Fantasy"],
     movieGenres: ["Science Fiction", "Fantasy"],
     movieSectionTitle: "Top sci-fi & fantasy films",

@@ -3,8 +3,10 @@ import type { Context } from "hono";
 import type { SyncEnv } from "./sync";
 
 // ASSETS: the static-assets fetcher — the chart export embeds the Archivo
-// woff2 from it so saved SVGs are standalone documents
-export type Bindings = SyncEnv & { ASSETS: Fetcher };
+// woff2 from it so saved SVGs are standalone documents.
+// CF_BEACON_TOKEN: Cloudflare Web Analytics token (public); when set, Layout
+// renders the beacon. Unset locally so dev pages stay clean.
+export type Bindings = SyncEnv & { ASSETS: Fetcher; CF_BEACON_TOKEN?: string };
 export type AppContext = Context<{ Bindings: Bindings }>;
 
 export interface ShowRow {

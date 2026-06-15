@@ -16,11 +16,22 @@
 .dossier-row {
   display: grid;
   grid-template-columns: auto auto 1fr auto;
-  gap: 0 0.9rem;
+  /* genres ride as a chyron above the title in the title column on desktop;
+     mobile re-points the "genres" area to a full-width band across the top */
+  grid-template-areas:
+    "num poster genres score"
+    "num poster main   score";
+  column-gap: 0.9rem;
+  row-gap: 0.2rem;
   align-items: center;
   padding: 0.75rem 0.35rem;
   border-top: 1px solid var(--line);
 }
+.dossier-num { grid-area: num; }
+.dossier-poster { grid-area: poster; }
+.dossier-genres { grid-area: genres; }
+.dossier-main { grid-area: main; }
+.dossier-score { grid-area: score; }
 .dossier-row:last-child {
   border-bottom: 1px solid var(--line);
 }
@@ -188,7 +199,7 @@ a.dossier-compare {
 }
 @media (max-width: 700px) {
   .dossier-row {
-    gap: 0 0.7rem;
+    column-gap: 0.7rem;
     padding: 0.65rem 0.1rem;
   }
   .dossier-poster img,
@@ -205,6 +216,22 @@ a.dossier-compare {
   }
 }
 @media (max-width: 560px) {
+  /* the title column is too narrow for the chyron here, so the genres stacked
+     one-per-line; lift them to a full-width band across the top of the row */
+  .dossier-row {
+    grid-template-areas:
+      ".   .      genres genres"
+      "num poster main   score";
+    row-gap: 0.2rem;
+  }
+  /* always one line, full width — clip any overflow with a fade instead of
+     wrapping or cutting a letter hard */
+  .dossier-genres {
+    flex-wrap: nowrap;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to right, #000 88%, transparent);
+    mask-image: linear-gradient(to right, #000 88%, transparent);
+  }
   .dossier-leader,
   .dossier-era {
     display: none;

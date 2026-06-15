@@ -35,19 +35,19 @@ export const DossierRow: FC<{
         <span class="dossier-poster-empty"></span>
       )}
     </a>
+    {d.genreLine.length ? (
+      <span class="dossier-genres">
+        {d.genreLine.map((t, j) => (
+          <>
+            {j > 0 ? <span class="g-sep">·</span> : null}
+            <a class={t.hit ? undefined : "g-dim"} href={`/genre/${slugifyName(t.g)}/${medium}`}>
+              {t.g}
+            </a>
+          </>
+        ))}
+      </span>
+    ) : null}
     <span class="dossier-main">
-      {d.genreLine.length ? (
-        <span class="dossier-genres">
-          {d.genreLine.map((t, j) => (
-            <>
-              {j > 0 ? <span class="g-sep">·</span> : null}
-              <a class={t.hit ? undefined : "g-dim"} href={`/genre/${slugifyName(t.g)}/${medium}`}>
-                {t.g}
-              </a>
-            </>
-          ))}
-        </span>
-      ) : null}
       <span class="dossier-line">
         <a class="dossier-name" href={href}>
           {name}

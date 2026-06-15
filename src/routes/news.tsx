@@ -259,12 +259,14 @@ app.get("/whats-new", async (c) => {
   }) => (
     <section class="shuffle-board">
       <header class="shuffle-head">
-        {PROVIDER_LOGOS[service] ? (
-          <img src={PROVIDER_LOGOS[service]} alt="" width="30" height="30" loading="lazy" />
-        ) : null}
-        <h3 class="shuffle-title">
-          {verb} <strong>{service}</strong>
-        </h3>
+        <div class="shuffle-head-id">
+          {PROVIDER_LOGOS[service] ? (
+            <img src={PROVIDER_LOGOS[service]} alt="" width="30" height="30" loading="lazy" />
+          ) : null}
+          <h3 class="shuffle-title">
+            {verb} <strong>{service}</strong>
+          </h3>
+        </div>
         <span class="shuffle-count">
           {rows.length === 1 ? "1 title" : `${rows.length} titles`}
         </span>

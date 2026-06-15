@@ -5,6 +5,48 @@
    calmed to a quiet duotone at rest and bloom to full colour on hover,
    so ten different photo shoots read as one cast — not a scrape.
    ============================================================ */
+/* every show-page section heading with a "see all" link: title anchors left, the
+   link floats to the right edge (Cast, Highest-rated episodes, Shows-like,
+   Head-to-head — all consistent) */
+.show-hub h2:has(.more) {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+}
+.show-hub h2:has(.more) .more { margin-left: auto; }
+/* the amber tick sits on its own line under the title, but paints only its first
+   2rem — so it underlines just the heading text, matching every other section */
+.show-hub h2:has(.more)::after {
+  order: 1;
+  flex-basis: 100%;
+  background: linear-gradient(90deg, var(--accent) 2rem, transparent 2rem);
+}
+/* on a phone the heading takes the full row on its own; the tick and the link
+   then drop together onto row 2 — tick under the heading on the left, link
+   right-aligned across from it. (.h2-label lets the title claim the whole row
+   instead of being squeezed to half-width by the link's column.) */
+@media (max-width: 560px) {
+  .show-hub h2:has(.more) {
+    row-gap: 0.5rem;
+  }
+  .show-hub h2:has(.more) > .h2-label {
+    flex: 1 1 100%;
+  }
+  .show-hub h2:has(.more)::after {
+    order: 1;
+    flex-basis: auto;
+    width: 2rem;
+    margin-top: 0;
+    background: var(--accent);
+    align-self: center;
+  }
+  .show-hub h2:has(.more) .more {
+    order: 2;
+    margin-left: auto;
+  }
+}
+
 .cast-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
@@ -253,7 +295,10 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
 .rank-row:last-child { border-bottom: 0; }
 .rank-row:hover { background: rgba(255, 255, 255, 0.025); }
 .rank-num {
-  flex: 0 0 1.7rem;
+  /* shrink to the digit so the number starts at the row's left inset — the
+     fixed 1.7rem box was right-aligning single digits, leaving a left margin
+     far bigger than the rating's right margin */
+  flex: 0 0 auto;
   text-align: right;
   font-family: var(--display);
   font-stretch: 110%;
@@ -361,6 +406,34 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
 .detail-side .soc-links { margin-top: 0.4rem; }
 
 @media (max-width: 560px) {
-  .stat-num { font-size: 1.4rem; }
+  /* keep the band horizontal (2×2) instead of collapsing to one tall column */
+  .stat-band {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.1rem 1.2rem;
+    padding: 1.1rem 0.25rem;
+  }
+  .stat-num { font-size: 1.35rem; }
+
+  /* person hero: float the poster column (image + socials) so the name, birth
+     line and bio fill the empty space to its right instead of wrapping under
+     the image; the long bio reflows full-width once it clears the float. */
+  .person-hero .detail-head { display: flow-root; }
+  .person-hero .detail-side {
+    float: left;
+    width: 128px;
+    margin: 0 1.1rem 0.7rem 0;
+  }
+  .person-hero .detail-head h1 { font-size: 1.7rem; }
+  /* name + birth line ride beside the image; the about + genres drop below the
+     whole poster column and run full width */
+  .person-hero .detail-info .summary,
+  .person-hero .detail-info .person-genres { clear: left; }
+  /* the 2.6rem buttons read chunky under the small poster — trim them down */
+  .person-hero .soc-links { gap: 0.4rem; }
+  .person-hero .soc-link {
+    height: 2.1rem;
+    min-width: 2.1rem;
+    padding: 0 0.5rem;
+  }
 }
 

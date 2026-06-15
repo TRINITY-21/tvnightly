@@ -63,3 +63,45 @@ export const NotFoundPage: FC = () => (
     </section>
   </Layout>
 );
+
+// 500 — same Standby Glow tube, but the signal dropped on our end. Rendered by
+// app.onError so an unhandled exception still gives a styled, on-brand page
+// (and never leaks the error to the visitor).
+export const ErrorPage: FC = () => (
+  <Layout
+    title="Something went wrong | TV Nightly"
+    description="A glitch on our end. Refresh, or jump back to tonight's lineup."
+    noindex
+  >
+    <section class="nf">
+      <div class="nf-screen" aria-hidden="true">
+        <span class="nf-scan"></span>
+        <span class="nf-sweep"></span>
+        <p class="nf-screen-label">Signal dropped</p>
+        <p class="nf-code">500</p>
+        <span class="nf-led"></span>
+      </div>
+
+      <div class="nf-copy">
+        <p class="nf-eyebrow">Something went wrong</p>
+        <h1 class="nf-title">A glitch on our end</h1>
+        <p class="nf-lead">
+          That wasn&apos;t you — something broke while loading this page. Try a refresh, or
+          head somewhere that&apos;s definitely on the air.
+        </p>
+
+        <nav class="nf-links" aria-label="Popular destinations">
+          {DESTINATIONS.map(([label, href]) => (
+            <a class="nf-link" href={href}>
+              {label}
+            </a>
+          ))}
+        </nav>
+
+        <a class="nf-home" href="/">
+          Back to home
+        </a>
+      </div>
+    </section>
+  </Layout>
+);

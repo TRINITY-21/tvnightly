@@ -13,20 +13,27 @@
   "triggers": { "crons": ["0 * * * *", "30 * * * *", "0 22 * * *"] },
   "vars": {
     "SITE_ORIGIN": "https://tvnightly.com",
-    // 'console' | 'gmail' | 'resend' — see src/email.ts
-    "EMAIL_PROVIDER": "console",
+    // 'console' | 'gmail' | 'smtp' | 'resend' — see src/email.ts. gmail/smtp need
+    // the SMTP_* secrets below; until they're set, sends fail (logged) but nothing breaks.
+    "EMAIL_PROVIDER": "gmail",
     "EMAIL_FROM": "TV Nightly <alerts@tvnightly.com>"
+    // CF_BEACON_TOKEN — paste here (it's public, not a secret) AFTER creating the
+    // Cloudflare Web Analytics site post-deploy; the beacon renders only when set.
   },
   // Secrets (set with `wrangler secret put NAME`, or .dev.vars locally):
-  //   SECRET             — HMAC key for confirm/unsubscribe links (required in prod)
-  //   GMAIL_USER         — your Gmail address          (EMAIL_PROVIDER=gmail)
-  //   GMAIL_APP_PASSWORD — 16-char Google app password (EMAIL_PROVIDER=gmail)
-  //   RESEND_API_KEY     — Resend key                  (EMAIL_PROVIDER=resend)
-  //   TMDB_API_KEY       — provider patrol (streaming availability diffing)
+  //   SECRET         — HMAC key for confirm/unsubscribe links (required in prod)
+  //   SMTP_USER      — SMTP / Gmail address              (EMAIL_PROVIDER=gmail|smtp)
+  //   SMTP_PASS      — SMTP password / Gmail app password (EMAIL_PROVIDER=gmail|smtp)
+  //   SMTP_HOST/SMTP_PORT — optional; default smtp.gmail.com:465
+  //   RESEND_API_KEY — Resend key                        (EMAIL_PROVIDER=resend)
+  //   TMDB_API_KEY   — provider patrol (streaming availability diffing)
+  // Migrations are tracked natively: `npm run db:migrate:remote` (and :local).
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "tvnightly",
+      // migrations live in ./migrations, applied in order with run-once tracking.
+      "migrations_dir": "migrations",
       // Local dev works with this placeholder. Before first deploy run
       // `wrangler d1 create tvnightly` and paste the real id here.
       "database_id": "REPLACE_AFTER_wrangler_d1_create"

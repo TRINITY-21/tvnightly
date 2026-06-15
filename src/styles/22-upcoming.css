@@ -74,10 +74,22 @@
   border-radius: 999px;
   background: var(--bg);
 }
-/* calendar rows carry a logline, so they run tall — top-align them and seat the
-   date rail up beside the title instead of stranding it mid-row */
-.sched-row:has(.sched-blurb) { align-items: start; }
-.sched-row:has(.sched-blurb) .sched-rail { margin-top: 0.2rem; }
+/* rows carry a logline: date + poster + title ride the top line, then the
+   logline drops onto its own full-width row right under the poster — so the
+   "about" gets the whole column instead of being squeezed beside the poster */
+.sched-row:has(.sched-blurb) {
+  grid-template-columns: 3.6rem auto minmax(0, 1fr);
+  grid-template-areas:
+    "rail poster main"
+    ".    blurb  blurb";
+  align-items: start;
+  row-gap: 0.55rem;
+}
+.sched-row:has(.sched-blurb) .sched-rail { grid-area: rail; margin-top: 0.2rem; }
+.sched-row:has(.sched-blurb) > img,
+.sched-row:has(.sched-blurb) > .sched-thumb-blank { grid-area: poster; }
+.sched-row:has(.sched-blurb) > .sched-main { grid-area: main; }
+.sched-row:has(.sched-blurb) > .sched-blurb { grid-area: blurb; margin-top: 0; }
 
 .shelf-tile-static {
   cursor: default;
@@ -85,6 +97,15 @@
 }
 
 @media (max-width: 520px) {
-  .sched-row .sched-blurb { -webkit-line-clamp: 1; }
+  /* full-width under the poster now — room for two lines of logline */
+  .sched-row .sched-blurb { -webkit-line-clamp: 2; }
   .upcoming-chip { font-size: 0.58rem; padding: 0.22rem 0.45rem; }
+  /* the date + countdown share a narrow column here; in a row the date gets
+     squeezed and breaks mid-date ("June 19," / "2026") beside the chip. Stack
+     them so the date keeps one line and the chip sits beneath it. */
+  .sched-when {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+  }
 }

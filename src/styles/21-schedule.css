@@ -84,6 +84,11 @@
   display: flex;
   align-items: baseline;
   gap: 0.6rem;
+  /* [date][count][tick] is a flex row; without wrap the count squeezed the date
+     until "Sunday · June 14" broke to "Sunday · June / 14". Let it wrap so the
+     date keeps its own line and the count drops cleanly beneath. */
+  flex-wrap: wrap;
+  row-gap: 0.15rem;
 }
 .sched-count {
   font-family: var(--display);
@@ -179,7 +184,9 @@
 .sched-row:focus-visible .sched-net { color: var(--text); }
 
 @media (max-width: 520px) {
-  .sched-row { grid-template-columns: 2.9rem 40px minmax(0, 1fr); gap: 0.6rem; }
+  /* rail widened from 2.9rem: localized 12-hour times ("10:30 PM") need more
+     room than the tidy "18:00" the UTC rail used to show */
+  .sched-row { grid-template-columns: 3.6rem 40px minmax(0, 1fr); gap: 0.55rem; }
   .sched-row img,
   .sched-thumb-blank { width: 40px; height: 60px; }
   .sched-net { display: none; }

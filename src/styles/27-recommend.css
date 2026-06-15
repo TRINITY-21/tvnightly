@@ -81,7 +81,9 @@
   font-weight: 600;
   color: var(--muted);
 }
-.rec-steps span { color: var(--accent); margin: 0 0.3rem; }
+/* keep each step on one line so a wrap lands on an arrow, never mid-phrase */
+.rec-step { white-space: nowrap; }
+.rec-steps .rec-arrow { color: var(--accent); margin: 0 0.3rem; }
 .rec-trust { margin: 0.7rem 0 0; font-size: 0.82rem; }
 
 .rec-sec { margin-top: 2rem; }
@@ -403,6 +405,29 @@
 .rec-match-year { color: var(--muted); font-weight: 500; }
 .rec-match-reason { margin: 0 0 0.85rem; max-width: 38rem; font-size: 1.02rem; line-height: 1.5; color: var(--text); }
 .rec-match-cta { margin: 0.9rem 0 0; }
+@media (max-width: 600px) {
+  /* stack like the what-to-watch shortlist: poster centered on top, the rest
+     beneath it. Backdrop darkened a touch (and a vertical scrim that goes
+     darkest over the text below) so the copy stays legible on a phone. */
+  .rec-match .detail-head {
+    flex-direction: column;
+    align-items: center;
+  }
+  .rec-match .detail-side {
+    flex: 0 0 auto;
+    width: 150px;
+  }
+  .rec-match .detail-info {
+    width: 100%;
+    text-align: center;
+  }
+  /* the reason ledger stays a left-aligned list under the centered title */
+  .rec-match .rec-why-ledger { text-align: left; }
+  .rec-match .hero-backdrop { opacity: 0.6; }
+  .rec-match.detail-hero::after {
+    background: linear-gradient(180deg, rgba(8, 8, 11, 0.45) 0%, rgba(8, 8, 11, 0.7) 48%, rgba(8, 8, 11, 0.88) 100%);
+  }
+}
 
 /* match-% ring — the amber arc IS the score (fills to --pct); seated cleanly
    inside the poster's top-right corner, not floating in the gutter */
@@ -483,6 +508,23 @@
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--muted);
+}
+@media (max-width: 560px) {
+  /* phones: stack the kicker over the reason so the reason gets the full width
+     instead of wrapping to 3 lines beside the right-pinned label */
+  .rwl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "mark sub"
+      ".    main";
+    column-gap: 0.5rem;
+    row-gap: 0.1rem;
+    align-items: center;
+  }
+  .rwl-mark { grid-area: mark; }
+  .rwl-sub { grid-area: sub; }
+  .rwl-main { grid-area: main; align-self: start; }
 }
 
 /* ---- taste chips in the result header ---- */

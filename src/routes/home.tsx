@@ -213,6 +213,9 @@ app.get("/", async (c) => {
       ? `Premieres ${spotPremiere.ep_airdate ? longDate(spotPremiere.ep_airdate) : "soon"}`
       : "Tonight's pick";
   const spotAirTime = spotTonight?.ep_airstamp ? airTime(spotTonight.ep_airstamp) : null;
+  // canonical UTC instant for client-side localization; the UTC string stays the
+  // truthful no-JS fallback and localtime.js swaps in the viewer's local time
+  const spotAirIso = spotTonight?.ep_airstamp ? new Date(spotTonight.ep_airstamp).toISOString() : null;
   const spotGenres: string[] = spot?.genres ? JSON.parse(spot.genres) : [];
   const spotNet: string | null = spot?.network ?? spot?.web_channel ?? null;
   const alsoTonight = spotTonight ? tonight.filter((e) => e.show_slug !== spotTonight.slug) : tonight;
@@ -275,10 +278,12 @@ app.get("/", async (c) => {
                   <span class="eyebrow-sep">·</span>
                   {spotEyebrow}
                   {spotAirTime ? (
-                    <>
+                    <span class="eyebrow-time">
                       <span class="eyebrow-sep">·</span>
-                      {spotAirTime} UTC
-                    </>
+                      <time data-localtime datetime={spotAirIso ?? undefined}>
+                        {spotAirTime} UTC
+                      </time>
+                    </span>
                   ) : null}
                 </p>
                 <h1 class="spot-title" id="spot-title">
@@ -294,9 +299,9 @@ app.get("/", async (c) => {
                   <StatusBadge status={spot.status} />
                   {spot.premiered ? <span>{spot.premiered.slice(0, 4)}</span> : null}
                   {spotGenres.length ? (
-                    <>
-                      <span class="sep">·</span>
-                      <span>
+                    <span class="mi-genres">
+                      <span class="sep sep-genres">·</span>
+                      <span class="mi-genres-list">
                         {spotGenres.slice(0, 3).map((g, i) => (
                           <>
                             {i > 0 ? ", " : ""}
@@ -304,7 +309,7 @@ app.get("/", async (c) => {
                           </>
                         ))}
                       </span>
-                    </>
+                    </span>
                   ) : null}
                   {spot.rating != null ? (
                     <>
@@ -344,20 +349,22 @@ app.get("/", async (c) => {
           <div class="evening-grid">
             <div class="evening-card evening-main">
               <div class="evening-head">
-                <h2>
-                  {spotTonight ? (
-                    <>
-                      <span class="live-dot"></span>Also on tonight
-                    </>
-                  ) : (
-                    <>
-                      <span class="live-dot"></span>On tonight
-                    </>
-                  )}{" "}
+                <div class="evening-head-top">
+                  <h2>
+                    {spotTonight ? (
+                      <>
+                        <span class="live-dot"></span>Also on tonight
+                      </>
+                    ) : (
+                      <>
+                        <span class="live-dot"></span>On tonight
+                      </>
+                    )}
+                  </h2>
                   <a class="more" href="/tonight">
                     full schedule
                   </a>
-                </h2>
+                </div>
                 <p class="section-lead muted">Every episode airing today, in air-time order.</p>
               </div>
               {alsoTonight.length ? (
@@ -382,7 +389,15 @@ app.get("/", async (c) => {
                         ) : (
                           <span class="shelf-fallback">{e.show_name}</span>
                         )}
-                        <span class="shelf-chip">{airTime(e.airstamp) ?? "tonight"}</span>
+                        <span class="shelf-chip">
+                          {e.airstamp ? (
+                            <time data-localtime datetime={new Date(e.airstamp).toISOString()}>
+                              {airTime(e.airstamp)}
+                            </time>
+                          ) : (
+                            "tonight"
+                          )}
+                        </span>
                       </a>
                       <span class="shelf-name">{e.show_name}</span>
                     </li>
@@ -398,12 +413,12 @@ app.get("/", async (c) => {
             </div>
             <div class="evening-card evening-aside">
               <div class="evening-head">
-                <h2>
-                  Coming up{" "}
+                <div class="evening-head-top">
+                  <h2>Coming up</h2>
                   <a class="more" href="/premieres">
                     all premieres
                   </a>
-                </h2>
+                </div>
                 <p class="section-lead muted">Season premieres in the next three weeks.</p>
               </div>
               {premieres.length ? (
@@ -464,8 +479,10 @@ app.get("/", async (c) => {
               <p class="section-lead muted">Ranked by popularity, not ratings — see top-rated for the critical picks.</p>
             </div>
             <div class="discover-tablist">
-              <label for="discover-tv">TV shows</label>
-              <label for="discover-movies">Movies</label>
+              <div class="discover-tabrow">
+                <label for="discover-tv">TV shows</label>
+                <label for="discover-movies">Movies</label>
+              </div>
               <span class="discover-more">
                 <a class="more more-tv" href="/top/tv">
                   top-rated
@@ -508,8 +525,10 @@ app.get("/", async (c) => {
               </div>
               {hasTrendTv && hasTrendMovies ? (
                 <div class="discover-tablist">
-                  <label for="trend-tv">TV shows</label>
-                  <label for="trend-movies">Movies</label>
+                  <div class="discover-tabrow">
+                    <label for="trend-tv">TV shows</label>
+                    <label for="trend-movies">Movies</label>
+                  </div>
                 </div>
               ) : null}
               {hasTrendTv ? (

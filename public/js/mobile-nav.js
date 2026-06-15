@@ -31,7 +31,7 @@
   });
 
   // grew back to desktop while open → drop the drawer and the scroll lock
-  var mq = window.matchMedia("(min-width: 701px)");
+  var mq = window.matchMedia("(min-width: 901px)");
   (mq.addEventListener ? mq.addEventListener.bind(mq, "change") : mq.addListener.bind(mq))(function (e) {
     if (e.matches) close();
   });

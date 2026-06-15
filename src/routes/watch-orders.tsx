@@ -91,8 +91,7 @@ app.get("/watch-orders", async (c) => {
     >
       <h1>Watch-order guides</h1>
       <p class="muted wo-lead">
-        Release order and chronological order for every major franchise — with ratings, runtimes,
-        and where to stream. Pick a saga; we'll keep the timeline straight.
+        Release and chronological order for every major franchise — with runtimes and where to stream.
       </p>
       <div class="lane-grid wo-grid">
         {guides.map((g, i) => (

@@ -72,6 +72,22 @@
     updateFilterButton();
   }
 
+  // a small spinner beside the "Results" heading — shown only if a fetch
+  // actually runs slow (>150ms), so fast in-page swaps never flash anything
+  function showSpin() {
+    if (!title || title.querySelector(".srch-spin")) return;
+    var s = document.createElement("span");
+    s.className = "srch-spin spinner spinner-sm";
+    s.setAttribute("role", "status");
+    s.setAttribute("aria-label", "Searching");
+    title.appendChild(s);
+  }
+  function hideSpin() {
+    if (!title) return;
+    var s = title.querySelector(".srch-spin");
+    if (s) s.remove();
+  }
+
   function runSearch(q) {
     if (pending) pending.abort();
     var ac = new AbortController();
@@ -86,6 +102,10 @@
     if (title) title.textContent = q ? "Results" : "Find a show, movie, or person";
 
     if (!q) setFilter("all");
+
+    // only surface the spinner if the fetch outlasts 150ms, and only while
+    // this call is still the live one (a newer keystroke owns it otherwise)
+    var slow = setTimeout(function () { if (pending === ac) showSpin(); }, 150);
 
     fetch(url, { signal: ac.signal, headers: { Accept: "text/html" } })
       .then(function (r) {
@@ -105,7 +125,8 @@
         if (e.name === "AbortError") return;
       })
       .finally(function () {
-        if (pending === ac) pending = null;
+        clearTimeout(slow);
+        if (pending === ac) { pending = null; hideSpin(); }
       });
   }
 

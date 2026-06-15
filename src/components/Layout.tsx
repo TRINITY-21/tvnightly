@@ -6,6 +6,15 @@ import { VERTICALS } from "../lib/verticals";
 import { networkLogo } from "../lib/providers";
 import { slugifyName } from "../lib/format";
 
+// Cloudflare Web Analytics beacon token. Request-invariant config: the token is
+// the same for every request, so a middleware setting it once per request (see
+// src/index.tsx) is race-free even across concurrent requests on one isolate.
+// Kept module-level because Layout is rendered with plain props, not request context.
+let cfBeaconToken: string | undefined;
+export const setBeaconToken = (token?: string) => {
+  cfBeaconToken = token;
+};
+
 // Live countdown band: four stat blocks ticking once a second. Renders "—"
 // placeholders until JS lands; flips to "Airing now" past zero.
 export const COUNTDOWN_JS = `<script>(function(){var b=document.querySelector('.count-band');if(!b||!b.dataset.ts)return;var t=new Date(b.dataset.ts).getTime();function q(u){return b.querySelector('[data-u="'+u+'"]')}function pad(v){return ('0'+v).slice(-2)}function tick(){var d=Math.floor((t-Date.now())/1000);if(d<=0){b.classList.add('count-live');b.innerHTML='<span class="count-now">Airing now</span>';return}q('d').textContent=Math.floor(d/86400);q('h').textContent=pad(Math.floor(d%86400/3600));q('m').textContent=pad(Math.floor(d%3600/60));q('s').textContent=pad(d%60);setTimeout(tick,1000)}tick()})();</script>`;
@@ -167,6 +176,12 @@ export const Layout: FC<
       <meta name="twitter:card" content="summary" />
       <link rel="stylesheet" href="/styles.css" />
       {(props.ld ?? []).map((d) => jsonLd(d))}
+      {/* Cloudflare Web Analytics — deferred, privacy-first, renders only when configured. */}
+      {cfBeaconToken
+        ? raw(
+            `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"${cfBeaconToken}"}'></script>`,
+          )
+        : null}
     </head>
     <body>
       <div class="nprogress" aria-hidden="true"><span class="nprogress-bar"></span><span class="nprogress-spin"></span></div>
@@ -402,7 +417,7 @@ export const Layout: FC<
         </div>
         </div>
       </footer>
-      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", ...(props.scripts ?? [])].map((s) => (
+      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", "/js/localtime.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>
       ))}
     </body>

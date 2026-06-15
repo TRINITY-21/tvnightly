@@ -547,8 +547,8 @@ app.get("/person/:slug", async (c) => {
                 ) : null}
                 {person.birthplace || person.country ? (
                   <>
-                    {age != null || years ? <span class="sep">·</span> : null}
-                    <span>{person.birthplace ?? person.country}</span>
+                    {age != null || years ? <span class="sep sep-loc">·</span> : null}
+                    <span class="ms-birthplace">{person.birthplace ?? person.country}</span>
                   </>
                 ) : null}
               </p>

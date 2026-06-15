@@ -54,8 +54,7 @@ app.get("/best-episodes", async (c) => {
           <p class="section-eyebrow">The all-time 100</p>
           <h1 class="chart-h1">The highest-rated TV episodes of all time</h1>
           <p class="section-lead">
-            Ranked by viewer rating, weighted against each show&apos;s overall score so
-            tiny-sample outliers don&apos;t game the list. Maximum three entries per show.
+            Ranked by viewer rating, weighted against flukes — at most three episodes per show.
           </p>
           {results.length ? (
             <p class="chart-statline">
@@ -120,7 +119,7 @@ app.get("/best-episodes", async (c) => {
                       {e.airdate ? (
                         <>
                           <span class="sep"> · </span>
-                          {longDate(e.airdate)}
+                          <span class="epreg-date">{longDate(e.airdate)}</span>
                         </>
                       ) : null}
                     </p>

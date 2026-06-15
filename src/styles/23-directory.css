@@ -602,6 +602,26 @@
   .browse-tile-hero { grid-column: span 1; min-height: 10rem; }
   .browse-tile { min-height: 8.5rem; }
   .browse-hero-foot { flex-direction: column; align-items: flex-start; }
-  .browse-netgrid { grid-template-columns: repeat(2, 1fr); }
+  /* the logo tiles are a fixed ~55px, so a 2-col grid floats each in a huge
+     half-width cell (sparse, 15 long rows for 30 networks); 3-up packs them */
+  .browse-netgrid { grid-template-columns: repeat(3, 1fr); }
   .browse-genre-grid { grid-template-columns: repeat(2, 1fr); }
+  /* the flex row falls to a sparse 2-per-line with HUBS stranded; pack the five
+     counts into a tidy 3-column grid (3 + 2) with tighter gaps */
+  .browse-stats {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    justify-content: start;
+    gap: 1.1rem 1.7rem;
+  }
+  .browse-search {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+  }
+  /* keep the heading + meta on one row: "TV networks" left, "30 networks" over
+     "ranked by quality" on the right — don't drop the meta to its own line */
+  .browse-nets-head { flex-wrap: nowrap; }
+  .browse-nets-head > div:first-child { min-width: 0; }
+  .browse-nets-meta { flex: 0 0 auto; align-items: flex-end; text-align: right; }
 }

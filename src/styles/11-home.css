@@ -13,6 +13,9 @@
   margin: 0 0 0.4rem;
 }
 .eyebrow-sep { opacity: 0.55; margin: 0 0.35rem; }
+/* keep the airtime glued to its separator so "· 00:00 UTC" never breaks apart
+   and strands "UTC" on a line of its own on narrow phones */
+.eyebrow-time { white-space: nowrap; }
 
 .section-eyebrow {
   font-family: var(--display);
@@ -147,12 +150,38 @@
 .spot-actions {
   margin: 0.9rem 0 0;
 }
+/* genres + their leading separator travel as one meta token: identical to the
+   old two-child layout on desktop (inline-flex re-creates the parent's gap), but
+   now a single unit we can drop onto its own line on phones — see the ≤480 rule */
+.mi-genres {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
 .spotlight + .evening {
   margin-top: 1.75rem;
 }
 @media (max-width: 600px) {
   .spotlight {
     padding: 3.6rem 0 1.4rem;
+  }
+  /* Backdrop-led hero on phones: one cinematic still carries it, the text rides
+     the lower third. The floating poster fought the backdrop for the same narrow
+     space, so it's dropped when a real backdrop exists — and kept only in the
+     ambient (no-backdrop) fallback below, where it's the only crisp image. */
+  .spotlight:not(.spot-ambient) {
+    padding-top: 8.5rem; /* clear image zone above the lower-third */
+  }
+  .spotlight:not(.spot-ambient) .spot-poster {
+    display: none;
+  }
+  /* edge-to-edge and a touch brighter — it's THE hero now, not a strip beside a
+     poster, so drop the side-fade that blended the 1280px desktop plate */
+  .spotlight:not(.spot-ambient) .hero-backdrop {
+    -webkit-mask-image: none;
+    mask-image: none;
+    opacity: 0.88;
   }
   .spot-ambient {
     padding-top: 2.4rem;
@@ -168,7 +197,7 @@
     gap: 0.85rem;
   }
   .spot-poster {
-    width: 108px;
+    width: 108px; /* ambient (no-backdrop) fallback — the only crisp image there */
   }
   .spot-info {
     width: 100%;
@@ -180,6 +209,31 @@
   }
   .spot-dek {
     -webkit-line-clamp: 3;
+  }
+  /* primary hero action goes full-width as a comfortable thumb target */
+  .spot-actions .btn-ghost {
+    display: block;
+    text-align: center;
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+  }
+}
+@media (max-width: 480px) {
+  /* tighten the chyron so the dateline reads as one calm line, not a shout */
+  .spotlight .eyebrow {
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+  }
+  /* Deliberate two-line meta: identity + the rating (the answer) on top, genres
+     given their own line below. Reordering genres past the rating means the line
+     break itself replaces a separator — so no middot ever strands at a line end. */
+  .spotlight .mi-genres {
+    order: 9;
+    flex-basis: 100%;
+    margin-top: 0.1rem;
+  }
+  .spotlight .mi-genres .sep-genres {
+    display: none;
   }
 }
 
@@ -208,14 +262,30 @@
 }
 @media (max-width: 760px) {
   .evening-grid { grid-template-columns: 1fr; gap: 1rem; }
+  /* Single column: drop the carve entirely. The "cards curve around the floating
+     CTA" is a desktop two-column flourish — stacked, the CTA's dark moat landed
+     on the aside card's shelf names ("American Horror Sto…"). So both cards keep
+     a normal radius and bottom padding, and the CTA sits cleanly BELOW them. */
   .evening-card { padding-bottom: 1.5rem; }
-  .evening-aside { padding-bottom: 3.6rem; }
-  /* single column: no seam to carve, both cards keep the normal radius */
-  .evening-main { border-bottom-right-radius: var(--radius-lg); }
-  .evening-aside { border-bottom-left-radius: 48px; border-bottom-right-radius: 48px; }
-  .evening-cta { margin-top: -2.6rem; }
+  .evening-main,
+  .evening-aside {
+    border-bottom-left-radius: var(--radius-lg);
+    border-bottom-right-radius: var(--radius-lg);
+  }
+  /* .evening-cta spacing comes from its base rule (margin-top: 1.25rem); the
+     desktop-only carve override lives at ≥761px, so nothing to undo here. */
 }
 .evening-head h2 { margin: 0; }
+/* title + its "see all" link share a baseline row. On a phone the link can no
+   longer break mid-phrase ("full / schedule") — it drops whole to the next line
+   under the title. Desktop is unchanged: link sits inline just after the title. */
+.evening-head-top {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+}
+.evening-head-top .more { margin-left: 0; }
 
 /* ---- the evening shelves: posters with airtime / date chips ---- */
 /* Schedule as a shelf of one-sheets — the chip (a legibility scrim over
@@ -449,10 +519,16 @@
   align-items: center;
   width: 440px;
   max-width: 88%;
-  margin: -4.6rem auto 0;
+  /* default: sit cleanly below the cards (the mobile/stacked case). The desktop
+     carve — pulling the pill up into the cards' notched bottoms — is layered on
+     only at ≥761px, just below, so source order can't let it leak onto phones. */
+  margin: 1.25rem auto 0;
   background: var(--bg);
   padding: 0.65rem;
   border-radius: 26px;
+}
+@media (min-width: 761px) {
+  .evening-cta { margin-top: -4.6rem; }
 }
 .evening-cta .verdict-btn,
 .evening-cta .btn-ghost {
@@ -462,6 +538,9 @@
   padding: 0.75rem 1.1rem;
   border-radius: 13px;
   font-size: 0.98rem;
+  /* when a label wraps (e.g. "Rate your taste, get a personal pick"), split it
+     evenly instead of stranding a lone "pick" on the second line */
+  text-wrap: balance;
 }
 .evening-cta .verdict-btn {
   box-shadow: 0 3px 12px rgba(255, 169, 77, 0.14);
@@ -512,6 +591,10 @@
   margin-bottom: 0.85rem;
   border-bottom: 1px solid var(--line);
 }
+/* desktop: dissolve the wrapper so the labels + "see all" link share one row and
+   one divider, exactly as before. Mobile (below) makes it a real row so the
+   underline divider stays welded to the tabs and the link drops beneath it. */
+.discover-tabrow { display: contents; }
 .discover-tablist label {
   padding: 0.5rem 0.95rem;
   /* brighter than --muted so the inactive tab reads as a peer control, not a
@@ -542,6 +625,26 @@
 .discover-panel { display: none; }
 #discover-tv:checked ~ .panel-tv,
 #discover-movies:checked ~ .panel-movies { display: block; }
+@media (max-width: 600px) {
+  /* the tab labels + their underline divider stay one welded unit; the "see all"
+     link drops to its own line beneath the divider, right-aligned — no more
+     stranded link floating between the tabs and a disconnected rule */
+  .discover-tablist {
+    display: block;
+    border-bottom: none;
+  }
+  .discover-tabrow {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .discover-more {
+    display: block;
+    margin: 0.5rem 0 0;
+    text-align: right;
+  }
+}
 
 /* the trending unit sits below the popular one inside the same section */
 .discover-tabs + .discover-tabs { margin-top: 2.2rem; }
@@ -757,6 +860,14 @@
 .home-lanes { margin-top: 3rem; }
 .lanes-head { margin-bottom: 1.5rem; }
 .lanes-head h2 { display: flex; align-items: baseline; gap: 0.75rem; }
+@media (max-width: 600px) {
+  /* the head is a flex row [title][link][tick]; with no wrap the link squeezed
+     the title until "Pick a lane" broke mid-phrase ("Pick a" / "lane"). Let it
+     wrap and order the link last, so line 1 keeps the title + its amber tick and
+     the "see all" link drops cleanly onto its own line beneath. */
+  .lanes-head h2 { flex-wrap: wrap; row-gap: 0.3rem; }
+  .lanes-head h2 .more { order: 1; }
+}
 .lane-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

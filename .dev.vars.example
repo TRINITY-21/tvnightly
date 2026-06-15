@@ -2,17 +2,22 @@
 # it is committed to git. Real values go in .dev.vars only.
 SITE_ORIGIN=http://localhost:8787
 
-# Email backend: console (log only) | gmail | resend
+# Email backend: console (log only) | gmail | smtp | resend
 EMAIL_PROVIDER=console
 
 # HMAC key for confirm/unsubscribe links. Generate a long random string for prod.
 SECRET=dev-secret-not-for-production
 
-# EMAIL_PROVIDER=gmail — requires a Google App Password (NOT your normal password):
-# Google Account -> Security -> 2-Step Verification (enable) -> App passwords.
-# Limits: ~500 emails/day; From is always your Gmail address.
-#GMAIL_USER=you@gmail.com
-#GMAIL_APP_PASSWORD=abcdabcdabcdabcd
+# EMAIL_PROVIDER=gmail|smtp — SMTP via worker-mailer. For Gmail you need a Google
+# App Password (NOT your normal password): Google Account -> Security ->
+# 2-Step Verification (enable) -> App passwords. Limits: ~500 emails/day; Gmail
+# rewrites From to the authenticated address. Do NOT add inline "# comments" after
+# a value below — dotenv folds them into the value and corrupts it.
+# SMTP_HOST/SMTP_PORT are optional (default smtp.gmail.com:465; 587 = STARTTLS).
+#SMTP_USER=you@gmail.com
+#SMTP_PASS=abcdabcdabcdabcd
+#SMTP_HOST=smtp.gmail.com
+#SMTP_PORT=465
 
 # EMAIL_PROVIDER=resend — 100/day, 3K/mo free; custom From after domain verification.
 #RESEND_API_KEY=re_xxxxxxxx
@@ -23,3 +28,7 @@ SECRET=dev-secret-not-for-production
 
 # Optional, unused for now (extra artwork source for later).
 #FANART_API_KEY=your_fanart_key
+
+# Cloudflare Web Analytics beacon token (public). Get it post-deploy from the CF
+# dashboard -> Web Analytics. Leave unset locally; the beacon won't render.
+#CF_BEACON_TOKEN=your_beacon_token

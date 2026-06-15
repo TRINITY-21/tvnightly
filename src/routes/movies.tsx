@@ -13,6 +13,7 @@ import { franchiseOfMovie } from "../lib/franchises";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { crewLinkMap, similarMovies } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
+import { foldSql, foldText } from "../lib/search";
 import { canonical, origin } from "../lib/seo";
 import { tmdbMovieBackdrop, tmdbMovieCast, tmdbMovieCrew, tmdbMovieMedia, tmdbUpcomingBackdrop } from "../lib/tmdb";
 import { hubForGenres } from "../lib/verticals";
@@ -108,8 +109,8 @@ app.get("/movies/upcoming", async (c) => {
             <span class="sched-ep">{longDate(m.release_date)}</span>
             {countdown ? <span class="upcoming-chip">{countdown}</span> : null}
           </span>
-          {m.overview ? <span class="sched-blurb">{stripHtml(m.overview)}</span> : null}
         </span>
+        {m.overview ? <span class="sched-blurb">{stripHtml(m.overview)}</span> : null}
       </>
     );
     return (
@@ -467,8 +468,7 @@ app.get("/movies/best", async (c) => {
           <p class="section-eyebrow">The chart</p>
           <h1>{heading}</h1>
           <p class="wo-intro">
-            Ranked by viewer rating alone — every film here cleared a thousand votes, so nothing
-            on the board is a fluke. Cut it by genre, or let the picker choose for you.
+            Ranked by viewer rating — a thousand-vote minimum, so nothing here is a fluke.
           </p>
           <p class="hub-actions">
             <a class="verdict-btn" href="/what-to-watch?type=movie">
@@ -493,7 +493,7 @@ app.get("/movies/best", async (c) => {
         />
       </form>
       {results.length === 0 ? <p class="muted">No rated movies for that filter yet.</p> : null}
-      <ol class="wo-list wo-ranked">
+      <ol class="wo-list wo-ranked wo-ranked-meta">
         {results.map((m, i) => {
           const provs = [...new Set(providersFor(m, region).names.map(providerBrand))];
           const gs: string[] = m.genres ? JSON.parse(m.genres) : [];
@@ -514,6 +514,8 @@ app.get("/movies/best", async (c) => {
                 </span>
                 <span class="wo-provs">
                   {(provs.length ? provs.slice(0, 3) : gs.slice(0, 2)).join(" · ")}
+                  {provs.length || gs.length ? <span class="wo-provs-sep"> · </span> : null}
+                  <span class="rating">★ {m.rating!.toFixed(1)}</span>
                 </span>
               </span>
               <span class="wo-side">
@@ -1503,9 +1505,9 @@ app.get("/movies/compare", async (c) => {
       (await db.prepare("SELECT * FROM movies WHERE slug = ?").bind(q).first<MovieRow>()) ??
       (await db
         .prepare(
-          "SELECT * FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 1",
+          `SELECT * FROM movies WHERE ${foldSql("title")} LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 1`,
         )
-        .bind(q)
+        .bind(foldText(q))
         .first<MovieRow>())
     );
   };

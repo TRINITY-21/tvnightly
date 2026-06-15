@@ -797,8 +797,7 @@ app.get("/top/tv", async (c) => {
           <p class="section-eyebrow">The all-time 100</p>
           <h1>The top-rated TV shows</h1>
           <p class="wo-intro">
-            Ranked by viewer rating on shows we actually track — weight and popularity gate the
-            board so a three-episode fluke never outranks a decade of consensus.
+            Ranked by viewer rating — weighted so a fluke never outranks the classics.
           </p>
           <p class="hub-actions">
             <a class="verdict-btn" href="/what-to-watch?type=tv">
@@ -814,7 +813,7 @@ app.get("/top/tv", async (c) => {
       {!results.length ? (
         <p class="muted">Ratings are still loading — check back soon.</p>
       ) : (
-        <ol class="wo-list wo-ranked">
+        <ol class="wo-list wo-ranked wo-ranked-meta">
           {results.map((s, i) => {
             const art = posterSrc(s);
             const provLinks = showProvLinks(s);
@@ -842,16 +841,16 @@ app.get("/top/tv", async (c) => {
                     <a href={`/show/${s.slug}`}>{s.name}</a>
                     {showYear(s) ? <span class="muted"> ({showYear(s)})</span> : null}
                   </span>
-                  {provLinks.length ? (
-                    <span class="wo-provs">
-                      {provLinks.map((l, j) => (
-                        <>
-                          {j > 0 ? " · " : null}
-                          <a href={l.href}>{l.label}</a>
-                        </>
-                      ))}
-                    </span>
-                  ) : null}
+                  <span class="wo-provs">
+                    {provLinks.map((l, j) => (
+                      <>
+                        {j > 0 ? " · " : null}
+                        <a href={l.href}>{l.label}</a>
+                      </>
+                    ))}
+                    {provLinks.length ? <span class="wo-provs-sep"> · </span> : null}
+                    <span class="rating">★ {s.rating!.toFixed(1)}</span>
+                  </span>
                 </span>
                 <span class="wo-side">
                   <span class="rating">★ {s.rating!.toFixed(1)}</span>
@@ -965,8 +964,7 @@ app.get("/top/seasons", async (c) => {
             <p class="section-eyebrow">The all-time 50</p>
             <h1>The best TV seasons of all time</h1>
             <p class="wo-intro">
-              Ranked by average episode rating, pulled toward each show&apos;s overall score.
-              Seasons need at least six rated episodes; maximum two per show.
+              Ranked by average episode rating, weighted against flukes — six-episode minimum, two per show.
             </p>
             <p class="hub-actions">
               <a class="verdict-btn" href="/what-to-watch?type=tv">
@@ -982,7 +980,7 @@ app.get("/top/seasons", async (c) => {
         {!results.length ? (
           <p class="muted">Ratings are still loading — check back soon.</p>
         ) : (
-          <ol class="wo-list wo-ranked">
+          <ol class="wo-list wo-ranked wo-ranked-meta">
             {results.map((r, i) => {
               const art = posterSrc(r);
               const provLinks = showProvLinks(r);
@@ -1008,22 +1006,22 @@ app.get("/top/seasons", async (c) => {
                   <span class="wo-main">
                     <span class="wo-title">
                       <a href={`/show/${r.slug}`}>{r.name}</a>
-                      <span class="muted">
-                        {" "}
-                        ·{" "}
-                        <a href={`/show/${r.slug}/season/${r.season}`}>Season {r.season}</a>
-                      </span>
+                      <a class="wo-season" href={`/show/${r.slug}/season/${r.season}`}>
+                        Season {r.season}
+                      </a>
                     </span>
-                    {provLinks.length ? (
-                      <span class="wo-provs">
-                        {provLinks.map((l, j) => (
-                          <>
-                            {j > 0 ? " · " : null}
-                            <a href={l.href}>{l.label}</a>
-                          </>
-                        ))}
-                      </span>
-                    ) : null}
+                    {/* phones: rating rides the genre line so the title gets the full
+                        width (see .wo-ranked-meta); desktop uses .wo-side below */}
+                    <span class="wo-provs">
+                      {provLinks.map((l, j) => (
+                        <>
+                          {j > 0 ? " · " : null}
+                          <a href={l.href}>{l.label}</a>
+                        </>
+                      ))}
+                      {provLinks.length ? <span class="wo-provs-sep"> · </span> : null}
+                      <span class="rating">★ {r.avg_r.toFixed(2)}</span>
+                    </span>
                   </span>
                   <span class="wo-side">
                     <span class="rating">★ {r.avg_r.toFixed(2)}</span>
@@ -1077,9 +1075,25 @@ app.get("/top/networks", async (c) => {
      ) ORDER BY score DESC LIMIT 30`,
   ).all<{ n: string; c: number; r: number; score: number }>();
 
+  // Lead with the headline networks people actually use (Netflix, Hulu, HBO …) in
+  // the same order as the directory grid, then the rest by quality score — a pure
+  // average-rating sort floats boutiques (Adult Swim, Syfy) above the majors.
+  const ranked = (() => {
+    const used = new Set<string>();
+    const head: typeof results = [];
+    for (const pat of HEADLINE_PATTERNS) {
+      const hit = results.find((x) => !used.has(x.n) && pat.test(x.n));
+      if (hit) {
+        head.push(hit);
+        used.add(hit.n);
+      }
+    }
+    return [...head, ...results.filter((x) => !used.has(x.n))];
+  })();
+
   // Full-bleed hero backdrop from the top network's single best show — the same
   // champion-frame the chart pages use, with a blurred-poster ambient fallback.
-  const topNet = results[0]?.n ?? null;
+  const topNet = ranked[0]?.n ?? null;
   let art: { x1: string; x2?: string } | null = null;
   let ambient = false;
   if (topNet) {
@@ -1141,7 +1155,7 @@ app.get("/top/networks", async (c) => {
         ) : (
           <section class="hub-sec nets-grid-sec">
             <div class="nets-grid">
-              {results.map((r) => (
+              {ranked.map((r) => (
                 <NetBrandCard name={r.n} href={`/network/${slugifyName(r.n)}`} />
               ))}
             </div>

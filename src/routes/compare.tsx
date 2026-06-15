@@ -4,6 +4,7 @@ import { Bindings, AppContext, ShowRow, EpisodeRow } from "../types";
 import { comparePathFor, hiRes } from "../lib/format";
 import { origin, canonical } from "../lib/seo";
 import { similarShows } from "../lib/queries";
+import { foldSql, foldText } from "../lib/search";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { Layout } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
@@ -38,6 +39,10 @@ function episodeChart(epsA: EpisodeRow[], epsB: EpisodeRow[], nameA: string, nam
   const nB = epsB.filter((e) => e.rating != null).length;
   const n = Math.max(nA, nB);
   if (!n) return null;
+  // Give every episode ~7px of room. When that's wider than the screen the card
+  // scrolls the plot horizontally (see .vsx-scroll); short runs that already fit
+  // keep width:100% and never scroll. Capped so a 700-episode run stays sane.
+  const minPx = Math.min(2000, Math.round(n * 7));
   const step = (VSX.W - VSX.L - VSX.R) / Math.max(n - 1, 1);
   const a = vsxSeries(epsA, step);
   const b = vsxSeries(epsB, step);
@@ -58,7 +63,7 @@ function episodeChart(epsA: EpisodeRow[], epsB: EpisodeRow[], nameA: string, nam
       `<text x="${VSX.L - 8}" y="${y + 3.5}" fill="#7d7a74" font-size="11" text-anchor="end">${r}</text>`;
   }
   const svg =
-    `<svg class="vsx-svg" viewBox="0 0 ${VSX.W} ${VSX.H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Episode ratings: ${attrEsc(nameA)} versus ${attrEsc(nameB)}">` +
+    `<svg class="vsx-svg" style="min-width:${minPx}px" viewBox="0 0 ${VSX.W} ${VSX.H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Episode ratings: ${attrEsc(nameA)} versus ${attrEsc(nameB)}">` +
     `<defs>` +
     `<linearGradient id="vsxA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(255,169,77,0.30)"/><stop offset="1" stop-color="rgba(255,169,77,0)"/></linearGradient>` +
     `<linearGradient id="vsxB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(255,92,138,0.28)"/><stop offset="1" stop-color="rgba(255,92,138,0)"/></linearGradient>` +
@@ -272,7 +277,7 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
         </div>
         {chart ? (
           <div class="vsx-graph">
-            {raw(chart.svg)}
+            <div class="vsx-scroll">{raw(chart.svg)}</div>
             <div class="vsx-tip" aria-hidden="true"></div>
             <script
               type="application/json"
@@ -347,8 +352,8 @@ app.get("/compare", async (c) => {
     return (
       (await showBySlug(db, q)) ??
       (await db
-        .prepare("SELECT * FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 1")
-        .bind(q)
+        .prepare(`SELECT * FROM shows WHERE ${foldSql("name")} LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 1`)
+        .bind(foldText(q))
         .first<ShowRow>())
     );
   };

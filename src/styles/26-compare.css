@@ -164,9 +164,12 @@
   text-decoration: none;
 }
 @media (max-width: 700px) {
+  /* the pill drops out of the header's top-right corner and stacks below the
+     intro — it needs a real gap beneath it or the form card butts right up
+     against it and it looks like it's sitting on the card */
   .cmp-head .cmp-xlink {
     position: static;
-    margin: 0.8rem 0 0;
+    margin: 0.9rem 0 1.4rem;
   }
 }
 
@@ -176,6 +179,16 @@
   flex-wrap: wrap;
   gap: 0.6rem;
   margin-top: 1.9rem;
+}
+@media (max-width: 560px) {
+  /* stack the footer actions full-width, matching the other mobile CTAs */
+  .vsx-actions {
+    flex-direction: column;
+  }
+  .vsx-actions .btn-ghost {
+    width: 100%;
+    text-align: center;
+  }
 }
 
 /* the picker reads as a matchup: long fields flanking a "vs", centered on
@@ -198,6 +211,32 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
+}
+/* phones: stop relying on flex-wrap (a desktop side-by-side construct). The
+   wrapped flow left the centered "vs" floating with lopsided gaps — pinned near
+   field A with a void beneath it. Force a real vertical column so the two fields
+   and the CTA go full-width with the "vs" snug and symmetric between them.
+   Covers /compare and /movies/compare. */
+@media (max-width: 560px) {
+  .compare-form {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+  .compare-form label {
+    flex: none;
+    max-width: none;
+  }
+  /* drop the desktop baseline nudge (align-self:end + padding-bottom) that made
+     it hang to one side; center it between the stacked fields instead */
+  .compare-form .cmp-or {
+    align-self: center;
+    padding: 0;
+  }
+  .compare-form button {
+    width: 100%;
+    margin-top: 0.4rem;
+  }
 }
 
 /* the title-picker dropdown — mirrors the header search's .ta look */
@@ -397,12 +436,33 @@
   box-shadow: var(--shadow-1);
   padding: 0.6rem 0.7rem 0.4rem;
 }
+/* horizontal scroll for dense runs: the SVG carries a min-width (≈7px/episode,
+   set inline), so when there are more episodes than the screen can show the plot
+   overflows into this scroller instead of cramming. A thin scrollbar doubles as
+   the "there's more" affordance. Short runs fit and never scroll. */
+.vsx-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.vsx-scroll::-webkit-scrollbar {
+  height: 7px;
+}
+.vsx-scroll::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
 .vsx-svg {
   display: block;
   width: 100%;
   height: auto;
   cursor: crosshair;
-  touch-action: pan-y;
+  /* allow horizontal swipe to scroll the plot (and vertical to scroll the page);
+     a tap still drops the crosshair + tooltip on the nearest episode */
+  touch-action: pan-x pan-y;
 }
 .vsx-cross {
   stroke: rgba(248, 246, 242, 0.28);

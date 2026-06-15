@@ -52,6 +52,27 @@ button, .verdict-btn {
 .vote-btn:hover { border-color: rgba(255, 255, 255, 0.18); text-decoration: none; }
 .vote.voted .vote-btn { opacity: 0.6; cursor: default; }
 .vote.voted .vote-count { opacity: 1; color: var(--text); }
+/* in-flight: lock the pair and spin the tapped pill (POST /api/vote has no
+   navigation, so the top progress bar can't speak for this click) */
+.vote.is-voting .vote-btn { pointer-events: none; opacity: 0.5; }
+.vote-btn[aria-busy="true"] { position: relative; opacity: 1; }
+.vote-btn[aria-busy="true"] svg,
+.vote-btn[aria-busy="true"] .vote-count { visibility: hidden; }
+.vote-btn[aria-busy="true"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vote-btn[aria-busy="true"]::before { animation: none; }
+}
 .rate-inline { display: flex; gap: 0.4rem; align-items: center; margin: 0.6rem 0; flex-wrap: wrap; }
 .rate-inline .vote-btn { font-size: 1rem; }
 .rate-inline .verdict-form { position: relative; }
@@ -200,11 +221,17 @@ button, .verdict-btn {
     flex: 1 1 100%;
     min-width: 0;
   }
-  /* the alerts-card controls (.sub-form.inline > .sub-controls) hold a flex input
-     with a 100% basis; without min-width:0 the wrapper keeps its content size and
-     the "Notify me" button rides ~10px past the 320px viewport edge */
+  /* the alerts-card controls are a nowrap row, so the input's 100% basis just
+     compressed it beside the button — the email field narrowed past its own
+     placeholder and "Notify me" wrapped to two lines. Let the row wrap and drop
+     the button to its own full-width line under the full-width input. */
   .sub-controls {
+    flex-wrap: wrap;
     min-width: 0;
+  }
+  .sub-form.inline .sub-controls button {
+    flex: 1 1 100%;
+    width: 100%;
   }
 }
 

@@ -6,6 +6,7 @@ import { ipHash } from "../lib/crypto";
 import { heroBg, hiRes } from "../lib/format";
 import { RatedEntry, VERDICTS, VERDICT_SCALE, fmtRated, getRatedTitle, parseRated } from "../lib/ratings";
 import { DeckCard, Pick, WhySignal, buildRecommendation, enrichDeck, landingPicks } from "../lib/recommend";
+import { foldSql, foldText } from "../lib/search";
 import { canonical, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { Bindings } from "../types";
@@ -183,11 +184,16 @@ app.get("/recommend", async (c) => {
 
     let art: { x1: string; x2?: string } | null = null;
     if (primary && c.env.TMDB_API_KEY) {
-      art = primary.tmdbId
-        ? await tmdbBackdrop(c.env.TMDB_API_KEY, primary.tmdbId)
-        : primary.imdbId
-          ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, primary.imdbId)
-          : null;
+      // movies carry a tmdbId too, but tmdbBackdrop hits /tv/{id} — route by kind
+      // or a movie picks up some unrelated TV show with the same numeric id.
+      art =
+        primary.kind === "tv"
+          ? primary.tmdbId
+            ? await tmdbBackdrop(c.env.TMDB_API_KEY, primary.tmdbId)
+            : null
+          : primary.imdbId
+            ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, primary.imdbId)
+            : null;
     }
     if (!art && primary?.poster) art = { x1: hiRes(primary.poster) ?? primary.poster };
     const heroFrame = art ? heroBg(art.x1, art.x2) : null;
@@ -199,11 +205,14 @@ app.get("/recommend", async (c) => {
     const contArt = await Promise.all(
       contenders.map(async (p) => {
         if (c.env.TMDB_API_KEY) {
-          const bd = p.tmdbId
-            ? await tmdbBackdrop(c.env.TMDB_API_KEY, p.tmdbId)
-            : p.imdbId
-              ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, p.imdbId)
-              : null;
+          const bd =
+            p.kind === "tv"
+              ? p.tmdbId
+                ? await tmdbBackdrop(c.env.TMDB_API_KEY, p.tmdbId)
+                : null
+              : p.imdbId
+                ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, p.imdbId)
+                : null;
           if (bd) return heroBg(bd.x1, bd.x2);
         }
         return p.poster ? heroBg(hiRes(p.poster) ?? p.poster) : null;
@@ -446,12 +455,12 @@ app.get("/recommend", async (c) => {
   if (q) {
     const [shows, movies] = await Promise.all([
       db
-        .prepare("SELECT id, name, premiered, COALESCE(poster_url, image_url) AS poster FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 6")
-        .bind(q)
+        .prepare(`SELECT id, name, premiered, COALESCE(poster_url, image_url) AS poster FROM shows WHERE ${foldSql("name")} LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 6`)
+        .bind(foldText(q))
         .all<{ id: number; name: string; premiered: string | null; poster: string | null }>(),
       db
-        .prepare("SELECT imdb_id, title, year, poster_url AS poster FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 6")
-        .bind(q)
+        .prepare(`SELECT imdb_id, title, year, poster_url AS poster FROM movies WHERE ${foldSql("title")} LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 6`)
+        .bind(foldText(q))
         .all<{ imdb_id: string; title: string; year: number | null; poster: string | null }>(),
     ]);
     // Carry kind+ref, never a bare name. A unique exact-name match skips ahead.
@@ -523,7 +532,7 @@ app.get("/recommend", async (c) => {
         <header class="rec-center rec-land-head">
           <h1 class="rec-h1">What should I watch next?</h1>
           <p class="section-lead rec-lead">
-            Tell us a thing or two you've seen and how they landed. We read the pattern — genre, era, even what you can't stand — and hand you one pick worth your night.
+            Name a couple of things you've watched and how they landed — we read your taste and hand you one pick for tonight.
           </p>
           {/* No Start button: the live typeahead dropdown (recommend.js) is the
               path — pick a suggestion to jump straight to rating. With no JS the
@@ -534,7 +543,13 @@ app.get("/recommend", async (c) => {
             </span>
             {ratedStr ? <input type="hidden" name="rated" value={ratedStr} /> : null}
           </form>
-          <p class="rec-steps">Pick something you've seen <span aria-hidden="true">→</span> say how it landed <span aria-hidden="true">→</span> get your match</p>
+          <p class="rec-steps">
+            <span class="rec-step">Pick something you've seen</span>{" "}
+            <span class="rec-arrow" aria-hidden="true">→</span>{" "}
+            <span class="rec-step">say how it landed</span>{" "}
+            <span class="rec-arrow" aria-hidden="true">→</span>{" "}
+            <span class="rec-step">get your match</span>
+          </p>
           <p class="rec-trust muted">No account — your taste lives in a shareable link.</p>
         </header>
         <section class="rec-sec">
@@ -700,8 +715,7 @@ app.get("/loved", async (c) => {
           <p class="section-eyebrow">Community</p>
           <h1 class="chart-h1">Most loved shows and movies</h1>
           <p class="section-lead">
-            Ranked from one-tap reader verdicts — loved, liked, or not for me. Titles need at
-            least two ratings to chart.
+            Ranked from one-tap reader verdicts — loved, good, meh, or awful.
           </p>
           {board.length ? (
             <p class="chart-statline">
@@ -795,7 +809,8 @@ app.get("/loved", async (c) => {
 
         {board.length ? (
           <p class="loved-foot muted">
-            Score weights loved at full credit and good at half.{" "}
+            Each verdict counts toward the positive score: loved in full, good at half, meh and
+            awful at zero.{" "}
             <span class="loved-key"><span class="loved-dot seg-awful"></span> awful</span>{" "}
             <span class="loved-key"><span class="loved-dot seg-meh"></span> meh</span>{" "}
             <span class="loved-key"><span class="loved-dot seg-liked"></span> good</span>{" "}

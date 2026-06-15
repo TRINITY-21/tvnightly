@@ -168,7 +168,56 @@
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 @media (max-width: 600px) {
-  .wo-hero-bleed .wo-hero-body { padding-top: 2.75rem; }
+  /* The full still as a clean 16:9 banner — cover fills a 16:9 box exactly, so
+     nothing crops at the sides — with the lockup riding its darkened lower edge.
+     (Overlaid on the bright middle of the scene, the muted eyebrow + title were
+     getting lost against the desert.) The banner's foot resolves into the page. */
+  .wo-hero-bleed .wo-frame {
+    -webkit-mask-image: none;
+    mask-image: none;
+    bottom: auto;
+    height: 56.25vw; /* 16:9 at the full-bleed viewport width */
+    background-size: cover;
+    background-position: center;
+  }
+  .wo-hero-bleed .wo-frame::after {
+    /* desktop voice, on the banner: darken the left (where the left-aligned lockup
+       sits) and the foot, leaving the scene reading through on the upper-right —
+       then resolve into the page so the copy + buttons continue on flat dark */
+    background:
+      linear-gradient(
+        to right,
+        rgba(18, 18, 20, 0.92),
+        rgba(18, 18, 20, 0.58) 46%,
+        rgba(18, 18, 20, 0.14) 78%,
+        rgba(18, 18, 20, 0)
+      ),
+      linear-gradient(
+        to bottom,
+        transparent 32%,
+        rgba(18, 18, 20, 0.5) 72%,
+        var(--bg) 100%
+      );
+  }
+  /* lay the eyebrow + title onto the banner's darkened lower-left */
+  .wo-hero-bleed .wo-hero-body { padding-top: calc(56.25vw - 6rem); }
+  .wo-hero-bleed .section-eyebrow,
+  .wo-hero-bleed .wo-intro {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  }
+  /* hero actions: full-width, centered, stacked */
+  .wo-hero .hub-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .wo-hero .hub-actions .verdict-btn,
+  .wo-hero .hub-actions .btn-ghost {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding-top: 0.72rem;
+    padding-bottom: 0.72rem;
+  }
 }
 .wo-intro { margin: 0; max-width: 58ch; color: var(--text); }
 .wo-stats {
@@ -176,8 +225,9 @@
   flex-wrap: wrap;
   gap: 2rem;
   margin: 1.15rem 0 0;
-  padding-top: 0.85rem;
+  padding: 0.85rem 0;
   border-top: 1px solid rgba(248, 246, 242, 0.14);
+  border-bottom: 1px solid rgba(248, 246, 242, 0.14);
 }
 .wo-stats dt {
   font-family: var(--display);
@@ -243,7 +293,37 @@
 .wo-ranked li:nth-child(2) .wo-num,
 .wo-ranked li:nth-child(3) .wo-num { color: var(--text); }
 @media (max-width: 520px) {
-  .wo-ranked .wo-row { grid-template-columns: 1.9rem 40px minmax(0, 1fr) auto; }
+  /* trim the rank column + left padding so the row's left margin matches its
+     right: the right-aligned rank left dead space on its left edge, pushing the
+     whole row in more than the rating sits in from the right. */
+  .wo-ranked .wo-row {
+    grid-template-columns: 1.7rem 40px minmax(0, 1fr) auto;
+    padding-left: 0.25rem;
+  }
+  /* the "best episodes" deep-link sized the side column to ~90px, squeezing the
+     name to half width so even "Breaking Bad" wrapped. Drop it on phones (still
+     one tap away on the show page): the name leads, the rating stays prominent. */
+  .wo-ranked .wo-mins { display: none; }
+}
+
+/* meta-rating variant (/top/tv, /movies/best, /top/seasons): on PHONES the rating
+   drops onto the genre line and the title takes the full row width. Desktop keeps
+   its scannable right-hand rating column untouched — the rating is rendered in
+   both spots and each viewport shows only one. */
+.wo-ranked-meta .wo-provs > .rating,
+.wo-ranked-meta .wo-provs-sep { display: none; }
+@media (max-width: 520px) {
+  .wo-ranked-meta .wo-row { grid-template-columns: 1.7rem 40px minmax(0, 1fr); }
+  .wo-ranked-meta .wo-side { display: none; }
+  .wo-ranked-meta .wo-provs-sep { display: inline; opacity: 0.45; }
+  /* the rating reads as the gold stat on the line, not a tiny chyron token */
+  .wo-ranked-meta .wo-provs > .rating {
+    display: inline;
+    font-size: 0.95rem;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+  }
 }
 
 .wo-poster {
@@ -262,6 +342,14 @@
 }
 .wo-title { overflow-wrap: anywhere; }
 .wo-title a { font-weight: 600; }
+/* "Season N" rides inline after the show, a muted middot before it. With the
+   title now spanning the full row width (meta-rating layout) it fits on one line. */
+.wo-season::before {
+  content: "·";
+  margin: 0 0.4rem;
+  color: var(--muted);
+  font-weight: 400;
+}
 .wo-provs {
   font-family: var(--display);
   font-stretch: 80%;
@@ -325,7 +413,13 @@
 }
 .wo-back { margin-top: 1.8rem; }
 @media (max-width: 520px) {
-  .wo-row { grid-template-columns: 1.5rem 40px minmax(0, 1fr) auto; gap: 0.6rem; }
+  /* trim the rank column + left pad so the row's left margin matches its right
+     (the right-aligned number was leaving dead space on its left edge) */
+  .wo-row {
+    grid-template-columns: 1.3rem 40px minmax(0, 1fr) auto;
+    gap: 0.6rem;
+    padding-left: 0.3rem;
+  }
   .wo-poster { width: 40px; height: 60px; }
 }
 

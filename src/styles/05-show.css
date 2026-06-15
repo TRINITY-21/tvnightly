@@ -52,8 +52,9 @@
 .frame-hero .summary,
 .frame-hero .provs,
 .frame-hero .ep-eyebrow,
-.frame-hero .blurb {
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+.frame-hero .blurb,
+.frame-hero .rate-inline-label {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 .detail-info { flex: 1 1 320px; min-width: 0; }
 .meta-strip {
@@ -80,6 +81,14 @@
 }
 /* the headline score is the answer the page exists to give — let it lead */
 .meta-strip .rating { font-size: 1.1rem; font-weight: 700; }
+
+/* person hero: on a narrow screen the birthplace always wraps under the
+   birth date, which would strand its "·" at the end of the first line. Drop
+   the separator and give the birthplace its own clean row instead. */
+@media (max-width: 560px) {
+  .meta-strip .sep-loc { display: none; }
+  .meta-strip .ms-birthplace { flex-basis: 100%; }
+}
 
 /* money-page links — rectangular footer cards, not pills */
 .pill-nav {
@@ -418,6 +427,69 @@ a.cast-tile:hover { text-decoration: none; }
 }
 @media (max-width: 600px) {
   .show-hub .frame-hero { padding-top: 5rem; }
+  /* on a phone the poster, rate widget, title and meta all stack down into the
+     middle of the frame — where the desktop scrim is still light. Tone the
+     backdrop down and bring the dark up earlier so the muted text reads, while
+     the top band still shows the still. */
+  .show-hub .frame-hero .hero-backdrop { opacity: 0.48; }
+  .show-hub .frame-hero::after {
+    /* a left+right vignette darkens the edges where each line of text starts and
+       ends, layered over a deeper top-down scrim — the poster-fed full-bleed was
+       washing the muted meta / genres / summary out through the bright middle */
+    background:
+      linear-gradient(
+        to right,
+        rgba(18, 18, 20, 0.84) 0%,
+        rgba(18, 18, 20, 0.2) 26%,
+        rgba(18, 18, 20, 0.2) 74%,
+        rgba(18, 18, 20, 0.84) 100%
+      ),
+      linear-gradient(
+        to bottom,
+        rgba(18, 18, 20, 0.44) 0%,
+        rgba(18, 18, 20, 0.66) 30%,
+        rgba(18, 18, 20, 0.92) 66%,
+        var(--bg) 100%
+      );
+  }
+  /* backdrop-led: drop the poster, and show the FULL still as a 16:9 banner across
+     the top of the panel (cover fills a 16:9 box exactly, so nothing crops). It
+     fades into the dark below, where the title/meta/summary sit on the surface —
+     the still finally reads at full strength instead of dimmed behind the text. */
+  .show-hub.hub-backdrop .frame-hero { padding-top: calc(56.25vw - 3.5rem); }
+  .show-hub.hub-backdrop .frame-hero .hero-backdrop {
+    top: 0;
+    bottom: auto;
+    left: 0;
+    transform: none;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    opacity: 0.95;
+    background-position: center;
+    -webkit-mask-image: linear-gradient(to bottom, #000 64%, transparent);
+    mask-image: linear-gradient(to bottom, #000 64%, transparent);
+  }
+  .show-hub.hub-backdrop .frame-hero::after { background: transparent; }
+  .show-hub.hub-backdrop .detail-side .poster { display: none; }
+  /* the rate widget drops to the bottom of the hero (after title/meta/summary)
+     as a centered "rate this" footer, separated by a hairline */
+  .show-hub.hub-backdrop .detail-side {
+    flex-basis: 100%;
+    width: 100%;
+    order: 2;
+    margin-top: 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .show-hub.hub-backdrop .detail-side .rate-inline { justify-content: center; }
+  /* the subpage heroes (where-to-watch, similar, media) carry only a poster in
+     the side column — no rate widget. Once the backdrop banner drops the poster
+     there's nothing left to show as a footer, so collapse the empty column
+     instead of leaving a stray hairline-bordered box. */
+  .show-hub.hub-backdrop .detail-side:not(:has(.rate-inline)) {
+    display: none;
+  }
 }
 .ep-eyebrow {
   margin: 0.1rem 0 0.2rem;
@@ -533,19 +605,21 @@ a.cast-tile:hover { text-decoration: none; }
 }
 .watch-list { list-style: none; padding: 0; margin: 0; }
 .watch-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "logo name more";
   align-items: center;
-  gap: 0.85rem;
+  column-gap: 0.85rem;
   padding: 0.65rem 0.25rem;
   border-bottom: 1px solid var(--line);
 }
 .watch-logo {
+  grid-area: logo;
   width: 44px;
   height: 44px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
   object-fit: cover;
-  flex: 0 0 auto;
 }
 .watch-logo-fallback {
   display: flex;
@@ -556,8 +630,21 @@ a.cast-tile:hover { text-decoration: none; }
   font-weight: 700;
   color: var(--muted);
 }
-.watch-name { font-weight: 600; font-size: 1.02rem; min-width: 0; }
-.watch-more { margin-left: auto; font-size: 0.88rem; font-weight: 600; white-space: nowrap; }
+.watch-name { grid-area: name; font-weight: 600; font-size: 1.02rem; min-width: 0; }
+.watch-more { grid-area: more; font-size: 0.88rem; font-weight: 600; white-space: nowrap; }
+/* phones: long provider names ("Paramount Plus Apple TV Channel") collided with
+   the inline "More on …" link. Stack the link under the full-width name; the logo
+   stays centered alongside both rows. */
+@media (max-width: 560px) {
+  .watch-row {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "logo name"
+      "logo more";
+    row-gap: 0.1rem;
+  }
+  .watch-more { justify-self: start; }
+}
 .watch-elsewhere-eyebrow {
   margin: 1rem 0 0.65rem;
   font-size: 0.68rem;

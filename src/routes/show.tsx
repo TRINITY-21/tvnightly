@@ -121,7 +121,7 @@ app.get("/show/:slug", async (c) => {
       ld={ld}
       ogImage={show.poster_url ?? show.image_url ?? undefined}
     >
-      <article class="show-hub">
+      <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
         <header class="detail-hero frame-hero">
           {heroFrame ? (
             <div class="hero-backdrop" style={heroFrame}></div>
@@ -253,7 +253,8 @@ app.get("/show/:slug", async (c) => {
           return nextEp ? (
             <p class="answer">
               <span class="live-dot"></span>Next episode: <strong>{epCode(nextEp)}</strong>
-              {nextEp.name ? ` — ${nextEp.name}` : ""} · {nextEp.airdate}{" "}
+              {nextEp.name ? ` — ${nextEp.name}` : ""}
+              {nextEp.airdate ? ` · ${longDate(nextEp.airdate)}` : ""}{" "}
               <a href={`/show/${show.slug}/next-episode`} class="chev-after">countdown</a>
             </p>
           ) : null;
@@ -266,7 +267,7 @@ app.get("/show/:slug", async (c) => {
           return top3.length ? (
             <section>
               <h2>
-                Highest-rated episodes{" "}
+                <span class="h2-label">Highest-rated episodes</span>{" "}
                 <a class="more" href={`/show/${show.slug}/best-episodes`}>
                   all ranked
                 </a>
@@ -282,13 +283,13 @@ app.get("/show/:slug", async (c) => {
                       ) : null}
                       <span class="top3-main">
                         <span class="top3-name">
-                          <a href={epHref(show.slug, e)}>{e.name}</a>{" "}
-                          <span class="muted">{epCode(e)}</span>
+                          <a href={epHref(show.slug, e)}>{e.name}</a>
+                        </span>
+                        <span class="top3-meta">
+                          <span class="muted">{epCode(e)}</span> ·{" "}
+                          <span class="rating">★ {e.rating!.toFixed(1)}</span>
                         </span>
                         {pitch ? <span class="top3-sub">{pitch}</span> : null}
-                      </span>
-                      <span class="rank-score">
-                        <span class="rating">★ {e.rating!.toFixed(1)}</span>
                       </span>
                     </li>
                   );
@@ -304,7 +305,7 @@ app.get("/show/:slug", async (c) => {
           return cast.length ? (
             <section id="cast">
               <h2>
-                Cast
+                <span class="h2-label">Cast</span>
                 {cast.length > 8 ? (
                   <a class="more" href={`/show/${show.slug}/cast`}>
                     full cast & details
@@ -513,7 +514,7 @@ app.get("/show/:slug", async (c) => {
         {similar.length ? (
           <section id="similar">
             <h2>
-              Shows like {show.name}{" "}
+              <span class="h2-label">Shows like {show.name}</span>{" "}
               <a class="more" href={`/show/${show.slug}/similar`}>
                 all similar shows
               </a>
@@ -544,7 +545,7 @@ app.get("/show/:slug", async (c) => {
         {similar.length ? (
           <section id="head-to-head">
             <h2>
-              Head-to-head{" "}
+              <span class="h2-label">Head-to-head</span>{" "}
               <a class="more" href={`/compare?a=${show.slug}`}>
                 pick any opponent
               </a>
@@ -581,7 +582,7 @@ app.get("/show/:slug", async (c) => {
           return (
             <section>
               <h2>
-                Keep exploring{" "}
+                <span class="h2-label">Keep exploring</span>{" "}
                 <a class="more" href="/top/tv">
                   top shows
                 </a>
@@ -719,7 +720,7 @@ app.get("/show/:slug/where-to-watch", async (c) => {
       ld={[breadcrumbLd(site, show, "Where to watch", base)]}
       scripts={["/js/dropdown.js"]}
     >
-      <article class="show-hub">
+      <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
         <header class="detail-hero frame-hero">
           {heroFrame ? (
             <div class="hero-backdrop" style={heroFrame}></div>
@@ -865,7 +866,7 @@ app.get("/show/:slug/similar", async (c) => {
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={ld}
     >
-      <article class="show-hub">
+      <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
         <header class="detail-hero frame-hero">
           {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
           <div class="detail-head">
@@ -977,7 +978,7 @@ app.get("/show/:slug/media", async (c) => {
       ld={ld}
       scripts={["/js/media-lightbox.js"]}
     >
-      <article class="show-hub">
+      <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
         <header class="detail-hero frame-hero">
           {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
           <div class="detail-head">

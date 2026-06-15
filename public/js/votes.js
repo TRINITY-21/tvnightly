@@ -9,6 +9,15 @@
       btn.addEventListener("click", function (ev) {
         ev.preventDefault();
         if (localStorage.getItem(key)) return;
+        if (wrap.classList.contains("is-voting")) return; // a vote is already in flight
+        // spin the tapped pill and lock the pair until the round-trip lands —
+        // /api/vote has no navigation, so the nav bar never fires for this
+        wrap.classList.add("is-voting");
+        btn.setAttribute("aria-busy", "true");
+        function done() {
+          wrap.classList.remove("is-voting");
+          btn.removeAttribute("aria-busy");
+        }
         fetch("/api/vote", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -22,8 +31,9 @@
             if (down) down.textContent = counts.down;
             localStorage.setItem(key, btn.dataset.dir);
             wrap.classList.add("voted");
+            done();
           })
-          .catch(function () {});
+          .catch(done);
       });
     });
   });

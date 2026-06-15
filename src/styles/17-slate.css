@@ -44,6 +44,8 @@
 .slate-hero {
   position: relative;
   background: var(--plate);
+  /* backdrop card: the image defines the top edge, so drop the hairline outline */
+  border: 0;
 }
 .slate-hero .slate-frame {
   position: absolute;
@@ -201,8 +203,28 @@
   .slate-media img { max-height: 220px; }
   .count-band { gap: 1.4rem; }
   .count-num { font-size: 1.7rem; }
-  /* phones: a clean viewing band up top, the text settles low on the scrim */
-  .slate-hero .slate-body { min-height: 0; padding-top: 4.6rem; justify-content: flex-end; }
+  /* real backdrop/still: show it IN FULL as a 16:9 banner up top, then stack the
+     answer + countdown on the plate below. The absolute-fill `cover` crop hid
+     most of the image on a tall, narrow phone card. (position:relative — not
+     static — so the scrim ::after still clips to the banner, not the whole card.) */
+  .slate-hero:not(.slate-ambient) .slate-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background-position: center;
+  }
+  .slate-hero:not(.slate-ambient) .slate-frame::after {
+    /* short fade only at the very bottom — keep the backdrop crisp, then a clean
+       hand-off to the plate so the image and the answer read as one card */
+    background: linear-gradient(to bottom, transparent 76%, var(--plate));
+  }
+  .slate-hero:not(.slate-ambient) .slate-body {
+    min-height: 0;
+    padding-top: 0.7rem;
+    justify-content: flex-start;
+  }
+  /* poster-fed ambient glow has no real art to reveal — keep it behind the text */
+  .slate-ambient .slate-body { min-height: 0; padding-top: 4.6rem; justify-content: flex-end; }
 }
 
 @media (max-width: 600px) {

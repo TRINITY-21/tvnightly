@@ -14,15 +14,26 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 // One row grammar for the whole schedule section: time (or date) on the
 // rail, poster, episode line, network chyron at the right edge.
-const SchedRow: FC<{ e: TonightRow; rail: string; href?: string; line?: string }> = ({
-  e,
-  rail,
-  href,
-  line,
-}) => (
+const SchedRow: FC<{
+  e: TonightRow;
+  rail: string;
+  href?: string;
+  line?: string;
+  /** When set, the rail is an air time: render it as a localized <time> (the
+   *  `rail` string is the UTC fallback). Omit for date rails (premieres). */
+  railTime?: string | null;
+}> = ({ e, rail, href, line, railTime }) => (
   <li>
     <a class="sched-row" href={href ?? `/show/${e.show_slug}`}>
-      <span class="sched-rail">{rail}</span>
+      <span class="sched-rail">
+        {railTime ? (
+          <time data-localtime="compact" datetime={new Date(railTime).toISOString()}>
+            {rail}
+          </time>
+        ) : (
+          rail
+        )}
+      </span>
       {(e.show_poster ?? e.show_image) ? (
         <img
           src={(e.show_poster ?? e.show_image)!}
@@ -105,7 +116,7 @@ app.get("/tonight", async (c) => {
       {results.length ? (
         <p class="sched-sum">
           <strong>{results.length}</strong> episode{results.length === 1 ? "" : "s"} on the
-          schedule · times in UTC
+          schedule · your local time
         </p>
       ) : (
         <p class="muted">Nothing in the schedule for today yet — check back after the next sync.</p>
@@ -116,7 +127,15 @@ app.get("/tonight", async (c) => {
           {art ? <div class="sched-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
           <div class="sched-hero-body">
             <p class="sched-kicker">
-              Tonight's headliner{head.airstamp ? ` · ${airTime(head.airstamp)} UTC` : ""}
+              Tonight's headliner
+              {head.airstamp ? (
+                <>
+                  {" · "}
+                  <time data-localtime datetime={new Date(head.airstamp).toISOString()}>
+                    {airTime(head.airstamp)} UTC
+                  </time>
+                </>
+              ) : null}
             </p>
             <h2 class="sched-hero-title">
               <a href={`/show/${head.show_slug}`}>{head.show_name}</a>
@@ -134,7 +153,7 @@ app.get("/tonight", async (c) => {
       {rest.length ? (
         <ol class="sched-list">
           {rest.map((e) => (
-            <SchedRow e={e} rail={airTime(e.airstamp) ?? "--:--"} />
+            <SchedRow e={e} rail={airTime(e.airstamp) ?? "--:--"} railTime={e.airstamp} />
           ))}
         </ol>
       ) : null}
@@ -198,7 +217,7 @@ app.get("/calendar", async (c) => {
       ) : (
         <p class="sched-sum">
           <strong>{results.length}</strong> episode{results.length === 1 ? "" : "s"} across{" "}
-          {byDay.size} day{byDay.size === 1 ? "" : "s"} · times in UTC
+          {byDay.size} day{byDay.size === 1 ? "" : "s"} · your local time
         </p>
       )}
       {[...byDay.entries()].map(([day, eps]) => (
@@ -211,7 +230,7 @@ app.get("/calendar", async (c) => {
           </h2>
           <ol class="sched-list">
             {eps.map((e) => (
-              <SchedRow e={e} rail={airTime(e.airstamp) ?? "--:--"} />
+              <SchedRow e={e} rail={airTime(e.airstamp) ?? "--:--"} railTime={e.airstamp} />
             ))}
           </ol>
         </section>

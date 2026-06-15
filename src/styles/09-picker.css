@@ -127,6 +127,16 @@
   text-transform: uppercase;
   color: var(--muted);
 }
+/* In the picker grid the fields sit two/three to a row. A label that wraps to a
+   second line ("Streaming on (US)") is taller than its neighbour, which would
+   drop its own select below the one beside it and break the row. Reserve two
+   lines for every label so the controls in a row always line up. Scoped to the
+   grid so single FilterSelects elsewhere (region picker, /movies/best) are
+   unaffected. */
+.watch-bar-fields .watch-field-label {
+  min-height: 2.5em;
+  line-height: 1.25;
+}
 /* the native <select> base — shared by the picker's own fields and any
    FilterSelect (.watch-field), so the no-JS fallback is styled everywhere,
    not only inside .watch-bar */
@@ -589,6 +599,14 @@
     width: 112px;
     min-height: 168px;
   }
+  /* hero cards set their own (wider) poster via .shortlist-hero .shortlist-poster,
+     which out-specifies the rule above — narrow it here too, or the facts column
+     stays cramped and the CTA wraps */
+  .shortlist-hero .shortlist-poster {
+    flex-basis: 104px;
+    width: 104px;
+    margin: 0.9rem 0 0.9rem 0.9rem;
+  }
   .shortlist-body { padding: 0.8rem 0.9rem 0.9rem; }
   .shortlist-blurb { display: none; }
   .watch-ghost .watch-ghost-poster { flex-basis: 84px; width: 84px; }
@@ -619,6 +637,56 @@
   .watch-head h1 {
     font-size: 1.55rem;
   }
+  /* On a phone the landscape card crushes the facts column (the CTA wrapped to
+     two lines, the faces folded to 2×2). Stack it instead: poster on top, then
+     title / facts / CTA / rating in a full-width column beneath. The backdrop
+     stays as faint ambient texture under a heavier scrim so centered text reads. */
+  .shortlist-card { flex-direction: column; }
+  .shortlist-frame::after {
+    background: linear-gradient(to bottom, rgba(14, 14, 17, 0.82), rgba(14, 14, 17, 0.93));
+  }
+  /* (0,2,0) beats the base poster rule and ties—then-wins the hero override */
+  .shortlist-card .shortlist-poster {
+    flex: 0 0 auto;
+    width: 150px;
+    min-height: 0;
+    aspect-ratio: 2 / 3;
+    align-self: center;
+    margin: 1.2rem auto 0;
+    border-radius: var(--radius);
+  }
+  .shortlist-body {
+    align-items: center;
+    text-align: center;
+    padding: 0.85rem 1.1rem 1.2rem;
+  }
+  .shortlist-meta,
+  .shortlist-provs { justify-content: center; }
+  /* full-width CTA over a centered rating row */
+  .shortlist-foot {
+    flex-direction: column;
+    align-items: stretch;
+    align-self: stretch;
+    gap: 0.8rem;
+  }
+  .shortlist-btn { width: 100%; white-space: nowrap; }
+  .shortlist-foot .rate-inline { justify-content: center; }
+  .shortlist-foot .rate-inline-label { text-align: center; }
+  /* the pre-search skeleton previews the result layout, so stack it to match */
+  .watch-ghost {
+    flex-direction: column;
+    align-items: center;
+  }
+  .watch-ghost .watch-ghost-poster {
+    flex-basis: auto;
+    width: 150px;
+  }
+  .watch-ghost-lines {
+    width: 100%;
+    align-items: center;
+    padding-top: 0;
+  }
+  .watch-ghost .watch-ghost-btn { width: 100%; }
 }
 
 .provs { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; }

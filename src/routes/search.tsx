@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard, StatusBadge } from "../components/cards";
 import { heroBg, hiRes, retinaSet, slugifyName, stripHtml } from "../lib/format";
+import { diceSimilarity, foldSql, foldText } from "../lib/search";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { Bindings, MovieRow, ShowRow } from "../types";
 
@@ -11,37 +12,31 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 app.get("/api/search", async (c) => {
   const q = (c.req.query("q") ?? "").trim();
-  if (q.length < 2) return c.json([]);
-  // Leading-wildcard LIKE can't use an index; skip the movie and people
-  // scans for very short queries to keep per-keystroke rows-read inside
-  // the D1 free budget.
-  const includeMovies = q.length >= 3;
+  // Fold the query the same way the columns are folded so "spiderman",
+  // "spider man", and "Spider-Man" all hit. Gate on the folded length so an
+  // all-punctuation query doesn't become a match-everything '%%'.
+  const qf = foldText(q);
+  if (qf.length < 2) return c.json([]);
   const [shows, movies, people] = await Promise.all([
     c.env.DB.prepare(
       `SELECT id, name, slug, premiered, rating, COALESCE(poster_url, image_url) AS poster
-       FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 6`,
+       FROM shows WHERE ${foldSql("name")} LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 6`,
     )
-      .bind(q)
+      .bind(qf)
       .all<{ id: number; name: string; slug: string; premiered: string | null; rating: number | null; poster: string | null }>(),
-    includeMovies
-      ? c.env.DB.prepare(
-          `SELECT imdb_id, title, slug, year, rating, poster_url AS poster
-           FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 4`,
-        )
-          .bind(q)
-          .all<{ imdb_id: string; title: string; slug: string; year: number | null; rating: number | null; poster: string | null }>()
-      : Promise.resolve({
-          results: [] as { imdb_id: string; title: string; slug: string; year: number | null; rating: number | null; poster: string | null }[],
-        }),
-    includeMovies
-      ? c.env.DB.prepare(
-          `SELECT id, name, image_url FROM people WHERE name LIKE '%' || ? || '%'
-           ORDER BY (SELECT COUNT(*) FROM credits cr WHERE cr.person_id = people.id) DESC
-           LIMIT 3`,
-        )
-          .bind(q)
-          .all<{ id: number; name: string; image_url: string | null }>()
-      : Promise.resolve({ results: [] as { id: number; name: string; image_url: string | null }[] }),
+    c.env.DB.prepare(
+      `SELECT imdb_id, title, slug, year, rating, poster_url AS poster
+       FROM movies WHERE ${foldSql("title")} LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 4`,
+    )
+      .bind(qf)
+      .all<{ imdb_id: string; title: string; slug: string; year: number | null; rating: number | null; poster: string | null }>(),
+    c.env.DB.prepare(
+      `SELECT id, name, image_url FROM people WHERE ${foldSql("name")} LIKE '%' || ? || '%'
+       ORDER BY (SELECT COUNT(*) FROM credits cr WHERE cr.person_id = people.id) DESC
+       LIMIT 3`,
+    )
+      .bind(qf)
+      .all<{ id: number; name: string; image_url: string | null }>(),
   ]);
   c.header("Cache-Control", "public, max-age=300");
   return c.json(
@@ -79,31 +74,33 @@ app.get("/api/search", async (c) => {
 
 app.get("/search", async (c) => {
   const q = (c.req.query("q") ?? "").trim();
+  const qf = foldText(q);
   type PersonHit = { id: number; name: string; image_url: string | null; known_dept: string | null; roles: number };
-  const [{ results }, { results: movieResults }, { results: personResults }] = q
-    ? await Promise.all([
-        c.env.DB.prepare(
-          `SELECT * FROM shows WHERE name LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 20`,
-        )
-          .bind(q)
-          .all<ShowRow>(),
-        c.env.DB.prepare(
-          `SELECT * FROM movies WHERE title LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 12`,
-        )
-          .bind(q)
-          .all<MovieRow>(),
-        // ranked by body of work — both screens count
-        c.env.DB.prepare(
-          `SELECT id, name, image_url, known_dept,
-                  (SELECT COUNT(*) FROM credits cr WHERE cr.person_id = people.id) +
-                  (SELECT COUNT(*) FROM movie_credits mc WHERE mc.person_id = people.id) AS roles
-           FROM people WHERE name LIKE '%' || ? || '%'
-           ORDER BY roles DESC LIMIT 8`,
-        )
-          .bind(q)
-          .all<PersonHit>(),
-      ])
-    : [{ results: [] as ShowRow[] }, { results: [] as MovieRow[] }, { results: [] as PersonHit[] }];
+  const [{ results }, { results: movieResults }, { results: personResults }] =
+    qf.length >= 2
+      ? await Promise.all([
+          c.env.DB.prepare(
+            `SELECT * FROM shows WHERE ${foldSql("name")} LIKE '%' || ? || '%' ORDER BY weight DESC LIMIT 20`,
+          )
+            .bind(qf)
+            .all<ShowRow>(),
+          c.env.DB.prepare(
+            `SELECT * FROM movies WHERE ${foldSql("title")} LIKE '%' || ? || '%' ORDER BY popularity DESC LIMIT 12`,
+          )
+            .bind(qf)
+            .all<MovieRow>(),
+          // ranked by body of work — both screens count
+          c.env.DB.prepare(
+            `SELECT id, name, image_url, known_dept,
+                    (SELECT COUNT(*) FROM credits cr WHERE cr.person_id = people.id) +
+                    (SELECT COUNT(*) FROM movie_credits mc WHERE mc.person_id = people.id) AS roles
+             FROM people WHERE ${foldSql("name")} LIKE '%' || ? || '%'
+             ORDER BY roles DESC LIMIT 8`,
+          )
+            .bind(qf)
+            .all<PersonHit>(),
+        ])
+      : [{ results: [] as ShowRow[] }, { results: [] as MovieRow[] }, { results: [] as PersonHit[] }];
 
   // the strongest hit takes the hero: an exact title match outranks the
   // weight order; otherwise TV (the house specialty) leads
@@ -145,6 +142,32 @@ app.get("/search", async (c) => {
   const restMovies = best?.kind === "movie" ? movieResults.filter((m) => m !== best.movie) : movieResults;
   const total = results.length + movieResults.length + personResults.length;
   const nothing = Boolean(q) && total === 0;
+
+  // Did-you-mean: when nothing matched, score the most popular titles against the
+  // query by bigram similarity to catch a wrong/missing letter ("breqking bad").
+  // Bounded pool (only fetched on a miss), not run per-keystroke. Reaches popular
+  // titles — an obscure show typed wrong still falls through to the popular shelf.
+  const dym: { shows: ShowRow[]; movies: MovieRow[] } = { shows: [], movies: [] };
+  if (nothing && qf.length >= 4) {
+    const THRESH = 0.34;
+    const [poolShows, poolMovies] = await Promise.all([
+      c.env.DB.prepare(`SELECT * FROM shows ORDER BY weight DESC LIMIT 300`).all<ShowRow>(),
+      c.env.DB.prepare(`SELECT * FROM movies ORDER BY popularity DESC LIMIT 300`).all<MovieRow>(),
+    ]);
+    dym.shows = poolShows.results
+      .map((s) => ({ s, score: diceSimilarity(qf, foldText(s.name)) }))
+      .filter((x) => x.score >= THRESH)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((x) => x.s);
+    dym.movies = poolMovies.results
+      .map((m) => ({ m, score: diceSimilarity(qf, foldText(m.title)) }))
+      .filter((x) => x.score >= THRESH)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6)
+      .map((x) => x.m);
+  }
+  const hasSuggestions = dym.shows.length > 0 || dym.movies.length > 0;
 
   // a launch pad instead of a dead end: the bare page and the zero-result
   // page both get the catalog's most-returned-to shelf
@@ -327,7 +350,37 @@ app.get("/search", async (c) => {
           </article>
         ) : null}
 
-        {nothing ? (
+        {nothing && hasSuggestions ? (
+          <>
+            <p class="srch-empty">
+              Nothing exactly matched “{q}”. Did you mean:
+            </p>
+            {dym.shows.length ? (
+              <section class="srch-section">
+                <h2>
+                  TV shows <span class="srch-count">{dym.shows.length}</span>
+                </h2>
+                <div class="grid">
+                  {dym.shows.map((s) => (
+                    <ShowCard show={s} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            {dym.movies.length ? (
+              <section class="srch-section">
+                <h2>
+                  Movies <span class="srch-count">{dym.movies.length}</span>
+                </h2>
+                <div class="grid">
+                  {dym.movies.map((m) => (
+                    <MovieCard movie={m} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </>
+        ) : nothing ? (
           <p class="srch-empty">
             Nothing matched “{q}”. Check the spelling, or try fewer words — we match titles and
             names, not descriptions.

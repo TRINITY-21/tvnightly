@@ -65,11 +65,30 @@
       box.hidden = !any;
     }
 
+    // a brief spinner row while /api/search is in flight — same .ta-loading
+    // affordance the global typeahead uses, so all three pickers match
+    function showLoading() {
+      box.innerHTML = "";
+      active = -1;
+      var row = document.createElement("div");
+      row.className = "ta-loading";
+      var sp = document.createElement("span");
+      sp.className = "spinner spinner-sm";
+      sp.setAttribute("role", "status");
+      sp.setAttribute("aria-label", "Searching");
+      var txt = document.createElement("span");
+      txt.textContent = "Searching…";
+      row.appendChild(sp); row.appendChild(txt);
+      box.appendChild(row);
+      box.hidden = false;
+    }
+
     input.addEventListener("input", function () {
       clearTimeout(timer);
       var q = input.value.trim();
       if (q.length < 2) { close(); return; }
       timer = setTimeout(function () {
+        showLoading();
         fetch("/api/search?q=" + encodeURIComponent(q))
           .then(function (r) { return r.json(); })
           .then(function (items) { if (input.value.trim() === q) render(items); })

@@ -60,9 +60,10 @@
 @media (prefers-reduced-motion: reduce) {
   .nprogress.is-active .nprogress-spin { animation: none; }
 }
-/* clear the hamburger on the mobile header */
+/* the mobile header is tight (toggle · field · hamburger) — drop the ring and
+   let the top bar carry the loading signal on its own */
 @media (max-width: 700px) {
-  .nprogress-spin { right: 3.6rem; }
+  .nprogress-spin { display: none; }
 }
 
 /* ---- 2. poster skeleton: a shimmer behind the art until it loads ----

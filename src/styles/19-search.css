@@ -4,6 +4,9 @@
    or zero-result page hands the reader somewhere real to go. */
 
 .srch h1 { margin-bottom: 0.4rem; }
+/* the live-search spinner rides beside the heading while a slow fetch is in
+   flight (.spinner supplies the ring + reduced-motion handling) */
+.srch-spin { margin-left: 0.6rem; vertical-align: middle; }
 
 .srch-bar {
   display: grid;
@@ -257,10 +260,63 @@
   .srch-form {
     height: 2.75rem;
   }
+  /* browse + filter fill the row as two equal columns */
   .srch-tools {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
     height: 2.75rem;
   }
-  .srch-hero-body { min-height: 0; padding-top: 4.2rem; justify-content: flex-end; }
+  .srch-filter-dd { min-width: 0; }
+
+  /* real-backdrop top match: same grammar as the /top/tv bleed hero — show the
+     whole 16:9 still (cover on a 16:9 box crops nothing at the sides), then lay
+     the kicker + title onto its darkened lower-left; meta + dek + CTA resolve
+     onto the plate below. The scene reads through on the upper-right. */
+  .srch-hero:not(.srch-ambient) .srch-frame {
+    bottom: auto;
+    aspect-ratio: 16 / 9;
+    background-position: center;
+  }
+  .srch-hero:not(.srch-ambient) .srch-frame::after {
+    background:
+      linear-gradient(
+        to right,
+        rgba(14, 14, 17, 0.92),
+        rgba(14, 14, 17, 0.56) 48%,
+        rgba(14, 14, 17, 0.14) 80%,
+        rgba(14, 14, 17, 0)
+      ),
+      linear-gradient(
+        to bottom,
+        transparent 34%,
+        rgba(14, 14, 17, 0.5) 72%,
+        var(--plate) 100%
+      );
+  }
+  .srch-hero:not(.srch-ambient) .srch-hero-body {
+    min-height: 0;
+    /* 56.25% of the card width == the banner's height; back off 5.5rem so the
+       kicker + title sit on its foot */
+    padding: calc(56.25% - 5.5rem) 1.4rem 1.4rem;
+    justify-content: flex-start;
+  }
+  .srch-hero:not(.srch-ambient) .srch-kicker,
+  .srch-hero:not(.srch-ambient) .srch-hero-title,
+  .srch-hero:not(.srch-ambient) .meta-strip {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  }
+  /* the poster-as-ambient variant keeps the text-over-light overlay */
+  .srch-ambient .srch-hero-body {
+    min-height: 0;
+    padding-top: 4.2rem;
+    justify-content: flex-end;
+  }
   .srch-hero-title { font-size: 1.5rem; }
+  /* keep the CTA label and its chevron together, vertically aligned —
+     inline flow was orphaning the arrow onto its own line */
+  .srch-hero-actions .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+  }
 }

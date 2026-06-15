@@ -1,7 +1,9 @@
 // Swappable email sender. EMAIL_PROVIDER selects the backend:
 //   'console' (default) — logs instead of sending; safe for local dev
-//   'gmail'             — SMTP via the user's Gmail app password (~500 sends/day cap;
-//                         From is forced to the Gmail address by Google)
+//   'gmail' / 'smtp'    — SMTP via worker-mailer. Reads SMTP_HOST/SMTP_PORT/
+//                         SMTP_USER/SMTP_PASS (GMAIL_USER/GMAIL_APP_PASSWORD are
+//                         accepted as aliases). Gmail's free SMTP caps ~500/day and
+//                         rewrites From to the authenticated account.
 //   'resend'            — Resend HTTP API (100/day, 3K/mo free; custom From domain)
 // One env-var flip migrates providers; nothing else changes.
 
@@ -13,7 +15,13 @@ export interface EmailMessage {
 
 export interface EmailEnv {
   EMAIL_PROVIDER?: string;
-  EMAIL_FROM?: string; // used by resend; gmail always sends from GMAIL_USER
+  EMAIL_FROM?: string; // used by resend; SMTP sends from the authenticated user
+  // SMTP — works for Gmail or any host. SMTP_* are preferred; the GMAIL_* names
+  // are kept as aliases so older configs keep working.
+  SMTP_HOST?: string;
+  SMTP_PORT?: string;
+  SMTP_USER?: string;
+  SMTP_PASS?: string;
   GMAIL_USER?: string;
   GMAIL_APP_PASSWORD?: string;
   RESEND_API_KEY?: string;
@@ -24,7 +32,8 @@ export async function sendEmails(env: EmailEnv, messages: EmailMessage[]): Promi
   if (messages.length === 0) return [];
   switch (env.EMAIL_PROVIDER) {
     case "gmail":
-      return sendViaGmail(env, messages);
+    case "smtp":
+      return sendViaSmtp(env, messages);
     case "resend":
       return sendViaResend(env, messages);
     default:
@@ -35,37 +44,44 @@ export async function sendEmails(env: EmailEnv, messages: EmailMessage[]): Promi
   }
 }
 
-async function sendViaGmail(env: EmailEnv, messages: EmailMessage[]): Promise<boolean[]> {
-  if (!env.GMAIL_USER || !env.GMAIL_APP_PASSWORD) {
-    console.error("[email:gmail] GMAIL_USER / GMAIL_APP_PASSWORD not set");
+async function sendViaSmtp(env: EmailEnv, messages: EmailMessage[]): Promise<boolean[]> {
+  const user = env.SMTP_USER ?? env.GMAIL_USER;
+  const pass = env.SMTP_PASS ?? env.GMAIL_APP_PASSWORD;
+  if (!user || !pass) {
+    console.error("[email:smtp] SMTP_USER/SMTP_PASS (or GMAIL_USER/GMAIL_APP_PASSWORD) not set");
     return messages.map(() => false);
   }
+  const host = env.SMTP_HOST ?? "smtp.gmail.com";
+  const port = Number(env.SMTP_PORT) || 465;
+  // 465 = implicit TLS; anything else (e.g. 587) negotiates STARTTLS.
+  const secure = port === 465;
   const { WorkerMailer } = await import("worker-mailer");
   let mailer;
   try {
     mailer = await WorkerMailer.connect({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      credentials: { username: env.GMAIL_USER, password: env.GMAIL_APP_PASSWORD },
+      host,
+      port,
+      secure,
+      startTls: !secure,
+      credentials: { username: user, password: pass },
       authType: "plain",
     });
   } catch (e) {
-    console.error(`[email:gmail] SMTP connect failed: ${e instanceof Error ? e.message : e}`);
+    console.error(`[email:smtp] connect to ${host}:${port} failed: ${e instanceof Error ? e.message : e}`);
     return messages.map(() => false);
   }
   const results: boolean[] = [];
   for (const m of messages) {
     try {
       await mailer.send({
-        from: { name: "TV Nightly", email: env.GMAIL_USER },
+        from: { name: "TV Nightly", email: user },
         to: m.to,
         subject: m.subject,
         html: m.html,
       });
       results.push(true);
     } catch (e) {
-      console.error(`[email:gmail] send to ${m.to} failed: ${e instanceof Error ? e.message : e}`);
+      console.error(`[email:smtp] send to ${m.to} failed: ${e instanceof Error ? e.message : e}`);
       results.push(false);
     }
   }

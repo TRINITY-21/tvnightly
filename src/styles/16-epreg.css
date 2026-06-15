@@ -204,6 +204,11 @@ li.epreg-plate .epreg-still--empty {
 .epreg-meta .epreg-code {
   color: var(--text);
 }
+/* keep the air date whole so a wrap drops "May 2, 2010" together, never an
+   orphaned "2010" on its own line */
+.epreg-date {
+  white-space: nowrap;
+}
 .epreg-meta .sep {
   opacity: 0.5;
 }
@@ -324,19 +329,37 @@ li.epreg-plate .epreg-sum {
   .epreg-cells {
     gap: 1px;
   }
+  /* stack every row: still full-width on top, then rank + text beneath — the
+     same reflow the top-3 plates already used, now applied to all rows. The
+     full-width text column also ends the chyron wrapping + stranded rating. */
   .epreg li {
-    grid-template-columns: 1.9rem auto 1fr;
-    column-gap: 0.6rem;
-  }
-  .epreg--textonly li {
     grid-template-columns: 1.9rem 1fr;
+    grid-template-areas:
+      "still still"
+      "num   main";
+    column-gap: 0.6rem;
+    row-gap: 0.55rem;
   }
-  .epreg-num {
-    font-size: 1.05rem;
+  .epreg-still-link,
+  .epreg-still--empty {
+    grid-area: still;
   }
   .epreg-still,
   .epreg-still--empty {
-    width: 104px;
+    width: 100%;
+  }
+  .epreg-num {
+    grid-area: num;
+    font-size: 1.15rem;
+    align-self: start;
+  }
+  .epreg-main {
+    grid-area: main;
+  }
+  /* the text-only register carries no stills — just rank + text */
+  .epreg--textonly li {
+    grid-template-columns: 1.9rem 1fr;
+    grid-template-areas: "num main";
   }
   .epreg-leader,
   .epreg-rt {
@@ -351,28 +374,9 @@ li.epreg-plate .epreg-sum {
   .epreg-sum {
     -webkit-line-clamp: 2;
   }
-  /* the plate reflows: full-width still, numeral spine beside the text */
-  li.epreg-plate {
-    grid-template-columns: 1.9rem 1fr;
-    grid-template-areas:
-      "still still"
-      "num main";
-    row-gap: 0.5rem;
-  }
-  li.epreg-plate .epreg-still-link {
-    grid-area: still;
-  }
-  li.epreg-plate .epreg-still,
-  li.epreg-plate .epreg-still--empty {
-    width: 100%;
-  }
+  /* plates stay louder than the rest: bigger numeral + a fuller summary */
   li.epreg-plate .epreg-num {
-    grid-area: num;
-    font-size: 1.3rem;
-    align-self: start;
-  }
-  li.epreg-plate .epreg-main {
-    grid-area: main;
+    font-size: 1.6rem;
   }
   li.epreg-plate .epreg-sum {
     display: -webkit-box;

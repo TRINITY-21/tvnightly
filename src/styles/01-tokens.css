@@ -154,4 +154,7 @@ h3 {
   letter-spacing: 0;
   font-stretch: 100%;
   margin-left: 0.5rem;
+  /* a "see all" affordance must never break across lines ("full / schedule") —
+     it wraps whole, with its chevron, or not at all */
+  white-space: nowrap;
 }

@@ -48,6 +48,8 @@ app.get("/sitemaps/:file", async (c) => {
     const genreSlugs = [...new Set([...genres.tv, ...genres.movie].map((g) => slugifyName(g)))];
     const tvGenreSlugs = [...new Set(genres.tv.map((g) => slugifyName(g)))];
     const movieGenreSlugs = [...new Set(genres.movie.map((g) => slugifyName(g)))];
+    // the guide pages (src/routes/guides.tsx) are evergreen on the current year
+    const year = new Date().getFullYear();
     const urls = [
       "/",
       "/recommend",
@@ -56,6 +58,10 @@ app.get("/sitemaps/:file", async (c) => {
       "/movies",
       "/movies/best",
       "/movies/upcoming",
+      "/movies/underrated",
+      `/movies/best/${year}`,
+      "/tv/underrated",
+      `/tv/best/${year}`,
       "/best-episodes",
       "/premieres",
       "/whats-new",
@@ -78,6 +84,11 @@ app.get("/sitemaps/:file", async (c) => {
       ...genreSlugs.map((g) => `/genre/${g}`),
       ...tvGenreSlugs.map((g) => `/genre/${g}/shows`),
       ...movieGenreSlugs.map((g) => `/genre/${g}/movies`),
+      // guide pages, cut by genre
+      ...movieGenreSlugs.map((g) => `/movies/best/${year}/${g}`),
+      ...movieGenreSlugs.map((g) => `/movies/underrated/${g}`),
+      ...tvGenreSlugs.map((g) => `/tv/best/${year}/${g}`),
+      ...tvGenreSlugs.map((g) => `/tv/underrated/${g}`),
     ]
       .map((p) => `<url><loc>${site}${p}</loc></url>`)
       .join("");
@@ -104,14 +115,24 @@ app.get("/sitemaps/:file", async (c) => {
 
   const pp = /^people-(\d+)\.xml$/.exec(file);
   if (pp) {
+    // films/shows = credit counts, so we only emit a /…/featuring page for people
+    // with a real body of work (3+ credits) — thin pages stay out of the index
     const { results } = await c.env.DB.prepare(
-      "SELECT id, name FROM people ORDER BY id LIMIT ? OFFSET ?",
+      `SELECT p.id, p.name,
+              (SELECT COUNT(*) FROM movie_credits mc WHERE mc.person_id = p.id) AS films,
+              (SELECT COUNT(*) FROM credits cr WHERE cr.person_id = p.id) AS shows
+       FROM people p ORDER BY p.id LIMIT ? OFFSET ?`,
     )
       .bind(SHOWS_PER_SITEMAP, Number(pp[1]) * SHOWS_PER_SITEMAP)
-      .all<{ id: number; name: string }>();
+      .all<{ id: number; name: string; films: number; shows: number }>();
     if (results.length === 0) return c.notFound();
     const urls = results
-      .map((r) => `<url><loc>${site}/person/${slugifyName(r.name)}-${r.id}</loc></url>`)
+      .map((r) => {
+        const slug = `${slugifyName(r.name)}-${r.id}`;
+        const film = r.films >= 3 ? `<url><loc>${site}/movies/featuring/${slug}</loc></url>` : "";
+        const tv = r.shows >= 3 ? `<url><loc>${site}/tv/featuring/${slug}</loc></url>` : "";
+        return `<url><loc>${site}/person/${slug}</loc></url>${film}${tv}`;
+      })
       .join("");
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
   }

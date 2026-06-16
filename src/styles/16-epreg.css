@@ -276,6 +276,20 @@ li.epreg-plate .epreg-sum {
 }
 
 /* cross-ranking rail: chyron doors, no preamble */
+/* the ranking links and the Share button share one row — Share pushed right,
+   wrapping below the links on narrow screens */
+.epreg-foot {
+  margin: 1.1rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.4rem;
+}
+.epreg-foot .epreg-links,
+.epreg-foot .share-bar {
+  margin: 0;
+}
 .epreg-links {
   margin: 1.1rem 0 0;
   display: flex;

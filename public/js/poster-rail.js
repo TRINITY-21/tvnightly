@@ -29,12 +29,16 @@
     var next = rail.querySelector(".rail-btn-next");
     if (!row || !prev || !next) return;
 
+    var rafId = 0;
     function refresh() {
-      updateRail(rail);
+      if (rafId) return;
+      rafId = requestAnimationFrame(function () {
+        rafId = 0;
+        updateRail(rail);
+      });
     }
-    refresh();
+    updateRail(rail);
     row.addEventListener("scroll", refresh, { passive: true });
-    window.addEventListener("resize", refresh);
     prev.addEventListener("click", function () {
       scrollRail(rail, -1);
     });
@@ -45,13 +49,22 @@
 
   document.querySelectorAll(".poster-rail").forEach(bindRail);
 
+  var resizeId = 0;
+  window.addEventListener("resize", function () {
+    if (resizeId) return;
+    resizeId = requestAnimationFrame(function () {
+      resizeId = 0;
+      document.querySelectorAll(".poster-rail").forEach(updateRail);
+    });
+  });
+
   var tabs = document.querySelector(".discover-tabs");
   if (tabs) {
     tabs.querySelectorAll('input[name="discover"]').forEach(function (input) {
       input.addEventListener("change", function () {
-        setTimeout(function () {
+        requestAnimationFrame(function () {
           document.querySelectorAll(".poster-rail").forEach(updateRail);
-        }, 0);
+        });
       });
     });
   }

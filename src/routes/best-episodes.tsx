@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
 import { epCode, largeStill, longDate, stripHtml } from "../lib/format";
@@ -128,7 +129,7 @@ app.get("/best-episodes", async (c) => {
                         {e.name ?? epCode(e)}
                       </a>
                       <span class="epreg-leader"></span>
-                      <span class="rating">★ {e.rating!.toFixed(1)}</span>
+                      <span class="rating"><IconStar class="rating-star" />{e.rating!.toFixed(1)}</span>
                     </p>
                     {e.summary ? <p class="epreg-sum">{stripHtml(e.summary)}</p> : null}
                   </span>

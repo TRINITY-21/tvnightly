@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { IconStar, IconInstagram, IconX, IconGlobe } from "../components/icons";
 import { Context } from "hono";
 import { Bindings, ShowRow, MovieRow, PersonRow } from "../types";
 import { stripHtml, slugifyName, retinaSet, longDate, ageOf } from "../lib/format";
@@ -7,7 +8,6 @@ import { getShow, crewLinkMap } from "../lib/queries";
 import { Layout } from "../components/Layout";
 import { ShowTabs, SeasonTabs } from "../components/nav";
 import { ClampSummary, ExploreCard } from "../components/cards";
-import { IconInstagram, IconX, IconGlobe } from "../components/icons";
 
 /** genres are stored as a JSON string array on shows & movies */
 const parseGenres = (j: string | null): string[] => {
@@ -602,7 +602,7 @@ app.get("/person/:slug", async (c) => {
             {topRated ? (
               <div class="stat">
                 <span class="stat-num">
-                  {topRated.rating.toFixed(1)} <span class="rating">★</span>
+                  {topRated.rating.toFixed(1)} <span class="rating"><IconStar class="rating-star" /></span>
                 </span>
                 <span class="stat-label">Highest rated</span>
                 <span class="stat-sub muted">{topRated.name}</span>
@@ -611,7 +611,7 @@ app.get("/person/:slug", async (c) => {
             {avgRating && ratedCredits.length > 1 ? (
               <div class="stat">
                 <span class="stat-num">
-                  {avgRating} <span class="rating">★</span>
+                  {avgRating} <span class="rating"><IconStar class="rating-star" /></span>
                 </span>
                 <span class="stat-label">Average rating</span>
                 <span class="stat-sub muted">across {ratedCredits.length} titles</span>
@@ -623,6 +623,9 @@ app.get("/person/:slug", async (c) => {
           <section class="credit-sec">
             <h2 class="credit-head">
               Top TV shows <span class="credit-count">{roles.length}</span>
+              <a class="more" href={`/tv/featuring/${canonicalSlug}`}>
+                best {person.name} shows
+              </a>
             </h2>
             <ol class="rank-list">
               {roles.map((r, i) => {
@@ -658,7 +661,7 @@ app.get("/person/:slug", async (c) => {
                   </span>
                   {r.rating != null ? (
                     <span class="rank-score">
-                      <span class="rating">★ {r.rating.toFixed(1)}</span>
+                      <span class="rating"><IconStar class="rating-star" />{r.rating.toFixed(1)}</span>
                     </span>
                   ) : null}
                 </li>
@@ -673,6 +676,9 @@ app.get("/person/:slug", async (c) => {
           <section class="credit-sec">
             <h2 class="credit-head">
               Top movies <span class="credit-count">{films.length}</span>
+              <a class="more" href={`/movies/featuring/${canonicalSlug}`}>
+                best {person.name} movies
+              </a>
             </h2>
             <ol class="rank-list">
               {films.map((m, i) => {
@@ -702,7 +708,7 @@ app.get("/person/:slug", async (c) => {
                   </span>
                   {m.rating != null ? (
                     <span class="rank-score">
-                      <span class="rating">★ {m.rating.toFixed(1)}</span>
+                      <span class="rating"><IconStar class="rating-star" />{m.rating.toFixed(1)}</span>
                     </span>
                   ) : null}
                 </li>

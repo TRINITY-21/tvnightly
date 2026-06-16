@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { IconStar } from "../components/icons";
 import type { FC } from "hono/jsx";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
@@ -541,6 +542,7 @@ app.get("/lists", async (c) => {
     featuredArts(c),
     hubCardArts(c),
   ]);
+  const year = new Date().getFullYear();
   const CHARTS: [string, string][] = [
     ["Top TV shows", "/top/tv"],
     ["Top movies", "/movies/best"],
@@ -554,6 +556,13 @@ app.get("/lists", async (c) => {
     ["Streaming arrivals", "/whats-new"],
     ["Renewals & cancellations", "/renewals"],
     ["Popular movies", "/movies"],
+  ];
+  // the year/genre guide pages get their own labelled block below
+  const GUIDES: [string, string][] = [
+    [`Best TV shows of ${year}`, `/tv/best/${year}`],
+    [`Best movies of ${year}`, `/movies/best/${year}`],
+    ["Underrated TV shows", "/tv/underrated"],
+    ["Underrated movies", "/movies/underrated"],
   ];
   const moreCharts = CHARTS.filter(
     ([, href]) =>
@@ -579,6 +588,10 @@ app.get("/lists", async (c) => {
               <div>
                 <dt>Charts</dt>
                 <dd>{CHARTS.length}</dd>
+              </div>
+              <div>
+                <dt>Guides</dt>
+                <dd>{GUIDES.length}</dd>
               </div>
               <div>
                 <dt>Tools</dt>
@@ -653,6 +666,27 @@ app.get("/lists", async (c) => {
               </ul>
             </div>
           </div>
+        </section>
+
+        <section class="browse-sec">
+          <div class="browse-sec-head">
+            <div>
+              <h2>Watch guides</h2>
+              <p class="section-lead muted">
+                Best-of-{year} picks and underrated gems, cut by genre.
+              </p>
+            </div>
+          </div>
+          <ul class="browse-index" aria-label="Watch guides">
+            {GUIDES.map(([label, href]) => (
+              <li>
+                <a href={href}>
+                  <span class="browse-index-label">{label}</span>
+                  <span class="chev-icon" aria-hidden="true"></span>
+                </a>
+              </li>
+            ))}
+          </ul>
         </section>
 
         <section class="browse-sec browse-nets">
@@ -849,11 +883,11 @@ app.get("/top/tv", async (c) => {
                       </>
                     ))}
                     {provLinks.length ? <span class="wo-provs-sep"> · </span> : null}
-                    <span class="rating">★ {s.rating!.toFixed(1)}</span>
+                    <span class="rating"><IconStar class="rating-star" />{s.rating!.toFixed(1)}</span>
                   </span>
                 </span>
                 <span class="wo-side">
-                  <span class="rating">★ {s.rating!.toFixed(1)}</span>
+                  <span class="rating"><IconStar class="rating-star" />{s.rating!.toFixed(1)}</span>
                   <a class="wo-mins" href={`/show/${s.slug}/best-episodes`}>
                     best episodes
                   </a>
@@ -868,16 +902,22 @@ app.get("/top/tv", async (c) => {
         <h2>Keep exploring</h2>
         <div class="explore-grid">
           <ExploreCard
+            icon="Watch guide"
+            title={`Best shows of ${new Date().getFullYear()}`}
+            desc="The acclaimed series to watch this year, what's airing now first."
+            href={`/tv/best/${new Date().getFullYear()}`}
+          />
+          <ExploreCard
+            icon="Hidden gems"
+            title="Underrated TV shows"
+            desc="High ratings, low profile — the great series most people have missed."
+            href="/tv/underrated"
+          />
+          <ExploreCard
             icon="Shortcut"
             title="All-time best episodes"
             desc="The single greatest hours of television, across every show."
             href="/best-episodes"
-          />
-          <ExploreCard
-            icon="Directory"
-            title="Browse everything"
-            desc="Networks, genres, hubs, and every chart in one directory."
-            href="/lists"
           />
           <ExploreCard
             icon="Compare"
@@ -1020,11 +1060,11 @@ app.get("/top/seasons", async (c) => {
                         </>
                       ))}
                       {provLinks.length ? <span class="wo-provs-sep"> · </span> : null}
-                      <span class="rating">★ {r.avg_r.toFixed(2)}</span>
+                      <span class="rating"><IconStar class="rating-star" />{r.avg_r.toFixed(2)}</span>
                     </span>
                   </span>
                   <span class="wo-side">
-                    <span class="rating">★ {r.avg_r.toFixed(2)}</span>
+                    <span class="rating"><IconStar class="rating-star" />{r.avg_r.toFixed(2)}</span>
                     <span class="wo-mins">{r.eps} episodes</span>
                   </span>
                 </li>
@@ -1288,9 +1328,12 @@ app.get("/network/:slug", async (c) => {
   if (!entry) return c.notFound();
   const regionHas = regionTester(visitorRegion(c), entry.name);
 
-  const [best, films, airingRes] = await Promise.all([
-    topNetworkShows(db, entry, regionHas, 12),
-    topNetworkMovies(db, regionHas, 12),
+  // fetch a deep slice (same query cost — the 400-row pool runs regardless) so
+  // the genre doors below can surface long-tail genres (Western, Romance, …),
+  // then take the top 12 for the on-page grids.
+  const [allShows, allMovies, airingRes] = await Promise.all([
+    topNetworkShows(db, entry, regionHas, 150),
+    topNetworkMovies(db, regionHas, 150),
     db
       .prepare(
         `SELECT * FROM shows WHERE (network = ? OR web_channel = ?) AND status = 'Running'
@@ -1299,6 +1342,8 @@ app.get("/network/:slug", async (c) => {
       .bind(entry.name, entry.name)
       .all<ShowRow>(),
   ]);
+  const best = allShows.slice(0, 12);
+  const films = allMovies.slice(0, 12);
   const airing = airingRes.results;
   const { art, ambient } = await networkHeroArt(c.env.TMDB_API_KEY, best, films);
 
@@ -1310,6 +1355,32 @@ app.get("/network/:slug", async (c) => {
   if (films.length) stats.push({ label: "Films", value: String(films.length) });
   if (airing.length) stats.push({ label: "On air", value: String(airing.length) });
   if (entry.count) stats.push({ label: "In catalog", value: String(entry.count) });
+
+  // "Best {genre} on {network}" doors — every genre actually present in this
+  // network's catalog (region-filtered), deduped by slug (TV "Science-Fiction"
+  // + movie "Science Fiction" = one chip) and ordered by how many titles carry
+  // it, so the strongest genres lead and the long tail still shows. These are
+  // the internal links that get the genre×service pages crawled.
+  const genreCount = new Map<string, { label: string; n: number }>();
+  const collectGenres = (json: string | null) => {
+    if (!json) return;
+    try {
+      for (const g of JSON.parse(json) as string[]) {
+        const sl = slugifyName(g);
+        const cur = genreCount.get(sl);
+        if (cur) cur.n++;
+        else genreCount.set(sl, { label: g, n: 1 });
+      }
+    } catch {
+      /* skip malformed */
+    }
+  };
+  allShows.forEach((s) => collectGenres(s.genres));
+  allMovies.forEach((m) => collectGenres(m.genres));
+  const genreLinks = [...genreCount.entries()]
+    .sort((a, b) => b[1].n - a[1].n)
+    .slice(0, 18)
+    .map(([sl, v]) => [sl, v.label] as [string, string]);
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -1345,6 +1416,18 @@ app.get("/network/:slug", async (c) => {
           All networks ranked
         </a>
       </NetworkHero>
+      {genreLinks.length ? (
+        <nav class="net-genres" aria-label={`Best ${entry.name} by genre`}>
+          <span class="net-genres-label">Best by genre</span>
+          <div class="net-genres-rail">
+            {genreLinks.map(([sl, g]) => (
+              <a class="genre-chip" href={`/network/${slug}/${sl}`}>
+                {g}
+              </a>
+            ))}
+          </div>
+        </nav>
+      ) : null}
       {best.length ? (
         <section class="hub-sec">
           <h2>
@@ -1406,7 +1489,7 @@ app.get("/network/:slug", async (c) => {
                     <span class="sched-main">
                       <span class="sched-show">{s.name}</span>
                       <span class="sched-ep">
-                        {s.rating != null ? `★ ${s.rating.toFixed(1)} · ` : ""}
+                        {s.rating != null ? <><IconStar class="rating-star" /> {s.rating.toFixed(1)} · </> : null}
                         <span class="muted">next episode</span>
                       </span>
                     </span>
@@ -1548,6 +1631,116 @@ app.get("/network/:slug/movies", async (c) => {
       ) : (
         <p class="muted">No {entry.name} movies in this region's catalog yet.</p>
       )}
+      <NetworkDoors />
+    </Layout>,
+  );
+});
+
+/** Does a title's genres array (JSON) contain this label? */
+const inGenre = (json: string | null, label: string): boolean => {
+  if (!json) return false;
+  try {
+    return (JSON.parse(json) as string[]).includes(label);
+  } catch {
+    return false;
+  }
+};
+
+// "Best {genre} on {service}" — the high-intent long-tail page ("best horror on
+// netflix"). Registered AFTER /shows + /movies so those literal paths win; any
+// other 3rd segment is treated as a genre. 404s on combos with no titles so we
+// never publish a thin/empty page.
+app.get("/network/:slug/:genre", async (c) => {
+  const db = c.env.DB;
+  const slug = c.req.param("slug");
+  const genreSlug = c.req.param("genre");
+  const entry = await resolveNetwork(db, slug);
+  if (!entry) return c.notFound();
+  const dir = await genreDirectory(db);
+  const tvGenre = dir.tv.find((g) => slugifyName(g) === genreSlug);
+  const movieGenre = dir.movie.find((g) => slugifyName(g) === genreSlug);
+  if (!tvGenre && !movieGenre) return c.notFound();
+  const label = tvGenre ?? movieGenre!;
+
+  const regionHas = regionTester(visitorRegion(c), entry.name);
+  const [allShows, allMovies] = await Promise.all([
+    tvGenre ? topNetworkShows(db, entry, regionHas, 300) : Promise.resolve([] as ShowRow[]),
+    movieGenre ? topNetworkMovies(db, regionHas, 300) : Promise.resolve([] as MovieRow[]),
+  ]);
+  const shows = tvGenre ? allShows.filter((s) => inGenre(s.genres, tvGenre)).slice(0, 36) : [];
+  const movies = movieGenre ? allMovies.filter((m) => inGenre(m.genres, movieGenre)).slice(0, 36) : [];
+  if (!shows.length && !movies.length) return c.notFound();
+
+  const { art, ambient } = await networkHeroArt(c.env.TMDB_API_KEY, shows, movies);
+  const stats: { label: string; value: string }[] = [];
+  if (shows.length) stats.push({ label: "Series", value: String(shows.length) });
+  if (movies.length) stats.push({ label: "Films", value: String(movies.length) });
+  const topRated = shows[0]?.rating ?? movies[0]?.rating ?? null;
+  if (topRated != null) stats.push({ label: "Top rating", value: `★ ${topRated.toFixed(1)}` });
+
+  const lc = label.toLowerCase();
+  const kindWord = shows.length && movies.length ? "shows and movies" : movies.length && !shows.length ? "movies" : "shows";
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`Best ${lc} on ${entry.name} — ranked | TV Nightly`}
+      description={`The best ${lc} ${kindWord} on ${entry.name}, ranked by viewer rating — with where to watch in your region.`}
+      canonical={canonical(c)}
+    >
+      <NetworkHero
+        name={entry.name}
+        art={art}
+        ambient={ambient}
+        eyebrow={`${entry.name} · ${label}`}
+        title={`Best ${label} on ${entry.name}`}
+        intro={`The top-rated ${lc} on ${entry.name} in your region, ranked honestly by viewer rating — no sponsorships.`}
+        stats={stats.length ? stats : undefined}
+      >
+        <a class="verdict-btn" href={`/network/${slug}`}>
+          The best of {entry.name}
+        </a>
+        <a class="btn-ghost" href={`/genre/${genreSlug}`}>
+          All {lc}
+        </a>
+        <a class="btn-ghost" href="/top/networks">
+          All networks ranked
+        </a>
+      </NetworkHero>
+      {shows.length ? (
+        <section class="hub-sec">
+          <h2>
+            Top {lc} series on {entry.name}{" "}
+            {tvGenre ? (
+              <a class="more" href={`/network/${slug}/shows`}>
+                all shows
+              </a>
+            ) : null}
+          </h2>
+          <div class="grid">
+            {shows.map((s) => (
+              <ShowCard show={s} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {movies.length ? (
+        <section class="hub-sec">
+          <h2>
+            Top {lc} movies on {entry.name}{" "}
+            {movieGenre ? (
+              <a class="more" href={`/network/${slug}/movies`}>
+                all movies
+              </a>
+            ) : null}
+          </h2>
+          <div class="grid">
+            {movies.map((m) => (
+              <MovieCard movie={m} />
+            ))}
+          </div>
+        </section>
+      ) : null}
       <NetworkDoors />
     </Layout>,
   );
@@ -1760,6 +1953,7 @@ app.get("/genre/:slug/shows", async (c) => {
 
   const hub = hubForGenres([tvGenre], null);
   const siblings = dir.tv.filter((g) => g !== tvGenre).slice(0, 16);
+  const year = new Date().getFullYear();
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -1802,6 +1996,20 @@ app.get("/genre/:slug/shows", async (c) => {
       ) : (
         <p class="muted">No rated {lower} shows yet.</p>
       )}
+      <section class="hub-sec">
+        <h2>More {lower} TV guides</h2>
+        <div class="footer-picks">
+          <a class="footer-card" href={`/tv/best/${year}/${slug}`}>
+            Best {lower} shows to watch in {year}
+          </a>
+          <a class="footer-card" href={`/tv/underrated/${slug}`}>
+            Underrated {lower} shows
+          </a>
+          <a class="footer-card" href={`/genre/${slug}`}>
+            The best of {tvGenre}
+          </a>
+        </div>
+      </section>
       {siblings.length ? (
         <section class="hub-sec">
           <h2>
@@ -1878,6 +2086,7 @@ app.get("/genre/:slug/movies", async (c) => {
 
   const hub = hubForGenres([movieGenre], null);
   const siblings = dir.movie.filter((g) => g !== movieGenre).slice(0, 16);
+  const year = new Date().getFullYear();
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -1923,6 +2132,20 @@ app.get("/genre/:slug/movies", async (c) => {
       ) : (
         <p class="muted">No rated {lower} films yet.</p>
       )}
+      <section class="hub-sec">
+        <h2>More {lower} movie guides</h2>
+        <div class="footer-picks">
+          <a class="footer-card" href={`/movies/best/${year}/${slug}`}>
+            Best {lower} movies to watch in {year}
+          </a>
+          <a class="footer-card" href={`/movies/underrated/${slug}`}>
+            Underrated {lower} movies
+          </a>
+          <a class="footer-card" href={`/movies/best?genre=${encodeURIComponent(movieGenre)}`}>
+            Best {lower} movies of all time
+          </a>
+        </div>
+      </section>
       {siblings.length ? (
         <section class="hub-sec">
           <h2>

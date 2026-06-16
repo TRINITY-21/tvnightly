@@ -344,12 +344,15 @@ export function buildSignalSvg(
   );
   top5.forEach((ep, i) => {
     const y = rowsY0 + rowH * i + rowH / 2;
+    // rank + rating lead the row so the score is never the thing that pans off
+    // the right edge on a phone (the SVG scrolls at 880px); the title and code
+    // trail and may scroll out of view, which is fine — the start still reads.
     parts.push(
       `<text x="${r2(regX)}" y="${r2(y)}">` +
         `<tspan font-size="${r2(listFs * 1.15)}" font-weight="800" style="font-variation-settings:'wdth' 62,'wght' 800" fill="${TEXT}" opacity="0.3">${String(i + 1).padStart(2, "0")}</tspan>` +
+        `<tspan dx="0.6em" font-size="${r2(listFs * 1.1)}" font-family="${SYS}" font-weight="700" fill="${GOLD}" style="font-variant-numeric:tabular-nums">${ep.rating!.toFixed(1)}</tspan>` +
         `<tspan dx="0.6em" font-size="${listFs}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="0.8" fill="${TEXT}">${esc(trunc((ep.name ?? code(ep)).toUpperCase(), isCard ? 26 : 30))}</tspan>` +
-        `<tspan dx="0.55em" font-size="${r2(listFs * 0.82)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="1" fill="${MUTED}">${code(ep)} ·</tspan>` +
-        `<tspan dx="0.45em" font-size="${r2(listFs * 1.1)}" font-family="${SYS}" font-weight="700" fill="${GOLD}" style="font-variant-numeric:tabular-nums">${ep.rating!.toFixed(1)}</tspan>` +
+        `<tspan dx="0.5em" font-size="${r2(listFs * 0.82)}" font-weight="700" style="font-variation-settings:'wdth' 105,'wght' 700" letter-spacing="1" fill="${MUTED}">${code(ep)}</tspan>` +
         `</text>`,
     );
   });

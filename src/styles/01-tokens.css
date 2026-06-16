@@ -27,6 +27,9 @@
      emit the literal for export parity (lib/signal.ts) */
   --plate: #0e0e11;
   --accent-2: #ff5c8a;     /* marquee pink — live / fandom / chart B */
+  --rating: #e0820f;       /* poster rating chip — a deeper amber than --accent
+                              so a white star + score stay legible (white on the
+                              bright interactive amber would not read) */
   --ok: #3cdf8e;
   --warn: #eac54f;
   --bad: #ff6b6b;
@@ -90,7 +93,9 @@ main { max-width: 980px; margin: 0 auto; padding: 1rem 1rem 2rem; }
 h1 {
   font-family: var(--display);
   font-stretch: 120%;
-  font-weight: 650;
+  /* the marquee weight: every main page title reads at the same Archivo-black
+     heft as the detail-page hero, instead of some pages landing at a lighter 650 */
+  font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   font-size: 1.7rem;
@@ -145,7 +150,27 @@ h3 {
 }
 /* drawn glyphs (components/icons.tsx) sit on the text line, not above it */
 .icon { vertical-align: -0.16em; }
-.rating { color: var(--warn); white-space: nowrap; font-weight: 650; }
+/* inline-flex so the star icon centers on the number at any size — no baseline
+   guesswork; vertical-align:middle keeps the whole chip centered when it sits in
+   a run of plain inline text (flex parents like .meta-strip ignore it harmlessly) */
+.rating {
+  color: var(--warn);
+  white-space: nowrap;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.16em;
+  vertical-align: middle;
+}
+/* inline star icon (components/icons IconStar), sized to the rating text.
+   vertical-align centers it in plain-inline contexts (search typeahead, compare
+   tooltips rendered by client JS); flex parents like .rating ignore it. */
+.rating-star {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  vertical-align: -0.15em;
+}
 .more {
   font-family: var(--body);
   font-weight: 600;

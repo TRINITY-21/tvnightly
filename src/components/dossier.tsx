@@ -1,6 +1,7 @@
 // The match-dossier ledger row: a recommendation with its receipts.
 // Shared by show + movie similar sections and their dedicated pages.
 import { FC } from "hono/jsx";
+import { IconStar } from "./icons";
 import { Dossier } from "../lib/dossier";
 import { slugifyName } from "../lib/format";
 import { providerBrand } from "../lib/providers";
@@ -115,7 +116,7 @@ export const DossierRow: FC<{
       ) : null}
     </span>
     <span class="dossier-score">
-      {rating != null ? <span class="rating">★ {rating.toFixed(1)}</span> : null}
+      {rating != null ? <span class="rating"><IconStar class="rating-star" />{rating.toFixed(1)}</span> : null}
       {compare ? (
         <a class="dossier-compare chev-after" href={compare.href} aria-label={compare.label}>
           Compare

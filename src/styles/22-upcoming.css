@@ -71,7 +71,7 @@
   white-space: nowrap;
   padding: 0.2rem 0.55rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--bg);
 }
 /* rows carry a logline: date + poster + title ride the top line, then the

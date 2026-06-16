@@ -92,7 +92,7 @@
         ? '<a class="sig-read-name" href="' + row.h + '">' + esc(row.n) + "</a>"
         : '<span class="sig-read-name">' + esc(row.n) + "</span>") +
       (row.r != null
-        ? '<span class="rating">★ ' + row.r.toFixed(1) + "</span>"
+        ? '<span class="rating"><svg class="rating-star" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.74 5.55 6.13.9-4.44 4.32 1.05 6.11L12 16.69l-5.48 2.79 1.05-6.11L3.13 9.05l6.13-.9z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>' + row.r.toFixed(1) + "</span>"
         : '<span class="sig-read-code" style="opacity:.6">Unrated</span>') +
       (row.d ? '<span class="sig-read-date">' + esc(row.d) + "</span>" : "");
     if (live)

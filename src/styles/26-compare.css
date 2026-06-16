@@ -104,7 +104,7 @@
   right: 1.6rem;
   text-align: right;
 }
-/* the cinematic medallion, dead-center on the seam */
+/* the cinematic medallion, dead-center on the seam — a glossy "clash" coin */
 .vsx-badge {
   position: absolute;
   top: 50%;
@@ -114,23 +114,43 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.9rem;
-  height: 2.9rem;
+  width: 3.5rem;
+  height: 3.5rem;
   border-radius: 999px;
   font-family: var(--display);
-  font-stretch: 80%;
+  font-stretch: 88%;
   font-weight: 800;
-  font-size: 0.9rem;
-  letter-spacing: 0.04em;
-  color: var(--text);
-  /* opaque plate base under the tint so the seam can't bleed through; a solid
-     plate ring hides the line across the badge too (it still shows above/below) */
-  background: linear-gradient(135deg, rgba(255, 169, 77, 0.45), rgba(255, 92, 138, 0.45)), var(--plate);
-  border: 1.5px solid rgba(248, 246, 242, 0.7);
+  font-style: italic;
+  font-size: 1.2rem;
+  letter-spacing: 0.01em;
+  color: #fff;
+  /* glassy top highlight over a fiery amber→coral→magenta clash gradient */
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 48%),
+    linear-gradient(145deg, #ffb55c 0%, #ff7a52 40%, #ff4f87 72%, #9c2f5e 100%);
+  text-shadow: 0 1px 2px rgba(90, 10, 30, 0.7);
   box-shadow:
-    0 0 0 7px var(--plate),
-    0 6px 24px rgba(0, 0, 0, 0.6),
-    0 0 26px rgba(255, 169, 77, 0.28);
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.6),    /* glossy top rim */
+    inset 0 -5px 10px rgba(110, 18, 42, 0.55),     /* curved coin underside */
+    0 0 0 6px var(--plate),                        /* opaque moat hides the seam */
+    0 0 0 7.5px rgba(255, 176, 92, 0.7),           /* bright accent ring */
+    0 10px 30px rgba(0, 0, 0, 0.6),                /* drop shadow */
+    0 0 34px rgba(255, 110, 90, 0.5);              /* warm bloom */
+}
+/* a slow heat throb so the matchup feels live, not painted */
+@media (prefers-reduced-motion: no-preference) {
+  .vsx-badge {
+    animation: vsx-throb 2.8s ease-in-out infinite;
+  }
+}
+@keyframes vsx-throb {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 7px rgba(255, 110, 90, 0.35));
+  }
+  50% {
+    filter: drop-shadow(0 0 17px rgba(255, 110, 90, 0.7));
+  }
 }
 
 /* cross-link to the other medium's compare tool — a pill in the header's
@@ -150,7 +170,7 @@
   gap: 0.4rem;
   padding: 0.45rem 0.95rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--muted);
   font-size: 0.82rem;
@@ -284,6 +304,21 @@
 .vsx-h2 {
   margin: 0 0 0.85rem;
 }
+/* section head: heading on the left, Share on the right, same baseline row */
+.vsx-sec-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.85rem;
+}
+.vsx-sec-head .vsx-h2 {
+  margin: 0;
+}
+.vsx-sec-head .share-bar {
+  margin: 0;
+}
 
 /* tale of the tape — fixed columns so the two sides sit symmetric about the
    centered metric label, not bunched at the left */
@@ -322,19 +357,22 @@
 .tape-team-b {
   text-align: left;
 }
+/* color key on its own line above the name, aligned to the name's edge — so
+   both squares sit at the same height no matter how the names wrap */
 .tape-dot {
-  display: inline-block;
+  display: block;
   width: 0.62rem;
   height: 0.62rem;
   border-radius: 3px;
-  flex-shrink: 0;
-  vertical-align: middle;
+  margin-bottom: 0.4rem;
 }
 .tape-team .tape-dot {
-  margin-right: 0.45rem;
+  margin-left: auto;
+  margin-right: 0;
 }
 .tape-team-b .tape-dot {
-  margin-left: 0.45rem;
+  margin-right: auto;
+  margin-left: 0;
 }
 .tape-dot-a {
   background: #ffa94d;
@@ -447,6 +485,13 @@
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
+}
+/* stop iOS's long-press image callout / text selection from hijacking a tap on
+   the chart (it fires pointercancel/leave and dismisses the episode card) */
+.vsx-svg {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .vsx-scroll::-webkit-scrollbar {
   height: 7px;

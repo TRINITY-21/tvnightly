@@ -67,11 +67,12 @@ export const epHref = (slug: string, e: EpisodeRow) => `/show/${slug}/${epCode(e
 export const hiRes = (url: string | null): string | null =>
   url ? url.replace(/\/medium_(portrait|landscape)\//, "/original_untouched/") : null;
 
-/** 1x/2x srcset: medium for standard screens, the original only for dense ones. */
-export const retinaSet = (url: string | null): string | undefined =>
-  url && /\/medium_(portrait|landscape)\//.test(url)
-    ? `${url} 1x, ${url.replace(/\/medium_(portrait|landscape)\//, "/original_untouched/")} 2x`
-    : undefined;
+/** TVmaze only offers medium (~210px) and original_untouched (unbounded,
+ *  often 2000–3500px). For poster-card slots (~252px), the original is
+ *  massively oversized on retina displays — 6 MB+ wasted per page. No
+ *  intermediate rendition exists, so we skip the 2x srcset; the medium
+ *  is sharp enough for every poster slot. */
+export const retinaSet = (_url: string | null): string | undefined => undefined;
 
 /** Bounded retina still for register slots (~400w): a 168–256px slot wants
  *  large_landscape, never the unbounded original_untouched. */

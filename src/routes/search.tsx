@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard, StatusBadge } from "../components/cards";
 import { heroBg, hiRes, retinaSet, slugifyName, stripHtml } from "../lib/format";
@@ -336,7 +337,7 @@ app.get("/search", async (c) => {
                 {bestRating != null ? (
                   <>
                     <span class="sep">·</span>
-                    <span class="rating">★ {bestRating.toFixed(1)}</span>
+                    <span class="rating"><IconStar class="rating-star" />{bestRating.toFixed(1)}</span>
                   </>
                 ) : null}
               </p>

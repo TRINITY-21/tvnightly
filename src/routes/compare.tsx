@@ -4,9 +4,14 @@ import { Bindings, AppContext, ShowRow, EpisodeRow } from "../types";
 import { comparePathFor, hiRes } from "../lib/format";
 import { origin, canonical } from "../lib/seo";
 import { similarShows } from "../lib/queries";
+import { servePng } from "../lib/render";
 import { foldSql, foldText } from "../lib/search";
+import { posterDataUri } from "../lib/signal";
+import { buildCompareOgCard, type OgSide } from "../lib/social";
 import { tmdbBackdrop } from "../lib/tmdb";
+import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
+import { ShareBar } from "../components/share";
 import { ExploreCard } from "../components/cards";
 import { VsCard, VsSide } from "../components/compare";
 
@@ -144,7 +149,11 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
   // the tale of the tape: win is +1 for A, -1 for B, 0 = neutral (no winner)
   const cmp = (a: number | null | undefined, b: number | null | undefined) =>
     a == null || b == null ? 0 : a > b ? 1 : a < b ? -1 : 0;
-  const star = (r: number) => `★ ${r.toFixed(1)}`;
+  const star = (r: number) => (
+    <>
+      <IconStar class="rating-star" /> {r.toFixed(1)}
+    </>
+  );
   const tape = [
     {
       label: "Overall rating",
@@ -211,8 +220,9 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
       title={`${showA.name} vs ${showB.name} — episode ratings compared | TV Nightly`}
       description={`${showA.name} or ${showB.name}? Both shows' full episode-rating histories on one chart, plus head-to-head stats.`}
       canonical={`${origin(c)}${comparePathFor(showA.slug, showB.slug)}`}
-      ogImage={showA.image_url ?? showB.image_url ?? undefined}
-      scripts={["/js/compare-chart.js"]}
+      ogImage={`${origin(c)}${comparePathFor(showA.slug, showB.slug)}/og.png`}
+      ogImageLarge
+      scripts={["/js/compare-chart.js", "/js/share.js"]}
     >
       <header class="vsx-hero">
         <div class="vsx-art" aria-hidden="true">
@@ -229,7 +239,13 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
       </header>
 
       <section class="vsx-sec">
-        <h2 class="vsx-h2">By the numbers</h2>
+        <div class="vsx-sec-head">
+          <h2 class="vsx-h2">By the numbers</h2>
+          <ShareBar
+            url={`${origin(c)}${comparePathFor(showA.slug, showB.slug)}`}
+            title={`${showA.name} vs ${showB.name} — episode ratings compared`}
+          />
+        </div>
         <table class="tape">
           <caption class="sr-only">
             {showA.name} versus {showB.name}, head-to-head stats
@@ -242,8 +258,8 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
               </th>
               <th scope="col" class="tape-vs" aria-hidden="true"></th>
               <th scope="col" class="tape-team tape-team-b">
-                {showB.name}
                 <span class="tape-dot tape-dot-b" aria-hidden="true"></span>
+                {showB.name}
               </th>
             </tr>
           </thead>
@@ -343,6 +359,41 @@ app.get("/compare/:pair", async (c) => {
   const canonicalPath = comparePathFor(showA.slug, showB.slug);
   if (`/compare/${pair}` !== canonicalPath) return c.redirect(canonicalPath, 301);
   return renderComparePage(c, showA, showB);
+});
+
+// one OG side: real backdrop → hi-res still → poster, all inlined for resvg
+async function compareOgSide(c: AppContext, show: ShowRow): Promise<OgSide> {
+  const bd = c.env.TMDB_API_KEY && show.tmdb_id ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id) : null;
+  const art = bd?.x1 ?? hiRes(show.image_url) ?? show.poster_url ?? null;
+  const [backdropUri, posterUri] = await Promise.all([
+    posterDataUri(art),
+    posterDataUri(show.poster_url ?? hiRes(show.image_url)),
+  ]);
+  return { name: show.name, posterUri, backdropUri, rating: show.rating };
+}
+
+// 1200×630 head-to-head card for link unfurls.
+app.get("/compare/:pair/og.png", async (c) => {
+  const db = c.env.DB;
+  const pair = c.req.param("pair");
+  return servePng(c, `compare/${pair}`, async () => {
+    const parts = pair.split("-vs-");
+    let showA: ShowRow | null = null;
+    let showB: ShowRow | null = null;
+    for (let i = 1; i < parts.length && !showB; i++) {
+      const [ra, rb] = await Promise.all([
+        showBySlug(db, parts.slice(0, i).join("-vs-")),
+        showBySlug(db, parts.slice(i).join("-vs-")),
+      ]);
+      if (ra && rb) {
+        showA = ra;
+        showB = rb;
+      }
+    }
+    if (!showA || !showB) return null;
+    const [a, b] = await Promise.all([compareOgSide(c, showA), compareOgSide(c, showB)]);
+    return buildCompareOgCard(a, b);
+  });
 });
 
 app.get("/compare", async (c) => {

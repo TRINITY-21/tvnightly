@@ -2,12 +2,17 @@ import { Hono } from "hono";
 import { Child, FC } from "hono/jsx";
 import { Layout } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
+import { IconStar, IconStarBadge } from "../components/icons";
+import { ShareBar } from "../components/share";
 import { ipHash } from "../lib/crypto";
-import { heroBg, hiRes } from "../lib/format";
+import { heroBg, hiRes, retinaSet } from "../lib/format";
 import { RatedEntry, VERDICTS, VERDICT_SCALE, fmtRated, getRatedTitle, parseRated } from "../lib/ratings";
 import { DeckCard, Pick, WhySignal, buildRecommendation, enrichDeck, landingPicks } from "../lib/recommend";
+import { servePng } from "../lib/render";
 import { foldSql, foldText } from "../lib/search";
 import { canonical, origin } from "../lib/seo";
+import { posterDataUri } from "../lib/signal";
+import { buildOgCard } from "../lib/social";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { Bindings } from "../types";
 
@@ -15,6 +20,18 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 // Ratings collected before we synthesize the match (rate card 1 + deck cards).
 const TARGET = 5;
+
+// Hi-res 1x/2x srcset for a poster — keeps the big rate/deck cards sharp on
+// retina phones (the bare w342 / medium_portrait source scaled up was blurry).
+// Handles both a TVmaze (medium_*) and a TMDB (w342) URL.
+const posterSet = (url: string | null | undefined): string | undefined =>
+  !url
+    ? undefined
+    : /\/medium_(portrait|landscape)\//.test(url)
+      ? retinaSet(url)
+      : url.includes("/w342/")
+        ? `${url} 1x, ${url.replace("/w342/", "/w780/")} 2x`
+        : undefined;
 
 // ---- shared bits ----------------------------------------------------------
 
@@ -71,10 +88,27 @@ const ContenderCard: FC<{ p: Pick; bg: string | null }> = ({ p, bg }) => (
     <div class="rec-cont-art" style={bg ?? undefined}>
       {!bg ? <span class="rec-cont-blank">{p.name}</span> : null}
       <span class="rec-cont-scrim" aria-hidden="true"></span>
-      {p.rating != null ? <span class="card-rating rec-cont-rating">★ {p.rating.toFixed(1)}</span> : null}
+      {p.rating != null ? (
+        <span class="card-rating rec-cont-rating">
+          <IconStarBadge class="card-rating-star" />
+          {p.rating.toFixed(1)}
+        </span>
+      ) : null}
       <span class="rec-cont-overlay">
-        <span class="card-title">{p.name}</span>
-        <span class="rec-cont-chip">{contChip(p)}</span>
+        {p.poster ? (
+          <img
+            class="rec-cont-poster"
+            src={p.poster}
+            srcset={posterSet(p.poster)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+        ) : null}
+        <span class="rec-cont-text">
+          <span class="card-title">{p.name}</span>
+          <span class="rec-cont-chip">{contChip(p)}</span>
+        </span>
       </span>
     </div>
   </a>
@@ -164,6 +198,45 @@ const RecUndo: FC<{ href: string; label: string }> = ({ href, label }) => (
 
 // ---- GET /recommend (multi-state) -----------------------------------------
 
+// 1200×630 branded card for link unfurls — the primary pick as the subject.
+// Fully determined by ?rated= (a fixed hash keeps it deterministic + cacheable,
+// unlike the personalized page which excludes the visitor's own seen titles).
+app.get("/recommend/og.png", async (c) => {
+  const rated = parseRated(c.req.query("rated"));
+  if (!rated.length) return c.notFound();
+  return servePng(c, `recommend/${encodeURIComponent(fmtRated(rated))}`, async () => {
+    const hash = await ipHash(c.env.SECRET ?? "anon-salt", "og-card");
+    const { primary } = await buildRecommendation(c.env.DB, hash, rated);
+    if (!primary) return null;
+    let bd: { x1: string } | null = null;
+    if (c.env.TMDB_API_KEY) {
+      bd =
+        primary.kind === "tv"
+          ? primary.tmdbId
+            ? await tmdbBackdrop(c.env.TMDB_API_KEY, primary.tmdbId)
+            : null
+          : primary.imdbId
+            ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, primary.imdbId)
+            : null;
+    }
+    const heroPoster = primary.poster ? (hiRes(primary.poster) ?? primary.poster) : null;
+    const [backdropUri, posterUri] = await Promise.all([
+      posterDataUri(bd?.x1 ?? heroPoster),
+      posterDataUri(heroPoster),
+    ]);
+    const meta = [primary.genres.slice(0, 3).join(" · "), primary.year].filter(Boolean).join(" · ");
+    return buildOgCard({
+      kicker: "Your next watch",
+      title: primary.name,
+      meta: meta || null,
+      rating: primary.rating,
+      note: primary.reason || null,
+      posterUri,
+      backdropUri,
+    });
+  });
+});
+
 app.get("/recommend", async (c) => {
   const db = c.env.DB;
   const q = (c.req.query("q") ?? "").trim();
@@ -226,8 +299,9 @@ app.get("/recommend", async (c) => {
         description={primary ? `Based on your ratings, TV Nightly says watch ${primary.name} next.` : "Rate a few things, get your next watch."}
         canonical={`${origin(c)}/recommend`}
         noindex
-        ogImage={primary?.poster ?? undefined}
-        scripts={["/js/recommend.js"]}
+        ogImage={primary ? `${origin(c)}/recommend/og.png?rated=${encodeURIComponent(ratedStr)}` : undefined}
+        ogImageLarge={!!primary}
+        scripts={["/js/recommend.js", "/js/share.js"]}
       >
         <article class="rec-page rec-results">
           <header class="chart-head rec-result-head">
@@ -269,7 +343,7 @@ app.get("/recommend", async (c) => {
                 <div class="detail-info">
                   <p class="rec-match-tag">
                     <span class="rec-conf">{peek ? "Best guess so far" : confidence}</span>
-                    {primary.rating != null ? <span class="rec-match-star"> · ★ {primary.rating.toFixed(1)}</span> : null}
+                    {primary.rating != null ? <span class="rec-match-star"> · <IconStar class="rating-star" />{primary.rating.toFixed(1)}</span> : null}
                     {" · "}
                     {primary.kind === "tv" ? "TV series" : "Film"}
                     {!peek ? <span class="rec-from"> · from {rated.length} ratings</span> : null}
@@ -304,7 +378,15 @@ app.get("/recommend", async (c) => {
 
           {contenders.length ? (
             <section class="rec-sec">
-              <h2>If not that, then</h2>
+              <div class="rec-sec-head">
+                <h2>If not that, then</h2>
+                {primary ? (
+                  <ShareBar
+                    url={`${origin(c)}/recommend?step=results&rated=${encodeURIComponent(ratedStr)}`}
+                    title={`TV Nightly says watch ${primary.name} next`}
+                  />
+                ) : null}
+              </div>
               <div class="rec-cont-grid">
                 {contenders.map((p, i) => (
                   <ContenderCard p={p} bg={contArt[i]} />
@@ -352,7 +434,7 @@ app.get("/recommend", async (c) => {
                   <RecUndo href={undoHref} label="Undo last rating" />
                   <span class="rec-poster">
                     {card.poster ? (
-                      <img src={card.poster} alt={card.name} loading={i === 0 ? "eager" : "lazy"} decoding="async" />
+                      <img src={card.poster} srcset={posterSet(card.poster)} alt={card.name} loading={i === 0 ? "eager" : "lazy"} decoding="async" />
                     ) : (
                       <span class="rec-poster-blank">{card.name}</span>
                     )}
@@ -434,7 +516,7 @@ app.get("/recommend", async (c) => {
             {rated.length ? <RecUndo href={backHref} label="Back" /> : null}
             <span class="rec-poster rec-poster-lg">
               {title.image ? (
-                <img src={title.image} alt={cardName} />
+                <img src={title.image} srcset={posterSet(title.image)} alt={cardName} />
               ) : (
                 <span class="rec-poster-blank">{cardName}</span>
               )}
@@ -545,9 +627,9 @@ app.get("/recommend", async (c) => {
           </form>
           <p class="rec-steps">
             <span class="rec-step">Pick something you've seen</span>{" "}
-            <span class="rec-arrow" aria-hidden="true">→</span>{" "}
+            <span class="rec-arrow chev-icon chev-icon-sm" aria-hidden="true"></span>{" "}
             <span class="rec-step">say how it landed</span>{" "}
-            <span class="rec-arrow" aria-hidden="true">→</span>{" "}
+            <span class="rec-arrow chev-icon chev-icon-sm" aria-hidden="true"></span>{" "}
             <span class="rec-step">get your match</span>
           </p>
           <p class="rec-trust muted">No account — your taste lives in a shareable link.</p>

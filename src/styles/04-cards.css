@@ -39,20 +39,41 @@
   color: var(--muted);
 }
 .card-media { position: relative; }
-/* rating chip lives on the art, streaming-app style */
+/* rating chip is TUCKED into the poster's bottom-right corner — not a floating
+   pill. It sits flush against the right and bottom edges, so each corner has a
+   different radius: the inner (top-left) corner is rounded, the two edge corners
+   are square, and the shared bottom-right corner is clipped to the poster's own
+   curve by .card's overflow:hidden. Deep amber (--rating) with a white chunky
+   star + score. Border only on the two inner edges (top + left); a soft up-left
+   shadow lifts it off the art. */
 .card-rating {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  background: rgba(18, 18, 20, 0.78);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  border-radius: var(--radius-sm);
-  color: var(--warn);
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.14rem 0.42rem;
+  bottom: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  background: var(--rating);
+  border-top: 1px solid rgba(0, 0, 0, 0.2);
+  border-left: 1px solid rgba(0, 0, 0, 0.2);
+  border-top-left-radius: 10px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.005em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  padding: 0.28rem 0.44rem;
   white-space: nowrap;
+  box-shadow: -1px -1px 7px rgba(0, 0, 0, 0.28);
+}
+.card-rating-star {
+  display: block;
+  flex: none;
+  font-size: 1.02em;
 }
 .card-body {
   display: flex;

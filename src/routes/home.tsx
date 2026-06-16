@@ -1,20 +1,10 @@
 import { Hono } from "hono";
+import { IconStar, IconReel, IconDial, IconClapper, IconHearts, IconTvPlay, IconVs, IconCal, IconSparkle, IconRoute } from "../components/icons";
 import { FC, PropsWithChildren } from "hono/jsx";
 import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
 import { visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
 import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml, slugifyName } from "../lib/format";
 import { tmdbBackdrop, tmdbMovieBackdrop, tmdbTrending } from "../lib/tmdb";
-import {
-  IconReel,
-  IconDial,
-  IconClapper,
-  IconHearts,
-  IconTvPlay,
-  IconVs,
-  IconCal,
-  IconSparkle,
-  IconRoute,
-} from "../components/icons";
 import { canonical } from "../lib/seo";
 import { Layout } from "../components/Layout";
 import { StatusBadge, ShowCard, MovieCard } from "../components/cards";
@@ -314,7 +304,7 @@ app.get("/", async (c) => {
                   {spot.rating != null ? (
                     <>
                       <span class="sep">·</span>
-                      <span class="rating">★ {spot.rating.toFixed(1)}</span>
+                      <span class="rating"><IconStar class="rating-star" />{spot.rating.toFixed(1)}</span>
                     </>
                   ) : null}
                 </p>
@@ -332,7 +322,7 @@ app.get("/", async (c) => {
                     ) : null}
                   </p>
                 ) : null}
-                <ProviderLine row={spot} region={visitorRegion(c)} pickerType="tv" />
+                <ProviderLine row={spot} region={visitorRegion(c)} title={spot.name} pickerType="tv" />
                 <p class="spot-actions">
                   <a class="btn-ghost chev-after" href={`/show/${spot.slug}`}>
                     Episode guide & ratings

@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Share card preview · TV Nightly</title>
+    <!-- Brand face. Served locally so the page matches the real cards; the static
+         instances we ship to resvg cover the same weights. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #121214;
+        --surface: #1a1a1e;
+        --surface-2: #232328;
+        --line: #2b2b32;
+        --text: #f8f6f2;
+        --muted: #b6b1a9;
+        --accent: #ffa94d;
+        --plate: #0e0e11;
+        --ok: #3cdf8e;
+        --warn: #eac54f;
+        --radius: 8px;
+        --display: "Archivo", -apple-system, "Segoe UI", Roboto, sans-serif;
+        --body: -apple-system, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(1200px 600px at 50% -10%, #1b1b22 0%, var(--bg) 55%) fixed;
+        color: var(--text);
+        font-family: var(--body);
+        line-height: 1.5;
+        padding: 0 0 6rem;
+      }
+      .wrap { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
+
+      /* ---- page header ---- */
+      .ph { text-align: center; padding: 4rem 1.5rem 2.5rem; }
+      .ph-eyebrow {
+        font-family: var(--display);
+        font-weight: 700;
+        font-size: 0.72rem;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .ph h1 {
+        font-family: var(--display);
+        font-weight: 900;
+        font-size: clamp(2rem, 5vw, 3.1rem);
+        letter-spacing: -0.01em;
+        margin: 0.5rem 0 0.6rem;
+      }
+      .ph p { color: var(--muted); max-width: 60ch; margin: 0 auto; font-size: 1.02rem; }
+      .ph .lockup {
+        display: inline-flex; align-items: center; gap: 0.5rem;
+        font-family: var(--display); font-weight: 900; letter-spacing: 0.04em;
+        margin-bottom: 1.4rem;
+      }
+      .ph .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+      /* ---- section scaffolding ---- */
+      .sec { margin-top: 3.5rem; }
+      .sec-head { display: flex; align-items: baseline; gap: 0.8rem; margin-bottom: 1.4rem; flex-wrap: wrap; }
+      .sec-head h2 {
+        font-family: var(--display); font-weight: 900; font-size: 1.5rem; margin: 0;
+      }
+      .sec-head .note { color: var(--muted); font-size: 0.9rem; }
+      .kicker {
+        font-family: var(--display); font-weight: 700; font-size: 0.66rem;
+        letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+      }
+
+      .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem; align-items: start; }
+      @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+
+      .mock { display: flex; flex-direction: column; gap: 0.8rem; }
+      .mock-label {
+        display: flex; align-items: center; gap: 0.5rem;
+        font-family: var(--display); font-weight: 700; font-size: 0.8rem;
+        letter-spacing: 0.04em; color: var(--muted);
+      }
+      .mock-label .pillico {
+        width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center;
+        font-size: 11px; font-weight: 800; color: #fff;
+      }
+
+      /* the actual 1200x630 card, scaled responsively */
+      .card-img { width: 100%; aspect-ratio: 1200 / 630; display: block; object-fit: cover; background: var(--plate); }
+
+      /* ============ iMessage (dark) ============ */
+      .imsg { background: #1c1c1e; border-radius: 22px; padding: 1.4rem; }
+      .imsg-bubble {
+        max-width: 340px; border-radius: 18px; overflow: hidden;
+        background: #26262a; box-shadow: 0 1px 0 rgba(255,255,255,0.04);
+      }
+      .imsg-foot { padding: 0.6rem 0.85rem 0.7rem; }
+      .imsg-title { font-size: 0.86rem; font-weight: 600; line-height: 1.3; color: #f2f2f7; }
+      .imsg-domain { font-size: 0.78rem; color: #8e8e93; margin-top: 0.15rem; }
+      .imsg-stamp { text-align: right; color: #8e8e93; font-size: 0.7rem; margin-top: 0.4rem; max-width: 340px; }
+
+      /* ============ X / Twitter (large summary) ============ */
+      .x { background: #000; border-radius: 20px; padding: 1.4rem; }
+      .x-card {
+        position: relative; max-width: 420px; border: 1px solid #2f3336;
+        border-radius: 16px; overflow: hidden;
+      }
+      .x-domain {
+        position: absolute; left: 12px; bottom: 12px;
+        background: rgba(0,0,0,0.72); color: #fff; font-size: 0.72rem;
+        padding: 0.15rem 0.5rem; border-radius: 5px; backdrop-filter: blur(2px);
+      }
+      .x-title { padding: 0.6rem 0.1rem 0; color: #71767b; font-size: 0.82rem; max-width: 420px; }
+
+      /* ============ Slack ============ */
+      .slack { background: #1a1d21; border-radius: 16px; padding: 1.4rem; }
+      .slack-unfurl { border-left: 4px solid var(--accent); padding-left: 0.85rem; max-width: 400px; }
+      .slack-svc { display: flex; align-items: center; gap: 0.4rem; color: #d1d2d3; font-weight: 700; font-size: 0.82rem; }
+      .slack-svc .fav { width: 16px; height: 16px; border-radius: 3px; }
+      .slack-title { color: #1d9bd1; font-weight: 700; font-size: 0.96rem; margin: 0.25rem 0 0.2rem; }
+      .slack-desc { color: #abadb0; font-size: 0.86rem; margin-bottom: 0.6rem; }
+      .slack-img { border-radius: 8px; overflow: hidden; max-width: 360px; }
+
+      /* ============ Discord ============ */
+      .discord { background: #313338; border-radius: 16px; padding: 1.4rem; }
+      .discord-embed {
+        background: #2b2d31; border-radius: 4px; border-left: 4px solid var(--accent);
+        padding: 0.7rem 0.95rem 0.85rem; max-width: 432px;
+      }
+      .discord-svc { color: #b5bac1; font-size: 0.72rem; margin-bottom: 0.2rem; }
+      .discord-title { color: #00a8fc; font-weight: 600; font-size: 1rem; margin-bottom: 0.3rem; }
+      .discord-desc { color: #dbdee1; font-size: 0.86rem; margin-bottom: 0.6rem; }
+      .discord-img { border-radius: 8px; overflow: hidden; max-width: 400px; }
+
+      /* ============ Facebook / LinkedIn (light) ============ */
+      .fb { background: #18191a; border-radius: 16px; padding: 1.4rem; }
+      .fb-card { max-width: 400px; border: 1px solid #dadde1; border-radius: 8px; overflow: hidden; background: #fff; }
+      .fb-foot { padding: 0.7rem 0.85rem 0.8rem; background: #f2f3f5; }
+      .fb-domain { color: #606770; font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; }
+      .fb-title { color: #1d2129; font-weight: 700; font-size: 0.98rem; line-height: 1.25; margin: 0.15rem 0 0.2rem; }
+      .fb-desc { color: #606770; font-size: 0.84rem; line-height: 1.3; }
+
+      /* ============ raw card gallery ============ */
+      .gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.6rem; }
+      @media (max-width: 760px) { .gallery { grid-template-columns: 1fr; } }
+      .gcard { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+      .gcard figcaption {
+        display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+        padding: 0.7rem 0.9rem; font-size: 0.82rem; color: var(--muted);
+      }
+      .gcard figcaption b { color: var(--text); font-family: var(--display); font-weight: 700; }
+      .gcard code { font-size: 0.74rem; color: var(--accent); background: rgba(255,169,77,0.08); padding: 0.1rem 0.4rem; border-radius: 4px; }
+
+      /* ============ ShareBar (mirrors src/styles/30-share.css) ============ */
+      .demo-panel {
+        border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+        padding: 1.6rem; display: flex; flex-direction: column; gap: 0.5rem;
+        background-image: linear-gradient(0deg, rgba(0,0,0,0.25), rgba(0,0,0,0)), radial-gradient(600px 200px at 20% 0%, rgba(255,169,77,0.06), transparent);
+      }
+      .demo-panel .ctx { color: var(--muted); font-size: 0.86rem; margin: 0 0 0.4rem; }
+      .share-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.55rem; }
+      .share-bar-label {
+        margin-right: 0.15rem; color: var(--muted); font-family: var(--display);
+        font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      }
+      .share-btn {
+        display: inline-flex; align-items: center; gap: 0.4rem;
+        background: rgba(18,18,20,0.5); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 0.42rem 0.85rem; color: var(--text); font-family: var(--display);
+        font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+        white-space: nowrap; cursor: pointer;
+        transition: color .18s, border-color .18s, background-color .18s;
+      }
+      .share-btn svg { width: 15px; height: 15px; }
+      .share-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(255,169,77,0.1); }
+      .share-native { border-color: var(--accent); color: var(--accent); }
+      .share-btn.is-copied { color: var(--ok); border-color: rgba(60,223,142,0.45); background: rgba(60,223,142,0.08); }
+
+      .foot { margin-top: 4.5rem; text-align: center; color: var(--muted); font-size: 0.84rem; }
+      .foot code { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header class="ph">
+      <div class="wrap">
+        <span class="lockup">
+          <svg viewBox="0 0 36 24" width="26" height="17" aria-hidden="true">
+            <rect x="1.25" y="1.25" width="33.5" height="21.5" rx="5.5" fill="none" stroke="#F2F5FA" stroke-width="2.5" />
+            <circle cx="26.5" cy="16.5" r="3.4" fill="#FFA94D" opacity="0.22" />
+            <circle cx="26.5" cy="16.5" r="2.2" fill="#FFA94D" />
+          </svg>
+          TV NIGHTLY<span class="dot"></span>
+        </span>
+        <div class="ph-eyebrow">Share system preview</div>
+        <h1>How a TV Nightly link unfurls</h1>
+        <p>
+          The same 1200×630 branded card, rendered server-side, dropped into each platform's real
+          link-preview chrome. These are the live <code>/og.png</code> images — exactly what ships.
+        </p>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <!-- ============ ShareBar ============ -->
+      <section class="sec">
+        <div class="sec-head">
+          <h2>The ShareBar</h2>
+          <span class="note">Appears on show, episode, movie, compare &amp; recommend pages</span>
+        </div>
+        <div class="demo-panel">
+          <p class="ctx">Sits under the title block in the hero column:</p>
+          <div class="share-bar">
+            <button class="share-btn share-native" type="button" onclick="var t=this.querySelector('.share-btn-t');var b=this;if(navigator.share){navigator.share({title:document.title,url:location.href}).catch(function(){})}else{var o=t.textContent;t.textContent='Link copied';b.classList.add('is-copied');try{navigator.clipboard&&navigator.clipboard.writeText(location.href)}catch(e){}setTimeout(function(){t.textContent=o;b.classList.remove('is-copied')},1500)}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M8.4 7 12 3.4 15.6 7"/><path d="M6 11H5.2A1.7 1.7 0 0 0 3.5 12.7v6.1A1.7 1.7 0 0 0 5.2 20.5h13.6a1.7 1.7 0 0 0 1.7-1.7v-6.1A1.7 1.7 0 0 0 18.8 11H18"/></svg>
+              <span class="share-btn-t">Share</span>
+            </button>
+          </div>
+          <p class="ctx" style="margin:0.6rem 0 0">
+            One button. With JS it opens the native OS share sheet (mobile, Safari, Edge); where that
+            doesn't exist (desktop Firefox/Chrome) it copies the link instead — so it always works.
+            Try it.
+          </p>
+        </div>
+      </section>
+
+      <!-- ============ platform unfurls ============ -->
+      <section class="sec">
+        <div class="sec-head">
+          <h2>In the wild</h2>
+          <span class="note">The show card across five platforms</span>
+        </div>
+        <div class="grid">
+          <!-- iMessage -->
+          <div class="mock">
+            <div class="mock-label"><span class="pillico" style="background:#34c759">i</span> iMessage</div>
+            <div class="imsg">
+              <div class="imsg-bubble">
+                <img class="card-img" src="/show/true-detective/og.png" alt="True Detective share card" />
+                <div class="imsg-foot">
+                  <div class="imsg-title">True Detective — episodes, ratings &amp; renewal status</div>
+                  <div class="imsg-domain">tvnightly.com</div>
+                </div>
+              </div>
+              <div class="imsg-stamp">Delivered</div>
+            </div>
+          </div>
+
+          <!-- X / Twitter -->
+          <div class="mock">
+            <div class="mock-label"><span class="pillico" style="background:#000;border:1px solid #333">𝕏</span> X (Twitter)</div>
+            <div class="x">
+              <div class="x-card">
+                <img class="card-img" src="/show/true-detective/og.png" alt="True Detective share card" />
+                <span class="x-domain">tvnightly.com</span>
+              </div>
+              <div class="x-title">True Detective — episodes, ratings &amp; renewal status</div>
+            </div>
+          </div>
+
+          <!-- Slack -->
+          <div class="mock">
+            <div class="mock-label"><span class="pillico" style="background:#4a154b">#</span> Slack</div>
+            <div class="slack">
+              <div class="slack-unfurl">
+                <div class="slack-svc"><span class="fav" style="background:var(--accent)"></span> TV Nightly</div>
+                <div class="slack-title">True Detective — episodes, ratings &amp; renewal status</div>
+                <div class="slack-desc">Every episode of True Detective rated and charted, with where to stream.</div>
+                <div class="slack-img"><img class="card-img" src="/show/true-detective/og.png" alt="True Detective share card" /></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Discord -->
+          <div class="mock">
+            <div class="mock-label"><span class="pillico" style="background:#5865f2">D</span> Discord</div>
+            <div class="discord">
+              <div class="discord-embed">
+                <div class="discord-svc">TV Nightly</div>
+                <div class="discord-title">True Detective — episodes, ratings &amp; renewal status</div>
+                <div class="discord-desc">Every episode of True Detective rated and charted, with where to stream.</div>
+                <div class="discord-img"><img class="card-img" src="/show/true-detective/og.png" alt="True Detective share card" /></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Facebook -->
+          <div class="mock">
+            <div class="mock-label"><span class="pillico" style="background:#1877f2">f</span> Facebook · LinkedIn</div>
+            <div class="fb">
+              <div class="fb-card">
+                <img class="card-img" src="/show/true-detective/og.png" alt="True Detective share card" />
+                <div class="fb-foot">
+                  <div class="fb-domain">TVNIGHTLY.COM</div>
+                  <div class="fb-title">True Detective — episodes, ratings &amp; renewal status</div>
+                  <div class="fb-desc">Every episode rated and charted, with where to stream.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- WhatsApp -->
+          <div class="mock">
+            <div class="mock-label"><span class="pillico" style="background:#25d366">W</span> WhatsApp · Messages</div>
+            <div class="imsg" style="background:#0b141a">
+              <div class="imsg-bubble" style="background:#005c4b">
+                <img class="card-img" src="/show/true-detective/og.png" alt="True Detective share card" />
+                <div class="imsg-foot">
+                  <div class="imsg-title" style="color:#e9edef">True Detective — episodes, ratings &amp; renewal status</div>
+                  <div class="imsg-domain" style="color:#8ed3c4">tvnightly.com</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ all five card types ============ -->
+      <section class="sec">
+        <div class="sec-head">
+          <h2>Every card type</h2>
+          <span class="note">One builder family, five surfaces</span>
+        </div>
+        <div class="gallery">
+          <figure class="gcard" style="margin:0">
+            <img class="card-img" src="/show/true-detective/og.png" alt="Show card" />
+            <figcaption><b>Show</b><code>/show/:slug/og.png</code></figcaption>
+          </figure>
+          <figure class="gcard" style="margin:0">
+            <img class="card-img" src="/show/true-detective/s01e05/og.png" alt="Episode card" />
+            <figcaption><b>Episode</b><code>/show/:slug/:code/og.png</code></figcaption>
+          </figure>
+          <figure class="gcard" style="margin:0">
+            <img class="card-img" src="/movie/10-cloverfield-lane-2016/og.png" alt="Movie card" />
+            <figcaption><b>Movie</b><code>/movie/:slug/og.png</code></figcaption>
+          </figure>
+          <figure class="gcard" style="margin:0">
+            <img class="card-img" src="/compare/arrow-vs-true-detective/og.png" alt="Compare card" />
+            <figcaption><b>Compare</b><code>/compare/:pair/og.png</code></figcaption>
+          </figure>
+          <figure class="gcard" style="margin:0">
+            <img class="card-img" src="/show/true-detective/ratings/og.png" alt="Ratings graph card" />
+            <figcaption><b>Ratings graph</b><code>/show/:slug/ratings/og.png</code></figcaption>
+          </figure>
+          <figure class="gcard" style="margin:0; grid-column: 1 / -1;">
+            <img class="card-img" src="/recommend/og.png?rated=tv:1412:love,tv:60556:meh" alt="Recommendation card" />
+            <figcaption><b>Recommendation</b><code>/recommend/og.png?rated=…</code></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <p class="foot">
+        Serve via the dev server and open <code>http://localhost:8787/share-preview.html</code> —
+        the card images are the live <code>/og.png</code> endpoints. Validate real unfurls post-deploy
+        with a metadata debugger (opengraph.xyz, Slack paste, iMessage).
+      </p>
+    </main>
+    <script>
+      // Preview-only: the og.png URLs are stable (so browsers cache them for an
+      // hour), which hides fresh card renders during iteration. Bust the browser
+      // cache on every load. The edge cache key ignores the query string, so this
+      // still serves the current server-rendered card — it just refetches it.
+      document.querySelectorAll(".card-img").forEach(function (img) {
+        var u = img.getAttribute("src");
+        img.src = u + (u.indexOf("?") > -1 ? "&" : "?") + "cb=" + Date.now();
+      });
+    </script>
+  </body>
+</html>

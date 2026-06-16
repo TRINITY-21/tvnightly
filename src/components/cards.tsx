@@ -2,6 +2,7 @@
 import { FC, PropsWithChildren } from "hono/jsx";
 import { ShowRow, MovieRow } from "../types";
 import { posterSrc } from "../lib/format";
+import { IconStar, IconStarBadge } from "./icons";
 
 // Long synopses clamp to 3 lines with a pure-CSS show more/less toggle
 // (hidden checkbox — no JS; the label is the control).
@@ -29,7 +30,12 @@ export const ShowCard: FC<{ show: ShowRow }> = ({ show }) => (
           <div class="card-fallback">{show.name}</div>
         );
       })()}
-      {show.rating != null ? <span class="card-rating">★ {show.rating.toFixed(1)}</span> : null}
+      {show.rating != null ? (
+        <span class="card-rating">
+          <IconStarBadge class="card-rating-star" />
+          {show.rating.toFixed(1)}
+        </span>
+      ) : null}
       <span class="card-hover-title" aria-hidden="true">{show.name}</span>
     </div>
     <div class="card-body">
@@ -46,7 +52,12 @@ export const MovieCard: FC<{ movie: MovieRow }> = ({ movie }) => (
       ) : (
         <div class="card-fallback">{movie.title}</div>
       )}
-      {movie.rating != null ? <span class="card-rating">★ {movie.rating.toFixed(1)}</span> : null}
+      {movie.rating != null ? (
+        <span class="card-rating">
+          <IconStarBadge class="card-rating-star" />
+          {movie.rating.toFixed(1)}
+        </span>
+      ) : null}
       <span class="card-hover-title" aria-hidden="true">{movie.title}</span>
     </div>
     <div class="card-body">
@@ -67,7 +78,7 @@ export const ExploreCard: FC<{
   <a class="explore-card" href={href}>
     <span class="explore-kicker">
       {icon}
-      {rating != null ? <span class="rating explore-rating">★ {rating.toFixed(1)}</span> : null}
+      {rating != null ? <span class="rating explore-rating"><IconStar class="rating-star" />{rating.toFixed(1)}</span> : null}
       <span class="chev-icon explore-arrow" aria-hidden="true"></span>
     </span>
     <strong class="explore-title">{title}</strong>

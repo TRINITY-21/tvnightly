@@ -8,6 +8,46 @@
 .nets-hero {
   --net-glow: hsl(220 42% 42%);
 }
+
+/* "Best {genre} on {network}" doors under the hero — a labeled chip set, each
+   chip a door into the long-tail genre×service page */
+.net-genres {
+  margin: 1.4rem 0 0.4rem;
+}
+.net-genres-label {
+  display: block;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.55rem;
+}
+.net-genres-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+/* phones: collapse the 6 stacked rows into one swipeable rail — chips stay real
+   crawlable links, just on a single horizontal track */
+@media (max-width: 700px) {
+  .net-genres-rail {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.15rem;
+  }
+  .net-genres-rail::-webkit-scrollbar {
+    display: none;
+  }
+  .net-genres-rail .genre-chip {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}
 .net-hero-glow {
   position: absolute;
   inset: 0;

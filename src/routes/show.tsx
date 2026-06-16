@@ -1,19 +1,20 @@
 import { Hono } from "hono";
+import { IconStar, IconPlay } from "../components/icons";
 import { raw } from "hono/html";
 import { Layout } from "../components/Layout";
 import { ClampSummary, ExploreCard } from "../components/cards";
 import { VsCard } from "../components/compare";
 import { DossierRow } from "../components/dossier";
 import { FilterSelect, RateInline, SubscribeForm } from "../components/forms";
-import { IconPlay } from "../components/icons";
 import { SeasonTabs, ShowTabs } from "../components/nav";
 import { ProviderLine } from "../components/providers";
+import { ShareBar } from "../components/share";
 import { buildDossier } from "../lib/dossier";
 import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml, fmtRuntime } from "../lib/format";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, visitorRegion } from "../lib/providers";
 import { getShow, similarShows, crewLinkMap } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
-import { breadcrumbLd, canonical, origin } from "../lib/seo";
+import { breadcrumbLd, canonical, faqLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMedia, tmdbShowCreators } from "../lib/tmdb";
 import { hubForGenres } from "../lib/verticals";
 import { Bindings, EpisodeRow, ShowRow } from "../types";
@@ -119,7 +120,9 @@ app.get("/show/:slug", async (c) => {
       description={stripHtml(show.summary).slice(0, 155)}
       canonical={canonical(c)}
       ld={ld}
-      ogImage={show.poster_url ?? show.image_url ?? undefined}
+      ogImage={`${canonical(c)}/og.png`}
+      ogImageLarge
+      scripts={["/js/share.js"]}
     >
       <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
         <header class="detail-hero frame-hero">
@@ -132,7 +135,10 @@ app.get("/show/:slug", async (c) => {
               <RateInline kind="tv" refId={String(show.id)} stat={stat} />
             </div>
             <div class="detail-info">
-              <h1>{show.name}</h1>
+              <div class="detail-title-row">
+                <h1>{show.name}</h1>
+                <ShareBar url={canonical(c)} title={`${show.name} — episodes, ratings & where to stream`} />
+              </div>
               <p class="meta-strip">
                 {/* the year range carries the status: closed = ended, –present = airing */}
                 <span>
@@ -198,7 +204,7 @@ app.get("/show/:slug", async (c) => {
                 {show.rating != null ? (
                   <>
                     <span class="sep">·</span>
-                    <span class="rating">★ {show.rating.toFixed(1)}</span>
+                    <span class="rating"><IconStar class="rating-star" />{show.rating.toFixed(1)}</span>
                   </>
                 ) : null}
                 {creators.length ? (
@@ -226,6 +232,7 @@ app.get("/show/:slug", async (c) => {
               <ProviderLine
                 row={show}
                 region={region}
+                title={show.name}
                 fallbackHref={`/show/${show.slug}/release-date`}
                 pickerType="tv"
                 allHref={`/show/${show.slug}/where-to-watch`}
@@ -287,7 +294,7 @@ app.get("/show/:slug", async (c) => {
                         </span>
                         <span class="top3-meta">
                           <span class="muted">{epCode(e)}</span> ·{" "}
-                          <span class="rating">★ {e.rating!.toFixed(1)}</span>
+                          <span class="rating"><IconStar class="rating-star" />{e.rating!.toFixed(1)}</span>
                         </span>
                         {pitch ? <span class="top3-sub">{pitch}</span> : null}
                       </span>
@@ -385,7 +392,7 @@ app.get("/show/:slug", async (c) => {
                 const epRate = (e: EpisodeRow) =>
                   e.rating != null ? (
                     <span class="ep-rate rating">
-                      <span class="star">★</span> {e.rating.toFixed(1)}
+                      <span class="star"><IconStar class="rating-star" /></span> {e.rating.toFixed(1)}
                     </span>
                   ) : (
                     <span class="ep-rate muted">—</span>
@@ -444,7 +451,7 @@ app.get("/show/:slug", async (c) => {
                             <span class="m-val rating">
                               {avg != null ? (
                                 <>
-                                  <span class="star">★</span> {avg.toFixed(1)}
+                                  <span class="star"><IconStar class="rating-star" /></span> {avg.toFixed(1)}
                                 </>
                               ) : (
                                 "—"
@@ -717,7 +724,20 @@ app.get("/show/:slug/where-to-watch", async (c) => {
       }
       canonical={`${site}${base}`}
       ogImage={show.poster_url ?? show.image_url ?? undefined}
-      ld={[breadcrumbLd(site, show, "Where to watch", base)]}
+      ld={[
+        breadcrumbLd(site, show, "Where to watch", base),
+        // service names are visible in the list below, so this answer is on-page
+        ...(names.length
+          ? [
+              faqLd([
+                {
+                  q: `Where can I watch ${show.name}?`,
+                  a: `${show.name} is streaming on ${names.slice(0, 6).join(", ")} in ${region}.`,
+                },
+              ]),
+            ]
+          : []),
+      ]}
       scripts={["/js/dropdown.js"]}
     >
       <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
@@ -976,7 +996,7 @@ app.get("/show/:slug/media", async (c) => {
       canonical={`${site}${base}`}
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={ld}
-      scripts={["/js/media-lightbox.js"]}
+      scripts={["/js/media-lightbox.js", "/js/media-video.js"]}
     >
       <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
         <header class="detail-hero frame-hero">
@@ -1003,15 +1023,23 @@ app.get("/show/:slug/media", async (c) => {
         {trailer ? (
           <section>
             <h2>Trailer</h2>
-            <div class="media-player">
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${trailer.key}`}
-                title={trailer.name}
+            <a
+              class="media-player media-player-cta"
+              href={`https://www.youtube.com/watch?v=${trailer.key}`}
+              target="_blank"
+              rel="noopener"
+              data-video-key={trailer.key}
+              data-video-name={trailer.name}
+              aria-label={`Play trailer: ${trailer.name}`}
+            >
+              <img
+                src={`https://img.youtube.com/vi/${trailer.key}/hqdefault.jpg`}
+                alt=""
                 loading="lazy"
-                allowfullscreen
-                allow="encrypted-media; picture-in-picture"
-              ></iframe>
-            </div>
+                decoding="async"
+              />
+              <IconPlay size={56} />
+            </a>
           </section>
         ) : null}
         {clips.length ? (
@@ -1024,6 +1052,8 @@ app.get("/show/:slug/media", async (c) => {
                   href={`https://www.youtube.com/watch?v=${v.key}`}
                   target="_blank"
                   rel="noopener"
+                  data-video-key={v.key}
+                  data-video-name={v.name}
                 >
                   <span class="media-thumb">
                     <img
@@ -1194,7 +1224,7 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
                       {e.name ?? epCode(e)}
                     </a>
                     <span class="epreg-leader"></span>
-                    {e.rating != null ? <span class="rating">★ {e.rating.toFixed(1)}</span> : null}
+                    {e.rating != null ? <span class="rating"><IconStar class="rating-star" />{e.rating.toFixed(1)}</span> : null}
                   </p>
                   {e.summary ? <p class="epreg-sum">{stripHtml(e.summary)}</p> : null}
                 </span>

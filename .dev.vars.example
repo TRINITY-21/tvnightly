@@ -32,3 +32,17 @@ SECRET=dev-secret-not-for-production
 # Cloudflare Web Analytics beacon token (public). Get it post-deploy from the CF
 # dashboard -> Web Analytics. Leave unset locally; the beacon won't render.
 #CF_BEACON_TOKEN=your_beacon_token
+
+# Affiliate ids (public). When set, "watch" links for Prime Video / Apple TV
+# carry them and start earning; unset = plain links. Sign up at
+# affiliate-program.amazon.com (Associates) and performance-partners.apple.com.
+#AMAZON_ASSOC_TAG=tvnightly-20
+#APPLE_AFFILIATE_TOKEN=your_apple_pp_token
+
+# Cloudflare Turnstile — anti-spam on /feedback. Create a widget at
+# dash.cloudflare.com -> Turnstile, then paste the real sitekey (public) +
+# secret. Both unset = widget hidden and the check skipped (honeypot + rate
+# limit still apply). The values below are Cloudflare's always-pass TEST keys —
+# fine for local dev, NEVER use them in production.
+#TURNSTILE_SITE_KEY=1x00000000000000000000AA
+#TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA

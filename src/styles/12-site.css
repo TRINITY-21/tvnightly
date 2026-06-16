@@ -360,7 +360,7 @@
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 0.22rem 0.6rem;
   background: var(--bg);
 }
@@ -390,3 +390,8 @@
 
 /* renewals wire: the door line before the inbox capture */
 .wire-foot { margin-top: 2.2rem; max-width: 56ch; }
+
+/* message/confirmation pages: "back" link leads with the house chevron, tinted
+   to match the accent link (not the default muted chevron) */
+.msg-back { display: inline-flex; align-items: center; gap: 0.3rem; }
+.msg-back .chev-icon { color: inherit; }

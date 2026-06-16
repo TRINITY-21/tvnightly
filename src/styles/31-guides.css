@@ -1,0 +1,24 @@
+/* ============================================================
+   Guide pages — Best/Underrated/Featuring movie templates.
+   These pages reuse the chart (wo-*) and hub (hub-sec) shells;
+   the only net-new piece is the FAQ block, kept border-free
+   and token-driven so it reads as quiet prose, not a widget.
+   ============================================================ */
+
+.guide-faq-item {
+  margin: 0 0 1.1rem;
+  max-width: 64ch;
+}
+.guide-faq-item:last-child {
+  margin-bottom: 0;
+}
+/* the question carries the weight; the answer is muted body copy */
+.guide-faq-item h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  color: var(--text);
+}
+.guide-faq-item p {
+  margin: 0;
+  line-height: 1.55;
+}

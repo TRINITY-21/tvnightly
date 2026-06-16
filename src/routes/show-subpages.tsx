@@ -1,19 +1,22 @@
 import { Context, Hono } from "hono";
+import { IconStar, ChevDown, ChevUp, IconCal } from "../components/icons";
 import { raw } from "hono/html";
 import { COUNTDOWN_JS, Layout } from "../components/Layout";
 import { StatusBadge } from "../components/cards";
 import { DossierRow } from "../components/dossier";
 import { SubscribeForm } from "../components/forms";
-import { ChevDown, ChevUp, IconCal } from "../components/icons";
 import { SeasonTabs, ShowTabs } from "../components/nav";
+import { ShareBar } from "../components/share";
 import { buildDossier } from "../lib/dossier";
 import { epCode, epHref, heroBg, largeStill, longDate, posterSrc, stripHtml, fmtRuntime } from "../lib/format";
-import { visitorRegion } from "../lib/providers";
+import { providersFor, visitorRegion } from "../lib/providers";
 import { getShow, similarShows } from "../lib/queries";
-import { breadcrumbLd, canonical, origin } from "../lib/seo";
+import { servePng } from "../lib/render";
+import { breadcrumbLd, canonical, faqLd, origin } from "../lib/seo";
 import { archivoFontCss, buildSignalSvg, posterDataUri } from "../lib/signal";
+import { buildOgCard, buildRatingsOgCard, type OgCardData, type RatingsEp } from "../lib/social";
 import { tmdbBackdrop } from "../lib/tmdb";
-import { Bindings, EpisodeRow, EventRow } from "../types";
+import { Bindings, EpisodeRow, EventRow, ShowRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -225,7 +228,7 @@ app.get("/show/:slug/essential", async (c) => {
                         {ep.name ?? epCode(ep)}
                       </a>
                       <span class="epreg-leader"></span>
-                      {ep.rating != null ? <span class="rating">★ {ep.rating.toFixed(1)}</span> : null}
+                      {ep.rating != null ? <span class="rating"><IconStar class="rating-star" />{ep.rating.toFixed(1)}</span> : null}
                     </p>
                     {ep.summary ? <p class="epreg-sum">{stripHtml(ep.summary)}</p> : null}
                   </span>
@@ -331,6 +334,70 @@ app.get("/show/:slug/ratings.svg", async (c) => {
   return c.body(sig.svg);
 });
 
+// "Streaming on X" for the OG card. Region-invariant (the card is one shared
+// edge-cached image) — prefer the US provider, fall back to the network.
+function ogStreamNote(show: ShowRow): string | null {
+  const { names } = providersFor(show, "US");
+  if (names.length) return `Streaming on ${names[0].trim()}`;
+  if (show.network) return `On ${show.network}`;
+  if (show.web_channel) return `On ${show.web_channel}`;
+  return null;
+}
+
+/** A ShowRow → landscape OG card payload: genres · year range, rating, stream. */
+function ogShowData(show: ShowRow, posterUri: string | null, backdropUri: string | null): OgCardData {
+  const genres: string[] = show.genres ? JSON.parse(show.genres) : [];
+  const yr = show.premiered
+    ? show.premiered.slice(0, 4) +
+      (show.ended ? `–${show.ended.slice(0, 4)}` : show.status === "Running" ? "–present" : "")
+    : "";
+  const meta = [genres.slice(0, 3).join(" · "), yr].filter(Boolean).join(" · ");
+  return {
+    kicker: "TV Series",
+    title: show.name,
+    meta: meta || null,
+    rating: show.rating,
+    note: ogStreamNote(show),
+    posterUri,
+    backdropUri,
+  };
+}
+
+// 1200×630 branded card for link unfurls — see src/lib/render.ts / social.ts.
+app.get("/show/:slug/og.png", async (c) => {
+  const slug = c.req.param("slug");
+  return servePng(c, `show/${slug}`, async () => {
+    const show = await getShow(c.env.DB, slug);
+    if (!show) return null;
+    const bd =
+      show.tmdb_id && c.env.TMDB_API_KEY ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id) : null;
+    const [posterUri, backdropUri] = await Promise.all([
+      posterDataUri(posterSrc(show)?.src ?? null),
+      posterDataUri(bd?.x1 ?? null),
+    ]);
+    return buildOgCard(ogShowData(show, posterUri, backdropUri));
+  });
+});
+
+// 1200×630 ratings-graph card — the episode heatmap is the hero (see social.ts).
+app.get("/show/:slug/ratings/og.png", async (c) => {
+  const slug = c.req.param("slug");
+  return servePng(c, `ratings/${slug}`, async () => {
+    const show = await getShow(c.env.DB, slug);
+    if (!show) return null;
+    const { results: eps } = await c.env.DB.prepare(
+      "SELECT season, number, rating FROM episodes WHERE show_id = ? ORDER BY season, number",
+    )
+      .bind(show.id)
+      .all<RatingsEp>();
+    if (!eps.length) return null;
+    const bd =
+      show.tmdb_id && c.env.TMDB_API_KEY ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id) : null;
+    const backdropUri = await posterDataUri(bd?.x1 ?? posterSrc(show)?.src ?? null);
+    return buildRatingsOgCard({ name: show.name, kicker: "Episode ratings", episodes: eps, backdropUri });
+  });
+});
+
 app.get("/show/:slug/ratings", async (c) => {
   const scope = await ratingsScope(c, "");
   if (!scope) return c.notFound();
@@ -366,9 +433,10 @@ app.get("/show/:slug/ratings", async (c) => {
           : `Every rated ${show.name} episode on one chart: see the peaks, the dips, and how each season compares.`
       }
       canonical={season != null ? `${site}${base}?season=${season}` : `${site}${base}`}
-      ogImage={show.poster_url ?? show.image_url ?? undefined}
+      ogImage={`${site}${base}/og.png`}
+      ogImageLarge
       ld={[breadcrumbLd(site, show, `${seasonLabel || "Episode"} ratings graph`.trim(), path)]}
-      scripts={["/js/signal.js"]}
+      scripts={["/js/signal.js", "/js/share.js"]}
     >
       <h1>
         <a href={`/show/${show.slug}`}>{show.name}</a>
@@ -423,11 +491,16 @@ app.get("/show/:slug/ratings", async (c) => {
             <div class="sig-read" id="sig-read"></div>
           </div>
           {raw(`<script type="application/json" id="sig-data">${sig.island}</script>`)}
-          <nav class="epreg-links" aria-label={`More ${show.name} rankings`}>
-            <a href={`/show/${show.slug}/best-episodes${q}`}>Best episodes</a>
-            <a href={`/show/${show.slug}/worst-episodes${q}`}>Worst episodes</a>
-            <a href={`/show/${show.slug}/essential${q}`}>Essential episodes</a>
-          </nav>
+          {/* ranking links + Share on one row (Share pushed right); the .sig-save
+              button above still handles the portrait image export. */}
+          <div class="epreg-foot">
+            <nav class="epreg-links" aria-label={`More ${show.name} rankings`}>
+              <a href={`/show/${show.slug}/best-episodes${q}`}>Best episodes</a>
+              <a href={`/show/${show.slug}/worst-episodes${q}`}>Worst episodes</a>
+              <a href={`/show/${show.slug}/essential${q}`}>Essential episodes</a>
+            </nav>
+            <ShareBar url={`${site}${base}`} title={`${show.name} — every episode rated & charted`} />
+          </div>
           {similar.length ? (
             <section>
               <h2>Shows like {show.name}</h2>
@@ -634,7 +707,7 @@ const rankedPage =
                       {e.name ?? epCode(e)}
                     </a>
                     <span class="epreg-leader"></span>
-                    <span class="rating">★ {e.rating!.toFixed(1)}</span>
+                    <span class="rating"><IconStar class="rating-star" />{e.rating!.toFixed(1)}</span>
                   </p>
                   {e.summary ? <p class="epreg-sum">{stripHtml(e.summary)}</p> : null}
                   <div class="epreg-verdict">
@@ -792,7 +865,23 @@ app.get("/show/:slug/next-episode", async (c) => {
       }
       canonical={canonical(c)}
       ogImage={show.poster_url ?? show.image_url ?? undefined}
-      ld={[breadcrumbLd(site, show, "Next episode", path)]}
+      ld={[
+        breadcrumbLd(site, show, "Next episode", path),
+        // only when there's a real next episode, so the answer matches the
+        // visible "Airs <date> on <network>" slate (Google's FAQ visibility rule)
+        ...(next
+          ? [
+              faqLd([
+                {
+                  q: `When is the next episode of ${show.name}?`,
+                  a: `${show.name} ${epCode(next)}${next.name ? ` "${next.name}"` : ""} airs ${
+                    next.airdate ? longDate(next.airdate) : "soon"
+                  }${show.network ? ` on ${show.network}` : ""}.`,
+                },
+              ]),
+            ]
+          : []),
+      ]}
     >
       <h1>
         Next episode of <a href={`/show/${show.slug}`}>{show.name}</a>
@@ -893,7 +982,7 @@ app.get("/show/:slug/next-episode", async (c) => {
                       {e.name ?? epCode(e)}
                     </a>
                     <span class="epreg-leader"></span>
-                    {e.rating != null ? <span class="rating">★ {e.rating.toFixed(1)}</span> : null}
+                    {e.rating != null ? <span class="rating"><IconStar class="rating-star" />{e.rating.toFixed(1)}</span> : null}
                   </p>
                   {e.summary ? <p class="epreg-sum">{stripHtml(e.summary)}</p> : null}
                 </span>
@@ -1026,6 +1115,16 @@ app.get("/show/:slug/release-date", async (c) => {
 
   const site = origin(c);
   const path = new URL(c.req.url).pathname;
+  // status-aware title: match the query people actually type for each state
+  // ("is X renewed", "is X coming back", "X season N release date")
+  const generalTitle =
+    show.status === "To Be Determined"
+      ? `Is ${show.name} renewed for Season ${maxAired + 1}? Status & news`
+      : show.status === "Ended"
+        ? `Is ${show.name} coming back? ${show.name} status`
+        : next && (next.season ?? 0) > maxAired
+          ? `${show.name} Season ${next.season} release date & news`
+          : `${show.name} release date & renewal status`;
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
     <Layout
@@ -1036,12 +1135,22 @@ app.get("/show/:slug/release-date", async (c) => {
                 ? `: ${next.airdate}`
                 : " — not announced yet"
             } | TV Nightly`
-          : `${show.name} release date & renewal status | TV Nightly`
+          : `${generalTitle} | TV Nightly`
       }
       description={answer.slice(0, 155)}
       canonical={canonical(c)}
       ogImage={show.poster_url ?? show.image_url ?? undefined}
-      ld={[breadcrumbLd(site, show, "Release date", path)]}
+      ld={[
+        breadcrumbLd(site, show, "Release date", path),
+        faqLd([
+          {
+            q: targetSeason
+              ? `When is ${show.name} Season ${targetSeason}?`
+              : `Is ${show.name} renewed, and when does it return?`,
+            a: statusLine,
+          },
+        ]),
+      ]}
     >
       <h1>
         {targetSeason ? (

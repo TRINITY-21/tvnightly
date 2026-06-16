@@ -42,6 +42,7 @@ const BROWSE_PATHS = [
   "/lists",
   "/top",
   "/movies",
+  "/tv",
   "/best-episodes",
   "/loved",
   "/watch-orders",
@@ -55,7 +56,7 @@ const BROWSE_PATHS = [
 
 // Browse is a tall, scrollable drawer: grouped link sections, then network
 // logo tiles and genre chips drawn from the same data as the /lists directory.
-const BROWSE_SECTIONS: { kicker: string; links: [string, string][] }[] = [
+const browseSections = (year: number): { kicker: string; links: [string, string][] }[] => [
   {
     kicker: "Top charts",
     links: [
@@ -64,6 +65,15 @@ const BROWSE_SECTIONS: { kicker: string; links: [string, string][] }[] = [
       ["Best episodes", "/best-episodes"],
       ["Top seasons", "/top/seasons"],
       ["Most loved", "/loved"],
+    ],
+  },
+  {
+    kicker: "Watch guides",
+    links: [
+      [`Best shows of ${year}`, `/tv/best/${year}`],
+      [`Best movies of ${year}`, `/movies/best/${year}`],
+      ["Underrated shows", "/tv/underrated"],
+      ["Underrated movies", "/movies/underrated"],
     ],
   },
   {
@@ -124,6 +134,9 @@ export const Layout: FC<
     canonical?: string;
     ld?: unknown[];
     ogImage?: string;
+    /** Set when ogImage is a 1200×630 branded card (an /og.png endpoint) rather
+     *  than a portrait poster: renders the large Twitter card + declares dims. */
+    ogImageLarge?: boolean;
     scripts?: string[];
     noindex?: boolean;
     /** Meta-refresh auto-forward (no-JS path for the synth interstitial). */
@@ -144,6 +157,7 @@ export const Layout: FC<
   const navClass = (prefixes: string[]) =>
     prefixes.some((p) => path === p || path.startsWith(p + "/")) ? "active" : "";
   const browseActive = BROWSE_PATHS.some((p) => path === p || path.startsWith(p + "/"));
+  const BROWSE_SECTIONS = browseSections(new Date().getFullYear());
   return (
   <html lang="en">
     <head>
@@ -163,8 +177,10 @@ export const Layout: FC<
           as="image"
           href={props.preloadImage.x1}
           imagesrcset={`${props.preloadImage.x1} 1x, ${props.preloadImage.x2} 2x`}
+          fetchpriority="high"
         />
       ) : null}
+      <link rel="preload" as="font" type="font/woff2" href="/fonts/archivo-var.woff2" crossOrigin="anonymous" />
       <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <meta property="og:site_name" content="TV Nightly" />
       <meta property="og:type" content="website" />
@@ -172,8 +188,15 @@ export const Layout: FC<
       {props.description ? <meta property="og:description" content={props.description} /> : null}
       {props.canonical ? <meta property="og:url" content={props.canonical} /> : null}
       {props.ogImage ? <meta property="og:image" content={props.ogImage} /> : null}
-      {/* Posters are portrait — the small summary card crops far better than large-image. */}
-      <meta name="twitter:card" content="summary" />
+      {props.ogImage && props.ogImageLarge ? (
+        <>
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+        </>
+      ) : null}
+      {/* A branded 1200×630 card unfurls large; a bare portrait poster crops far
+          better in the small summary card. */}
+      <meta name="twitter:card" content={props.ogImage && props.ogImageLarge ? "summary_large_image" : "summary"} />
       <link rel="stylesheet" href="/styles.css" />
       {(props.ld ?? []).map((d) => jsonLd(d))}
       {/* Cloudflare Web Analytics — deferred, privacy-first, renders only when configured. */}
@@ -409,6 +432,8 @@ export const Layout: FC<
         </div>
         <div class="footer-base">
           <span class="footer-base-links">
+            <a href="/feedback">Feedback</a>
+            <span class="footer-sep" aria-hidden="true">·</span>
             <a href="/terms">Terms of Service</a>
             <span class="footer-sep" aria-hidden="true">·</span>
             <a href="/privacy">Privacy Policy</a>
@@ -430,7 +455,10 @@ export const MessagePage: FC<{ title: string; body: string }> = ({ title, body }
     <h1>{title}</h1>
     <p>{body}</p>
     <p>
-      <a href="/">← Back to TV Nightly</a>
+      <a class="msg-back" href="/">
+        <span class="chev-icon chev-icon-prev" aria-hidden="true"></span>
+        Back to TV Nightly
+      </a>
     </p>
   </Layout>
 );

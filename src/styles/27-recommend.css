@@ -13,7 +13,7 @@
 .rec-h1 {
   font-family: var(--display);
   font-stretch: 114%;
-  font-weight: 700;
+  font-weight: 900;
   text-transform: none;
   letter-spacing: -0.01em;
   font-size: clamp(1.6rem, 4vw, 2.25rem);
@@ -31,7 +31,7 @@
   width: 100%;
   background: var(--plate);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   color: var(--text);
   padding: 0.72rem 1.1rem;
   font: inherit;
@@ -83,11 +83,23 @@
 }
 /* keep each step on one line so a wrap lands on an arrow, never mid-phrase */
 .rec-step { white-space: nowrap; }
-.rec-steps .rec-arrow { color: var(--accent); margin: 0 0.3rem; }
+/* the step arrows are now house chevrons — amber, centered on the step text */
+.rec-steps .rec-arrow { color: var(--accent); margin: 0 0.2rem; vertical-align: middle; }
 .rec-trust { margin: 0.7rem 0 0; font-size: 0.82rem; }
 
 .rec-sec { margin-top: 2rem; }
 .rec-sec > .grid { margin-top: 0.6rem; }
+/* contenders heading row: title left, Share control parked on the right */
+.rec-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.6rem;
+}
+.rec-sec-head h2 { margin: 0; }
+.rec-sec-head .share-bar { margin: 0; }
 
 /* poster frame for the rate / deck screens */
 .rec-poster { position: relative; display: inline-block; }
@@ -97,7 +109,7 @@
   top: 12px;
   left: 50%;
   padding: 0.32rem 0.85rem;
-  border-radius: 999px;
+  border-radius: var(--radius);
   color: #fff;
   font-family: var(--display);
   font-stretch: 100%;
@@ -227,13 +239,14 @@
   gap: 0;
   /* pulled up so the bigger circles cradle ("hug") the card's rounded bottom */
   margin: -3.4rem auto 0;
-  max-width: 27rem;
-  --d: clamp(80px, 23vw, 118px);
+  max-width: 29rem;
+  --d: clamp(88px, 26vw, 128px);
 }
 .rate-fan .rate-opt { margin: 0 -3px; display: flex; }
 .rate-fan .rate-circle {
   display: grid;
   place-items: center;
+  flex-shrink: 0;
   border-radius: 50%;
   border: 3px solid rgba(248, 246, 242, 0.92);
   background: var(--fill);
@@ -273,7 +286,10 @@
 }
 .rate-fan.has-pick .rate-circle:not(.is-picked) { opacity: 0.45; filter: saturate(0.7); }
 @media (max-width: 480px) {
-  .rate-fan { --d: clamp(68px, 20vw, 94px); }
+  /* keep the circles big on phones (they were being shrunk to ~80px here); a
+     tighter cradle overlap is what lets them stay large without overflowing */
+  .rate-fan { --d: clamp(90px, 29vw, 128px); }
+  .rate-fan .rate-opt { margin: 0 -7px; }
 }
 
 /* ---- enrich deck: one card at a time ---- */
@@ -289,7 +305,7 @@
   text-align: center;
   margin: 1.5rem auto 0;
   padding: 0.7rem 1.15rem;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background: transparent;
   color: var(--muted);
@@ -384,8 +400,14 @@
    (filter:none, prominent opacity); a left->right scrim keeps the info column
    readable while the backdrop reads clearly around the poster. */
 .rec-match .hero-backdrop { filter: none; opacity: 0.72; inset: 0; background-position: center 22%; }
+/* edge vignette: the diagonal info scrim, plus left/right and bottom darkening
+   so the title, the why-matches ledger, and the right-hand labels stay legible
+   over a bright still — the center-top keeps the backdrop visible */
 .rec-match.detail-hero::after {
-  background: linear-gradient(105deg, rgba(8, 8, 11, 0.4) 0%, rgba(8, 8, 11, 0.62) 45%, rgba(8, 8, 11, 0.82) 100%);
+  background:
+    linear-gradient(to right, rgba(8, 8, 11, 0.5) 0%, rgba(8, 8, 11, 0) 20%, rgba(8, 8, 11, 0) 72%, rgba(8, 8, 11, 0.6) 100%),
+    linear-gradient(to bottom, rgba(8, 8, 11, 0) 48%, rgba(8, 8, 11, 0.55) 100%),
+    linear-gradient(105deg, rgba(8, 8, 11, 0.38) 0%, rgba(8, 8, 11, 0.58) 45%, rgba(8, 8, 11, 0.8) 100%);
 }
 .rec-match-tag {
   margin: 0 0 0.5rem;
@@ -542,7 +564,7 @@
 .taste-chip {
   padding: 0.2rem 0.6rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--surface);
   font-family: var(--display);
   font-stretch: 92%;
@@ -606,16 +628,33 @@
   inset: 0;
   background: linear-gradient(to top, rgba(8, 8, 11, 0.92) 6%, rgba(8, 8, 11, 0.4) 48%, rgba(8, 8, 11, 0.05) 100%);
 }
-.rec-cont-rating { position: absolute; top: 0.5rem; right: 0.5rem; }
+.rec-cont-rating { position: absolute; top: auto; bottom: 0; right: 0; }
 .rec-cont-overlay {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem 0.6rem;
+}
+/* the show/film one-sheet, tucked bottom-left over the backdrop */
+.rec-cont-poster {
+  flex-shrink: 0;
+  width: 3rem;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+}
+.rec-cont-text {
+  display: flex;
   flex-direction: column;
   gap: 0.32rem;
-  padding: 0.55rem 0.7rem 0.6rem;
+  min-width: 0;
 }
 .rec-cont .card-title {
   max-width: 100%;
@@ -630,7 +669,7 @@
 .rec-cont-chip {
   align-self: flex-start;
   padding: 0.1rem 0.46rem;
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: rgba(14, 14, 17, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.14);
   font-family: var(--display);

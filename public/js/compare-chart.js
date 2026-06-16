@@ -49,7 +49,7 @@
       esc(p.name) +
       "</span>" +
       '<span class="vsx-tip-rate">' +
-      (p.r != null ? "★ " + p.r.toFixed(1) : "") +
+      (p.r != null ? '<svg class="rating-star" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.74 5.55 6.13.9-4.44 4.32 1.05 6.11L12 16.69l-5.48 2.79 1.05-6.11L3.13 9.05l6.13-.9z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg> ' + p.r.toFixed(1) : "") +
       "</span></span>"
     );
   }
@@ -104,5 +104,14 @@
   svg.addEventListener("pointerdown", function (e) {
     place(e.clientX);
   });
-  svg.addEventListener("pointerleave", hide);
+  // Mouse: leaving the plot clears the card. Touch: keep it up after a tap —
+  // iOS fires pointerleave the instant the tap ends (and a long-press hands off
+  // to the image callout), which made the card flash and vanish. On touch we
+  // dismiss by tapping outside the chart instead.
+  svg.addEventListener("pointerleave", function (e) {
+    if (e.pointerType === "mouse") hide();
+  });
+  document.addEventListener("pointerdown", function (e) {
+    if (!graph.contains(e.target)) hide();
+  });
 })();

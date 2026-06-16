@@ -108,7 +108,8 @@
   min-width: 0;
   background: rgba(18, 18, 20, 0.72);
   border: 1px solid rgba(43, 43, 50, 0.95);
-  border-radius: 999px;
+  /* match the squared-off button radius (--radius), not a pill */
+  border-radius: var(--radius);
   color: var(--text);
   padding: 0.5rem 2rem 0.5rem 2.35rem;
   font: inherit;

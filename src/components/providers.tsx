@@ -1,6 +1,7 @@
 // Where-to-watch rendering: logo tiles and text chips.
 import { FC } from "hono/jsx";
 import { PROVIDER_LOGOS, providersFor, providerBrand } from "../lib/providers";
+import { watchUrl } from "../lib/affiliate";
 import { slugifyName } from "../lib/format";
 
 // The where-to-watch answer is the conversion moment of every detail page:
@@ -9,10 +10,11 @@ import { slugifyName } from "../lib/format";
 export const ProviderLine: FC<{
   row: { providers_intl: string | null };
   region: string;
+  title?: string; // the show/film title — needed for outbound "watch" links
   fallbackHref?: string;
   pickerType?: "tv" | "movie";
   allHref?: string; // the dedicated where-to-watch page, when one exists
-}> = ({ row, region, fallbackHref, pickerType, allHref }) => {
+}> = ({ row, region, title, fallbackHref, pickerType, allHref }) => {
   const prov = providersFor(row, region);
   if (!prov.names.length) {
     return fallbackHref ? (
@@ -44,27 +46,38 @@ export const ProviderLine: FC<{
         Streaming on{prov.region !== region ? ` (${prov.region} — not on your region's services)` : ` (${prov.region})`}
       </span>{" "}
       {shown.map(({ name, logo }) => {
-        const inner = logo ? (
-          <img src={logo} alt={name} width="34" height="34" loading="lazy" />
-        ) : null;
-        // tiles are real controls on detail pages: each opens the picker
-        // pre-filtered to that service ("more like this, same subscription")
-        return logo ? (
-          pickerType ? (
+        if (!logo) return <span class="prov">{name}</span>;
+        const inner = <img src={logo} alt={name} width="34" height="34" loading="lazy" />;
+        // providers with a real affiliate program (Prime Video, Apple TV) become
+        // outbound, sponsor-tagged "watch" links — the conversion moment
+        const watch = title ? watchUrl(name, title, prov.region) : null;
+        if (watch) {
+          return (
             <a
               class="prov-tile"
-              href={`/network/${slugifyName(providerBrand(name))}/${pickerType === "movie" ? "movies" : "shows"}`}
-              title={`${name} — the top ${name} ${pickerType === "movie" ? "movies" : "shows"}`}
+              href={watch.href}
+              target="_blank"
+              rel="sponsored noopener"
+              title={`Watch ${title} on ${name}`}
             >
               {inner}
             </a>
-          ) : (
-            <span class="prov-tile" title={name}>
-              {inner}
-            </span>
-          )
+          );
+        }
+        // the rest stay internal: each opens the picker pre-filtered to that
+        // service ("more like this, same subscription")
+        return pickerType ? (
+          <a
+            class="prov-tile"
+            href={`/network/${slugifyName(providerBrand(name))}/${pickerType === "movie" ? "movies" : "shows"}`}
+            title={`${name} — the top ${name} ${pickerType === "movie" ? "movies" : "shows"}`}
+          >
+            {inner}
+          </a>
         ) : (
-          <span class="prov">{name}</span>
+          <span class="prov-tile" title={name}>
+            {inner}
+          </span>
         );
       })}
       {extra > 0 ? <span class="muted">+{extra} more</span> : null}

@@ -157,6 +157,36 @@ export const IconReel: FC<{ size?: number }> = ({ size = 120 }) => (
   </svg>
 );
 
+/* rating star: the one solid glyph — a filled five-point star with rounded
+   joins, for the poster rating badge. Sizes to 1em so it scales with the
+   badge text; fill is currentColor so it takes the badge's ink color. */
+export const IconStar: FC<{ class?: string }> = ({ class: cls }) => (
+  <svg class={cls} width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M12 2.6l2.74 5.55 6.13.9-4.44 4.32 1.05 6.11L12 16.69l-5.48 2.79 1.05-6.11L3.13 9.05l6.13-.9z"
+      fill="currentColor"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linejoin="round"
+    />
+  </svg>
+);
+
+/* badge star: a fuller, friendlier five-point star with softly rounded points —
+   the chunky cut for the poster rating chip (.card-rating). Heavier inner radius
+   than IconStar so it reads as a bold mark beside the score, streaming-app style. */
+export const IconStarBadge: FC<{ class?: string }> = ({ class: cls }) => (
+  <svg class={cls} width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M12 3 14.82 9.12 21.51 9.91 16.57 14.48 17.88 21.09 12 17.8 6.12 21.09 7.43 14.48 2.49 9.91 9.18 9.12Z"
+      fill="currentColor"
+      stroke="currentColor"
+      stroke-width="1.4"
+      stroke-linejoin="round"
+    />
+  </svg>
+);
+
 /* play: the broadcast triangle in a ring, same line weight as the faces */
 export const IconPlay: FC<{ size?: number }> = ({ size = 18 }) => (
   <svg class="icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">

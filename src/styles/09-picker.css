@@ -279,6 +279,9 @@
 
 .watch-results {
   margin-top: 0.25rem;
+  /* when JS scrolls the picks into view after a submit, leave room for the
+     sticky header so the shortlist heading isn't tucked under it */
+  scroll-margin-top: 5rem;
 }
 .shortlist-head {
   display: flex;

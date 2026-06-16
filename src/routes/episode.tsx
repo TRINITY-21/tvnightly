@@ -2,14 +2,18 @@
 // of television. Guest cast comes live from TVmaze (free, keyless) through
 // the edge cache so the D1 mirror stays lean.
 import { Hono } from "hono";
+import { IconStar, ChevUp, ChevDown } from "../components/icons";
 import { Bindings, EpisodeRow } from "../types";
 import { stripHtml, epCode, epHref, hiRes, retinaSet, posterSrc, longDate, slugifyName, fmtRuntime } from "../lib/format";
 import { origin, canonical } from "../lib/seo";
 import { getShow } from "../lib/queries";
+import { servePng } from "../lib/render";
+import { posterDataUri } from "../lib/signal";
+import { buildOgCard } from "../lib/social";
 import { visitorRegion } from "../lib/providers";
 import { Layout } from "../components/Layout";
 import { ProviderLine } from "../components/providers";
-import { ChevUp, ChevDown } from "../components/icons";
+import { ShareBar } from "../components/share";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -193,10 +197,11 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
       description={`${show.name} ${code}${ep.name ? ` "${ep.name}"` : ""}${ep.rating != null ? ` — rated ★ ${ep.rating.toFixed(1)}` : ""}${ep.airdate ? `, aired ${longDate(ep.airdate)}` : ""}. ${pitch.slice(0, 110)}`}
       canonical={canonical(c)}
       ld={ld}
-      ogImage={hiRes(ep.image_url ?? show.image_url) ?? undefined}
-      scripts={["/js/votes.js"]}
+      ogImage={`${canonical(c)}/og.png`}
+      ogImageLarge
+      scripts={["/js/votes.js", "/js/share.js"]}
     >
-      <article class="show-hub">
+      <article class={`show-hub${(ep.image_url ?? show.image_url) ? " hub-backdrop" : ""}`}>
         {/* Serializd-style hero: the episode's own frame, sharp and full-bleed,
             with a legibility scrim; the show's poster anchors the facts. */}
         <header class="detail-hero frame-hero">
@@ -231,9 +236,11 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             <div class="detail-info">
               <p class="ep-eyebrow">
                 <a href={`/show/${show.slug}`}>{show.name}</a>
-                <span class="sep">·</span>{" "}
-                <a href={`/show/${show.slug}/season/${seasonNo}`}>Season {seasonNo}</a>{" "}
-                <span class="sep">·</span> Episode {epNo}
+                <span class="sep ep-eyebrow-sep">·</span>{" "}
+                <span class="ep-eyebrow-se">
+                  <a href={`/show/${show.slug}/season/${seasonNo}`}>Season {seasonNo}</a>{" "}
+                  <span class="sep">·</span> Episode {epNo}
+                </span>
               </p>
               <h1>{ep.name ?? code}</h1>
               <p class="meta-strip">
@@ -241,7 +248,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
                 {ep.rating != null ? (
                   <>
                     <span class="sep">·</span>
-                    <span class="rating">★ {ep.rating.toFixed(1)}</span>
+                    <span class="rating"><IconStar class="rating-star" />{ep.rating.toFixed(1)}</span>
                   </>
                 ) : null}
                 {ep.airdate ? (
@@ -250,27 +257,33 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
                     <span>{longDate(ep.airdate)}</span>
                   </>
                 ) : null}
-                {ep.runtime ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>{fmtRuntime(ep.runtime)}</span>
-                  </>
-                ) : null}
-                {show.network || show.web_channel ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>{show.network ?? show.web_channel}</span>
-                  </>
+                {ep.runtime || show.network || show.web_channel ? (
+                  <span class="ep-meta2">
+                    {ep.runtime ? (
+                      <>
+                        <span class="sep">·</span>
+                        <span>{fmtRuntime(ep.runtime)}</span>
+                      </>
+                    ) : null}
+                    {show.network || show.web_channel ? (
+                      <>
+                        <span class="sep">·</span>
+                        <span>{show.network ?? show.web_channel}</span>
+                      </>
+                    ) : null}
+                  </span>
                 ) : null}
               </p>
               {pitch ? <div class="summary">{pitch}</div> : null}
               <ProviderLine
                 row={show}
                 region={visitorRegion(c)}
+                title={show.name}
                 fallbackHref={`/show/${show.slug}/release-date`}
                 pickerType="tv"
                 allHref={`/show/${show.slug}/where-to-watch`}
               />
+              <ShareBar url={canonical(c)} title={`${show.name} ${code}${ep.name ? ` — ${ep.name}` : ""} on TV Nightly`} />
             </div>
           </div>
         </header>
@@ -297,7 +310,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
                   {Math.abs(vsAvg).toFixed(1)}
                 </span>
                 <span class="stat-label">vs season avg</span>
-                <span class="stat-sub muted">Season {seasonNo} averages ★ {seasonAvg!.toFixed(1)}</span>
+                <span class="stat-sub muted">Season {seasonNo} averages <IconStar class="rating-star" /> {seasonAvg!.toFixed(1)}</span>
               </div>
             ) : null}
             {ep.airdate ? (
@@ -387,7 +400,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
                 <span class="pager-title">{prev.name ?? epCode(prev)}</span>
                 <span class="pager-sub muted">
                   {epCode(prev)}
-                  {prev.rating != null ? ` · ★ ${prev.rating.toFixed(1)}` : ""}
+                  {prev.rating != null ? <> · <IconStar class="rating-star" /> {prev.rating.toFixed(1)}</> : null}
                 </span>
               </a>
             ) : (
@@ -399,7 +412,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
                 <span class="pager-title">{next.name ?? epCode(next)}</span>
                 <span class="pager-sub muted">
                   {epCode(next)}
-                  {next.rating != null ? ` · ★ ${next.rating.toFixed(1)}` : ""}
+                  {next.rating != null ? <> · <IconStar class="rating-star" /> {next.rating.toFixed(1)}</> : null}
                 </span>
               </a>
             ) : (
@@ -424,6 +437,36 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
       </article>
     </Layout>,
   );
+});
+
+// 1200×630 branded card for link unfurls — the episode's own still as the hero.
+app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}/og.png", async (c) => {
+  const slug = c.req.param("slug");
+  const code = c.req.param("code").toLowerCase();
+  return servePng(c, `ep/${slug}/${code}`, async () => {
+    const show = await getShow(c.env.DB, slug);
+    if (!show) return null;
+    const m = /^s(\d{1,3})e(\d{1,3})$/i.exec(code);
+    if (!m) return null;
+    const ep = await c.env.DB.prepare(
+      "SELECT * FROM episodes WHERE show_id = ? AND season = ? AND number = ?",
+    )
+      .bind(show.id, Number(m[1]), Number(m[2]))
+      .first<EpisodeRow>();
+    if (!ep) return null;
+    const [backdropUri, posterUri] = await Promise.all([
+      posterDataUri(hiRes(ep.image_url ?? show.image_url)),
+      posterDataUri(posterSrc(show)?.src ?? null),
+    ]);
+    return buildOgCard({
+      kicker: show.name,
+      title: ep.name ?? epCode(ep),
+      meta: [epCode(ep), ep.airdate ? longDate(ep.airdate) : null].filter(Boolean).join(" · "),
+      rating: ep.rating,
+      posterUri,
+      backdropUri,
+    });
+  });
 });
 
 export default app;

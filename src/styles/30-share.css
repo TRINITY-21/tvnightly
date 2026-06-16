@@ -1,0 +1,53 @@
+/* ShareBar — a single Share button in the house outline-button chassis
+   (cf. .sig-save, .btn-ghost). Rendered hidden; public/js/share.js reveals it. */
+.share-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 1.2rem 0 0.4rem;
+}
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  /* dark backing so the label holds AA contrast over bright hero frames */
+  background: rgba(18, 18, 20, 0.5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.42rem 0.85rem;
+  color: var(--text);
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--speed) var(--ease), border-color var(--speed) var(--ease),
+    background-color var(--speed) var(--ease);
+}
+.share-btn .icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+.share-btn:hover,
+.share-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(255, 169, 77, 0.1);
+}
+/* the native share sheet is the primary affordance where it exists */
+.share-native {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* clipboard-fallback confirmation ("Link copied") */
+.share-btn.is-copied,
+.share-btn.is-copied:hover {
+  color: var(--ok);
+  border-color: rgba(60, 223, 142, 0.45);
+  background: rgba(60, 223, 142, 0.08);
+}

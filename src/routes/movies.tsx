@@ -1,12 +1,13 @@
 import { Hono } from "hono";
+import { IconStar, IconPlay } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ClampSummary, ExploreCard } from "../components/cards";
 import { VsCard, VsSide } from "../components/compare";
 import { DossierRow } from "../components/dossier";
 import { FilterSelect, RateInline } from "../components/forms";
-import { IconPlay } from "../components/icons";
 import { MovieTabs } from "../components/nav";
 import { ProviderLine } from "../components/providers";
+import { ShareBar } from "../components/share";
 import { buildMovieDossier } from "../lib/dossier";
 import { MONTHS, heroBg, longDate, movieComparePathFor, premiereDateParts, slugifyName, stripHtml, fmtRuntime } from "../lib/format";
 import { franchiseOfMovie } from "../lib/franchises";
@@ -14,7 +15,10 @@ import { PROVIDER_LOGOS, REGIONS, providerBrand, providersFor, visitorRegion } f
 import { crewLinkMap, similarMovies } from "../lib/queries";
 import { titleStat } from "../lib/ratings";
 import { foldSql, foldText } from "../lib/search";
-import { canonical, origin } from "../lib/seo";
+import { canonical, faqLd, origin } from "../lib/seo";
+import { servePng } from "../lib/render";
+import { posterDataUri } from "../lib/signal";
+import { buildOgCard } from "../lib/social";
 import { tmdbMovieBackdrop, tmdbMovieCast, tmdbMovieCrew, tmdbMovieMedia, tmdbUpcomingBackdrop } from "../lib/tmdb";
 import { hubForGenres } from "../lib/verticals";
 import { Bindings, MovieRow } from "../types";
@@ -351,7 +355,7 @@ app.get("/movies", async (c) => {
                   </span>
                   <span class="wo-side">
                     {m.rating != null ? (
-                      <span class="rating">★ {m.rating.toFixed(1)}</span>
+                      <span class="rating"><IconStar class="rating-star" />{m.rating.toFixed(1)}</span>
                     ) : null}
                     {m.runtime ? (
                       <span class="wo-mins">{fmtRuntime(m.runtime)}</span>
@@ -437,6 +441,8 @@ app.get("/movies/best", async (c) => {
   }
 
   const heading = genre ? `The best ${genre.toLowerCase()} movies, ranked` : "The best movies of all time, ranked";
+  const year = new Date().getFullYear();
+  const gSlug = genre ? slugifyName(genre) : "";
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
@@ -515,11 +521,11 @@ app.get("/movies/best", async (c) => {
                 <span class="wo-provs">
                   {(provs.length ? provs.slice(0, 3) : gs.slice(0, 2)).join(" · ")}
                   {provs.length || gs.length ? <span class="wo-provs-sep"> · </span> : null}
-                  <span class="rating">★ {m.rating!.toFixed(1)}</span>
+                  <span class="rating"><IconStar class="rating-star" />{m.rating!.toFixed(1)}</span>
                 </span>
               </span>
               <span class="wo-side">
-                <span class="rating">★ {m.rating!.toFixed(1)}</span>
+                <span class="rating"><IconStar class="rating-star" />{m.rating!.toFixed(1)}</span>
                 {m.votes ? <span class="wo-mins">{fmtVotes(m.votes)} votes</span> : null}
               </span>
             </li>
@@ -547,16 +553,22 @@ app.get("/movies/best", async (c) => {
         <h2>Keep exploring</h2>
         <div class="explore-grid">
           <ExploreCard
+            icon="Watch guide"
+            title={genre ? `Best ${genre.toLowerCase()} movies of ${year}` : `Best movies of ${year}`}
+            desc="The acclaimed films to watch this year, newest greats first."
+            href={genre ? `/movies/best/${year}/${gSlug}` : `/movies/best/${year}`}
+          />
+          <ExploreCard
+            icon="Hidden gems"
+            title={genre ? `Underrated ${genre.toLowerCase()} movies` : "Underrated movies"}
+            desc="High ratings, low profile — the great films most people have missed."
+            href={genre ? `/movies/underrated/${gSlug}` : "/movies/underrated"}
+          />
+          <ExploreCard
             icon="Guides"
             title="Watch every saga in order"
             desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
             href="/watch-orders"
-          />
-          <ExploreCard
-            icon="The canon"
-            title="The classic films page"
-            desc="The best of cinema's first eighty years, ranked and streamable."
-            href="/classics"
           />
           <ExploreCard
             icon="Community"
@@ -568,6 +580,39 @@ app.get("/movies/best", async (c) => {
       </section>
     </Layout>,
   );
+});
+
+// 1200×630 branded card for link unfurls.
+app.get("/movie/:slug/og.png", async (c) => {
+  const slug = c.req.param("slug");
+  return servePng(c, `movie/${slug}`, async () => {
+    const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
+      .bind(slug)
+      .first<MovieRow>();
+    if (!movie) return null;
+    const bd =
+      c.env.TMDB_API_KEY && movie.imdb_id
+        ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id)
+        : null;
+    const [backdropUri, posterUri] = await Promise.all([
+      posterDataUri(bd?.x1 ?? null),
+      posterDataUri(movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? null),
+    ]);
+    const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
+    const { names } = providersFor(movie, "US");
+    const meta = [genres.slice(0, 3).join(" · "), movie.year ? String(movie.year) : ""]
+      .filter(Boolean)
+      .join(" · ");
+    return buildOgCard({
+      kicker: "Movie",
+      title: movie.title,
+      meta: meta || null,
+      rating: movie.rating,
+      note: names.length ? `Streaming on ${names[0].trim()}` : null,
+      posterUri,
+      backdropUri,
+    });
+  });
 });
 
 app.get("/movie/:slug", async (c) => {
@@ -607,7 +652,14 @@ app.get("/movie/:slug", async (c) => {
   const directorLinks = directors.length
     ? await crewLinkMap(c.env.DB, directors)
     : new Map<number, number>();
-  const heroFrame = backdrop ? heroBg(backdrop.x1, backdrop.x2) : null;
+  // mirror the show hero: a real backdrop leads; otherwise the poster itself
+  // feeds the frame-hero wash (not an ambient blur), so no-backdrop movies read
+  // like no-backdrop shows
+  const heroFrame = backdrop
+    ? heroBg(backdrop.x1, backdrop.x2)
+    : movie.poster_url
+      ? heroBg(movie.poster_url.replace("/w342/", "/w780/"))
+      : null;
   // the rivals' backdrops for the head-to-head split cards (edge-cached)
   const rivalBackdrops = c.env.TMDB_API_KEY
     ? await Promise.all(
@@ -632,10 +684,12 @@ app.get("/movie/:slug", async (c) => {
       title={`${movie.title}${movie.year ? ` (${movie.year})` : ""} — rating, runtime & info | TV Nightly`}
       description={(movie.overview ?? "").slice(0, 155)}
       canonical={canonical(c)}
-      ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+      ogImage={`${canonical(c)}/og.png`}
+      ogImageLarge
       ld={[ld]}
+      scripts={["/js/share.js"]}
     >
-      <article class="show-hub">
+      <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
         <header class={heroFrame ? "detail-hero frame-hero" : "detail-hero"}>
           {heroFrame ? (
             <div class="hero-backdrop" style={heroFrame}></div>
@@ -652,7 +706,10 @@ app.get("/movie/:slug", async (c) => {
               <RateInline kind="movie" refId={movie.imdb_id} stat={stat} />
             </div>
             <div class="detail-info">
-              <h1>{movie.title}</h1>
+              <div class="detail-title-row">
+                <h1>{movie.title}</h1>
+                <ShareBar url={canonical(c)} title={`${movie.title}${movie.year ? ` (${movie.year})` : ""} on TV Nightly`} />
+              </div>
               <p class="meta-strip">
                 <span>
                   <a href="/movies/best" title="The best movies, ranked">Movie</a>
@@ -685,7 +742,7 @@ app.get("/movie/:slug", async (c) => {
                 {movie.rating != null ? (
                   <>
                     <span class="sep">·</span>
-                    <span class="rating">★ {movie.rating.toFixed(1)}</span>
+                    <span class="rating"><IconStar class="rating-star" />{movie.rating.toFixed(1)}</span>
                     {movie.votes ? <span> ({movie.votes.toLocaleString()})</span> : null}
                   </>
                 ) : null}
@@ -714,6 +771,7 @@ app.get("/movie/:slug", async (c) => {
               <ProviderLine
                 row={movie}
                 region={region}
+                title={movie.title}
                 fallbackHref="/what-to-watch?type=movie"
                 pickerType="movie"
                 allHref={`/movie/${movie.slug}/where-to-watch`}
@@ -943,7 +1001,7 @@ app.get("/movie/:slug/similar", async (c) => {
       ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
       ld={ld}
     >
-      <article class="show-hub">
+      <article class={`show-hub${heroFrame ? " hub-backdrop" : ""}`}>
         <header class={heroFrame ? "detail-hero frame-hero" : "detail-hero"}>
           {heroFrame ? (
             <div class="hero-backdrop" style={heroFrame}></div>
@@ -1071,9 +1129,9 @@ app.get("/movie/:slug/media", async (c) => {
       canonical={`${site}${base}`}
       ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
       ld={ld}
-      scripts={["/js/media-lightbox.js"]}
+      scripts={["/js/media-lightbox.js", "/js/media-video.js"]}
     >
-      <article class="show-hub">
+      <article class={`show-hub${heroArt ? " hub-backdrop" : ""}`}>
         <header class={heroArt ? "detail-hero frame-hero" : "detail-hero"}>
           {heroArt ? (
             <div class="hero-backdrop" style={heroArt}></div>
@@ -1109,15 +1167,23 @@ app.get("/movie/:slug/media", async (c) => {
         {trailer ? (
           <section>
             <h2>Trailer</h2>
-            <div class="media-player">
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${trailer.key}`}
-                title={trailer.name}
+            <a
+              class="media-player media-player-cta"
+              href={`https://www.youtube.com/watch?v=${trailer.key}`}
+              target="_blank"
+              rel="noopener"
+              data-video-key={trailer.key}
+              data-video-name={trailer.name}
+              aria-label={`Play trailer: ${trailer.name}`}
+            >
+              <img
+                src={`https://img.youtube.com/vi/${trailer.key}/hqdefault.jpg`}
+                alt=""
                 loading="lazy"
-                allowfullscreen
-                allow="encrypted-media; picture-in-picture"
-              ></iframe>
-            </div>
+                decoding="async"
+              />
+              <IconPlay size={56} />
+            </a>
           </section>
         ) : null}
         {clips.length ? (
@@ -1130,6 +1196,8 @@ app.get("/movie/:slug/media", async (c) => {
                   href={`https://www.youtube.com/watch?v=${v.key}`}
                   target="_blank"
                   rel="noopener"
+                  data-video-key={v.key}
+                  data-video-name={v.name}
                 >
                   <span class="media-thumb">
                     <img
@@ -1378,9 +1446,21 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
       }
       canonical={`${site}${base}`}
       ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+      ld={
+        names.length
+          ? [
+              faqLd([
+                {
+                  q: `Where can I watch ${movie.title}?`,
+                  a: `${movie.title} is streaming on ${names.slice(0, 6).join(", ")} in ${region}.`,
+                },
+              ]),
+            ]
+          : []
+      }
       scripts={["/js/dropdown.js"]}
     >
-      <article class="show-hub">
+      <article class={`show-hub${heroFrame ? " hub-backdrop" : ""}`}>
         <header class={heroFrame ? "detail-hero frame-hero" : "detail-hero"}>
           {heroFrame ? (
             <div class="hero-backdrop" style={heroFrame}></div>
@@ -1750,8 +1830,8 @@ app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
   const tape: { label: string; a: unknown; b: unknown; win: number; minor?: boolean }[] = [
     {
       label: "Rating",
-      a: a.rating != null ? `★ ${a.rating.toFixed(1)}` : "—",
-      b: b.rating != null ? `★ ${b.rating.toFixed(1)}` : "—",
+      a: a.rating != null ? <><IconStar class="rating-star" /> {a.rating.toFixed(1)}</> : "—",
+      b: b.rating != null ? <><IconStar class="rating-star" /> {b.rating.toFixed(1)}</> : "—",
       win: cmp(a.rating, b.rating),
     },
     {

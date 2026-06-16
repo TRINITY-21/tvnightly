@@ -3,6 +3,7 @@
 import { Hono } from "hono";
 import { ErrorPage, NotFoundPage } from "./components/notfound";
 import { setBeaconToken } from "./components/Layout";
+import { setAffiliate } from "./lib/affiliate";
 import { providerPatrol, runSync, sendDailyDigest } from "./sync";
 import type { Bindings } from "./types";
 
@@ -10,6 +11,8 @@ import bestEpisodes from "./routes/best-episodes";
 import compare from "./routes/compare";
 import episode from "./routes/episode";
 import directory from "./routes/directory";
+import guides from "./routes/guides";
+import tvGuides from "./routes/tv-guides";
 import home from "./routes/home";
 import hubs from "./routes/hubs";
 import legal from "./routes/legal";
@@ -20,6 +23,8 @@ import recommend from "./routes/recommend";
 import schedule from "./routes/schedule";
 import search from "./routes/search";
 import show from "./routes/show";
+import admin from "./routes/admin";
+import feedback from "./routes/feedback";
 import showSubpages from "./routes/show-subpages";
 import sitemaps from "./routes/sitemaps";
 import subscribe from "./routes/subscribe";
@@ -35,6 +40,7 @@ const app = new Hono<{ Bindings: Bindings }>();
 // This also threads the public Web Analytics beacon token into the Layout module.
 app.use("*", async (c, next) => {
   setBeaconToken(c.env.CF_BEACON_TOKEN);
+  setAffiliate(c.env);
   c.header("X-Content-Type-Options", "nosniff");
   c.header("X-Frame-Options", "SAMEORIGIN");
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -73,12 +79,16 @@ app.route("/", directory);
 app.route("/", compare);
 app.route("/", hubs);
 app.route("/", watchOrders);
+app.route("/", guides);
+app.route("/", tvGuides);
 app.route("/", movies);
 app.route("/", whatToWatch);
 app.route("/", news);
 app.route("/", search);
 app.route("/", votes);
 app.route("/", subscribe);
+app.route("/", feedback);
+app.route("/", admin);
 app.route("/", sitemaps);
 app.route("/", legal);
 

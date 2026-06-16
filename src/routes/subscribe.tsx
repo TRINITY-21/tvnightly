@@ -4,6 +4,7 @@ import { origin } from "../lib/seo";
 import { MessagePage } from "../components/Layout";
 import { signToken, verifyToken } from "../tokens";
 import { sendEmails } from "../email";
+import { EMAIL, emailButton, emailShell } from "../lib/email-template";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -45,14 +46,21 @@ app.post("/subscribe", async (c) => {
     const token = await signToken({ email, showId, kind, action: "confirm" }, c.env.SECRET);
     const what =
       kind === "daily" ? "the TV Nightly daily email" : `${show!.name} renewal & schedule alerts`;
+    const confirmUrl = `${origin(c)}/confirm?token=${token}`;
     await sendEmails(c.env, [
       {
         to: email,
         subject: `Confirm: ${what}`,
-        html:
-          `<p>Confirm your subscription to <strong>${what}</strong>:</p>` +
-          `<p><a href="${origin(c)}/confirm?token=${token}">Yes, sign me up</a></p>` +
-          `<p style="color:#888;font-size:12px">If you didn't request this, ignore this email.</p>`,
+        html: emailShell({
+          title: "Confirm your subscription",
+          preheader: `One click to start ${what}.`,
+          contentHtml:
+            `<p style="margin:0 0 22px;color:${EMAIL.soft}">You're one tap away from <strong style="color:${EMAIL.text}">${what}</strong>. Confirm below and you're in.</p>` +
+            emailButton("Confirm subscription", confirmUrl) +
+            `<p style="margin:20px 0 0;font-size:13px;color:${EMAIL.muted}">Button not working? Paste this into your browser:<br><a href="${confirmUrl}" style="color:${EMAIL.accent};word-break:break-all">${confirmUrl}</a></p>`,
+          footerNote:
+            "You got this because someone entered this address on tvnightly.com. If that wasn't you, just ignore it — nothing is subscribed until you confirm.",
+        }),
       },
     ]);
   }

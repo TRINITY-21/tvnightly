@@ -388,7 +388,7 @@
 .wo-prov img { width: 1.45rem; height: 1.45rem; object-fit: contain; display: block; border-radius: 5px; }
 .wo-prov-text {
   padding: 0.18rem 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--surface-2);
   font-family: var(--display);

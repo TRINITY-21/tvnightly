@@ -29,6 +29,9 @@
      emit the literal for export parity (lib/signal.ts) */
   --plate: #0e0e11;
   --accent-2: #ff5c8a;     /* marquee pink — live / fandom / chart B */
+  --rating: #e0820f;       /* poster rating chip — a deeper amber than --accent
+                              so a white star + score stay legible (white on the
+                              bright interactive amber would not read) */
   --ok: #3cdf8e;
   --warn: #eac54f;
   --bad: #ff6b6b;
@@ -92,7 +95,9 @@ main { max-width: 980px; margin: 0 auto; padding: 1rem 1rem 2rem; }
 h1 {
   font-family: var(--display);
   font-stretch: 120%;
-  font-weight: 650;
+  /* the marquee weight: every main page title reads at the same Archivo-black
+     heft as the detail-page hero, instead of some pages landing at a lighter 650 */
+  font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   font-size: 1.7rem;
@@ -147,7 +152,27 @@ h3 {
 }
 /* drawn glyphs (components/icons.tsx) sit on the text line, not above it */
 .icon { vertical-align: -0.16em; }
-.rating { color: var(--warn); white-space: nowrap; font-weight: 650; }
+/* inline-flex so the star icon centers on the number at any size — no baseline
+   guesswork; vertical-align:middle keeps the whole chip centered when it sits in
+   a run of plain inline text (flex parents like .meta-strip ignore it harmlessly) */
+.rating {
+  color: var(--warn);
+  white-space: nowrap;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.16em;
+  vertical-align: middle;
+}
+/* inline star icon (components/icons IconStar), sized to the rating text.
+   vertical-align centers it in plain-inline contexts (search typeahead, compare
+   tooltips rendered by client JS); flex parents like .rating ignore it. */
+.rating-star {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  vertical-align: -0.15em;
+}
 .more {
   font-family: var(--body);
   font-weight: 600;
@@ -316,7 +341,8 @@ a:hover .chev-icon-prev { transform: translateX(-2px); }
   min-width: 0;
   background: rgba(18, 18, 20, 0.72);
   border: 1px solid rgba(43, 43, 50, 0.95);
-  border-radius: 999px;
+  /* match the squared-off button radius (--radius), not a pill */
+  border-radius: var(--radius);
   color: var(--text);
   padding: 0.5rem 2rem 0.5rem 2.35rem;
   font: inherit;
@@ -986,20 +1012,41 @@ body.nav-open { overflow: hidden; }
   color: var(--muted);
 }
 .card-media { position: relative; }
-/* rating chip lives on the art, streaming-app style */
+/* rating chip is TUCKED into the poster's bottom-right corner — not a floating
+   pill. It sits flush against the right and bottom edges, so each corner has a
+   different radius: the inner (top-left) corner is rounded, the two edge corners
+   are square, and the shared bottom-right corner is clipped to the poster's own
+   curve by .card's overflow:hidden. Deep amber (--rating) with a white chunky
+   star + score. Border only on the two inner edges (top + left); a soft up-left
+   shadow lifts it off the art. */
 .card-rating {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  background: rgba(18, 18, 20, 0.78);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  border-radius: var(--radius-sm);
-  color: var(--warn);
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.14rem 0.42rem;
+  bottom: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  background: var(--rating);
+  border-top: 1px solid rgba(0, 0, 0, 0.2);
+  border-left: 1px solid rgba(0, 0, 0, 0.2);
+  border-top-left-radius: 10px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.005em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  padding: 0.28rem 0.44rem;
   white-space: nowrap;
+  box-shadow: -1px -1px 7px rgba(0, 0, 0, 0.28);
+}
+.card-rating-star {
+  display: block;
+  flex: none;
+  font-size: 1.02em;
 }
 .card-body {
   display: flex;
@@ -1365,8 +1412,15 @@ body.nav-open { overflow: hidden; }
 }
 
 /* hero gets title-sequence scale on detail pages */
-.detail-head h1 { font-size: clamp(1.8rem, 3.2vw, 2.3rem); }
+.detail-head h1 { font-size: clamp(1.8rem, 3.2vw, 2.3rem); text-wrap: balance; }
 .detail-head .poster { width: 200px; }
+/* a long single-word title (INTERSTELLAR, SUPERNATURAL) is wider than a phone at
+   the 1.8rem floor — and a single word can't wrap at a space, so overflow-wrap
+   snaps off the last letter ("INTERSTELLA/R"). Let the title scale down to fit
+   the width instead; it stays on one line and reads whole. */
+@media (max-width: 560px) {
+  .detail-head h1 { font-size: clamp(1.5rem, 6vw, 1.8rem); }
+}
 
 /* ---- detail pages: full-bleed cinematic hero (no card chrome) ----
    The show's own art, blurred to ambient light, runs edge to edge and
@@ -1505,15 +1559,24 @@ a.cast-tile:hover { text-decoration: none; }
   mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
 }
 .show-hub .frame-hero::after {
-  /* hold the viewing band clear through the middle; the heavy dark only
-     arrives near the bottom where the page takes over */
-  background: linear-gradient(
-    to bottom,
-    rgba(18, 18, 20, 0.18) 0%,
-    rgba(18, 18, 20, 0.34) 48%,
-    rgba(18, 18, 20, 0.78) 82%,
-    var(--bg) 100%
-  );
+  /* hold the viewing band clear through the middle, but darken the edges where
+     text starts/ends: a left+right vignette plus the bottom scrim, so the title,
+     meta and summary read while the center-top still shows the backdrop */
+  background:
+    linear-gradient(
+      to right,
+      rgba(18, 18, 20, 0.55) 0%,
+      rgba(18, 18, 20, 0) 22%,
+      rgba(18, 18, 20, 0) 78%,
+      rgba(18, 18, 20, 0.55) 100%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(18, 18, 20, 0.2) 0%,
+      rgba(18, 18, 20, 0.4) 48%,
+      rgba(18, 18, 20, 0.82) 82%,
+      var(--bg) 100%
+    );
 }
 /* the verdict lives with the poster, like rating does on show pages */
 .detail-side .ep-vote {
@@ -1570,23 +1633,47 @@ a.cast-tile:hover { text-decoration: none; }
     mask-image: linear-gradient(to bottom, #000 64%, transparent);
   }
   .show-hub.hub-backdrop .frame-hero::after { background: transparent; }
-  .show-hub.hub-backdrop .detail-side .poster { display: none; }
-  /* the rate widget drops to the bottom of the hero (after title/meta/summary)
-     as a centered "rate this" footer, separated by a hairline */
+  /* movie subpages carry the poster bare in .detail-head (no side column) — drop
+     it under the banner; the main hero keeps its poster as a small footer mark */
+  .show-hub.hub-backdrop .detail-head > .poster { display: none; }
+  /* the side column drops to the foot of the hero as a band: the poster returns
+     small on the left (its key art still gets a moment) with the "did you love
+     it?" prompt beside it — neither fights the backdrop banner up top */
   .show-hub.hub-backdrop .detail-side {
     flex-basis: 100%;
     width: 100%;
     order: 2;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
     margin-top: 0.5rem;
     padding-top: 1rem;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
   }
-  .show-hub.hub-backdrop .detail-side .rate-inline { justify-content: center; }
+  .show-hub.hub-backdrop .detail-side .poster {
+    display: block;
+    width: 100px;
+    flex: 0 0 100px;
+    margin: 0;
+  }
+  .show-hub.hub-backdrop .detail-side .rate-inline,
+  .show-hub.hub-backdrop .detail-side .ep-vote {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    gap: 0.3rem;
+    justify-content: flex-start;
+  }
+  .show-hub.hub-backdrop .detail-side .rate-inline-label {
+    flex-basis: 100%;
+    text-align: left;
+  }
   /* the subpage heroes (where-to-watch, similar, media) carry only a poster in
      the side column — no rate widget. Once the backdrop banner drops the poster
      there's nothing left to show as a footer, so collapse the empty column
-     instead of leaving a stray hairline-bordered box. */
-  .show-hub.hub-backdrop .detail-side:not(:has(.rate-inline)) {
+     instead of leaving a stray hairline-bordered box. (Episode pages keep the
+     .ep-vote "fair rating?" footer, so they're exempt.) */
+  .show-hub.hub-backdrop .detail-side:not(:has(.rate-inline)):not(:has(.ep-vote)) {
     display: none;
   }
 }
@@ -1605,8 +1692,19 @@ a.cast-tile:hover { text-decoration: none; }
 .ep-eyebrow a:hover,
 .ep-eyebrow a:focus-visible { color: var(--accent); text-decoration: none; }
 .ep-eyebrow .sep { opacity: 0.45; margin: 0 0.3rem; }
+/* keep the runtime · network facts as one unit so they wrap together */
+.ep-meta2 { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0.55rem; }
 @media (max-width: 600px) {
   .ep-side { flex-basis: 100%; width: 100%; }
+}
+@media (max-width: 560px) {
+  /* eyebrow: show name on its own line, "Season · Episode" beneath — drop the
+     bridging dot so it doesn't strand at the start of the wrapped line */
+  .ep-eyebrow .ep-eyebrow-sep { display: none; }
+  .ep-eyebrow-se { display: block; }
+  /* meta: runtime · network drop to their own line, no leading orphan dot */
+  .ep-meta2 { flex-basis: 100%; }
+  .ep-meta2 .sep:first-child { display: none; }
 }
 
 /* prev/next: two doors at the end of the hour */
@@ -1645,10 +1743,11 @@ a.cast-tile:hover { text-decoration: none; }
 }
 .pager-title {
   font-weight: 600;
-  white-space: nowrap;
+  /* let the title use a second line rather than cutting to "We Are the…" */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
 }
 .pager-sub { font-size: 0.8rem; }
 
@@ -1761,6 +1860,25 @@ a.cast-tile:hover { text-decoration: none; }
   }
 }
 .provs-all { margin-left: 0.5rem; font-size: 0.85rem; font-weight: 600; }
+
+/* show/movie hero: title + Share button share one row — Share pinned to the
+   right, vertically centered on the title (margins moved off the h1 so the
+   centering isn't skewed). Wraps below the title on narrow columns. */
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.2rem;
+  flex-wrap: wrap;
+  margin: 0.1rem 0 0.5rem;
+}
+.detail-title-row h1 {
+  margin: 0;
+}
+.detail-title-row .share-bar {
+  margin: 0;
+  flex: 0 0 auto;
+}
 /* ============================================================
    full cast page — editorial overlay tiles
    The headshot IS the card: it fills a portrait frame and the name +
@@ -1873,8 +1991,8 @@ a.cast-tile:hover { text-decoration: none; }
   background: linear-gradient(
     to top,
     rgba(0, 0, 0, 0.9) 0%,
-    rgba(0, 0, 0, 0.52) 26%,
-    rgba(0, 0, 0, 0) 54%
+    rgba(0, 0, 0, 0.55) 30%,
+    rgba(0, 0, 0, 0) 60%
   );
 }
 
@@ -1889,6 +2007,9 @@ a.cast-tile:hover { text-decoration: none; }
   flex-direction: column;
   gap: 0.08rem;
   padding: 0.65rem 0.7rem 0.7rem;
+  /* the scrim fades out where tall text reaches, so carry legibility on the
+     glyphs themselves — readable over a bright suit or a dark background alike */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.55);
 }
 .cast-tile-body strong {
   font-family: var(--display);
@@ -1897,12 +2018,23 @@ a.cast-tile:hover { text-decoration: none; }
   line-height: 1.18;
   letter-spacing: 0.01em;
   transition: color var(--speed) var(--ease);
+  /* keep names to two lines so they can't run up the whole frame */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
 .cast-tile-body .cast-char {
   font-size: 0.76rem;
   color: var(--muted);
   line-height: 1.25;
+  /* cap the longest character names ("…Dr. Donald Horatio 'Ducky' Mallard") so
+     the lockup stays inside the scrim band; full role is one tap away */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .cast-meta { font-size: 0.74rem; }
 
@@ -1914,7 +2046,7 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   top: 0.5rem;
   right: 0.5rem;
   padding: 0.1rem 0.42rem;
-  border-radius: 999px;
+  border-radius: var(--radius);
   font-size: 0.68rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -2038,7 +2170,7 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   letter-spacing: 0.08em;
   color: var(--muted);
   background: var(--surface-2);
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 0.16rem 0.6rem;
   position: relative;
   top: -0.16rem;
@@ -2125,7 +2257,7 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   color: var(--muted);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 0.28rem 0.72rem;
   transition: color var(--speed) var(--ease), border-color var(--speed) var(--ease),
     background var(--speed) var(--ease);
@@ -2183,10 +2315,18 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   .person-hero .detail-head { display: flow-root; }
   .person-hero .detail-side {
     float: left;
-    width: 128px;
+    width: 112px;
     margin: 0 1.1rem 0.7rem 0;
   }
-  .person-hero .detail-head h1 { font-size: 1.7rem; }
+  /* the marquee h1 is uppercase Archivo expanded to 120% — far too wide for the
+     narrow column beside the image, so long names (JENNIFER CONNELLY) hard-break
+     mid-word. Condense + downsize so each name word fits whole on its own line;
+     overflow-wrap stays as the last-resort net for a genuinely huge single name. */
+  .person-hero .detail-head h1 {
+    font-size: 1.5rem;
+    font-stretch: 85%;
+    letter-spacing: 0;
+  }
   /* name + birth line ride beside the image; the about + genres drop below the
      whole poster column and run full width */
   .person-hero .detail-info .summary,
@@ -2475,7 +2615,7 @@ button, .verdict-btn {
 .vote-btn {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   color: var(--text);
   font-size: 0.78rem;
   padding: 0.28rem 0.7rem;
@@ -2666,6 +2806,214 @@ button, .verdict-btn {
     width: 100%;
   }
 }
+
+/* ---- /feedback page form ---- */
+.fb-page { max-width: 34rem; margin: 0 auto; }
+.fb-form { display: flex; flex-direction: column; gap: 1.1rem; margin-top: 1.3rem; }
+.fb-field { display: flex; flex-direction: column; gap: 0.35rem; }
+.fb-label { font-weight: 600; font-size: 0.92rem; }
+.fb-opt { color: var(--muted); font-weight: 400; }
+.fb-note { color: var(--muted); font-size: 0.82rem; }
+.fb-form textarea,
+.fb-form input[type="email"] {
+  width: 100%;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 0.7rem 0.9rem;
+  font: inherit;
+  transition: border-color var(--speed) var(--ease);
+}
+.fb-form textarea { resize: vertical; min-height: 7rem; line-height: 1.5; }
+.fb-form textarea:focus-visible,
+.fb-form input[type="email"]:focus-visible {
+  outline: none;
+  border-color: rgba(255, 169, 77, 0.5);
+}
+.fb-form button {
+  align-self: flex-start;
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 700;
+  padding: 0.62rem 1.5rem;
+  cursor: pointer;
+  transition: filter var(--speed) var(--ease);
+}
+.fb-form button:hover { filter: brightness(1.1); }
+/* honeypot: pushed off-screen (not display:none — bots skip those) */
+.fb-hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+/* reserve the widget's height so it doesn't shift the submit button on load */
+.fb-turnstile { min-height: 65px; }
+
+/* ---- /admin/feedback read-only inbox ---- */
+.adm-count { color: var(--muted); font-weight: 400; font-size: 0.6em; }
+.adm-list { list-style: none; padding: 0; margin-top: 1.2rem; }
+.adm-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.7rem;
+}
+.adm-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.adm-meta a { color: var(--accent); }
+.adm-page { word-break: break-all; }
+.adm-msg { white-space: pre-wrap; word-wrap: break-word; line-height: 1.5; }
+.adm-nav { margin-bottom: 0.4rem; font-size: 0.85rem; }
+.adm-nav a { color: var(--accent); display: inline-flex; align-items: center; gap: 0.2rem; }
+.adm-nav .chev-icon { color: inherit; }
+
+/* ---- social studio ---- */
+.studio-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.6rem 0 1rem; }
+.studio-tab {
+  padding: 0.4rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.studio-tab:hover {
+  color: var(--text);
+  text-decoration: none;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.studio-tab.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.studio-genre { display: flex; gap: 0.6rem; align-items: center; margin: 0 0 0.4rem; max-width: 34rem; }
+.studio-genre select {
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+}
+.studio-genre button {
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 700;
+  padding: 0.55rem 1.2rem;
+  cursor: pointer;
+}
+.studio-vs {
+  max-width: 34rem;
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.studio-vs .studio-search { margin: 0; }
+.studio-vs .studio-dl-btn { align-self: flex-start; }
+.studio-search { position: relative; max-width: 34rem; margin: 1.1rem 0; }
+.studio-search input {
+  width: 100%;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 0.7rem 1.1rem;
+  font: inherit;
+}
+.studio-search input:focus-visible { outline: none; border-color: rgba(255, 169, 77, 0.5); }
+.studio-ta {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  right: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+.studio-ta[hidden] { display: none; }
+.studio-ta .ta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0.7rem;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.studio-ta .ta-row:last-child { border-bottom: 0; }
+.studio-ta .ta-row:hover { background: rgba(255, 169, 77, 0.1); text-decoration: none; }
+.studio-ta img,
+.studio-ta .ta-blank {
+  width: 34px;
+  height: 51px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.studio-ta .ta-blank { background: var(--surface); }
+.studio-ta .ta-name { flex: 1; min-width: 0; }
+.studio-ta .ta-year { color: var(--muted); }
+.studio-ta .ta-kind {
+  color: var(--muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.studio-preview img {
+  width: 320px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  display: block;
+  margin: 1.2rem 0;
+  background: var(--plate);
+}
+.studio-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.3rem;
+  margin-top: 0.4rem;
+}
+.studio-dl-btn {
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 700;
+  padding: 0.6rem 1.5rem;
+  cursor: pointer;
+  transition: filter var(--speed) var(--ease);
+}
+.studio-dl-btn:hover { filter: brightness(1.1); }
+.studio-dl-btn:disabled { opacity: 0.6; cursor: default; }
+.studio-vid-btn {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.studio-vid-btn:hover { background: rgba(255, 169, 77, 0.1); filter: none; }
 
 /* ---- chips, picks, providers ---- */
 .quick-picks {
@@ -2948,6 +3296,9 @@ button, .verdict-btn {
 
 .watch-results {
   margin-top: 0.25rem;
+  /* when JS scrolls the picks into view after a submit, leave room for the
+     sticky header so the shortlist heading isn't tucked under it */
+  scroll-margin-top: 5rem;
 }
 .shortlist-head {
   display: flex;
@@ -3773,7 +4124,7 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 .wo-prov img { width: 1.45rem; height: 1.45rem; object-fit: contain; display: block; border-radius: 5px; }
 .wo-prov-text {
   padding: 0.18rem 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--surface-2);
   font-family: var(--display);
@@ -4044,12 +4395,31 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   .spotlight:not(.spot-ambient) .spot-poster {
     display: none;
   }
-  /* edge-to-edge and a touch brighter — it's THE hero now, not a strip beside a
-     poster, so drop the side-fade that blended the 1280px desktop plate */
+  /* edge-to-edge — it's THE hero now, not a strip beside a poster, so drop the
+     side-fade that blended the 1280px desktop plate; tone it so the scrim leads */
   .spotlight:not(.spot-ambient) .hero-backdrop {
     -webkit-mask-image: none;
     mask-image: none;
-    opacity: 0.88;
+    opacity: 0.8;
+  }
+  /* match the detail-page heroes: a left+right vignette darkens the edges where
+     the lower-third text starts and ends, layered over the top-down scrim */
+  .spotlight:not(.spot-ambient)::after {
+    background:
+      linear-gradient(
+        to right,
+        rgba(18, 18, 20, 0.78) 0%,
+        rgba(18, 18, 20, 0.16) 24%,
+        rgba(18, 18, 20, 0.16) 76%,
+        rgba(18, 18, 20, 0.78) 100%
+      ),
+      linear-gradient(
+        to bottom,
+        rgba(18, 18, 20, 0.14) 0%,
+        rgba(18, 18, 20, 0.4) 42%,
+        rgba(18, 18, 20, 0.85) 78%,
+        var(--bg) 100%
+      );
   }
   .spot-ambient {
     padding-top: 2.4rem;
@@ -4990,11 +5360,12 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   overflow: hidden;
 }
 .poster-row .card-rating {
-  top: 8px;
-  right: 8px;
-  font-size: 0.7rem;
-  padding: 0.18rem 0.48rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  bottom: 0;
+  right: 0;
+  gap: 0.2rem;
+  font-size: 0.68rem;
+  padding: 0.24rem 0.4rem;
+  border-top-left-radius: var(--radius);
 }
 /* tuned to the narrower rail posters */
 .poster-row .card-hover-title {
@@ -5425,7 +5796,7 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 0.22rem 0.6rem;
   background: var(--bg);
 }
@@ -5455,6 +5826,11 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 
 /* renewals wire: the door line before the inbox capture */
 .wire-foot { margin-top: 2.2rem; max-width: 56ch; }
+
+/* message/confirmation pages: "back" link leads with the house chevron, tinted
+   to match the accent link (not the default muted chevron) */
+.msg-back { display: inline-flex; align-items: center; gap: 0.3rem; }
+.msg-back .chev-icon { color: inherit; }
 /* ============================================================
    THE CHART — all-time episode leaderboard (/best-episodes)
    and shared chart masthead (also /top/tv in directory).
@@ -6030,6 +6406,88 @@ a.dossier-compare {
   height: 100%;
   border: 0;
 }
+/* trailer as a click-to-play poster: thumbnail + centered play badge, opens
+   the modal player (no heavy YouTube iframe loaded up front) */
+a.media-player-cta {
+  display: block;
+  cursor: pointer;
+}
+a.media-player-cta img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+a.media-player-cta .icon {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  color: var(--text);
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.75));
+  transition: color var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+a.media-player-cta:hover .icon {
+  color: var(--accent);
+  transform: scale(1.06);
+}
+
+/* the on-page video player modal */
+.vid-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(8, 8, 10, 0.92);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.vid-modal.open {
+  display: flex;
+}
+.vid-modal-stage {
+  width: min(100%, 1100px);
+}
+.vid-modal-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-2);
+}
+.vid-modal-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.vid-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(20, 20, 24, 0.6);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+.vid-modal-close:hover {
+  background: rgba(40, 40, 46, 0.85);
+  border-color: rgba(255, 255, 255, 0.3);
+}
 .media-videos {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -6271,13 +6729,13 @@ a.media-art img {
 }
 @media (max-width: 700px) {
   .fv-stage {
-    inset: 3.4rem 0.8rem 9.5rem;
+    inset: 3.4rem 0.8rem 13.2rem;
   }
   .fv-strip {
     top: auto;
     right: 0.8rem;
     left: 0.8rem;
-    bottom: 5.4rem;
+    bottom: 4.8rem;
     transform: none;
     flex-direction: row;
     width: auto;
@@ -6286,14 +6744,19 @@ a.media-art img {
     overflow-y: hidden;
   }
   .fv-thumb {
-    width: 64px;
+    width: 52px;
   }
+  /* the caption sits cleanly above the filmstrip — it used to overlap the thumbs */
   .fv-meta {
     left: 0.9rem;
-    bottom: 9.6rem;
+    right: 0.9rem;
+    bottom: 10.4rem;
   }
   .fv-title {
     font-size: 1.1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .fv-num {
     display: none;
@@ -6577,6 +7040,20 @@ li.epreg-plate .epreg-sum {
 }
 
 /* cross-ranking rail: chyron doors, no preamble */
+/* the ranking links and the Share button share one row — Share pushed right,
+   wrapping below the links on narrow screens */
+.epreg-foot {
+  margin: 1.1rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.4rem;
+}
+.epreg-foot .epreg-links,
+.epreg-foot .share-bar {
+  margin: 0;
+}
 .epreg-links {
   margin: 1.1rem 0 0;
   display: flex;
@@ -7745,7 +8222,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   color: var(--muted);
   white-space: nowrap;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 0.22rem 0.6rem;
   background: var(--bg);
 }
@@ -7849,7 +8326,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   white-space: nowrap;
   padding: 0.2rem 0.55rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--bg);
 }
 /* rows carry a logline: date + poster + title ride the top line, then the
@@ -8672,6 +9149,46 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .nets-hero {
   --net-glow: hsl(220 42% 42%);
 }
+
+/* "Best {genre} on {network}" doors under the hero — a labeled chip set, each
+   chip a door into the long-tail genre×service page */
+.net-genres {
+  margin: 1.4rem 0 0.4rem;
+}
+.net-genres-label {
+  display: block;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.55rem;
+}
+.net-genres-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+/* phones: collapse the 6 stacked rows into one swipeable rail — chips stay real
+   crawlable links, just on a single horizontal track */
+@media (max-width: 700px) {
+  .net-genres-rail {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.15rem;
+  }
+  .net-genres-rail::-webkit-scrollbar {
+    display: none;
+  }
+  .net-genres-rail .genre-chip {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}
 .net-hero-glow {
   position: absolute;
   inset: 0;
@@ -8877,7 +9394,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   right: 1.6rem;
   text-align: right;
 }
-/* the cinematic medallion, dead-center on the seam */
+/* the cinematic medallion, dead-center on the seam — a glossy "clash" coin */
 .vsx-badge {
   position: absolute;
   top: 50%;
@@ -8887,23 +9404,43 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.9rem;
-  height: 2.9rem;
+  width: 3.5rem;
+  height: 3.5rem;
   border-radius: 999px;
   font-family: var(--display);
-  font-stretch: 80%;
+  font-stretch: 88%;
   font-weight: 800;
-  font-size: 0.9rem;
-  letter-spacing: 0.04em;
-  color: var(--text);
-  /* opaque plate base under the tint so the seam can't bleed through; a solid
-     plate ring hides the line across the badge too (it still shows above/below) */
-  background: linear-gradient(135deg, rgba(255, 169, 77, 0.45), rgba(255, 92, 138, 0.45)), var(--plate);
-  border: 1.5px solid rgba(248, 246, 242, 0.7);
+  font-style: italic;
+  font-size: 1.2rem;
+  letter-spacing: 0.01em;
+  color: #fff;
+  /* glassy top highlight over a fiery amber→coral→magenta clash gradient */
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 48%),
+    linear-gradient(145deg, #ffb55c 0%, #ff7a52 40%, #ff4f87 72%, #9c2f5e 100%);
+  text-shadow: 0 1px 2px rgba(90, 10, 30, 0.7);
   box-shadow:
-    0 0 0 7px var(--plate),
-    0 6px 24px rgba(0, 0, 0, 0.6),
-    0 0 26px rgba(255, 169, 77, 0.28);
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.6),    /* glossy top rim */
+    inset 0 -5px 10px rgba(110, 18, 42, 0.55),     /* curved coin underside */
+    0 0 0 6px var(--plate),                        /* opaque moat hides the seam */
+    0 0 0 7.5px rgba(255, 176, 92, 0.7),           /* bright accent ring */
+    0 10px 30px rgba(0, 0, 0, 0.6),                /* drop shadow */
+    0 0 34px rgba(255, 110, 90, 0.5);              /* warm bloom */
+}
+/* a slow heat throb so the matchup feels live, not painted */
+@media (prefers-reduced-motion: no-preference) {
+  .vsx-badge {
+    animation: vsx-throb 2.8s ease-in-out infinite;
+  }
+}
+@keyframes vsx-throb {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 7px rgba(255, 110, 90, 0.35));
+  }
+  50% {
+    filter: drop-shadow(0 0 17px rgba(255, 110, 90, 0.7));
+  }
 }
 
 /* cross-link to the other medium's compare tool — a pill in the header's
@@ -8923,7 +9460,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   gap: 0.4rem;
   padding: 0.45rem 0.95rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--muted);
   font-size: 0.82rem;
@@ -9057,6 +9594,21 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .vsx-h2 {
   margin: 0 0 0.85rem;
 }
+/* section head: heading on the left, Share on the right, same baseline row */
+.vsx-sec-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.85rem;
+}
+.vsx-sec-head .vsx-h2 {
+  margin: 0;
+}
+.vsx-sec-head .share-bar {
+  margin: 0;
+}
 
 /* tale of the tape — fixed columns so the two sides sit symmetric about the
    centered metric label, not bunched at the left */
@@ -9095,19 +9647,22 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .tape-team-b {
   text-align: left;
 }
+/* color key on its own line above the name, aligned to the name's edge — so
+   both squares sit at the same height no matter how the names wrap */
 .tape-dot {
-  display: inline-block;
+  display: block;
   width: 0.62rem;
   height: 0.62rem;
   border-radius: 3px;
-  flex-shrink: 0;
-  vertical-align: middle;
+  margin-bottom: 0.4rem;
 }
 .tape-team .tape-dot {
-  margin-right: 0.45rem;
+  margin-left: auto;
+  margin-right: 0;
 }
 .tape-team-b .tape-dot {
-  margin-left: 0.45rem;
+  margin-right: auto;
+  margin-left: 0;
 }
 .tape-dot-a {
   background: #ffa94d;
@@ -9220,6 +9775,13 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
+}
+/* stop iOS's long-press image callout / text selection from hijacking a tap on
+   the chart (it fires pointercancel/leave and dismisses the episode card) */
+.vsx-svg {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .vsx-scroll::-webkit-scrollbar {
   height: 7px;
@@ -9396,7 +9958,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .rec-h1 {
   font-family: var(--display);
   font-stretch: 114%;
-  font-weight: 700;
+  font-weight: 900;
   text-transform: none;
   letter-spacing: -0.01em;
   font-size: clamp(1.6rem, 4vw, 2.25rem);
@@ -9414,7 +9976,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   width: 100%;
   background: var(--plate);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   color: var(--text);
   padding: 0.72rem 1.1rem;
   font: inherit;
@@ -9466,11 +10028,23 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 }
 /* keep each step on one line so a wrap lands on an arrow, never mid-phrase */
 .rec-step { white-space: nowrap; }
-.rec-steps .rec-arrow { color: var(--accent); margin: 0 0.3rem; }
+/* the step arrows are now house chevrons — amber, centered on the step text */
+.rec-steps .rec-arrow { color: var(--accent); margin: 0 0.2rem; vertical-align: middle; }
 .rec-trust { margin: 0.7rem 0 0; font-size: 0.82rem; }
 
 .rec-sec { margin-top: 2rem; }
 .rec-sec > .grid { margin-top: 0.6rem; }
+/* contenders heading row: title left, Share control parked on the right */
+.rec-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.6rem;
+}
+.rec-sec-head h2 { margin: 0; }
+.rec-sec-head .share-bar { margin: 0; }
 
 /* poster frame for the rate / deck screens */
 .rec-poster { position: relative; display: inline-block; }
@@ -9480,7 +10054,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   top: 12px;
   left: 50%;
   padding: 0.32rem 0.85rem;
-  border-radius: 999px;
+  border-radius: var(--radius);
   color: #fff;
   font-family: var(--display);
   font-stretch: 100%;
@@ -9610,13 +10184,14 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   gap: 0;
   /* pulled up so the bigger circles cradle ("hug") the card's rounded bottom */
   margin: -3.4rem auto 0;
-  max-width: 27rem;
-  --d: clamp(80px, 23vw, 118px);
+  max-width: 29rem;
+  --d: clamp(88px, 26vw, 128px);
 }
 .rate-fan .rate-opt { margin: 0 -3px; display: flex; }
 .rate-fan .rate-circle {
   display: grid;
   place-items: center;
+  flex-shrink: 0;
   border-radius: 50%;
   border: 3px solid rgba(248, 246, 242, 0.92);
   background: var(--fill);
@@ -9656,7 +10231,10 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 }
 .rate-fan.has-pick .rate-circle:not(.is-picked) { opacity: 0.45; filter: saturate(0.7); }
 @media (max-width: 480px) {
-  .rate-fan { --d: clamp(68px, 20vw, 94px); }
+  /* keep the circles big on phones (they were being shrunk to ~80px here); a
+     tighter cradle overlap is what lets them stay large without overflowing */
+  .rate-fan { --d: clamp(90px, 29vw, 128px); }
+  .rate-fan .rate-opt { margin: 0 -7px; }
 }
 
 /* ---- enrich deck: one card at a time ---- */
@@ -9672,7 +10250,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   text-align: center;
   margin: 1.5rem auto 0;
   padding: 0.7rem 1.15rem;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background: transparent;
   color: var(--muted);
@@ -9767,8 +10345,14 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
    (filter:none, prominent opacity); a left->right scrim keeps the info column
    readable while the backdrop reads clearly around the poster. */
 .rec-match .hero-backdrop { filter: none; opacity: 0.72; inset: 0; background-position: center 22%; }
+/* edge vignette: the diagonal info scrim, plus left/right and bottom darkening
+   so the title, the why-matches ledger, and the right-hand labels stay legible
+   over a bright still — the center-top keeps the backdrop visible */
 .rec-match.detail-hero::after {
-  background: linear-gradient(105deg, rgba(8, 8, 11, 0.4) 0%, rgba(8, 8, 11, 0.62) 45%, rgba(8, 8, 11, 0.82) 100%);
+  background:
+    linear-gradient(to right, rgba(8, 8, 11, 0.5) 0%, rgba(8, 8, 11, 0) 20%, rgba(8, 8, 11, 0) 72%, rgba(8, 8, 11, 0.6) 100%),
+    linear-gradient(to bottom, rgba(8, 8, 11, 0) 48%, rgba(8, 8, 11, 0.55) 100%),
+    linear-gradient(105deg, rgba(8, 8, 11, 0.38) 0%, rgba(8, 8, 11, 0.58) 45%, rgba(8, 8, 11, 0.8) 100%);
 }
 .rec-match-tag {
   margin: 0 0 0.5rem;
@@ -9925,7 +10509,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .taste-chip {
   padding: 0.2rem 0.6rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--surface);
   font-family: var(--display);
   font-stretch: 92%;
@@ -9989,16 +10573,33 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   inset: 0;
   background: linear-gradient(to top, rgba(8, 8, 11, 0.92) 6%, rgba(8, 8, 11, 0.4) 48%, rgba(8, 8, 11, 0.05) 100%);
 }
-.rec-cont-rating { position: absolute; top: 0.5rem; right: 0.5rem; }
+.rec-cont-rating { position: absolute; top: auto; bottom: 0; right: 0; }
 .rec-cont-overlay {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem 0.6rem;
+}
+/* the show/film one-sheet, tucked bottom-left over the backdrop */
+.rec-cont-poster {
+  flex-shrink: 0;
+  width: 3rem;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+}
+.rec-cont-text {
+  display: flex;
   flex-direction: column;
   gap: 0.32rem;
-  padding: 0.55rem 0.7rem 0.6rem;
+  min-width: 0;
 }
 .rec-cont .card-title {
   max-width: 100%;
@@ -10013,7 +10614,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 .rec-cont-chip {
   align-self: flex-start;
   padding: 0.1rem 0.46rem;
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: rgba(14, 14, 17, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.14);
   font-family: var(--display);
@@ -10371,7 +10972,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   max-width: 30rem;
   background: rgba(18, 18, 20, 0.6);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   overflow: hidden;
   transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
 }
@@ -10427,7 +11028,7 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   min-height: 2.4rem;
   padding: 0.45rem 0.95rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
   font-size: 0.9rem;
@@ -10461,4 +11062,81 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 @media (max-width: 600px) {
   .nf { min-height: 52vh; }
   .nf-search button { padding: 0 1.1rem; }
+}
+/* ShareBar — a single Share button in the house outline-button chassis
+   (cf. .sig-save, .btn-ghost). Rendered hidden; public/js/share.js reveals it. */
+.share-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 1.2rem 0 0.4rem;
+}
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  /* dark backing so the label holds AA contrast over bright hero frames */
+  background: rgba(18, 18, 20, 0.5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.42rem 0.85rem;
+  color: var(--text);
+  font-family: var(--display);
+  font-stretch: 105%;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--speed) var(--ease), border-color var(--speed) var(--ease),
+    background-color var(--speed) var(--ease);
+}
+.share-btn .icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+.share-btn:hover,
+.share-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(255, 169, 77, 0.1);
+}
+/* the native share sheet is the primary affordance where it exists */
+.share-native {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* clipboard-fallback confirmation ("Link copied") */
+.share-btn.is-copied,
+.share-btn.is-copied:hover {
+  color: var(--ok);
+  border-color: rgba(60, 223, 142, 0.45);
+  background: rgba(60, 223, 142, 0.08);
+}
+/* ============================================================
+   Guide pages — Best/Underrated/Featuring movie templates.
+   These pages reuse the chart (wo-*) and hub (hub-sec) shells;
+   the only net-new piece is the FAQ block, kept border-free
+   and token-driven so it reads as quiet prose, not a widget.
+   ============================================================ */
+
+.guide-faq-item {
+  margin: 0 0 1.1rem;
+  max-width: 64ch;
+}
+.guide-faq-item:last-child {
+  margin-bottom: 0;
+}
+/* the question carries the weight; the answer is muted body copy */
+.guide-faq-item h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  color: var(--text);
+}
+.guide-faq-item p {
+  margin: 0;
+  line-height: 1.55;
 }

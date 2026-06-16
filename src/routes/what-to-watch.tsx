@@ -7,6 +7,7 @@ import { origin, canonical } from "../lib/seo";
 import { PICKER_MIN_WEIGHT } from "../lib/queries";
 import { Layout } from "../components/Layout";
 import { StatusBadge, ExploreCard } from "../components/cards";
+import { IconStarBadge } from "../components/icons";
 import { ProviderChips } from "../components/providers";
 import { RateInline, FilterSelect } from "../components/forms";
 
@@ -250,7 +251,7 @@ app.get("/what-to-watch", async (c) => {
       title="What should I watch tonight? — TV show picker | TV Nightly"
       description="Can't decide what to watch? Spin the picker: a great TV show matching your genre, rating, and episode-length filters."
       canonical={origin(c) + "/what-to-watch"}
-      scripts={["/js/dropdown.js"]}
+      scripts={["/js/dropdown.js", "/js/watch-scroll.js"]}
     >
       <div class="watch-page">
         <header class="watch-head">
@@ -374,7 +375,10 @@ app.get("/what-to-watch", async (c) => {
                           <div class="card-fallback">{pick.name}</div>
                         )}
                         {pick.rating != null ? (
-                          <span class="card-rating">★ {pick.rating.toFixed(1)}</span>
+                          <span class="card-rating">
+                            <IconStarBadge class="card-rating-star" />
+                            {pick.rating.toFixed(1)}
+                          </span>
                         ) : null}
                       </a>
                       <div class="shortlist-body">

@@ -266,8 +266,15 @@
 }
 
 /* hero gets title-sequence scale on detail pages */
-.detail-head h1 { font-size: clamp(1.8rem, 3.2vw, 2.3rem); }
+.detail-head h1 { font-size: clamp(1.8rem, 3.2vw, 2.3rem); text-wrap: balance; }
 .detail-head .poster { width: 200px; }
+/* a long single-word title (INTERSTELLAR, SUPERNATURAL) is wider than a phone at
+   the 1.8rem floor — and a single word can't wrap at a space, so overflow-wrap
+   snaps off the last letter ("INTERSTELLA/R"). Let the title scale down to fit
+   the width instead; it stays on one line and reads whole. */
+@media (max-width: 560px) {
+  .detail-head h1 { font-size: clamp(1.5rem, 6vw, 1.8rem); }
+}
 
 /* ---- detail pages: full-bleed cinematic hero (no card chrome) ----
    The show's own art, blurred to ambient light, runs edge to edge and
@@ -406,15 +413,24 @@ a.cast-tile:hover { text-decoration: none; }
   mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
 }
 .show-hub .frame-hero::after {
-  /* hold the viewing band clear through the middle; the heavy dark only
-     arrives near the bottom where the page takes over */
-  background: linear-gradient(
-    to bottom,
-    rgba(18, 18, 20, 0.18) 0%,
-    rgba(18, 18, 20, 0.34) 48%,
-    rgba(18, 18, 20, 0.78) 82%,
-    var(--bg) 100%
-  );
+  /* hold the viewing band clear through the middle, but darken the edges where
+     text starts/ends: a left+right vignette plus the bottom scrim, so the title,
+     meta and summary read while the center-top still shows the backdrop */
+  background:
+    linear-gradient(
+      to right,
+      rgba(18, 18, 20, 0.55) 0%,
+      rgba(18, 18, 20, 0) 22%,
+      rgba(18, 18, 20, 0) 78%,
+      rgba(18, 18, 20, 0.55) 100%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(18, 18, 20, 0.2) 0%,
+      rgba(18, 18, 20, 0.4) 48%,
+      rgba(18, 18, 20, 0.82) 82%,
+      var(--bg) 100%
+    );
 }
 /* the verdict lives with the poster, like rating does on show pages */
 .detail-side .ep-vote {
@@ -471,23 +487,47 @@ a.cast-tile:hover { text-decoration: none; }
     mask-image: linear-gradient(to bottom, #000 64%, transparent);
   }
   .show-hub.hub-backdrop .frame-hero::after { background: transparent; }
-  .show-hub.hub-backdrop .detail-side .poster { display: none; }
-  /* the rate widget drops to the bottom of the hero (after title/meta/summary)
-     as a centered "rate this" footer, separated by a hairline */
+  /* movie subpages carry the poster bare in .detail-head (no side column) — drop
+     it under the banner; the main hero keeps its poster as a small footer mark */
+  .show-hub.hub-backdrop .detail-head > .poster { display: none; }
+  /* the side column drops to the foot of the hero as a band: the poster returns
+     small on the left (its key art still gets a moment) with the "did you love
+     it?" prompt beside it — neither fights the backdrop banner up top */
   .show-hub.hub-backdrop .detail-side {
     flex-basis: 100%;
     width: 100%;
     order: 2;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
     margin-top: 0.5rem;
     padding-top: 1rem;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
   }
-  .show-hub.hub-backdrop .detail-side .rate-inline { justify-content: center; }
+  .show-hub.hub-backdrop .detail-side .poster {
+    display: block;
+    width: 100px;
+    flex: 0 0 100px;
+    margin: 0;
+  }
+  .show-hub.hub-backdrop .detail-side .rate-inline,
+  .show-hub.hub-backdrop .detail-side .ep-vote {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    gap: 0.3rem;
+    justify-content: flex-start;
+  }
+  .show-hub.hub-backdrop .detail-side .rate-inline-label {
+    flex-basis: 100%;
+    text-align: left;
+  }
   /* the subpage heroes (where-to-watch, similar, media) carry only a poster in
      the side column — no rate widget. Once the backdrop banner drops the poster
      there's nothing left to show as a footer, so collapse the empty column
-     instead of leaving a stray hairline-bordered box. */
-  .show-hub.hub-backdrop .detail-side:not(:has(.rate-inline)) {
+     instead of leaving a stray hairline-bordered box. (Episode pages keep the
+     .ep-vote "fair rating?" footer, so they're exempt.) */
+  .show-hub.hub-backdrop .detail-side:not(:has(.rate-inline)):not(:has(.ep-vote)) {
     display: none;
   }
 }
@@ -506,8 +546,19 @@ a.cast-tile:hover { text-decoration: none; }
 .ep-eyebrow a:hover,
 .ep-eyebrow a:focus-visible { color: var(--accent); text-decoration: none; }
 .ep-eyebrow .sep { opacity: 0.45; margin: 0 0.3rem; }
+/* keep the runtime · network facts as one unit so they wrap together */
+.ep-meta2 { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0.55rem; }
 @media (max-width: 600px) {
   .ep-side { flex-basis: 100%; width: 100%; }
+}
+@media (max-width: 560px) {
+  /* eyebrow: show name on its own line, "Season · Episode" beneath — drop the
+     bridging dot so it doesn't strand at the start of the wrapped line */
+  .ep-eyebrow .ep-eyebrow-sep { display: none; }
+  .ep-eyebrow-se { display: block; }
+  /* meta: runtime · network drop to their own line, no leading orphan dot */
+  .ep-meta2 { flex-basis: 100%; }
+  .ep-meta2 .sep:first-child { display: none; }
 }
 
 /* prev/next: two doors at the end of the hour */
@@ -546,10 +597,11 @@ a.cast-tile:hover { text-decoration: none; }
 }
 .pager-title {
   font-weight: 600;
-  white-space: nowrap;
+  /* let the title use a second line rather than cutting to "We Are the…" */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
 }
 .pager-sub { font-size: 0.8rem; }
 
@@ -662,3 +714,22 @@ a.cast-tile:hover { text-decoration: none; }
   }
 }
 .provs-all { margin-left: 0.5rem; font-size: 0.85rem; font-weight: 600; }
+
+/* show/movie hero: title + Share button share one row — Share pinned to the
+   right, vertically centered on the title (margins moved off the h1 so the
+   centering isn't skewed). Wraps below the title on narrow columns. */
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.2rem;
+  flex-wrap: wrap;
+  margin: 0.1rem 0 0.5rem;
+}
+.detail-title-row h1 {
+  margin: 0;
+}
+.detail-title-row .share-bar {
+  margin: 0;
+  flex: 0 0 auto;
+}

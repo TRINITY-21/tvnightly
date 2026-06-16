@@ -1,5 +1,6 @@
 import { castJson, fetchShowWithEpisodes, fetchUpdates, topCast, type TvmShow } from "./tvmaze";
 import { sendEmails, type EmailEnv } from "./email";
+import { EMAIL, emailButton, emailShell } from "./lib/email-template";
 import { signToken } from "./tokens";
 
 export interface SyncEnv extends EmailEnv {
@@ -286,11 +287,15 @@ function eventEmail(
       subject = `${ev.name}: ${ev.oldValue ?? "?"} → ${ev.newValue ?? "?"}`;
       line = `<strong>${ev.name}</strong> just changed status: <strong>${ev.oldValue ?? "unknown"}</strong> → <strong>${ev.newValue ?? "unknown"}</strong>.`;
   }
-  const html =
-    `<p>${line}</p>` +
-    `<p><a href="${origin}/show/${ev.slug}/release-date">See the latest release info</a></p>` +
-    `<p style="color:#888;font-size:12px">You asked TV Nightly to notify you about this show. ` +
-    `<a href="${origin}/unsubscribe?token=${unsubToken}">Unsubscribe</a></p>`;
+  const html = emailShell({
+    title: subject,
+    heading: ev.name,
+    contentHtml:
+      `<p style="margin:0 0 20px;color:${EMAIL.soft}">${line}</p>` +
+      emailButton("See the latest", `${origin}/show/${ev.slug}/release-date`),
+    footerNote: "You asked TV Nightly to notify you about this show.",
+    unsubscribeHref: `${origin}/unsubscribe?token=${unsubToken}`,
+  });
   return { subject, html };
 }
 
@@ -356,12 +361,16 @@ async function enqueueTopEpisodeAlerts(env: SyncEnv, tops: TopEpisode[]): Promis
       { email: sub.email, showId: sub.show_id, kind: "renewal", action: "unsub" },
       env.SECRET,
     );
-    const html =
-      `<p><strong>${t.showName}</strong> just aired one of its best episodes ever: ` +
-      `<strong>"${t.epName}"</strong> (${t.code}) — rated ★${t.rating.toFixed(1)}.</p>` +
-      `<p><a href="${origin}/show/${t.slug}/best-episodes">See where it ranks</a></p>` +
-      `<p style="color:#888;font-size:12px">You asked TV Nightly to notify you about this show. ` +
-      `<a href="${origin}/unsubscribe?token=${unsubToken}">Unsubscribe</a></p>`;
+    const html = emailShell({
+      title: `${t.showName}: "${t.epName}" is an instant classic`,
+      heading: "An instant classic",
+      contentHtml:
+        `<p style="margin:0 0 20px;color:${EMAIL.soft}"><strong style="color:${EMAIL.text}">${t.showName}</strong> just aired one of its best episodes ever: ` +
+        `<strong style="color:${EMAIL.text}">&ldquo;${t.epName}&rdquo;</strong> (${t.code}) — rated ★${t.rating.toFixed(1)}.</p>` +
+        emailButton("See where it ranks", `${origin}/show/${t.slug}/best-episodes`),
+      footerNote: "You asked TV Nightly to notify you about this show.",
+      unsubscribeHref: `${origin}/unsubscribe?token=${unsubToken}`,
+    });
     stmts.push(
       env.DB.prepare(
         "INSERT INTO outbox (to_email, subject, html, created_at) VALUES (?,?,?,unixepoch())",
@@ -534,11 +543,15 @@ export async function providerPatrol(env: SyncEnv): Promise<{ checked: number; e
           ev.change === "added"
             ? `${ev.title} is now streaming on ${ev.service}`
             : `${ev.title} just left ${ev.service}`;
-        const html =
-          `<p><strong>${ev.title}</strong> ${ev.change === "added" ? "is now streaming on" : "just left"} <strong>${ev.service}</strong> (US).</p>` +
-          `<p><a href="${origin}/show/${ev.slug}">Where to watch it now</a></p>` +
-          `<p style="color:#888;font-size:12px">You asked TV Nightly to notify you about this show. ` +
-          `<a href="${origin}/unsubscribe?token=${unsubToken}">Unsubscribe</a></p>`;
+        const html = emailShell({
+          title: subject,
+          heading: ev.change === "added" ? "Now streaming" : "Left streaming",
+          contentHtml:
+            `<p style="margin:0 0 20px;color:${EMAIL.soft}"><strong style="color:${EMAIL.text}">${ev.title}</strong> ${ev.change === "added" ? "is now streaming on" : "just left"} <strong style="color:${EMAIL.text}">${ev.service}</strong> (US).</p>` +
+            emailButton(ev.change === "added" ? "Where to watch" : "See details", `${origin}/show/${ev.slug}`),
+          footerNote: "You asked TV Nightly to notify you about this show.",
+          unsubscribeHref: `${origin}/unsubscribe?token=${unsubToken}`,
+        });
         stmts.push(
           db
             .prepare("INSERT INTO outbox (to_email, subject, html, created_at) VALUES (?,?,?,unixepoch())")
@@ -623,10 +636,10 @@ export async function sendDailyDigest(env: SyncEnv): Promise<{ queued: number }>
 
   const code = (s: number | null, n: number | null) =>
     `S${String(s ?? 0).padStart(2, "0")}E${String(n ?? 0).padStart(2, "0")}`;
-  const li = (s: string) => `<li style="margin:4px 0">${s}</li>`;
+  const li = (s: string) => `<li style="margin:7px 0;color:${EMAIL.soft}">${s}</li>`;
   const section = (title: string, items: string[]) =>
     items.length
-      ? `<h3 style="margin:18px 0 6px">${title}</h3><ul style="padding-left:18px;margin:0">${items.join("")}</ul>`
+      ? `<h3 style="margin:22px 0 8px;font-size:14px;font-weight:800;letter-spacing:.04em;color:${EMAIL.text}">${title}</h3><ul style="padding-left:20px;margin:0;color:${EMAIL.soft}">${items.join("")}</ul>`
       : "";
 
   const eventLine = (ev: (typeof events)[number]) => {
@@ -671,7 +684,7 @@ export async function sendDailyDigest(env: SyncEnv): Promise<{ queued: number }>
       ),
     ) +
     (pick
-      ? `<h3 style="margin:18px 0 6px">Tonight's pick</h3><p style="margin:0"><a href="${origin}/show/${pick.slug}">${pick.name}</a> (★${pick.rating.toFixed(1)}) — <a href="${origin}/show/${pick.slug}/essential">start with the essentials</a>.</p>`
+      ? `<h3 style="margin:22px 0 8px;font-size:14px;font-weight:800;letter-spacing:.04em;color:${EMAIL.text}">Tonight's pick</h3><p style="margin:0;color:${EMAIL.soft}"><a href="${origin}/show/${pick.slug}">${pick.name}</a> (★${pick.rating.toFixed(1)}) — <a href="${origin}/show/${pick.slug}/essential">start with the essentials</a>.</p>`
       : "");
 
   const today = new Date().toISOString().slice(0, 10);
@@ -684,12 +697,17 @@ export async function sendDailyDigest(env: SyncEnv): Promise<{ queued: number }>
       { email: sub.email, showId: null, kind: "daily", action: "unsub" },
       env.SECRET,
     );
-    const html =
-      `<div style="font-family:sans-serif;max-width:560px">` +
-      `<p style="margin:0 0 4px;color:#888;font-size:12px">TV Nightly · ${today}</p>` +
-      bodyCore +
-      `<p style="color:#888;font-size:12px;margin-top:22px">You asked for the TV Nightly daily email. ` +
-      `<a href="${origin}/unsubscribe?token=${unsubToken}">Unsubscribe</a></p></div>`;
+    const html = emailShell({
+      title: "Tonight on TV",
+      heading: "Tonight on TV",
+      preheader: `${topName}${tonight.length > 1 ? ` + ${tonight.length - 1} more` : ""} — what's on and what's new.`,
+      contentHtml:
+        `<p style="margin:0 0 4px;color:${EMAIL.muted};font-size:12px;letter-spacing:.03em">${today}</p>` +
+        // brand every link amber inline (reliable even where <style> is stripped)
+        bodyCore.replace(/<a /g, `<a style="color:${EMAIL.accent};text-decoration:none" `),
+      footerNote: "You asked for the TV Nightly daily email.",
+      unsubscribeHref: `${origin}/unsubscribe?token=${unsubToken}`,
+    });
     stmts.push(
       db
         .prepare("INSERT INTO outbox (to_email, subject, html, created_at) VALUES (?,?,?,unixepoch())")

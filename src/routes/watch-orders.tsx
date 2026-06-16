@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard } from "../components/cards";
 import { fmtMarathon, fmtRuntime, heroBg, slugifyName } from "../lib/format";
@@ -266,7 +267,7 @@ app.get("/watch-order/:slug", async (c) => {
           ) : null}
         </span>
         <span class="wo-side">
-          {m?.rating != null ? <span class="rating">★ {m.rating.toFixed(1)}</span> : null}
+          {m?.rating != null ? <span class="rating"><IconStar class="rating-star" />{m.rating.toFixed(1)}</span> : null}
           {m?.runtime ? <span class="wo-mins">{fmtRuntime(m.runtime)}</span> : null}
         </span>
       </li>

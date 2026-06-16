@@ -6,7 +6,31 @@ import type { SyncEnv } from "./sync";
 // woff2 from it so saved SVGs are standalone documents.
 // CF_BEACON_TOKEN: Cloudflare Web Analytics token (public); when set, Layout
 // renders the beacon. Unset locally so dev pages stay clean.
-export type Bindings = SyncEnv & { ASSETS: Fetcher; CF_BEACON_TOKEN?: string };
+// AMAZON_ASSOC_TAG / APPLE_AFFILIATE_TOKEN: affiliate ids (public); when set,
+// Prime Video / Apple TV "watch" links carry them. Empty = plain links.
+export type Bindings = SyncEnv & {
+  ASSETS: Fetcher;
+  CF_BEACON_TOKEN?: string;
+  AMAZON_ASSOC_TAG?: string;
+  APPLE_AFFILIATE_TOKEN?: string;
+  // where /feedback submissions are emailed; falls back to EMAIL_FROM. Unset = D1 only.
+  FEEDBACK_TO?: string;
+  // Basic-auth password for /admin/* (username "admin"). Unset = admin disabled.
+  ADMIN_KEY?: string;
+  // Workers Rate Limiting (account-local, best-effort, per-colo; see wrangler.jsonc).
+  // FEEDBACK_LIMIT throttles the public /feedback write+email; ADMIN_LIMIT throttles
+  // failed /admin auth. Optional so an unconfigured env degrades quietly.
+  FEEDBACK_LIMIT?: RateLimiter;
+  ADMIN_LIMIT?: RateLimiter;
+  // Cloudflare Turnstile anti-spam on /feedback. TURNSTILE_SITE_KEY is public
+  // (rendered into the form); TURNSTILE_SECRET_KEY is a secret (server siteverify).
+  // Both unset = widget hidden and the check skipped (honeypot + rate limit remain).
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+};
+export interface RateLimiter {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
 export type AppContext = Context<{ Bindings: Bindings }>;
 
 export interface ShowRow {

@@ -11,6 +11,19 @@ export const jsonLd = (data: unknown) =>
     `<script type="application/ld+json">${JSON.stringify(data).replaceAll("<", "\\u003c")}</script>`,
   );
 
+// FAQPage: each answer's text MUST also be visible in the page body (Google's
+// rule), so callers pass the same sentence they render. Rich-result accordions
+// are gov/health-only since 2023, but this still feeds Bing + AI overviews.
+export const faqLd = (items: { q: string; a: string }[]) => ({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: items.map(({ q, a }) => ({
+    "@type": "Question",
+    name: q,
+    acceptedAnswer: { "@type": "Answer", text: a },
+  })),
+});
+
 export const breadcrumbLd = (site: string, show: ShowRow, page: string, path: string) => ({
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",

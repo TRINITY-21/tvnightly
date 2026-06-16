@@ -36,6 +36,7 @@
     "providers:tv:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/show-providers.sql"
   },
   "dependencies": {
+    "@cf-wasm/resvg": "^0.3.4",
     "hono": "^4",
     "worker-mailer": "^1.2.1"
   },

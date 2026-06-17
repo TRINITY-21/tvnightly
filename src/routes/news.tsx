@@ -5,7 +5,7 @@ import { FilterSelect } from "../components/forms";
 import { NEWS_TABS, SubNav } from "../components/nav";
 import { heroBg, hiRes, longDate, shortDate, stripHtml } from "../lib/format";
 import { PROVIDER_LOGOS, REGIONS, visitorRegion } from "../lib/providers";
-import { canonical, origin } from "../lib/seo";
+import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { Bindings, EventRow } from "../types";
 
@@ -137,12 +137,28 @@ app.get("/renewals", async (c) => {
       </section>
     ) : null;
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
     <Layout
       title="Renewed & cancelled TV shows — live tracker | TV Nightly"
       description="A live feed of TV renewals, cancellations, and premiere-date announcements, detected hourly from schedule data."
       canonical={canonical(c)}
+      ogImage={art && !ambient ? art.x1 : undefined}
+      ogImageLarge={!!(art && !ambient)}
+      ld={[
+        itemListLd(
+          "Renewals, cancellations & premiere dates",
+          results.map((r) => ({
+            name: `${r.name}${r.season ? ` Season ${r.season}` : ""}`,
+            url: `${site}/show/${r.slug}/release-date`,
+          })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Renewals", url: canonical(c) },
+        ]),
+      ]}
     >
       <SubNav items={NEWS_TABS} current="/renewals" />
       <h1>Renewals, cancellations & premiere dates</h1>
@@ -278,6 +294,7 @@ app.get("/whats-new", async (c) => {
               class="shelf-tile"
               href={href(r)}
               title={`${r.title} · ${r.kind === "movie" ? "Movie" : "TV show"}`}
+              aria-label={`${r.title} — ${r.kind === "movie" ? "movie" : "TV show"}`}
             >
               {posterOf(r) ? (
                 <img src={posterOf(r)!} alt="" width="92" height="138" loading="lazy" decoding="async" />
@@ -293,13 +310,24 @@ app.get("/whats-new", async (c) => {
     </section>
   );
 
+  const site = origin(c);
   c.header("Cache-Control", "private, max-age=300");
   return c.html(
     <Layout
       title={`What's new on streaming (${region}) — and what just left | TV Nightly`}
       description="Titles that just arrived on or left Netflix, Prime Video, Disney+ and more — tracked by our availability patrol, localized to your country."
-      canonical={`${origin(c)}/whats-new`}
+      canonical={`${site}/whats-new`}
       scripts={["/js/dropdown.js"]}
+      ld={[
+        itemListLd(
+          "New on streaming",
+          added.map((r) => ({ name: r.title, url: `${site}${href(r)}` })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "What's new", url: `${site}/whats-new` },
+        ]),
+      ]}
     >
       <SubNav items={NEWS_TABS} current="/whats-new" />
       <h1>What's new on streaming ({region})</h1>

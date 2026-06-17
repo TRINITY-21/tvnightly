@@ -993,7 +993,11 @@ body.nav-open { overflow: hidden; }
   transform: translateY(-2px);
   box-shadow: var(--shadow-2);
 }
-.card img { width: 100%; aspect-ratio: 2/2.8; object-fit: cover; display: block; }
+/* height:auto so the width/height ATTRS (added for CLS) drive the aspect-ratio
+   rather than pinning a fixed pixel height — without it the height attribute
+   leaks through as a presentational hint and overrides aspect-ratio (stretching
+   rail cards, which override to 2/3). */
+.card img { width: 100%; height: auto; aspect-ratio: 2/2.8; object-fit: cover; display: block; }
 .card-fallback {
   width: 100%;
   aspect-ratio: 2/2.8;
@@ -1271,7 +1275,10 @@ body.nav-open { overflow: hidden; }
   text-decoration: none;
 }
 
-.poster { width: 180px; border-radius: var(--radius-lg); box-shadow: var(--shadow-2); }
+/* aspect-ratio reserves the poster's height before the image loads, so the hero
+   never reflows when it arrives (CLS). Posters are a uniform 2:3; object-fit
+   guards the rare off-ratio source. Applies to every .poster image site-wide. */
+.poster { width: 180px; aspect-ratio: 2 / 3; height: auto; object-fit: cover; border-radius: var(--radius-lg); box-shadow: var(--shadow-2); }
 .summary { max-width: 62ch; }
 /* 3-line synopsis clamp, pure CSS (checkbox toggle) */
 .clampable .summary-text {

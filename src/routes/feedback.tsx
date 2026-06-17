@@ -19,6 +19,7 @@ app.get("/feedback", (c) =>
       title="Send feedback | TV Nightly"
       description="Found a bug, a wrong air date, or have an idea for TV Nightly? Send us your feedback — it goes straight to the team."
       canonical={canonical(c)}
+      noindex
       scripts={c.env.TURNSTILE_SITE_KEY ? [TURNSTILE_API] : undefined}
     >
       <div class="fb-page">

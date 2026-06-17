@@ -605,6 +605,56 @@ export function buildOgCard(d: OgCardData): string {
   return p.join("");
 }
 
+/** The default share card used as a sitewide og:image fallback for pages with
+ *  no subject image of their own (home, listings, hubs). Brand lockup + the
+ *  house tagline on the plate gradient — no poster. */
+export function buildBrandOgCard(): string {
+  const p: string[] = [];
+  p.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_W}" height="${OG_H}" viewBox="0 0 ${OG_W} ${OG_H}" font-family="Archivo, ${SYS}">`,
+  );
+  p.push(ogDefs());
+  p.push(`<rect width="${OG_W}" height="${OG_H}" fill="url(#bg)"/>`);
+  p.push(ogBrand(OG_M, 108));
+  // hero tagline — "Tonight, decided." with the amber logo-dot motif
+  let y = 332;
+  p.push(txtR(OG_M, y, "TONIGHT,", { size: 104, w: "black", fill: TEXT }));
+  y += 110;
+  p.push(txtR(OG_M, y, "DECIDED", { size: 104, w: "black", fill: TEXT }));
+  p.push(`<circle cx="${OG_M + 472}" cy="${r2(y - 14)}" r="13" fill="${AMBER}"/>`);
+  y += 70;
+  p.push(
+    txtR(OG_M, y, "Episode rankings, release dates & where to stream.", {
+      size: 30,
+      w: "semi",
+      fill: MUTED,
+    }),
+  );
+  p.push(ogFooter(OG_W - OG_M));
+  p.push(`</svg>`);
+  return p.join("");
+}
+
+/** Square brand mark for Organization.logo — Google's logo rich result wants a
+ *  raster image, not the SVG favicon. App-icon treatment: the standby mark
+ *  centered on the plate in a rounded square. */
+// `maskable` renders the full-bleed variant for PWA adaptive icons: a square
+// (un-rounded) plate so the launcher's own mask shape isn't fighting our corner
+// radius, with the mark left at 0.42 height — well inside the central-80% safe
+// zone every mask preserves.
+export function buildLogoSvg(size = 512, maskable = false): string {
+  const markH = Math.round(size * 0.42);
+  const markW = (markH * 36) / 24;
+  const mx = (size - markW) / 2;
+  const my = (size - markH) / 2;
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">` +
+    `<rect width="${size}" height="${size}" rx="${maskable ? 0 : r2(size * 0.2)}" fill="${PLATE}"/>` +
+    ogMark(mx, my, markH) +
+    `</svg>`
+  );
+}
+
 export interface OgSide {
   name: string;
   posterUri: string | null;

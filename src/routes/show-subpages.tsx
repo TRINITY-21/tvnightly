@@ -1139,7 +1139,8 @@ app.get("/show/:slug/release-date", async (c) => {
       }
       description={answer.slice(0, 155)}
       canonical={canonical(c)}
-      ogImage={show.poster_url ?? show.image_url ?? undefined}
+      ogImage={`${site}/show/${show.slug}/og.png`}
+      ogImageLarge
       ld={[
         breadcrumbLd(site, show, "Release date", path),
         faqLd([

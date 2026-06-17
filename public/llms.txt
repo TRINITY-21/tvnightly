@@ -1,0 +1,27 @@
+# TV Nightly
+
+> Independent TV and movie guide. Episode rankings, season release dates, renewal status, cast and crew, and where to stream — refreshed around the clock and localized to the visitor's country. No accounts required.
+
+TV Nightly helps people decide what to watch tonight and find when a show airs or where a title streams. Data is sourced from the TVmaze and TMDB APIs; air times are shown in the visitor's local timezone. Community ratings are collected anonymously on-site.
+
+## Find something to watch
+- [What to watch](https://tvnightly.com/what-to-watch): Browse by genre, network and streaming service.
+- [Get a recommendation](https://tvnightly.com/recommend): Rate a few titles, get a personalized next watch.
+- [Tonight's schedule](https://tvnightly.com/tonight): Everything airing tonight, in your timezone.
+- [What's new on streaming](https://tvnightly.com/whats-new): Recently added titles by service.
+
+## Rankings and guides
+- [Best episodes](https://tvnightly.com/best-episodes): Top-rated episodes across every tracked show.
+- [Top TV shows](https://tvnightly.com/top/tv): Highest-rated series.
+- [Top movies](https://tvnightly.com/movies/best): Best-reviewed films.
+- [Watch orders](https://tvnightly.com/watch-orders): Chronological and release-order guides for franchises.
+- [Compare shows](https://tvnightly.com/compare) and [compare movies](https://tvnightly.com/movies/compare): Head-to-head on ratings, length and reception.
+
+## Browse everything
+- [Lists, genres and networks](https://tvnightly.com/lists): The full directory.
+- [XML sitemap](https://tvnightly.com/sitemap.xml): Machine-readable index of all pages.
+
+## About
+- [Terms of Service](https://tvnightly.com/terms)
+- [Privacy Policy](https://tvnightly.com/privacy)
+- [Feedback and contact](https://tvnightly.com/feedback)

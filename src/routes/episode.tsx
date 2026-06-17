@@ -190,11 +190,22 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
     },
   ];
 
+  // Keep the meta description within the ~160-char SERP limit, trimming the plot
+  // pitch on a word boundary rather than letting the whole line overflow.
+  const epDesc = (() => {
+    const head = `${show.name} ${code}${ep.name ? ` "${ep.name}"` : ""}${ep.rating != null ? ` — rated ★ ${ep.rating.toFixed(1)}` : ""}${ep.airdate ? `, aired ${longDate(ep.airdate)}` : ""}.`;
+    const full = pitch ? `${head} ${pitch}` : head;
+    if (full.length <= 160) return full;
+    const cut = full.slice(0, 157);
+    const sp = cut.lastIndexOf(" ");
+    return (sp > 120 ? cut.slice(0, sp) : cut).trimEnd() + "…";
+  })();
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title={`${show.name} ${code} — ${ep.name ?? "episode"}: rating, recap & guest stars | TV Nightly`}
-      description={`${show.name} ${code}${ep.name ? ` "${ep.name}"` : ""}${ep.rating != null ? ` — rated ★ ${ep.rating.toFixed(1)}` : ""}${ep.airdate ? `, aired ${longDate(ep.airdate)}` : ""}. ${pitch.slice(0, 110)}`}
+      title={`${show.name} ${code}: ${ep.name ?? "episode"} | TV Nightly`}
+      description={epDesc}
       canonical={canonical(c)}
       ld={ld}
       ogImage={`${canonical(c)}/og.png`}

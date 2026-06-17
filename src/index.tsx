@@ -8,6 +8,7 @@ import { providerPatrol, runSync, sendDailyDigest } from "./sync";
 import type { Bindings } from "./types";
 
 import bestEpisodes from "./routes/best-episodes";
+import brand from "./routes/brand";
 import compare from "./routes/compare";
 import episode from "./routes/episode";
 import directory from "./routes/directory";
@@ -90,6 +91,7 @@ app.route("/", subscribe);
 app.route("/", feedback);
 app.route("/", admin);
 app.route("/", sitemaps);
+app.route("/", brand);
 app.route("/", legal);
 
 app.notFound((c) => c.html(<NotFoundPage />, 404));

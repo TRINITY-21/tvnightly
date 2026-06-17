@@ -7,7 +7,7 @@ import { heroBg, hiRes, posterSrc, slugifyName } from "../lib/format";
 import { FRANCHISE_BY_SLUG } from "../lib/franchises";
 import { networkLogo, networkLogoForBrand, providerBrand, visitorRegion } from "../lib/providers";
 import { genreDirectory, networkDirectory } from "../lib/queries";
-import { canonical, origin } from "../lib/seo";
+import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { VERTICALS, Vertical, genreBinds, genreOr, hubForGenres } from "../lib/verticals";
 import { Bindings, MovieRow, ShowRow } from "../types";
@@ -569,12 +569,23 @@ app.get("/lists", async (c) => {
       !["/top/tv", "/movies/best", "/best-episodes", "/loved", "/compare"].includes(href),
   );
   const sortedNets = sortBrowseNetworks(networks);
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title="Browse — every chart, network & genre | TV Nightly"
       description="All of TV Nightly in one place: top charts, networks, genres, fandom hubs, and tools to pick your next watch."
       canonical={canonical(c)}
+      ld={[
+        itemListLd(
+          "TV Nightly charts & guides",
+          [...CHARTS, ...GUIDES].map(([name, href]) => ({ name, url: `${site}${href}` })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Browse everything", url: canonical(c) },
+        ]),
+      ]}
     >
       <div class="browse">
         <header class="browse-hero">
@@ -1155,6 +1166,7 @@ app.get("/top/networks", async (c) => {
     }
   }
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
@@ -1162,6 +1174,20 @@ app.get("/top/networks", async (c) => {
       description="Netflix, Hulu, HBO, Disney+, and every major network and streamer — browse the best shows on each."
       canonical={canonical(c)}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
+      ld={[
+        itemListLd(
+          "Top TV networks & streamers",
+          ranked.map((n) => ({
+            name: n.n,
+            url: `${site}/network/${slugifyName(n.n)}`,
+          })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Browse everything", url: `${site}/lists` },
+          { name: "Top networks", url: canonical(c) },
+        ]),
+      ]}
     >
       <div class="nets">
         <header
@@ -1382,6 +1408,7 @@ app.get("/network/:slug", async (c) => {
     .slice(0, 18)
     .map(([sl, v]) => [sl, v.label] as [string, string]);
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
@@ -1392,6 +1419,17 @@ app.get("/network/:slug", async (c) => {
       }
       description={`Every ${entry.name} ${films.length ? "show and movie" : "show"} worth watching, ranked by rating, plus what's currently airing.`}
       canonical={canonical(c)}
+      ld={[
+        itemListLd(`The best ${entry.name} shows`, [
+          ...best.map((s) => ({ name: s.name, url: `${site}/show/${s.slug}` })),
+          ...films.map((m) => ({ name: m.title, url: `${site}/movie/${m.slug}` })),
+        ]),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Top networks", url: `${site}/top/networks` },
+          { name: entry.name, url: canonical(c) },
+        ]),
+      ]}
     >
       <NetworkHero
         name={entry.name}
@@ -1523,12 +1561,25 @@ app.get("/network/:slug/shows", async (c) => {
     .filter((y): y is number => y != null && y > 0);
   const span = years.length ? `${Math.min(...years)}–${Math.max(...years)}` : null;
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title={`Top ${entry.name} shows — ranked | TV Nightly`}
       description={`The best TV shows on ${entry.name}, ranked by viewer rating.`}
       canonical={canonical(c)}
+      ld={[
+        itemListLd(
+          `Top ${entry.name} shows`,
+          rows.map((s) => ({ name: s.name, url: `${site}/show/${s.slug}` })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Top networks", url: `${site}/top/networks` },
+          { name: entry.name, url: `${site}/network/${slug}` },
+          { name: "Shows", url: canonical(c) },
+        ]),
+      ]}
     >
       <NetworkHero
         name={entry.name}
@@ -1586,12 +1637,25 @@ app.get("/network/:slug/movies", async (c) => {
   const years = rows.map((m) => m.year).filter((y): y is number => y != null);
   const span = years.length ? `${Math.min(...years)}–${Math.max(...years)}` : null;
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title={`Top ${entry.name} movies — ranked | TV Nightly`}
       description={`The best movies on ${entry.name}, ranked by viewer rating.`}
       canonical={canonical(c)}
+      ld={[
+        itemListLd(
+          `Top ${entry.name} movies`,
+          rows.map((m) => ({ name: m.title, url: `${site}/movie/${m.slug}` })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Top networks", url: `${site}/top/networks` },
+          { name: entry.name, url: `${site}/network/${slug}` },
+          { name: "Movies", url: canonical(c) },
+        ]),
+      ]}
     >
       <NetworkHero
         name={entry.name}
@@ -1681,12 +1745,25 @@ app.get("/network/:slug/:genre", async (c) => {
   const lc = label.toLowerCase();
   const kindWord = shows.length && movies.length ? "shows and movies" : movies.length && !shows.length ? "movies" : "shows";
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title={`Best ${lc} on ${entry.name} — ranked | TV Nightly`}
       description={`The best ${lc} ${kindWord} on ${entry.name}, ranked by viewer rating — with where to watch in your region.`}
       canonical={canonical(c)}
+      ld={[
+        itemListLd(`Best ${label} on ${entry.name}`, [
+          ...shows.map((s) => ({ name: s.name, url: `${site}/show/${s.slug}` })),
+          ...movies.map((m) => ({ name: m.title, url: `${site}/movie/${m.slug}` })),
+        ]),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Top networks", url: `${site}/top/networks` },
+          { name: entry.name, url: `${site}/network/${slug}` },
+          { name: `Best ${label}`, url: canonical(c) },
+        ]),
+      ]}
     >
       <NetworkHero
         name={entry.name}
@@ -1808,6 +1885,7 @@ app.get("/genre/:slug", async (c) => {
     .slice(0, 16);
   const hub = hubForGenres([label], null);
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
@@ -1815,6 +1893,17 @@ app.get("/genre/:slug", async (c) => {
       description={`Top-rated ${label.toLowerCase()} TV series and films, with streaming availability.`}
       canonical={canonical(c)}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
+      ld={[
+        itemListLd(`The best ${label} shows & movies`, [
+          ...shows.map((s) => ({ name: s.name, url: `${site}/show/${s.slug}` })),
+          ...movies.map((m) => ({ name: m.title, url: `${site}/movie/${m.slug}` })),
+        ]),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Browse everything", url: `${site}/lists` },
+          { name: label, url: canonical(c) },
+        ]),
+      ]}
     >
       <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
@@ -1955,6 +2044,7 @@ app.get("/genre/:slug/shows", async (c) => {
   const siblings = dir.tv.filter((g) => g !== tvGenre).slice(0, 16);
   const year = new Date().getFullYear();
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
@@ -1962,6 +2052,17 @@ app.get("/genre/:slug/shows", async (c) => {
       description={`The best ${lower} TV shows, ranked by viewer rating, with streaming availability.`}
       canonical={canonical(c)}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
+      ld={[
+        itemListLd(
+          `Top ${tvGenre} shows`,
+          rows.map((s) => ({ name: s.name, url: `${site}/show/${s.slug}` })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: tvGenre, url: `${site}/genre/${slug}` },
+          { name: "Shows", url: canonical(c) },
+        ]),
+      ]}
     >
       <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
@@ -2088,13 +2189,25 @@ app.get("/genre/:slug/movies", async (c) => {
   const siblings = dir.movie.filter((g) => g !== movieGenre).slice(0, 16);
   const year = new Date().getFullYear();
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title={`Top ${lower} movies — ranked | TV Nightly`}
-      description={`The best ${lower} films, ranked by viewer rating, with streaming availability.`}
+      title={`${movieGenre} Movies - Best ${movieGenre} Films to Watch | TV Nightly`}
+      description={`Discover the best ${lower} movies. Browse our curated collection of ${lower} films with viewer ratings, streaming availability, and personalized recommendations.`}
       canonical={canonical(c)}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
+      ld={[
+        itemListLd(
+          `Top ${movieGenre} movies`,
+          rows.map((m) => ({ name: m.title, url: `${site}/movie/${m.slug}` })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: movieGenre, url: `${site}/genre/${slug}` },
+          { name: "Movies", url: canonical(c) },
+        ]),
+      ]}
     >
       <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}

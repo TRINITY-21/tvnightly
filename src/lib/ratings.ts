@@ -89,3 +89,36 @@ export async function titleStat(db: D1Database, kind: string, ref: string): Prom
   const pct = Math.round(((counts.loved + counts.liked) / total) * 100);
   return `${pct}% of ${total} raters loved or liked this`;
 }
+
+// Below this many on-site verdicts the average is too noisy (and too gameable)
+// to expose as a star snippet; the agreement line still renders via titleStat.
+const MIN_RATERS_FOR_SCHEMA = 5;
+
+/** First-party AggregateRating JSON-LD built from on-site verdicts — or null
+ *  below the rater threshold. These are OUR ratings, collected on this very
+ *  page (the verdict line stays visible in the body), which is exactly what
+ *  Google's review-snippet policy requires — unlike third-party TMDB votes,
+ *  which we deliberately never publish as structured data. The 4-point scale
+ *  (awful/meh/good/loved) maps onto 1–5 and is averaged by rater count. */
+export async function aggregateRatingLd(
+  db: D1Database,
+  kind: "tv" | "movie",
+  ref: string,
+): Promise<Record<string, unknown> | null> {
+  const c = await db
+    .prepare("SELECT loved, liked, meh, awful FROM title_ratings WHERE kind = ? AND ref = ?")
+    .bind(kind, ref)
+    .first<{ loved: number; liked: number; meh: number; awful: number }>();
+  if (!c) return null;
+  const count = c.loved + c.liked + c.meh + c.awful;
+  if (count < MIN_RATERS_FOR_SCHEMA) return null;
+  // loved=5 · good=4 · meh=2 · awful=1
+  const avg = (5 * c.loved + 4 * c.liked + 2 * c.meh + c.awful) / count;
+  return {
+    "@type": "AggregateRating",
+    ratingValue: Math.round(avg * 10) / 10,
+    bestRating: 5,
+    worstRating: 1,
+    ratingCount: count,
+  };
+}

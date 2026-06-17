@@ -134,9 +134,18 @@ export const Layout: FC<
     canonical?: string;
     ld?: unknown[];
     ogImage?: string;
+    /** og:type override (default "website"); e.g. "video.movie" / "video.tv_show"
+     *  so rich-media unfurls and entity parsers classify the page correctly. */
+    ogType?: string;
+    /** og:title / twitter:title override, when the share title should differ from
+     *  the SERP <title> (e.g. "Inception (2010)" vs "Inception (2010) - … | TV Nightly"). */
+    ogTitle?: string;
     /** Set when ogImage is a 1200×630 branded card (an /og.png endpoint) rather
      *  than a portrait poster: renders the large Twitter card + declares dims. */
     ogImageLarge?: boolean;
+    /** Alt text for the share image (entity name where meaningful); falls back
+     *  to the page title so the card is never announced as unlabelled. */
+    ogImageAlt?: string;
     scripts?: string[];
     noindex?: boolean;
     /** Meta-refresh auto-forward (no-JS path for the synth interstitial). */
@@ -146,14 +155,21 @@ export const Layout: FC<
     preloadImage?: { x1: string; x2: string };
   }>
 > = (props) => {
-  // active nav section, derived from the canonical URL every page already sets
-  const path = (() => {
+  // active nav section + og origin, derived from the canonical URL every page sets
+  const canonicalUrl = (() => {
     try {
-      return props.canonical ? new URL(props.canonical).pathname : "";
+      return props.canonical ? new URL(props.canonical) : null;
     } catch {
-      return "";
+      return null;
     }
   })();
+  const path = canonicalUrl?.pathname ?? "";
+  // Pages without a subject image of their own fall back to the branded default
+  // card (large), so every share/Discover unfurl carries an on-brand preview.
+  const ogImage =
+    props.ogImage ?? (canonicalUrl ? `${canonicalUrl.origin}/og-default.png` : undefined);
+  const ogImageLarge = props.ogImage ? !!props.ogImageLarge : true;
+  const ogImageAlt = props.ogImageAlt ?? props.title;
   const navClass = (prefixes: string[]) =>
     prefixes.some((p) => path === p || path.startsWith(p + "/")) ? "active" : "";
   const browseActive = BROWSE_PATHS.some((p) => path === p || path.startsWith(p + "/"));
@@ -168,9 +184,17 @@ export const Layout: FC<
       <title>{props.title}</title>
       {props.description ? <meta name="description" content={props.description} /> : null}
       {props.canonical ? <link rel="canonical" href={props.canonical} /> : null}
-      {props.noindex ? <meta name="robots" content="noindex" /> : null}
+      {/* Explicit on indexable pages too — leaves no ambiguity for crawlers that
+          treat a missing directive differently from an affirmative one. */}
+      <meta name="robots" content={props.noindex ? "noindex, follow" : "index, follow"} />
+      <meta name="googlebot" content={props.noindex ? "noindex, follow" : "index, follow"} />
       {props.refresh ? <meta http-equiv="refresh" content={`${props.refresh.delay};url=${props.refresh.url}`} /> : null}
       <meta name="theme-color" content="#121214" />
+      {/* Warm the connection to the image CDN that serves every hero backdrop and
+          poster — these are the LCP on content pages, so the saved DNS+TLS round
+          trip is on the critical path. No crossorigin: <img>/CSS bg are no-cors,
+          so a CORS preconnect would open a separate, unused connection. */}
+      <link rel="preconnect" href="https://image.tmdb.org" />
       {props.preloadImage ? (
         <link
           rel="preload"
@@ -182,21 +206,30 @@ export const Layout: FC<
       ) : null}
       <link rel="preload" as="font" type="font/woff2" href="/fonts/archivo-var.woff2" crossOrigin="anonymous" />
       <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+      <link rel="apple-touch-icon" href="/icon-180.png" />
+      <link rel="manifest" href="/manifest.json" />
       <meta property="og:site_name" content="TV Nightly" />
-      <meta property="og:type" content="website" />
-      <meta property="og:title" content={props.title} />
+      <meta property="og:type" content={props.ogType ?? "website"} />
+      <meta property="og:locale" content="en_US" />
+      <meta property="og:title" content={props.ogTitle ?? props.title} />
       {props.description ? <meta property="og:description" content={props.description} /> : null}
       {props.canonical ? <meta property="og:url" content={props.canonical} /> : null}
-      {props.ogImage ? <meta property="og:image" content={props.ogImage} /> : null}
-      {props.ogImage && props.ogImageLarge ? (
+      {ogImage ? <meta property="og:image" content={ogImage} /> : null}
+      {ogImage ? <meta property="og:image:alt" content={ogImageAlt} /> : null}
+      {ogImage && ogImageLarge ? (
         <>
           <meta property="og:image:width" content="1200" />
           <meta property="og:image:height" content="630" />
         </>
       ) : null}
       {/* A branded 1200×630 card unfurls large; a bare portrait poster crops far
-          better in the small summary card. */}
-      <meta name="twitter:card" content={props.ogImage && props.ogImageLarge ? "summary_large_image" : "summary"} />
+          better in the small summary card. Twitter reads og:* as a fallback, but
+          declaring the twitter:* set explicitly stops it guessing the wrong image. */}
+      <meta name="twitter:card" content={ogImage && ogImageLarge ? "summary_large_image" : "summary"} />
+      <meta name="twitter:title" content={props.ogTitle ?? props.title} />
+      {props.description ? <meta name="twitter:description" content={props.description} /> : null}
+      {ogImage ? <meta name="twitter:image" content={ogImage} /> : null}
+      {ogImage ? <meta name="twitter:image:alt" content={ogImageAlt} /> : null}
       <link rel="stylesheet" href="/styles.css" />
       {(props.ld ?? []).map((d) => jsonLd(d))}
       {/* Cloudflare Web Analytics — deferred, privacy-first, renders only when configured. */}
@@ -387,6 +420,7 @@ export const Layout: FC<
             <a href="/whats-new">What&apos;s new</a>
             <a href="/watch-orders">Watch orders</a>
             <a href="/lists">Browse everything</a>
+            <a href="/about">About TV Nightly</a>
           </div>
           <div>
             <h3>Hubs</h3>
@@ -434,6 +468,10 @@ export const Layout: FC<
           <span class="footer-base-links">
             <a href="/feedback">Feedback</a>
             <span class="footer-sep" aria-hidden="true">·</span>
+            <a href="/how-we-pick">How we pick</a>
+            <span class="footer-sep" aria-hidden="true">·</span>
+            <a href="/editorial-policy">Editorial policy</a>
+            <span class="footer-sep" aria-hidden="true">·</span>
             <a href="/terms">Terms of Service</a>
             <span class="footer-sep" aria-hidden="true">·</span>
             <a href="/privacy">Privacy Policy</a>
@@ -450,8 +488,11 @@ export const Layout: FC<
   );
 };
 
+// Transient confirmations and error states (subscribe/confirm/unsubscribe,
+// "Thank you", "Invalid link"): never indexable — they're one-shot pages with
+// no standalone search value, often behind a single-use token.
 export const MessagePage: FC<{ title: string; body: string }> = ({ title, body }) => (
-  <Layout title={`${title} | TV Nightly`}>
+  <Layout title={`${title} | TV Nightly`} noindex>
     <h1>{title}</h1>
     <p>{body}</p>
     <p>

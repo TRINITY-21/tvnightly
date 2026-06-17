@@ -3,7 +3,7 @@ import { IconStar, IconInstagram, IconX, IconGlobe } from "../components/icons";
 import { Context } from "hono";
 import { Bindings, ShowRow, MovieRow, PersonRow } from "../types";
 import { stripHtml, slugifyName, retinaSet, longDate, ageOf } from "../lib/format";
-import { origin, canonical, breadcrumbLd } from "../lib/seo";
+import { origin, canonical, breadcrumbLd, breadcrumbTrail } from "../lib/seo";
 import { getShow, crewLinkMap } from "../lib/queries";
 import { Layout } from "../components/Layout";
 import { ShowTabs, SeasonTabs } from "../components/nav";
@@ -452,28 +452,71 @@ app.get("/person/:slug", async (c) => {
     return s ?? m;
   })();
 
+  // sameAs ties this Person node to its authoritative profiles, the strongest
+  // signal we can give a knowledge graph that "our" person is that person.
+  const sameAs = [
+    person.tmdb_id ? `https://www.themoviedb.org/person/${person.tmdb_id}` : null,
+    person.imdb_id ? `https://www.imdb.com/name/${person.imdb_id}/` : null,
+    socials.ig ? `https://www.instagram.com/${socials.ig}/` : null,
+    socials.tw ? `https://twitter.com/${socials.tw}` : null,
+    person.homepage || null,
+  ].filter((u): u is string => !!u);
+
+  const site = origin(c);
+  // map the TMDB "known for" department to a clean schema.org occupation
+  const occupation =
+    person.known_dept === "Acting"
+      ? "Actor"
+      : person.known_dept === "Directing"
+        ? "Director"
+        : person.known_dept === "Writing"
+          ? "Writer"
+          : person.known_dept === "Production"
+            ? "Producer"
+            : person.known_dept;
   const ld = {
     "@context": "https://schema.org",
     "@type": "Person",
     name: person.name,
-    url: `${origin(c)}/person/${canonicalSlug}`,
+    url: `${site}/person/${canonicalSlug}`,
     ...(person.image_url ? { image: person.image_url } : {}),
     ...(person.birthday ? { birthDate: person.birthday } : {}),
     ...(person.deathday ? { deathDate: person.deathday } : {}),
     ...(person.country ? { nationality: person.country } : {}),
+    ...(occupation
+      ? { jobTitle: occupation, hasOccupation: { "@type": "Occupation", name: occupation } }
+      : {}),
+    ...(sameAs.length ? { sameAs } : {}),
   };
+
+  // "known for" line: real TV roles, else film credits, else a generic fallback —
+  // never the empty "known for ." that an actorless/credit-thin person produced.
+  const knownFor = roles.length
+    ? roles.slice(0, 3).map((r) => r.name)
+    : films.slice(0, 3).map((m) => m.title);
+  const personDescription = knownFor.length
+    ? `${person.name}${age != null && !years ? `, ${age},` : ""} — known for ${knownFor.join(", ")}. Every show, every role, where to stream them.`
+    : `${person.name}${age != null && !years ? `, ${age},` : ""} — full filmography, credits and where to stream their work, on TV Nightly.`;
+
+  const personCrumbs = bestTitle
+    ? [
+        { name: "TV Nightly", url: site },
+        { name: bestTitle.name, url: `${site}${bestTitle.href}` },
+        { name: person.name, url: `${site}/person/${canonicalSlug}` },
+      ]
+    : [
+        { name: "TV Nightly", url: site },
+        { name: person.name, url: `${site}/person/${canonicalSlug}` },
+      ];
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title={`${person.name} — TV shows, age & roles | TV Nightly`}
-      description={`${person.name}${age != null && !years ? `, ${age},` : ""} — known for ${roles
-        .slice(0, 3)
-        .map((r) => r.name)
-        .join(", ")}. Every show, every role, where to stream them.`}
+      description={personDescription}
       canonical={canonical(c)}
       ogImage={person.image_url ?? undefined}
-      ld={[ld]}
+      ld={[ld, breadcrumbTrail(personCrumbs)]}
     >
       <article class="show-hub">
         <header class="detail-hero person-hero">

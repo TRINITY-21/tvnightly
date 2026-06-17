@@ -5,7 +5,7 @@ import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
 import { visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
 import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml, slugifyName } from "../lib/format";
 import { tmdbBackdrop, tmdbMovieBackdrop, tmdbTrending } from "../lib/tmdb";
-import { canonical } from "../lib/seo";
+import { canonical, origin, siteIdentityLd } from "../lib/seo";
 import { Layout } from "../components/Layout";
 import { StatusBadge, ShowCard, MovieCard } from "../components/cards";
 import { ProviderLine } from "../components/providers";
@@ -229,9 +229,10 @@ app.get("/", async (c) => {
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
     <Layout
-      title="TV Nightly — best episodes, release dates & what's on TV tonight"
+      title="TV Nightly — best episodes, release dates & TV tonight"
       description="Track the best episodes of every TV show, season release dates, renewal status, and what's airing tonight."
       canonical={canonical(c)}
+      ld={siteIdentityLd(origin(c))}
       scripts={["/js/poster-rail.js"]}
       preloadImage={backdrop ?? undefined}
     >

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { raw } from "hono/html";
 import { Bindings, AppContext, ShowRow, EpisodeRow } from "../types";
 import { comparePathFor, hiRes } from "../lib/format";
-import { origin, canonical } from "../lib/seo";
+import { origin, canonical, breadcrumbTrail } from "../lib/seo";
 import { similarShows } from "../lib/queries";
 import { servePng } from "../lib/render";
 import { foldSql, foldText } from "../lib/search";
@@ -222,6 +222,16 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
       canonical={`${origin(c)}${comparePathFor(showA.slug, showB.slug)}`}
       ogImage={`${origin(c)}${comparePathFor(showA.slug, showB.slug)}/og.png`}
       ogImageLarge
+      ld={[
+        breadcrumbTrail([
+          { name: "TV Nightly", url: origin(c) },
+          { name: "Compare shows", url: `${origin(c)}/compare` },
+          {
+            name: `${showA.name} vs ${showB.name}`,
+            url: `${origin(c)}${comparePathFor(showA.slug, showB.slug)}`,
+          },
+        ]),
+      ]}
       scripts={["/js/compare-chart.js", "/js/share.js"]}
     >
       <header class="vsx-hero">
@@ -438,7 +448,7 @@ app.get("/compare", async (c) => {
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title="Compare two TV shows — episode ratings head-to-head | TV Nightly"
+      title="Compare TV shows by episode rating | TV Nightly"
       description="Put two shows' full episode-rating histories on one chart and settle the argument."
       canonical={`${origin(c)}/compare`}
       scripts={["/js/compare-typeahead.js"]}

@@ -4,7 +4,7 @@ import { Layout } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
 import { SCHEDULE_TABS, SubNav } from "../components/nav";
 import { MONTHS, airTime, epCode, heroBg, hiRes, homeDateline, premiereDateParts, stripHtml } from "../lib/format";
-import { canonical } from "../lib/seo";
+import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { Bindings, TonightRow } from "../types";
 
@@ -101,12 +101,28 @@ app.get("/tonight", async (c) => {
   }
   const rest = head ? results.filter((e) => e.id !== head.id) : results;
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
     <Layout
       title="What's on TV tonight | TV Nightly"
       description="Every episode airing on TV and streaming tonight, in air-time order."
       canonical={canonical(c)}
+      ogImage={art && !ambient ? art.x1 : undefined}
+      ogImageLarge={!!(art && !ambient)}
+      ld={[
+        itemListLd(
+          "On TV tonight",
+          results.map((e) => ({
+            name: `${e.show_name} ${epCode(e)}`,
+            url: `${site}/show/${e.show_slug}`,
+          })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "On tonight", url: canonical(c) },
+        ]),
+      ]}
     >
       <SubNav items={SCHEDULE_TABS} current="/tonight" />
       <p class="section-eyebrow">{homeDateline()}</p>
@@ -202,12 +218,26 @@ app.get("/calendar", async (c) => {
     byDay.get(day)!.push(e);
   }
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=900");
   return c.html(
     <Layout
       title="TV schedule this week | TV Nightly"
       description="The 7-day TV calendar: every episode airing this week, by day."
       canonical={canonical(c)}
+      ld={[
+        itemListLd(
+          "This week's TV calendar",
+          results.map((e) => ({
+            name: `${e.show_name} ${epCode(e)}`,
+            url: `${site}/show/${e.show_slug}`,
+          })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "This week", url: canonical(c) },
+        ]),
+      ]}
     >
       <SubNav items={SCHEDULE_TABS} current="/calendar" />
       <p class="section-eyebrow">The week ahead</p>
@@ -283,12 +313,26 @@ app.get("/premieres", async (c) => {
   }
   const monthLabel = (ym: string) => `${MONTHS[Number(ym.slice(5, 7)) - 1] ?? ym} ${ym.slice(0, 4)}`;
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title="Upcoming TV premieres — the next 90 days | TV Nightly"
       description="Every season premiere coming in the next three months, with dates and countdowns."
       canonical={canonical(c)}
+      ld={[
+        itemListLd(
+          "Upcoming TV premieres",
+          results.map((e) => ({
+            name: `${e.show_name}${e.season ? ` Season ${e.season}` : ""} premiere`,
+            url: `${site}/show/${e.show_slug}/release-date`,
+          })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Premieres", url: canonical(c) },
+        ]),
+      ]}
     >
       <SubNav items={SCHEDULE_TABS} current="/premieres" />
       <p class="section-eyebrow">The next 90 days</p>

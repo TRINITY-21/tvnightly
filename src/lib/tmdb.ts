@@ -4,6 +4,9 @@
 type RawBundle = {
   backdrop_path?: string | null;
   poster_path?: string | null;
+  original_title?: string;
+  original_language?: string;
+  production_companies?: { id: number; name: string }[];
   created_by?: { id: number; name: string }[];
   images?: {
     posters?: { file_path: string; iso_639_1: string | null; vote_count: number }[];
@@ -108,6 +111,31 @@ export async function tmdbMedia(key: string, tmdbId: number): Promise<TmdbMedia 
 export async function tmdbMovieMedia(key: string, imdbId: string): Promise<TmdbMedia | null> {
   const data = await bundle(key, "movie", imdbId);
   return data ? mapMedia(data) : null;
+}
+
+/** Schema-only facts that live in the same edge-cached movie bundle but aren't
+ *  persisted in our mirror: the original-language title, ISO 639-1 language,
+ *  lead production company, and the best YouTube trailer. Used to enrich the
+ *  Movie JSON-LD without a DB backfill or an extra TMDB round-trip (cache hit). */
+export async function tmdbMovieFacts(
+  key: string,
+  imdbId: string,
+): Promise<{
+  originalTitle: string | null;
+  language: string | null;
+  studio: string | null;
+  trailer: { name: string; key: string; published: string | null } | null;
+} | null> {
+  const data = await bundle(key, "movie", imdbId);
+  if (!data) return null;
+  const videos = mapMedia(data).videos;
+  const trailer = videos.find((v) => v.type === "Trailer") ?? videos[0] ?? null;
+  return {
+    originalTitle: data.original_title ?? null,
+    language: data.original_language ?? null,
+    studio: data.production_companies?.[0]?.name ?? null,
+    trailer,
+  };
 }
 
 /** The hero backdrop. NOT TMDB's designated backdrop_path — that's often a

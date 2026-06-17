@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { Bindings } from "../types";
 import { FRANCHISES } from "../lib/franchises";
 import { slugifyName } from "../lib/format";
-import { origin, xmlRes } from "../lib/seo";
+import { origin, xmlRes, sitemapUrl, epochDay } from "../lib/seo";
 import { networkDirectory, genreDirectory } from "../lib/queries";
 import { VERTICALS } from "../lib/verticals";
 
@@ -11,6 +11,14 @@ const app = new Hono<{ Bindings: Bindings }>();
 // --------------------------------------------------------------- sitemaps
 
 const SHOWS_PER_SITEMAP = 1000;
+
+// lastmod for the static shard. Charts, schedules and directories are rebuilt
+// from continuously-synced data, so "today" is the honest freshness hint; the
+// handful of evergreen editorial pages carry a fixed deploy date instead. Bump
+// BUILD_DATE when those pages are meaningfully edited.
+const TODAY = new Date().toISOString().slice(0, 10);
+const BUILD_DATE = "2026-06-17";
+const EVERGREEN = new Set(["/about", "/how-we-pick", "/editorial-policy"]);
 
 app.get("/sitemap.xml", async (c) => {
   const site = origin(c);
@@ -31,7 +39,9 @@ app.get("/sitemap.xml", async (c) => {
     ...Array.from({ length: peopleShards }, (_, i) => `people-${i}.xml`),
     ...Array.from({ length: episodeShards }, (_, i) => `episodes-${i}.xml`),
   ]
-    .map((f) => `<sitemap><loc>${site}/sitemaps/${f}</loc></sitemap>`)
+    // every shard is regenerated from continuously-synced data, so the freshness
+    // signal on the index is "today" — engines re-read children on this hint
+    .map((f) => `<sitemap><loc>${site}/sitemaps/${f}</loc><lastmod>${TODAY}</lastmod></sitemap>`)
     .join("");
   return xmlRes(c, `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${entries}</sitemapindex>`);
 });
@@ -52,6 +62,9 @@ app.get("/sitemaps/:file", async (c) => {
     const year = new Date().getFullYear();
     const urls = [
       "/",
+      "/about",
+      "/how-we-pick",
+      "/editorial-policy",
       "/recommend",
       "/loved",
       "/what-to-watch",
@@ -74,6 +87,7 @@ app.get("/sitemaps/:file", async (c) => {
       "/top/seasons",
       "/top/networks",
       "/compare",
+      "/movies/compare",
       ...FRANCHISES.map((f) => `/watch-order/${f.slug}`),
       ...VERTICALS.map((v) => `/${v.slug}`),
       ...networks.map((n) => `/network/${n.slug}`),
@@ -90,7 +104,7 @@ app.get("/sitemaps/:file", async (c) => {
       ...tvGenreSlugs.map((g) => `/tv/best/${year}/${g}`),
       ...tvGenreSlugs.map((g) => `/tv/underrated/${g}`),
     ]
-      .map((p) => `<url><loc>${site}${p}</loc></url>`)
+      .map((p) => sitemapUrl(`${site}${p}`, EVERGREEN.has(p) ? BUILD_DATE : TODAY))
       .join("");
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
   }
@@ -98,17 +112,18 @@ app.get("/sitemaps/:file", async (c) => {
   const mv = /^movies-(\d+)\.xml$/.exec(file);
   if (mv) {
     const { results } = await c.env.DB.prepare(
-      "SELECT slug FROM movies ORDER BY popularity DESC, imdb_id LIMIT ? OFFSET ?",
+      "SELECT slug, updated_at FROM movies ORDER BY popularity DESC, imdb_id LIMIT ? OFFSET ?",
     )
       .bind(SHOWS_PER_SITEMAP, Number(mv[1]) * SHOWS_PER_SITEMAP)
-      .all<{ slug: string }>();
+      .all<{ slug: string; updated_at: number }>();
     if (results.length === 0) return c.notFound();
     const urls = results
-      .map((r) =>
-        ["", "/where-to-watch", "/similar", "/compare", "/media", "/cast"]
-          .map((suffix) => `<url><loc>${site}/movie/${r.slug}${suffix}</loc></url>`)
-          .join(""),
-      )
+      .map((r) => {
+        const lm = epochDay(r.updated_at);
+        return ["", "/where-to-watch", "/similar", "/compare", "/media", "/cast"]
+          .map((suffix) => sitemapUrl(`${site}/movie/${r.slug}${suffix}`, lm))
+          .join("");
+      })
       .join("");
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
   }
@@ -140,18 +155,21 @@ app.get("/sitemaps/:file", async (c) => {
   const eps = /^episodes-(\d+)\.xml$/.exec(file);
   if (eps) {
     const { results } = await c.env.DB.prepare(
-      `SELECT s.slug, e.season, e.number FROM episodes e
+      `SELECT s.slug, e.season, e.number, e.airdate FROM episodes e
        JOIN shows s ON s.id = e.show_id
        ORDER BY e.show_id, e.season, e.number LIMIT ? OFFSET ?`,
     )
       .bind(SHOWS_PER_SITEMAP, Number(eps[1]) * SHOWS_PER_SITEMAP)
-      .all<{ slug: string; season: number | null; number: number | null }>();
+      .all<{ slug: string; season: number | null; number: number | null; airdate: string | null }>();
     if (results.length === 0) return c.notFound();
     const urls = results
-      .map(
-        (r) =>
-          `<url><loc>${site}/show/${r.slug}/s${String(r.season ?? 0).padStart(2, "0")}e${String(r.number ?? 0).padStart(2, "0")}</loc></url>`,
-      )
+      .map((r) => {
+        const loc = `${site}/show/${r.slug}/s${String(r.season ?? 0).padStart(2, "0")}e${String(r.number ?? 0).padStart(2, "0")}`;
+        // airdate is the episode's natural "last changed" date — but never emit a
+        // future date (unaired episodes) as lastmod
+        const lm = r.airdate && r.airdate <= TODAY ? r.airdate : undefined;
+        return sitemapUrl(loc, lm);
+      })
       .join("");
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
   }
@@ -159,18 +177,19 @@ app.get("/sitemaps/:file", async (c) => {
   const m = /^shows-(\d+)\.xml$/.exec(file);
   if (!m) return c.notFound();
   const { results } = await c.env.DB.prepare(
-    "SELECT slug FROM shows ORDER BY weight DESC, id LIMIT ? OFFSET ?",
+    "SELECT slug, updated_at FROM shows ORDER BY weight DESC, id LIMIT ? OFFSET ?",
   )
     .bind(SHOWS_PER_SITEMAP, Number(m[1]) * SHOWS_PER_SITEMAP)
-    .all<{ slug: string }>();
+    .all<{ slug: string; updated_at: number }>();
   if (results.length === 0) return c.notFound();
 
   const urls = results
-    .map((r) =>
-      ["", "/where-to-watch", "/similar", "/media", "/best-episodes", "/worst-episodes", "/essential", "/ratings", "/next-episode", "/release-date", "/cast"]
-        .map((suffix) => `<url><loc>${site}/show/${r.slug}${suffix}</loc></url>`)
-        .join(""),
-    )
+    .map((r) => {
+      const lm = epochDay(r.updated_at);
+      return ["", "/where-to-watch", "/similar", "/media", "/best-episodes", "/worst-episodes", "/essential", "/ratings", "/next-episode", "/release-date", "/cast"]
+        .map((suffix) => sitemapUrl(`${site}/show/${r.slug}${suffix}`, lm))
+        .join("");
+    })
     .join("");
   return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
 });

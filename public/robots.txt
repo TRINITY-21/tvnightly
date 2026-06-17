@@ -1,5 +1,30 @@
+# AI answer/search crawlers (GPTBot, OAI-SearchBot, ClaudeBot, PerplexityBot,
+# Google-Extended, etc.) are deliberately welcome: as an independent guide we
+# want our rankings and where-to-watch data cited. They fall under the rules
+# below; structured context for them lives at /llms.txt.
+#
+# One group only: a crawler obeys its MOST-specific matching User-agent block and
+# ignores the rest, so a narrower "Googlebot:" group would silently drop the
+# disallows below for Googlebot. Everything here therefore lives under "*".
 User-agent: *
 Allow: /
 Disallow: /admin/
+Disallow: /api/
+Disallow: /confirm
+Disallow: /unsubscribe
+# Search is noindex and an infinite ?q= space — keep crawlers out of it entirely
+# (the bare /search landing stays crawlable so its noindex is still seen).
+Disallow: /search?
+# Tracking / faceting params that only spawn duplicate crawl paths. The site's
+# real content params (q, region, season, a, b, genre…) are deliberately NOT
+# blocked. Wildcards are honored by Googlebot/Bingbot; other bots ignore them.
+Disallow: /*?utm_
+Disallow: /*?ref=
+Disallow: /*?session=
+Disallow: /*?sort=
+Disallow: /*?filter=
 
+# Single sitemap entry: /sitemap.xml is a sitemap INDEX that already fans out to
+# every child shard (static, shows, movies, people, episodes) — listing the
+# children here too would duplicate them and 404 the non-existent flat files.
 Sitemap: https://tvnightly.com/sitemap.xml

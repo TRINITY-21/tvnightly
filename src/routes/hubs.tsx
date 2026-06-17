@@ -4,7 +4,7 @@ import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
 import { heroBg, hiRes, premiereDateParts, shortDate, slugifyName } from "../lib/format";
 import { FRANCHISE_BY_SLUG } from "../lib/franchises";
 import { PROVIDER_LOGOS, visitorRegion } from "../lib/providers";
-import { origin } from "../lib/seo";
+import { breadcrumbTrail, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { VERTICALS, Vertical, genreBinds, genreOr } from "../lib/verticals";
 import { AppContext, Bindings, MovieRow, ShowRow } from "../types";
@@ -154,13 +154,25 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
         href: "/movies/best",
       };
 
+  const site = origin(c);
   c.header("Cache-Control", "private, max-age=600");
   return c.html(
     <Layout
       title={`${v.pageTitle} | TV Nightly`}
       description={v.description}
-      canonical={`${origin(c)}/${v.slug}`}
+      canonical={`${site}/${v.slug}`}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
+      ld={[
+        itemListLd(`The best of ${v.name}`, [
+          ...shows.map((s) => ({ name: s.name, url: `${site}/show/${s.slug}` })),
+          ...movies.map((m) => ({ name: m.title, url: `${site}/movie/${m.slug}` })),
+        ]),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Browse everything", url: `${site}/lists` },
+          { name: v.name, url: `${site}/${v.slug}` },
+        ]),
+      ]}
     >
       <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}

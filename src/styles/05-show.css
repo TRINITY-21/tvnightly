@@ -125,7 +125,10 @@
   text-decoration: none;
 }
 
-.poster { width: 180px; border-radius: var(--radius-lg); box-shadow: var(--shadow-2); }
+/* aspect-ratio reserves the poster's height before the image loads, so the hero
+   never reflows when it arrives (CLS). Posters are a uniform 2:3; object-fit
+   guards the rare off-ratio source. Applies to every .poster image site-wide. */
+.poster { width: 180px; aspect-ratio: 2 / 3; height: auto; object-fit: cover; border-radius: var(--radius-lg); box-shadow: var(--shadow-2); }
 .summary { max-width: 62ch; }
 /* 3-line synopsis clamp, pure CSS (checkbox toggle) */
 .clampable .summary-text {

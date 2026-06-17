@@ -6,7 +6,7 @@ import { fmtMarathon, fmtRuntime, heroBg, slugifyName } from "../lib/format";
 import { FRANCHISES, FRANCHISE_BY_SLUG, FranchiseEntry } from "../lib/franchises";
 import { providersFor, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
 import { similarMovies } from "../lib/queries";
-import { canonical } from "../lib/seo";
+import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbMovieBackdrop } from "../lib/tmdb";
 import { Bindings, MovieRow } from "../types";
 
@@ -83,12 +83,26 @@ app.get("/watch-orders", async (c) => {
     }),
   );
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=86400");
   return c.html(
     <Layout
-      title="Franchise watch-order guides — release & chronological | TV Nightly"
+      title="Movie watch-order guides — every franchise | TV Nightly"
       description="How to watch every big movie franchise in order: Marvel, Star Wars, Harry Potter and more — release and chronological orders with runtimes and streaming info."
       canonical={canonical(c)}
+      ld={[
+        itemListLd(
+          "Franchise watch-order guides",
+          guides.map((g) => ({
+            name: `${g.f.name} in order`,
+            url: `${site}/watch-order/${g.f.slug}`,
+          })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Watch orders", url: canonical(c) },
+        ]),
+      ]}
     >
       <h1>Watch-order guides</h1>
       <p class="muted wo-lead">
@@ -274,6 +288,7 @@ app.get("/watch-order/:slug", async (c) => {
     );
   };
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
@@ -287,12 +302,22 @@ app.get("/watch-order/:slug", async (c) => {
           "@context": "https://schema.org",
           "@type": "ItemList",
           name: `How to watch ${fr.name} in order`,
-          itemListElement: release.map((e, i) => ({
-            "@type": "ListItem",
-            position: i + 1,
-            name: `${e.title} (${e.year})`,
-          })),
+          itemListElement: release.map((e, i) => {
+            const m = movieFor(e);
+            return {
+              "@type": "ListItem",
+              position: i + 1,
+              name: `${e.title} (${e.year})`,
+              // link entries we actually track to their movie page
+              ...(m?.slug ? { url: `${site}/movie/${m.slug}` } : {}),
+            };
+          }),
         },
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Watch orders", url: `${site}/watch-orders` },
+          { name: fr.name, url: canonical(c) },
+        ]),
       ]}
     >
       <header class={art ? "wo-hero wo-hero-bleed" : "wo-hero wo-hero-bare"}>

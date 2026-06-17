@@ -20,7 +20,11 @@
   transform: translateY(-2px);
   box-shadow: var(--shadow-2);
 }
-.card img { width: 100%; aspect-ratio: 2/2.8; object-fit: cover; display: block; }
+/* height:auto so the width/height ATTRS (added for CLS) drive the aspect-ratio
+   rather than pinning a fixed pixel height — without it the height attribute
+   leaks through as a presentational hint and overrides aspect-ratio (stretching
+   rail cards, which override to 2/3). */
+.card img { width: 100%; height: auto; aspect-ratio: 2/2.8; object-fit: cover; display: block; }
 .card-fallback {
   width: 100%;
   aspect-ratio: 2/2.8;

@@ -13,20 +13,51 @@ import { buildDossier } from "../lib/dossier";
 import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml, fmtRuntime } from "../lib/format";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, visitorRegion } from "../lib/providers";
 import { getShow, similarShows, crewLinkMap } from "../lib/queries";
-import { titleStat } from "../lib/ratings";
-import { breadcrumbLd, canonical, faqLd, origin } from "../lib/seo";
+import { titleStat, aggregateRatingLd } from "../lib/ratings";
+import { breadcrumbLd, breadcrumbTrail, canonical, faqLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMedia, tmdbShowCreators } from "../lib/tmdb";
 import { hubForGenres } from "../lib/verticals";
 import { Bindings, EpisodeRow, ShowRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
+// A show's meta description: its real (HTML-stripped) summary when present, cut
+// cleanly on a word boundary; otherwise a synthesized line built from genre,
+// years and status — so the description (and the og/twitter description Layout
+// derives from it) is never empty for the summary-less shows in the catalog.
+const showMetaDescription = (show: ShowRow): string => {
+  const summary = stripHtml(show.summary).trim();
+  if (summary) {
+    if (summary.length <= 160) return summary;
+    const cut = summary.slice(0, 157);
+    const sp = cut.lastIndexOf(" ");
+    return (sp > 120 ? cut.slice(0, sp) : cut).trimEnd() + "…";
+  }
+  const genres: string[] = show.genres ? JSON.parse(show.genres) : [];
+  const g = genres.slice(0, 2).join(", ");
+  const years = show.premiered
+    ? ` (${show.premiered.slice(0, 4)}${show.ended ? `–${show.ended.slice(0, 4)}` : show.status === "Running" ? "–present" : ""})`
+    : "";
+  return `${show.name}${years} — ${g ? `${g} ` : ""}TV series: episode ratings, season guide, renewal status and where to stream, on TV Nightly.`;
+};
+
 // The hero poster: the same canonical art every other surface uses
 // (backfilled TMDB one-sheet, TVmaze fallback) — never a second variant.
 const HeroPoster = (show: ShowRow) => {
   const p = posterSrc(show);
+  // The above-the-fold hero poster: explicit 2:3 dims reserve its box (CLS) and
+  // it's an LCP candidate, so load it eagerly at high priority — never lazily.
   return p ? (
-    <img class="poster" src={p.src} srcset={p.srcset} alt={show.name} />
+    <img
+      class="poster"
+      src={p.src}
+      srcset={p.srcset}
+      alt={`${show.name} poster`}
+      width="200"
+      height="300"
+      fetchpriority="high"
+      decoding="async"
+    />
   ) : (
     <div class="poster card-fallback">{show.name}</div>
   );
@@ -50,9 +81,10 @@ app.get("/show/:slug", async (c) => {
   const netName = show.network ?? show.web_channel;
   const region = visitorRegion(c);
   // one bound COUNT instead of the full network GROUP-BY scan per pageview
-  const [similar, stat, netCount] = await Promise.all([
+  const [similar, stat, aggRating, netCount] = await Promise.all([
     similarShows(c.env.DB, show),
     titleStat(c.env.DB, "tv", String(show.id)),
+    aggregateRatingLd(c.env.DB, "tv", String(show.id)),
     netName
       ? c.env.DB.prepare(
           "SELECT COUNT(*) AS c FROM shows WHERE (network = ? OR web_channel = ?) AND weight >= 60",
@@ -65,20 +97,6 @@ app.get("/show/:slug", async (c) => {
     netName && (netCount?.c ?? 0) >= 3 ? { name: netName, slug: slugifyName(netName) } : undefined;
 
   const site = origin(c);
-  const ld: unknown[] = [
-    {
-      "@context": "https://schema.org",
-      "@type": "TVSeries",
-      name: show.name,
-      url: `${site}/show/${show.slug}`,
-      ...(show.poster_url || show.image_url
-        ? { image: show.poster_url ?? show.image_url }
-        : {}),
-      ...(show.premiered ? { startDate: show.premiered } : {}),
-      ...(show.ended ? { endDate: show.ended } : {}),
-      ...(seasons.size ? { numberOfSeasons: Math.max(...seasons.keys()) } : {}),
-    },
-  ];
 
   // The hero frame: the show's real designed backdrop from TMDB (edge-cached),
   // falling back to the poster for the few shows without a TMDB bridge.
@@ -95,6 +113,44 @@ app.get("/show/:slug", async (c) => {
   const creatorLinks = creators.length
     ? await crewLinkMap(c.env.DB, creators)
     : new Map<number, number>();
+
+  // TVSeries node built here (after creators resolve) so it can carry the creator
+  // credits, plus genre and episode count from the data already in scope.
+  const showGenres: string[] = show.genres ? JSON.parse(show.genres) : [];
+  const creatorNodes = creators.map((p) => {
+    const pid = creatorLinks.get(p.id);
+    return {
+      "@type": "Person",
+      name: p.name,
+      ...(pid ? { url: `${site}/person/${slugifyName(p.name)}-${pid}` } : {}),
+    };
+  });
+  const ld: unknown[] = [
+    {
+      "@context": "https://schema.org",
+      "@type": "TVSeries",
+      name: show.name,
+      url: `${site}/show/${show.slug}`,
+      ...(show.poster_url || show.image_url
+        ? { image: show.poster_url ?? show.image_url }
+        : {}),
+      ...(show.premiered ? { startDate: show.premiered } : {}),
+      ...(show.ended ? { endDate: show.ended } : {}),
+      ...(seasons.size ? { numberOfSeasons: Math.max(...seasons.keys()) } : {}),
+      ...(episodes.length ? { numberOfEpisodes: episodes.length } : {}),
+      ...(showGenres.length ? { genre: showGenres } : {}),
+      ...(creatorNodes.length ? { creator: creatorNodes } : {}),
+      // first-party community verdicts only (see aggregateRatingLd) — null below
+      // the rater threshold, so thin shows emit no star snippet
+      ...(aggRating ? { aggregateRating: aggRating } : {}),
+    },
+    breadcrumbTrail([
+      { name: "TV Nightly", url: site },
+      { name: "TV shows", url: `${site}/top/tv` },
+      { name: show.name, url: `${site}/show/${show.slug}` },
+    ]),
+  ];
+
   const posterBg = hiRes(show.image_url);
   const heroFrame = backdrop
     ? heroBg(backdrop.x1, backdrop.x2)
@@ -116,12 +172,13 @@ app.get("/show/:slug", async (c) => {
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
     <Layout
-      title={`${show.name} — episodes, ratings & renewal status | TV Nightly`}
-      description={stripHtml(show.summary).slice(0, 155)}
+      title={`${show.name} — episodes, ratings & renewals | TV Nightly`}
+      description={showMetaDescription(show)}
       canonical={canonical(c)}
       ld={ld}
       ogImage={`${canonical(c)}/og.png`}
       ogImageLarge
+      preloadImage={backdrop?.x2 ? { x1: backdrop.x1, x2: backdrop.x2 } : undefined}
       scripts={["/js/share.js"]}
     >
       <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
@@ -723,7 +780,8 @@ app.get("/show/:slug/where-to-watch", async (c) => {
           : `Where ${show.name} is streaming, region by region — checked around the clock.`
       }
       canonical={`${site}${base}`}
-      ogImage={show.poster_url ?? show.image_url ?? undefined}
+      ogImage={`${site}/show/${show.slug}/og.png`}
+      ogImageLarge
       ld={[
         breadcrumbLd(site, show, "Where to watch", base),
         // service names are visible in the list below, so this answer is on-page

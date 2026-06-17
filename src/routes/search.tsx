@@ -4,6 +4,7 @@ import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard, StatusBadge } from "../components/cards";
 import { heroBg, hiRes, retinaSet, slugifyName, stripHtml } from "../lib/format";
 import { diceSimilarity, foldSql, foldText } from "../lib/search";
+import { origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { Bindings, MovieRow, ShowRow } from "../types";
 
@@ -213,7 +214,13 @@ app.get("/search", async (c) => {
   c.header("Cache-Control", "public, max-age=300");
   // infinite ?q= variants must not enter the index (doorway/thin-content risk)
   return c.html(
-    <Layout title={`Search${q ? `: ${q}` : ""} | TV Nightly`} noindex scripts={["/js/search-live.js"]}>
+    <Layout
+      title={q ? `Search results for '${q}' | TV Nightly` : `Search | TV Nightly`}
+      description="Search TV Nightly for shows, movies and people — episode rankings, release dates, and where to stream."
+      canonical={`${origin(c)}/search${q ? `?q=${encodeURIComponent(q)}` : ""}`}
+      noindex
+      scripts={["/js/search-live.js"]}
+    >
       <div class="srch">
         <p class="section-eyebrow">Search</p>
         <h1 class="srch-title">{q ? "Results" : "Find a show, movie, or person"}</h1>

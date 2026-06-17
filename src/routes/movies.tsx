@@ -13,20 +13,77 @@ import { MONTHS, heroBg, longDate, movieComparePathFor, premiereDateParts, slugi
 import { franchiseOfMovie } from "../lib/franchises";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { crewLinkMap, similarMovies } from "../lib/queries";
-import { titleStat } from "../lib/ratings";
+import { titleStat, aggregateRatingLd } from "../lib/ratings";
 import { foldSql, foldText } from "../lib/search";
-import { canonical, faqLd, origin } from "../lib/seo";
+import { breadcrumbTrail, canonical, faqLd, itemListLd, origin } from "../lib/seo";
 import { servePng } from "../lib/render";
 import { posterDataUri } from "../lib/signal";
-import { buildOgCard } from "../lib/social";
-import { tmdbMovieBackdrop, tmdbMovieCast, tmdbMovieCrew, tmdbMovieMedia, tmdbUpcomingBackdrop } from "../lib/tmdb";
+import { buildOgCard, buildCompareOgCard, type OgSide } from "../lib/social";
+import { tmdbMovieBackdrop, tmdbMovieCast, tmdbMovieCrew, tmdbMovieFacts, tmdbMovieMedia, tmdbUpcomingBackdrop } from "../lib/tmdb";
 import { hubForGenres } from "../lib/verticals";
-import { Bindings, MovieRow } from "../types";
+import { AppContext, Bindings, MovieRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
 const fmtVotes = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n);
+
+// Truncate to `max` chars on the last whole-word boundary (no trailing fragment).
+const wordTrunc = (s: string, max: number): string => {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const sp = cut.lastIndexOf(" ");
+  return (sp > 0 ? cut.slice(0, sp) : cut).trimEnd();
+};
+
+// SEO <title>: "[Title] ([Year]) - [Genre] Movie | TV Nightly", kept ≤60 chars.
+// Over budget, we shed the genre descriptor first, then word-truncate the title,
+// before ever sacrificing the year or the brand suffix.
+const movieTitleTag = (movie: MovieRow, genres: string[]): string => {
+  const brand = " | TV Nightly";
+  const year = movie.year ? ` (${movie.year})` : "";
+  const genreLabel = genres.slice(0, 2).join(" ");
+  const withGenre = `${movie.title}${year} - ${genreLabel ? `${genreLabel} ` : ""}Movie${brand}`;
+  if (withGenre.length <= 60) return withGenre;
+  const noGenre = `${movie.title}${year}${brand}`;
+  if (noGenre.length <= 60) return noGenre;
+  const room = 60 - year.length - brand.length - 1; // 1 char for the ellipsis
+  return `${movie.title.slice(0, Math.max(1, room)).trimEnd()}…${year}${brand}`;
+};
+
+// SEO meta description: "Watch [Title] ([Year]). [plot]. Directed by [Dir].
+// Starring [A], [B]." — unique per film, ≤160 chars. The (unique, high-value)
+// director + lead-cast credits are always kept; the plot is word-truncated to
+// whatever budget remains, so even overview-less catalog films get a real line.
+const movieDescriptionTag = (
+  movie: MovieRow,
+  directors: { name: string }[],
+  cast: { name: string }[],
+): string => {
+  const year = movie.year ? ` (${movie.year})` : "";
+  const head = `Watch ${movie.title}${year}.`;
+  const dir = directors[0] ? `Directed by ${directors[0].name}.` : "";
+  const leads = cast.slice(0, 2).map((p) => p.name);
+  const starring = leads.length ? `Starring ${leads.join(", ")}.` : "";
+  const tail = [dir, starring].filter(Boolean).join(" ");
+  const overhead = head.length + (tail ? tail.length + 1 : 0) + 1; // +spaces
+  const plotBudget = 160 - overhead;
+  // Fill the plot slot with as many WHOLE sentences as fit (so it reads cleanly
+  // before "Directed by …"); if not even one fits, word-truncate the first and
+  // end on an ellipsis rather than running a fragment into the credits.
+  const overview = (movie.overview ?? "").trim().replace(/\s+/g, " ");
+  let plot = "";
+  if (overview && plotBudget > 0) {
+    for (const s of overview.match(/[^.!?]+[.!?]+/g) ?? [overview]) {
+      const cand = plot ? `${plot} ${s.trim()}` : s.trim();
+      if (cand.length <= plotBudget) plot = cand;
+      else break;
+    }
+    if (!plot) plot = `${wordTrunc(overview, Math.max(0, plotBudget - 1)).replace(/[,.;:!?]+$/, "")}…`;
+  }
+  const desc = [head, plot, tail].filter(Boolean).join(" ").trim();
+  return desc.length > 160 ? wordTrunc(desc, 160) : desc;
+};
 
 const movieProvLinks = (m: MovieRow, region: string) => {
   const links: { href: string; label: string }[] = [];
@@ -130,12 +187,26 @@ app.get("/movies/upcoming", async (c) => {
     );
   };
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
       title="Upcoming movies — theatrical release dates | TV Nightly"
       description="Every major movie heading to theaters soon, in release order — with dates, posters, and what to watch while you wait."
       canonical={canonical(c)}
+      ld={[
+        itemListLd(
+          "Upcoming movies",
+          results
+            .filter((m) => m.slug)
+            .map((m) => ({ name: m.title, url: `${site}/movie/${m.slug}` })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Movies", url: `${site}/movies` },
+          { name: "Upcoming", url: canonical(c) },
+        ]),
+      ]}
     >
       <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
@@ -622,30 +693,24 @@ app.get("/movie/:slug", async (c) => {
   if (!movie) return c.notFound();
   const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
   const region = visitorRegion(c);
-  const stat = await titleStat(c.env.DB, "movie", movie.imdb_id);
+  const [stat, aggRating] = await Promise.all([
+    titleStat(c.env.DB, "movie", movie.imdb_id),
+    aggregateRatingLd(c.env.DB, "movie", movie.imdb_id),
+  ]);
   const simMovies = await similarMovies(c.env.DB, movie);
-
-  // No aggregateRating here: Google's review-snippet guidelines require ratings
-  // collected on YOUR site; republishing TMDB votes as structured data risks a
-  // manual action. The rating stays visible in the page body.
-  const ld: Record<string, unknown> = {
-    "@context": "https://schema.org",
-    "@type": "Movie",
-    name: movie.title,
-    url: `${origin(c)}/movie/${movie.slug}`,
-    ...(movie.poster_url ? { image: movie.poster_url } : {}),
-    ...(movie.release_date ? { datePublished: movie.release_date } : {}),
-  };
 
   // the movie's real designed backdrop + billed cast (TMDB takes the IMDb id
   // directly; both ride one edge-cached bundle). Blurred poster = fallback.
-  const [backdrop, cast, crew] = c.env.TMDB_API_KEY
+  // `facts` (original title/language/studio/trailer) rides the SAME cached
+  // bundle, so enriching the Movie JSON-LD costs no extra round-trip.
+  const [backdrop, cast, crew, facts] = c.env.TMDB_API_KEY
     ? await Promise.all([
         tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id),
         tmdbMovieCast(c.env.TMDB_API_KEY, movie.imdb_id, 8),
         tmdbMovieCrew(c.env.TMDB_API_KEY, movie.imdb_id, 12),
+        tmdbMovieFacts(c.env.TMDB_API_KEY, movie.imdb_id),
       ])
-    : [null, [], []];
+    : [null, [], [], null];
   // the director is the headline credit on a film — pulled from the same cached
   // bundle as the cast, linked to a person page where we track them
   const directors = crew.filter((p) => p.jobs.split(" · ").includes("Director"));
@@ -678,15 +743,86 @@ app.get("/movie/:slug", async (c) => {
     for (const r of results) linkable.set(r.name.toLowerCase(), r.id);
   }
 
+  // Build the Movie node AFTER the cast/crew bundle resolves so director, actor,
+  // genre and runtime are all available (they aren't earlier). aggregateRating is
+  // sourced ONLY from our own community verdicts (visible in the body), never
+  // republished TMDB votes — publishing third-party ratings as structured data
+  // risks a manual action; aggregateRatingLd returns null below a rater threshold.
+  const site = origin(c);
+  const directorNodes = directors.map((d) => {
+    const pid = directorLinks.get(d.id);
+    return {
+      "@type": "Person",
+      name: d.name,
+      ...(pid ? { url: `${site}/person/${slugifyName(d.name)}-${pid}` } : {}),
+    };
+  });
+  const actorNodes = cast.slice(0, 8).map((p) => {
+    const pid = linkable.get(p.name.toLowerCase());
+    return {
+      "@type": "Person",
+      name: p.name,
+      ...(pid ? { url: `${site}/person/${slugifyName(p.name)}-${pid}` } : {}),
+    };
+  });
+  // ISO 8601 runtime: PT[H]H[M]M (e.g. 138 min → PT2H18M), per schema.org.
+  const isoDuration = (mins: number) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `PT${h ? `${h}H` : ""}${m ? `${m}M` : ""}` || "PT0M";
+  };
+  // original-language title, only when it actually differs from our display title
+  const altName =
+    facts?.originalTitle && facts.originalTitle.toLowerCase() !== movie.title.toLowerCase()
+      ? facts.originalTitle
+      : null;
+  const trailerNode = facts?.trailer
+    ? {
+        "@type": "VideoObject",
+        name: `${movie.title} — Official Trailer`,
+        description: `Official trailer for ${movie.title}.`,
+        thumbnailUrl: `https://img.youtube.com/vi/${facts.trailer.key}/hqdefault.jpg`,
+        embedUrl: `https://www.youtube-nocookie.com/embed/${facts.trailer.key}`,
+        ...(facts.trailer.published ? { uploadDate: facts.trailer.published } : {}),
+      }
+    : null;
+  const ld: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Movie",
+    name: movie.title,
+    ...(altName ? { alternateName: altName } : {}),
+    url: `${site}/movie/${movie.slug}`,
+    ...(movie.poster_url ? { image: movie.poster_url } : {}),
+    ...(movie.overview ? { description: movie.overview } : {}),
+    ...(movie.release_date ? { datePublished: movie.release_date } : {}),
+    ...(movie.runtime ? { duration: isoDuration(movie.runtime) } : {}),
+    ...(facts?.language ? { inLanguage: facts.language } : {}),
+    ...(genres.length ? { genre: genres } : {}),
+    ...(directorNodes.length ? { director: directorNodes } : {}),
+    ...(actorNodes.length ? { actor: actorNodes } : {}),
+    ...(facts?.studio ? { productionCompany: { "@type": "Organization", name: facts.studio } } : {}),
+    ...(aggRating ? { aggregateRating: aggRating } : {}),
+    ...(trailerNode ? { trailer: trailerNode } : {}),
+  };
+  const breadcrumb = breadcrumbTrail([
+    { name: "TV Nightly", url: site },
+    { name: "Movies", url: `${site}/movies` },
+    { name: movie.title, url: `${site}/movie/${movie.slug}` },
+  ]);
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title={`${movie.title}${movie.year ? ` (${movie.year})` : ""} — rating, runtime & info | TV Nightly`}
-      description={(movie.overview ?? "").slice(0, 155)}
+      title={movieTitleTag(movie, genres)}
+      description={movieDescriptionTag(movie, directors, cast)}
       canonical={canonical(c)}
+      ogType="video.movie"
+      ogTitle={`${movie.title}${movie.year ? ` (${movie.year})` : ""}`}
       ogImage={`${canonical(c)}/og.png`}
       ogImageLarge
-      ld={[ld]}
+      ogImageAlt={`${movie.title} official poster`}
+      preloadImage={backdrop?.x2 ? { x1: backdrop.x1, x2: backdrop.x2 } : undefined}
+      ld={[ld, breadcrumb]}
       scripts={["/js/share.js"]}
     >
       <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
@@ -699,7 +835,16 @@ app.get("/movie/:slug", async (c) => {
           <div class="detail-head">
             <div class="detail-side">
               {movie.poster_url ? (
-                <img class="poster" src={movie.poster_url} srcset={`${movie.poster_url} 1x, ${movie.poster_url.replace("/w342/", "/w780/")} 2x`} alt={movie.title} />
+                <img
+                  class="poster"
+                  src={movie.poster_url}
+                  srcset={`${movie.poster_url} 1x, ${movie.poster_url.replace("/w342/", "/w780/")} 2x`}
+                  alt={`${movie.title}${movie.year ? ` (${movie.year})` : ""} movie poster`}
+                  width="200"
+                  height="300"
+                  fetchpriority="high"
+                  decoding="async"
+                />
               ) : (
                 <div class="poster card-fallback">{movie.title}</div>
               )}
@@ -1330,6 +1475,14 @@ app.get("/movie/:slug/cast", async (c) => {
       }
       canonical={`${site}/movie/${movie.slug}/cast`}
       ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+      ld={[
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Movies", url: `${site}/movies` },
+          { name: movie.title, url: `${site}/movie/${movie.slug}` },
+          { name: "Cast", url: `${site}/movie/${movie.slug}/cast` },
+        ]),
+      ]}
     >
       <h1>
         Cast of <a href={`/movie/${movie.slug}`}>{movie.title}</a>
@@ -1738,6 +1891,14 @@ app.get("/movie/:slug/compare", async (c) => {
         .join(", ")} and more — ratings, votes, runtime and streaming, side by side.`}
       canonical={`${site}/movie/${movie.slug}/compare`}
       ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+      ld={[
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Movies", url: `${site}/movies` },
+          { name: movie.title, url: `${site}/movie/${movie.slug}` },
+          { name: "Compare", url: `${site}/movie/${movie.slug}/compare` },
+        ]),
+      ]}
     >
       <h1>
         Compare <a href={`/movie/${movie.slug}`}>{movie.title}</a>
@@ -1771,7 +1932,7 @@ app.get("/movie/:slug/compare", async (c) => {
 // One matchup, settled with facts: /compare/movie/{a}-vs-{b}, alphabetical
 // canonical (reversed forms 301). "-vs-" can appear inside a slug, so every
 // split is tried until both sides resolve.
-app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
+app.get("/compare/movie/:pair{[^/]+-vs-[^/]+}", async (c) => {
   const pair = c.req.param("pair");
   let a: MovieRow | null = null;
   let b: MovieRow | null = null;
@@ -1896,7 +2057,8 @@ app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
       title={`${a.title} vs ${b.title} — which should you watch? | TV Nightly`}
       description={`${a.title} or ${b.title}? Ratings, votes, runtime and where to stream, side by side.`}
       canonical={`${site}${canonicalPath}`}
-      ogImage={a.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+      ogImage={`${site}${canonicalPath}/og.png`}
+      ogImageLarge
       ld={[
         {
           "@context": "https://schema.org",
@@ -1981,6 +2143,48 @@ app.get("/compare/movie/:pair{.+-vs-.+}", async (c) => {
       </div>
     </Layout>,
   );
+});
+
+// One OG side per film — real backdrop → poster, inlined as data URIs for resvg.
+async function movieCompareOgSide(c: AppContext, m: MovieRow): Promise<OgSide> {
+  const bd =
+    c.env.TMDB_API_KEY && m.imdb_id ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, m.imdb_id) : null;
+  const poster = m.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? null;
+  const [backdropUri, posterUri] = await Promise.all([
+    posterDataUri(bd?.x1 ?? poster),
+    posterDataUri(poster),
+  ]);
+  return { name: m.title, posterUri, backdropUri, rating: m.rating };
+}
+
+// 1200×630 head-to-head card for movie matchup unfurls — the film equivalent of
+// the show /compare/:pair/og.png card, so a shared "X vs Y" link no longer shows
+// just one poster.
+app.get("/compare/movie/:pair{[^/]+-vs-[^/]+}/og.png", async (c) => {
+  const pair = c.req.param("pair");
+  return servePng(c, `compare/movie/${pair}`, async () => {
+    let a: MovieRow | null = null;
+    let b: MovieRow | null = null;
+    let idx = pair.indexOf("-vs-");
+    while (idx !== -1) {
+      const left = pair.slice(0, idx);
+      const right = pair.slice(idx + 4);
+      const rows = await c.env.DB.prepare("SELECT * FROM movies WHERE slug IN (?, ?)")
+        .bind(left, right)
+        .all<MovieRow>();
+      const l = rows.results.find((m) => m.slug === left);
+      const r = rows.results.find((m) => m.slug === right);
+      if (l && r) {
+        a = l;
+        b = r;
+        break;
+      }
+      idx = pair.indexOf("-vs-", idx + 1);
+    }
+    if (!a || !b) return null;
+    const [sa, sb] = await Promise.all([movieCompareOgSide(c, a), movieCompareOgSide(c, b)]);
+    return buildCompareOgCard(sa, sb);
+  });
 });
 
 export default app;

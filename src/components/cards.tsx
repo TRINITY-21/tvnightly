@@ -19,13 +19,25 @@ export const StatusBadge: FC<{ status: string | null }> = ({ status }) => {
   return <span class={`badge ${cls}`}>{status ?? "Unknown"}</span>;
 };
 
-export const ShowCard: FC<{ show: ShowRow }> = ({ show }) => (
+// width/height match the CSS `aspect-ratio: 2/2.8` so the poster box is reserved
+// before the image loads (no CLS even if styles are slow); `eager` opts a known
+// above-the-fold card out of lazy-loading so it isn't deferred when it's the LCP.
+export const ShowCard: FC<{ show: ShowRow; eager?: boolean }> = ({ show, eager }) => (
   <a class="card" href={`/show/${show.slug}`}>
     <div class="card-media">
       {(() => {
         const p = posterSrc(show);
         return p ? (
-          <img src={p.src} srcset={p.srcset} alt={show.name} loading="lazy" />
+          <img
+            src={p.src}
+            srcset={p.srcset}
+            alt={show.name}
+            width="200"
+            height="280"
+            loading={eager ? "eager" : "lazy"}
+            decoding="async"
+            {...(eager ? { fetchpriority: "high" } : {})}
+          />
         ) : (
           <div class="card-fallback">{show.name}</div>
         );
@@ -44,11 +56,19 @@ export const ShowCard: FC<{ show: ShowRow }> = ({ show }) => (
   </a>
 );
 
-export const MovieCard: FC<{ movie: MovieRow }> = ({ movie }) => (
+export const MovieCard: FC<{ movie: MovieRow; eager?: boolean }> = ({ movie, eager }) => (
   <a class="card" href={`/movie/${movie.slug}`}>
     <div class="card-media">
       {movie.poster_url ? (
-        <img src={movie.poster_url} alt={movie.title} loading="lazy" />
+        <img
+          src={movie.poster_url}
+          alt={movie.title}
+          width="200"
+          height="280"
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+          {...(eager ? { fetchpriority: "high" } : {})}
+        />
       ) : (
         <div class="card-fallback">{movie.title}</div>
       )}

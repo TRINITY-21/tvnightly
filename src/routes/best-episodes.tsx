@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
-import { epCode, largeStill, longDate, stripHtml } from "../lib/format";
+import { epCode, epHref, largeStill, longDate, stripHtml } from "../lib/format";
 import { canonical, origin } from "../lib/seo";
 import { Bindings, EpisodeRow } from "../types";
 
@@ -36,6 +36,8 @@ app.get("/best-episodes", async (c) => {
         results[0] ? `, starting with ${results[0].show_name}'s "${results[0].name}"` : ""
       }.`}
       canonical={canonical(c)}
+      ogImage={results[0]?.image_url ? heroSrc(results[0].image_url) : undefined}
+      ogImageLarge={!!results[0]?.image_url}
       ld={[
         {
           "@context": "https://schema.org",
@@ -45,7 +47,8 @@ app.get("/best-episodes", async (c) => {
             "@type": "ListItem",
             position: i + 1,
             name: `${e.show_name}: ${e.name ?? epCode(e)} (${epCode(e)})`,
-            url: `${origin(c)}/show/${e.show_slug}/best-episodes`,
+            // link to the specific episode, not the show's chart page
+            url: `${origin(c)}${epHref(e.show_slug, e)}`,
           })),
         },
       ]}

@@ -10,7 +10,7 @@ import { RatedEntry, VERDICTS, VERDICT_SCALE, fmtRated, getRatedTitle, parseRate
 import { DeckCard, Pick, WhySignal, buildRecommendation, enrichDeck, landingPicks } from "../lib/recommend";
 import { servePng } from "../lib/render";
 import { foldSql, foldText } from "../lib/search";
-import { canonical, origin } from "../lib/seo";
+import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { posterDataUri } from "../lib/signal";
 import { buildOgCard } from "../lib/social";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
@@ -306,7 +306,9 @@ app.get("/recommend", async (c) => {
         <article class="rec-page rec-results">
           <header class="chart-head rec-result-head">
             <p class="section-eyebrow">{peek ? "Early read" : "Your match"}</p>
-            <h1 class="chart-h1">{primary ? (peek ? `A starting point: ${primary.name}` : `Watch ${primary.name} next`) : "Your next watch"}</h1>
+            {/* styled statement, not the page h1 — the matched title below is the
+                sole <h1> so the results view has exactly one top-level heading */}
+            <p class="chart-h1">{primary ? (peek ? `A starting point: ${primary.name}` : `Watch ${primary.name} next`) : "Your next watch"}</p>
             {tasteRead.length ? (
               <p class="rec-taste">
                 <span class="rec-taste-label">Your taste</span>
@@ -785,12 +787,23 @@ app.get("/loved", async (c) => {
     </span>
   );
 
+  const site = origin(c);
   c.header("Cache-Control", "public, max-age=900");
   return c.html(
     <Layout
       title="The most loved shows & movies on TV Nightly"
       description="Community charts built from real one-tap verdicts: what TV Nightly's raters love right now."
       canonical={canonical(c)}
+      ld={[
+        itemListLd(
+          "Most loved shows and movies",
+          board.map((r) => ({ name: r.label, url: `${site}${r.href}` })),
+        ),
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: "Most loved", url: canonical(c) },
+        ]),
+      ]}
     >
       <article class="chart-page loved">
         <header class="chart-head">

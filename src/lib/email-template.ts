@@ -37,17 +37,20 @@ export function emailButton(label: string, href: string): string {
   );
 }
 
-// the TV NIGHTLY lockup: a bordered "screen" with an amber LED + the wordmark.
-// Outlook drops the border-radius (square frame) and the LED becomes a small
-// square — still reads as the mark; the wordmark carries the brand regardless.
+// the TV NIGHTLY lockup: a bordered, TV-shaped "screen" (wider than tall, ~3:2
+// like the app's LogoMark) with the amber standby LED tucked into the LOWER-RIGHT
+// corner — matching src/components/Layout.tsx. Explicit width/height on the
+// bordered cell stops it collapsing to a square; valign=bottom + align=right +
+// the asymmetric padding seat the LED in the corner. Outlook drops the radius
+// (square frame) and squares the LED — still reads as the mark.
 function lockup(): string {
   return (
     `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>` +
     `<td style="padding-right:11px;vertical-align:middle">` +
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="34" style="width:34px">` +
-    `<tr><td height="22" align="right" valign="middle" style="height:22px;border:2px solid #f2f5fa;border-radius:6px;padding:0 5px">` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0">` +
+    `<tr><td width="28" height="19" align="right" valign="bottom" style="width:28px;height:19px;border:2px solid #f2f5fa;border-radius:6px;padding:0 5px 4px 0;font-size:0;line-height:0">` +
     `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr>` +
-    `<td width="7" height="7" bgcolor="${C.accent}" style="width:7px;height:7px;border-radius:50%;font-size:0;line-height:0">&nbsp;</td>` +
+    `<td width="6" height="6" bgcolor="${C.accent}" style="width:6px;height:6px;border-radius:50%;font-size:0;line-height:0">&nbsp;</td>` +
     `</tr></table></td></tr></table>` +
     `</td>` +
     `<td valign="middle" style="font-family:${SANS};font-size:19px;font-weight:800;letter-spacing:.09em;color:${C.text}">TV&nbsp;NIGHTLY<span style="color:${C.accent}">.</span></td>` +

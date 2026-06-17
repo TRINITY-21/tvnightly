@@ -48,9 +48,7 @@
       "database_name": "tvnightly",
       // migrations live in ./migrations, applied in order with run-once tracking.
       "migrations_dir": "migrations",
-      // Local dev works with this placeholder. Before first deploy run
-      // `wrangler d1 create tvnightly` and paste the real id here.
-      "database_id": "REPLACE_AFTER_wrangler_d1_create"
+      "database_id": "7fb8c3fa-99f4-4df1-9ccb-ab10ea0df88e"
     }
   ],
   // Workers Rate Limiting (account-local, best-effort, per-colo). Throttles the

@@ -1886,6 +1886,15 @@ a.cast-tile:hover { text-decoration: none; }
   margin: 0;
   flex: 0 0 auto;
 }
+
+/* live-TMDB title fallback (hybrid catalog: titles not yet in the mirror) */
+.tmdb-watch { display: flex; align-items: center; gap: 0.75rem; margin: 1.1rem 0 0.2rem; flex-wrap: wrap; }
+.tmdb-watch-label { font-size: 0.85rem; color: var(--muted); }
+.tmdb-watch-provs { display: inline-flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.tmdb-watch-provs img { border-radius: 8px; }
+.tmdb-watch-name { font-size: 0.85rem; color: var(--text); }
+.tmdb-note { margin-top: 2rem; font-size: 0.9rem; }
+.tmdb-note a { color: var(--accent); }
 /* ============================================================
    full cast page — editorial overlay tiles
    The headshot IS the card: it fills a portrait frame and the name +
@@ -2993,8 +3002,57 @@ button, .verdict-btn {
   border-radius: 14px;
   border: 1px solid var(--line);
   display: block;
-  margin: 1.2rem 0;
   background: var(--plate);
+}
+.studio-preview-frame {
+  position: relative;
+  display: inline-block;
+  margin: 1.2rem 0 0.4rem;
+}
+.studio-safe {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 14px;
+  overflow: hidden;
+}
+/* 168px right rail + 300px bottom strip — matches src/lib/social.ts SR / SB */
+.studio-safe::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 15.56%; /* 168 / 1080 */
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 100, 100, 0.08),
+    rgba(255, 100, 100, 0.08) 6px,
+    rgba(255, 100, 100, 0.16) 6px,
+    rgba(255, 100, 100, 0.16) 12px
+  );
+  border-left: 1px dashed rgba(255, 120, 120, 0.45);
+}
+.studio-safe::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 15.63%; /* 300 / 1920 */
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 100, 100, 0.06),
+    rgba(255, 100, 100, 0.06) 6px,
+    rgba(255, 100, 100, 0.12) 6px,
+    rgba(255, 100, 100, 0.12) 12px
+  );
+  border-top: 1px dashed rgba(255, 120, 120, 0.35);
+}
+.studio-safe-note {
+  font-size: 0.78rem;
+  margin: 0 0 0.6rem;
+  max-width: 320px;
 }
 .studio-actions {
   display: flex;
@@ -4902,6 +4960,17 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 #trend-tv:checked ~ .panel-tv,
 #trend-movies:checked ~ .panel-movies { display: block; }
 
+/* premieres hub: TV / Movie premieres reuse the discover-tab grammar */
+#prem-tv:checked ~ .discover-tablist label[for="prem-tv"],
+#prem-movies:checked ~ .discover-tablist label[for="prem-movies"] {
+  color: var(--text);
+  font-weight: 700;
+  border-bottom-color: var(--accent);
+}
+#prem-tv:checked ~ .panel-tv,
+#prem-movies:checked ~ .panel-movies { display: block; }
+.prem-tabs .discover-tablist { margin-bottom: 1.4rem; }
+
 /* tools: unified bento grid — no settings-menu list */
 .home-tools h2 { margin: 0 0 1rem; }
 .tools-bento {
@@ -5489,6 +5558,29 @@ a.prov-tile:hover { border-color: rgba(255, 255, 255, 0.18); transform: translat
 }
 .footer-cols > div {
   min-width: 0;
+}
+/* socials under the brand blurb: a row of rounded icon tiles, amber-lit on hover */
+.footer-socials { display: flex; gap: 0.6rem; margin-top: 1.2rem; }
+.footer-socials .footer-social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.footer-socials .footer-social:hover {
+  color: var(--accent);
+  border-color: rgba(255, 169, 77, 0.5);
+  background: rgba(255, 169, 77, 0.1);
+  box-shadow: 0 0 16px rgba(255, 169, 77, 0.22);
+  transform: translateY(-2px);
+  text-decoration: none;
 }
 @media (max-width: 860px) {
   .footer-cols {
@@ -7708,15 +7800,30 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
   filter: blur(64px) saturate(1.15);
   opacity: 0.45;
 }
-.srch-hero-body {
+.srch-hero-row {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  min-height: 232px;
+  padding: 1.55rem 1.75rem 1.45rem;
+}
+.srch-poster {
+  flex: 0 0 auto;
+  width: 128px;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-2);
+}
+.srch-hero-body {
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 0.4rem;
-  max-width: 46rem;
-  min-height: 232px;
-  padding: 1.55rem 1.75rem 1.45rem;
+  min-width: 0;
+  max-width: 42rem;
 }
 .srch-kicker {
   margin: 0;
@@ -7831,6 +7938,9 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
     padding-top: 4.2rem;
     justify-content: flex-end;
   }
+  /* the poster is a desktop affordance — mobile keeps the 16:9 banner layout */
+  .srch-hero-row { display: block; padding: 0; min-height: 0; }
+  .srch-poster { display: none; }
   .srch-hero-title { font-size: 1.5rem; }
   /* keep the CTA label and its chevron together, vertically aligned —
      inline flow was orphaning the arrow onto its own line */
@@ -8263,6 +8373,15 @@ a.sig-read-name:hover { color: var(--accent); text-decoration: none; }
 /* ---- /movies/upcoming: theatrical release radar -------------------------
    Hero + headline card + opening-soon shelf + monthly rows — same grammar
    as premieres and the chart pages, tuned for films without slugs yet. */
+
+/* premieres hub: the TV / Movies band dividers — bigger, amber, room above so
+   the two regions read as distinct halves of one page (no card chrome). */
+.premiere-band {
+  font-size: 0.86rem;
+  color: var(--accent);
+  margin: 2.6rem 0 1.1rem;
+}
+.premiere-band:first-of-type { margin-top: 1.6rem; }
 
 .wo-hero .wo-hero-body {
   min-height: 15rem;

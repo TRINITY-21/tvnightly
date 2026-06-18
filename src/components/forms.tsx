@@ -1,6 +1,7 @@
 // Interactive fragments: verdict buttons, alert signup, filter dropdowns.
 import { FC } from "hono/jsx";
 import { FaceLove, FaceLike, FaceMeh, FaceAwful } from "./icons";
+import { Honeypot } from "./Layout";
 
 /** One-tap verdict buttons + community stat — every title page collects data.
  *  rate.js intercepts the submit and records the verdict in place (no nav). */
@@ -46,6 +47,7 @@ export const SubscribeForm: FC<{ showId: number; label: string }> = ({ showId, l
       <input id="sub-email" type="email" name="email" placeholder="you@example.com" required />
       <button type="submit">Notify me</button>
     </div>
+    <Honeypot />
   </form>
 );
 

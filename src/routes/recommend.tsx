@@ -1,12 +1,13 @@
 import { Hono } from "hono";
 import { Child, FC } from "hono/jsx";
-import { Layout } from "../components/Layout";
+import { Layout, Honeypot } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
 import { IconStar, IconStarBadge } from "../components/icons";
 import { ShareBar } from "../components/share";
 import { ipHash } from "../lib/crypto";
 import { heroBg, hiRes, retinaSet } from "../lib/format";
 import { RatedEntry, VERDICTS, VERDICT_SCALE, fmtRated, getRatedTitle, parseRated } from "../lib/ratings";
+import { isTmdbRef, materializeTmdbTitle } from "../lib/materialize";
 import { DeckCard, Pick, WhySignal, buildRecommendation, enrichDeck, landingPicks } from "../lib/recommend";
 import { servePng } from "../lib/render";
 import { foldSql, foldText } from "../lib/search";
@@ -168,6 +169,7 @@ const RecEmail: FC = () => (
       <input id="rec-email" type="email" name="email" placeholder="you@example.com" required />
       <button type="submit">Notify me</button>
     </div>
+    <Honeypot />
   </form>
 );
 
@@ -662,6 +664,11 @@ app.post("/recommend", async (c) => {
   const ajax = body.ajax != null;
   const col = VERDICTS[verdict];
   if (!col || (kind !== "tv" && kind !== "movie")) return ajax ? c.body(null, 400) : c.notFound();
+  // materialize-on-write: a live-TMDB title (ref "t<id>") joins our engaged set the
+  // moment it's rated, so its snapshot exists for getRatedTitle + community lists.
+  if (isTmdbRef(ref) && c.env.TMDB_API_KEY) {
+    await materializeTmdbTitle(c.env.DB, c.env.TMDB_API_KEY, kind, Number(ref.slice(1)));
+  }
   const title = await getRatedTitle(c.env.DB, kind, ref);
   if (!title) return ajax ? c.body(null, 404) : c.notFound();
 
@@ -709,8 +716,10 @@ app.get("/loved", async (c) => {
     )
     .all<{ kind: string; ref: string; loved: number; liked: number; meh: number; awful: number; total: number; score: number }>();
 
-  const showIds = rows.filter((r) => r.kind === "tv").map((r) => Number(r.ref));
-  const movieIds = rows.filter((r) => r.kind === "movie").map((r) => r.ref);
+  const isSnap = (ref: string) => /^t\d+$/.test(ref); // materialized live-TMDB title
+  const showIds = rows.filter((r) => r.kind === "tv" && !isSnap(r.ref)).map((r) => Number(r.ref));
+  const movieIds = rows.filter((r) => r.kind === "movie" && !isSnap(r.ref)).map((r) => r.ref);
+  const snapRefs = rows.filter((r) => isSnap(r.ref));
   const shows = showIds.length
     ? (
         await db
@@ -732,25 +741,40 @@ app.get("/loved", async (c) => {
           .all<{ imdb_id: string; title: string; year: number | null; slug: string; poster_url: string | null }>()
       ).results
     : [];
+  // materialized live-TMDB titles live in title_snapshots, not the mirror
+  const snaps = snapRefs.length
+    ? (
+        await db
+          .prepare(
+            `SELECT kind, ref, name, year, slug, poster_url, tmdb_id FROM title_snapshots
+             WHERE ref IN (${snapRefs.map(() => "?").join(",")})`,
+          )
+          .bind(...snapRefs.map((r) => r.ref))
+          .all<{ kind: string; ref: string; name: string; year: string | null; slug: string; poster_url: string | null; tmdb_id: number }>()
+      ).results
+    : [];
   const showMap = new Map(shows.map((s) => [String(s.id), s]));
   const movieMap = new Map(movies.map((m) => [m.imdb_id, m]));
+  const snapMap = new Map(snaps.map((s) => [`${s.kind}:${s.ref}`, s]));
 
-  // one resolved view per chart row; rows whose title left the mirror drop out
+  // one resolved view per chart row; rows whose title we can't resolve drop out
   const board = rows
     .map((r) => {
-      const s = r.kind === "tv" ? showMap.get(r.ref) : undefined;
-      const m = r.kind === "movie" ? movieMap.get(r.ref) : undefined;
-      if (!s && !m) return null;
+      const snap = isSnap(r.ref) ? snapMap.get(`${r.kind}:${r.ref}`) : undefined;
+      const s = !snap && r.kind === "tv" ? showMap.get(r.ref) : undefined;
+      const m = !snap && r.kind === "movie" ? movieMap.get(r.ref) : undefined;
+      if (!s && !m && !snap) return null;
+      const slug = s ? s.slug : m ? m.slug : snap!.slug;
       return {
         ...r,
-        href: s ? `/show/${s.slug}` : `/movie/${m!.slug}`,
-        label: s ? s.name : m!.title,
-        year: s ? null : (m?.year ?? null),
-        kindLabel: s ? "TV show" : "Movie",
-        poster: s ? s.poster : (m?.poster_url ?? null),
-        tmdbId: s?.tmdb_id ?? null,
+        href: `/${r.kind === "tv" ? "show" : "movie"}/${slug}`,
+        label: s ? s.name : m ? m.title : snap!.name,
+        year: r.kind !== "movie" ? null : (m?.year ?? (snap?.year ? Number(snap.year) : null)),
+        kindLabel: r.kind === "tv" ? "TV show" : "Movie",
+        poster: s ? s.poster : m ? (m.poster_url ?? null) : (snap?.poster_url ?? null),
+        tmdbId: s?.tmdb_id ?? snap?.tmdb_id ?? null,
         imdbId: m?.imdb_id ?? null,
-        ambientSrc: s ? hiRes(s.image_url) : (m?.poster_url ?? null),
+        ambientSrc: s ? hiRes(s.image_url) : m ? (m.poster_url ?? null) : (snap?.poster_url ?? null),
       };
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);

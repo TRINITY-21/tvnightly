@@ -3,6 +3,7 @@ import { Bindings } from "../types";
 import { origin } from "../lib/seo";
 import { MessagePage } from "../components/Layout";
 import { signToken, verifyToken } from "../tokens";
+import { materializeShow } from "../lib/tmdb-show";
 import { sendEmails } from "../email";
 import { EMAIL, emailButton, emailShell } from "../lib/email-template";
 
@@ -15,6 +16,18 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 app.post("/subscribe", async (c) => {
   const body = await c.req.parseBody();
+
+  // Honeypot: real visitors never see/fill this off-screen field; bots fill every
+  // input. Pretend success so the bot doesn't learn it was caught — subscribe nobody.
+  if (String(body.website ?? "").trim()) {
+    return c.html(
+      <MessagePage
+        title="Almost there"
+        body="Check your inbox and click the confirmation link to activate your alerts."
+      />,
+    );
+  }
+
   const email = String(body.email ?? "").trim().toLowerCase();
   const kind = String(body.kind ?? "");
   const showId = body.show_id ? Number(body.show_id) : null;
@@ -25,11 +38,24 @@ app.post("/subscribe", async (c) => {
       400,
     );
   }
-  const show = showId
+
+  let realId = showId;
+  let show = showId
     ? await c.env.DB.prepare("SELECT id, name FROM shows WHERE id = ?")
         .bind(showId)
         .first<{ id: number; name: string }>()
     : null;
+  // live-only show: the form carries its tmdb id — materialize it into D1 (the
+  // "save on engagement" rule) so the subscription has a real row to hang on.
+  if (showId && !show && c.env.TMDB_API_KEY) {
+    const mid = await materializeShow(c, showId);
+    if (mid) {
+      realId = mid;
+      show = await c.env.DB.prepare("SELECT id, name FROM shows WHERE id = ?")
+        .bind(mid)
+        .first<{ id: number; name: string }>();
+    }
+  }
   if (showId && !show) return c.notFound();
 
   // Without a SECRET (fresh local dev) skip double opt-in so the flow still works.
@@ -39,11 +65,11 @@ app.post("/subscribe", async (c) => {
      VALUES (?,?,?,?,unixepoch())
      ON CONFLICT(email, show_id, kind) DO NOTHING`,
   )
-    .bind(email, showId, kind, confirmed)
+    .bind(email, realId, kind, confirmed)
     .run();
 
   if (c.env.SECRET) {
-    const token = await signToken({ email, showId, kind, action: "confirm" }, c.env.SECRET);
+    const token = await signToken({ email, showId: realId, kind, action: "confirm" }, c.env.SECRET);
     const what =
       kind === "daily" ? "the TV Nightly daily email" : `${show!.name} renewal & schedule alerts`;
     const confirmUrl = `${origin(c)}/confirm?token=${token}`;

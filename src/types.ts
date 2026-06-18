@@ -15,6 +15,9 @@ export type Bindings = SyncEnv & {
   APPLE_AFFILIATE_TOKEN?: string;
   // where /feedback submissions are emailed; falls back to EMAIL_FROM. Unset = D1 only.
   FEEDBACK_TO?: string;
+  // Reply-To on outbound mail — a monitored inbox so replies reach a human, not the
+  // alerts sender. Forwarded to the team inbox via Cloudflare Email Routing.
+  EMAIL_REPLY_TO?: string;
   // Basic-auth password for /admin/* (username "admin"). Unset = admin disabled.
   ADMIN_KEY?: string;
   // Workers Rate Limiting (account-local, best-effort, per-colo; see wrangler.jsonc).
@@ -54,6 +57,7 @@ export interface ShowRow {
   cast_json: string | null; // JSON array: {n: name, c: character, img: headshot}
   providers_intl: string | null; // JSON object: country code -> service names
   tmdb_id: number | null; // bridged from TVmaze external ids (provider patrol)
+  type: string | null; // TVmaze classification: Scripted, Animation, Reality, Talk Show, News, …
 }
 
 export interface EpisodeRow {

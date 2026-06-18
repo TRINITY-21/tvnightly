@@ -41,8 +41,9 @@ async function get(path, params = "") {
   return res.json();
 }
 
+const ONLY_NEW = process.env.ONLY_NEW ? "AND tmdb_id IS NULL" : "";
 const raw = execSync(
-  `npx wrangler d1 execute tvnightly ${TARGET} --json --command "SELECT id, name, imdb_id, tvdb_id FROM shows WHERE (imdb_id IS NOT NULL OR tvdb_id IS NOT NULL) ORDER BY weight DESC LIMIT ${TOP}"`,
+  `npx wrangler d1 execute tvnightly ${TARGET} --json --command "SELECT id, name, imdb_id, tvdb_id FROM shows WHERE (imdb_id IS NOT NULL OR tvdb_id IS NOT NULL) ${ONLY_NEW} ORDER BY weight DESC LIMIT ${TOP}"`,
   { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
 );
 const shows = JSON.parse(raw)[0].results;

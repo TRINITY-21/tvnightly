@@ -2,9 +2,10 @@ import { Hono } from "hono";
 import { IconStar, IconInstagram, IconX, IconGlobe } from "../components/icons";
 import { Context } from "hono";
 import { Bindings, ShowRow, MovieRow, PersonRow } from "../types";
-import { stripHtml, slugifyName, retinaSet, longDate, ageOf } from "../lib/format";
+import { stripHtml, slugifyName, headshot, longDate, ageOf } from "../lib/format";
+import { tmdbPersonData, tmdbPersonByName, TMDB_PERSON_OFFSET, resolveShow } from "../lib/tmdb-show";
 import { origin, canonical, breadcrumbLd, breadcrumbTrail } from "../lib/seo";
-import { getShow, crewLinkMap } from "../lib/queries";
+import { crewLinkMap } from "../lib/queries";
 import { Layout } from "../components/Layout";
 import { ShowTabs, SeasonTabs } from "../components/nav";
 import { ClampSummary, ExploreCard } from "../components/cards";
@@ -110,7 +111,9 @@ const CrewGrid = ({
       <div class="guest-list">
         {crew.map((p) => {
           const img = p.profile_path ? `https://image.tmdb.org/t/p/w185${p.profile_path}` : null;
-          const pid = links?.get(p.id);
+          // a mirrored crew member links to their canonical page; everyone else
+          // resolves live via the TMDB person fallback (10M + their TMDB id)
+          const pid = links?.get(p.id) ?? (p.id ? TMDB_PERSON_OFFSET + p.id : null);
           const inner = (
             <>
               {img ? (
@@ -197,7 +200,9 @@ async function seasonCastPage(
           </p>
           <div class="cast-grid">
             {cast.map((p) => {
-              const id = linkable.get(p.name.toLowerCase());
+              const id =
+                linkable.get(p.name.toLowerCase()) ??
+                (p.id ? TMDB_PERSON_OFFSET + p.id : null);
               const img = p.profile_path
                 ? `https://image.tmdb.org/t/p/w342${p.profile_path}`
                 : null;
@@ -248,10 +253,19 @@ async function seasonCastPage(
 }
 
 app.get("/show/:slug/cast", async (c) => {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
+  const resolved = await resolveShow(c, c.req.param("slug"));
+  if (!resolved) return c.notFound();
+  const show = resolved.show;
+  type CreditRow = PersonRow & {
+    character: string | null;
+    voice: number;
+    episodes: number | null;
+    guest: number;
+  };
   const rawSeason = (c.req.query("season") ?? "").trim();
   if (rawSeason !== "") {
+    // live-TMDB titles have no per-season credit table; fold to the full cast
+    if (resolved.isTmdb) return c.redirect(`/show/${show.slug}/cast`, 301);
     const { results: seasonRows } = await c.env.DB.prepare(
       "SELECT DISTINCT season AS s FROM episodes WHERE show_id = ? AND season IS NOT NULL ORDER BY season",
     )
@@ -263,20 +277,39 @@ app.get("/show/:slug/cast", async (c) => {
       return c.redirect(`/show/${show.slug}/cast`, 301);
     return seasonCastPage(c, show, sn, sn === Math.max(...seasons));
   }
-  type CreditRow = PersonRow & {
-    character: string | null;
-    voice: number;
-    episodes: number | null;
-    guest: number;
-  };
-  const { results: credits } = await c.env.DB.prepare(
-    `SELECT p.*, cr.character, cr.voice, cr.episodes, cr.guest
-     FROM credits cr JOIN people p ON p.id = cr.person_id
-     WHERE cr.show_id = ?
-     ORDER BY cr.guest ASC, cr.episodes DESC, p.name`,
-  )
-    .bind(show.id)
-    .all<CreditRow>();
+  let credits: CreditRow[];
+  if (resolved.isTmdb) {
+    const cast = show.cast_json
+      ? (JSON.parse(show.cast_json) as {
+          id: number;
+          n: string;
+          c: string | null;
+          img: string | null;
+        }[])
+      : [];
+    credits = cast.map(
+      (p) =>
+        ({
+          id: p.id,
+          name: p.n,
+          image_url: p.img,
+          character: p.c,
+          voice: 0,
+          episodes: null,
+          guest: 0,
+        }) as unknown as CreditRow,
+    );
+  } else {
+    const res = await c.env.DB.prepare(
+      `SELECT p.*, cr.character, cr.voice, cr.episodes, cr.guest
+       FROM credits cr JOIN people p ON p.id = cr.person_id
+       WHERE cr.show_id = ?
+       ORDER BY cr.guest ASC, cr.episodes DESC, p.name`,
+    )
+      .bind(show.id)
+      .all<CreditRow>();
+    credits = res.results;
+  }
   const main = credits.filter((r) => !r.guest);
   const guests = credits.filter((r) => r.guest);
   const crew =
@@ -313,11 +346,14 @@ app.get("/show/:slug/cast", async (c) => {
             {main.map((p) => {
               return (
                 <a class="cast-tile" href={`/person/${slugifyName(p.name)}-${p.id}`}>
-                  {p.image_url ? (
-                    <img src={p.image_url} srcset={retinaSet(p.image_url)} alt={p.name} loading="lazy" />
-                  ) : (
-                    <div class="cast-fallback">{p.name}</div>
-                  )}
+                  {(() => {
+                    const h = headshot(p.image_url);
+                    return h ? (
+                      <img src={h.src} srcset={h.srcset} alt={p.name} loading="lazy" />
+                    ) : (
+                      <div class="cast-fallback">{p.name}</div>
+                    );
+                  })()}
                   {p.episodes ? (
                     <span class="cast-eps">
                       {p.episodes} ep{p.episodes === 1 ? "" : "s"}
@@ -342,13 +378,16 @@ app.get("/show/:slug/cast", async (c) => {
           <div class="guest-list">
             {guests.map((p) => (
               <a class="guest-row" href={`/person/${slugifyName(p.name)}-${p.id}`}>
-                {p.image_url ? (
-                  <img src={p.image_url} alt={p.name} loading="lazy" />
-                ) : (
-                  <span class="guest-fallback" aria-hidden="true">
-                    {p.name.slice(0, 1)}
-                  </span>
-                )}
+                {(() => {
+                  const h = headshot(p.image_url);
+                  return h ? (
+                    <img src={h.src} srcset={h.srcset} alt={p.name} loading="lazy" />
+                  ) : (
+                    <span class="guest-fallback" aria-hidden="true">
+                      {p.name.slice(0, 1)}
+                    </span>
+                  );
+                })()}
                 <span class="guest-who">
                   <span class="guest-name">{p.name}</span>
                   {p.character ? <span class="guest-char muted">as {p.character}</span> : null}
@@ -372,31 +411,104 @@ app.get("/person/:slug", async (c) => {
   const slug = c.req.param("slug");
   const idMatch = /-(\d+)$/.exec(slug);
   if (!idMatch) return c.notFound();
-  const person = await c.env.DB.prepare("SELECT * FROM people WHERE id = ?")
-    .bind(Number(idMatch[1]))
-    .first<PersonRow>();
-  if (!person) return c.notFound();
+  const pid = Number(idMatch[1]);
+  let person = await c.env.DB.prepare("SELECT * FROM people WHERE id = ?").bind(pid).first<PersonRow>();
+  let roles: (ShowRow & { character: string | null; voice: number; episodes: number | null })[];
+  let films: (MovieRow & { character: string | null })[];
+  if (person) {
+    const [r, f] = await Promise.all([
+      c.env.DB.prepare(
+        `SELECT cr.character, cr.voice, cr.episodes, s.*
+         FROM credits cr JOIN shows s ON s.id = cr.show_id
+         WHERE cr.person_id = ?
+         ORDER BY s.rating IS NULL, s.rating DESC, cr.episodes DESC LIMIT 50`,
+      )
+        .bind(person.id)
+        .all<ShowRow & { character: string | null; voice: number; episodes: number | null }>(),
+      c.env.DB.prepare(
+        `SELECT mc.character, m.* FROM movie_credits mc JOIN movies m ON m.imdb_id = mc.movie_id
+         WHERE mc.person_id = ?
+         ORDER BY m.rating IS NULL, m.rating DESC, m.popularity DESC LIMIT 50`,
+      )
+        .bind(person.id)
+        .all<MovieRow & { character: string | null }>(),
+    ]);
+    roles = r.results;
+    films = f.results;
+    // our D1 credits table only mirrors a slice of the catalogue, so a mirrored
+    // person would otherwise show 1–2 titles. Fill out the rest of their real
+    // filmography from TMDB, keeping D1 rows (canonical slug + community data)
+    // wherever a title is already mirrored. People are TVmaze-seeded with no
+    // tmdb_id, so we resolve by name, verified against titles we already know.
+    {
+      // match on the normalized title, not the D1 slug — a mirrored slug can carry
+      // a disambiguation suffix (the-office-us) that TMDB's name-slug won't have
+      const knownSlugs = new Set<string>([
+        ...roles.map((r) => slugifyName(r.name)),
+        ...films.map((m) => slugifyName(m.title)),
+      ]);
+      const extra = person.tmdb_id
+        ? await tmdbPersonData(c, person.tmdb_id)
+        : await tmdbPersonByName(c, person.name, knownSlugs);
+      if (extra) {
+        // overlay TMDB's bio/profile onto the D1 person wherever we hold nothing —
+        // our people are TVmaze-seeded with no biography, birthday or socials
+        const t = extra.person;
+        person = {
+          ...person,
+          bio: person.bio ?? t.bio,
+          birthday: person.birthday ?? t.birthday,
+          deathday: person.deathday ?? t.deathday,
+          birthplace: person.birthplace ?? t.birthplace,
+          country: person.country ?? t.country,
+          image_url: person.image_url ?? t.image_url,
+          known_dept: person.known_dept ?? t.known_dept,
+          tmdb_id: person.tmdb_id ?? t.tmdb_id,
+          imdb_id: person.imdb_id ?? t.imdb_id,
+          socials: person.socials ?? t.socials,
+          homepage: person.homepage ?? t.homepage,
+        };
+        const haveShow = new Set<string>();
+        for (const x of roles) {
+          if (x.tmdb_id != null) haveShow.add(`t${x.tmdb_id}`);
+          haveShow.add(`s${x.slug}`);
+        }
+        const haveFilm = new Set<string>();
+        for (const x of films) {
+          if (x.tmdb_id != null) haveFilm.add(`t${x.tmdb_id}`);
+          haveFilm.add(`s${x.slug}`);
+        }
+        // mirrored (D1) titles carry our community data, so they're always kept;
+        // TMDB extras only fill the remaining slots up to the display cap.
+        const byRating = (a: { rating: number | null }, b: { rating: number | null }) =>
+          (b.rating ?? -1) - (a.rating ?? -1);
+        const extraRoles = extra.roles
+          .filter((x) => !haveShow.has(`t${x.tmdb_id}`) && !haveShow.has(`s${x.slug}`))
+          .sort((a, b) => byRating(a, b) || (b.episodes ?? 0) - (a.episodes ?? 0));
+        roles = [...roles, ...extraRoles.slice(0, Math.max(0, 40 - roles.length))].sort(
+          (a, b) => byRating(a, b) || (b.episodes ?? 0) - (a.episodes ?? 0),
+        );
+        const extraFilms = extra.films
+          .filter((x) => !haveFilm.has(`t${x.tmdb_id}`) && !haveFilm.has(`s${x.slug}`))
+          .sort((a, b) => byRating(a, b) || (b.popularity ?? 0) - (a.popularity ?? 0));
+        films = [...films, ...extraFilms.slice(0, Math.max(0, 30 - films.length))].sort(
+          (a, b) => byRating(a, b) || (b.popularity ?? 0) - (a.popularity ?? 0),
+        );
+      }
+    }
+  } else if (pid >= TMDB_PERSON_OFFSET) {
+    // hybrid: build the SAME person page live from TMDB when not mirrored
+    const built = await tmdbPersonData(c, pid - TMDB_PERSON_OFFSET);
+    if (!built) return c.notFound();
+    person = built.person;
+    roles = built.roles;
+    films = built.films;
+  } else {
+    return c.notFound();
+  }
   // one canonical URL per person — name drift 301s home
   const canonicalSlug = `${slugifyName(person.name)}-${person.id}`;
   if (slug !== canonicalSlug) return c.redirect(`/person/${canonicalSlug}`, 301);
-
-  const [{ results: roles }, { results: films }] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT cr.character, cr.voice, cr.episodes, s.*
-       FROM credits cr JOIN shows s ON s.id = cr.show_id
-       WHERE cr.person_id = ?
-       ORDER BY s.rating IS NULL, s.rating DESC, cr.episodes DESC LIMIT 24`,
-    )
-      .bind(person.id)
-      .all<ShowRow & { character: string | null; voice: number; episodes: number | null }>(),
-    c.env.DB.prepare(
-      `SELECT mc.character, m.* FROM movie_credits mc JOIN movies m ON m.imdb_id = mc.movie_id
-       WHERE mc.person_id = ?
-       ORDER BY m.rating IS NULL, m.rating DESC, m.popularity DESC LIMIT 18`,
-    )
-      .bind(person.id)
-      .all<MovieRow & { character: string | null }>(),
-  ]);
   const socials: { ig?: string; tw?: string } = person.socials ? JSON.parse(person.socials) : {};
 
   // the stat band — everything from our own mirror
@@ -525,11 +637,14 @@ app.get("/person/:slug", async (c) => {
           ) : null}
           <div class="detail-head">
             <div class="detail-side">
-              {person.image_url ? (
-                <img class="poster" src={person.image_url} srcset={retinaSet(person.image_url)} alt={person.name} />
-              ) : (
-                <div class="poster card-fallback">{person.name}</div>
-              )}
+              {(() => {
+                const h = headshot(person.image_url, true);
+                return h ? (
+                  <img class="poster" src={h.src} srcset={h.srcset} alt={person.name} />
+                ) : (
+                  <div class="poster card-fallback">{person.name}</div>
+                );
+              })()}
               {socials.ig || socials.tw || person.homepage ? (
                 <div class="soc-links">
                   {socials.ig ? (

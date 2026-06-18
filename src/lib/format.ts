@@ -79,6 +79,28 @@ export const retinaSet = (_url: string | null): string | undefined => undefined;
 export const largeStill = (url: string): string =>
   url.replace("/medium_landscape/", "/large_landscape/");
 
+/** A person headshot at the right resolution for its slot. Both sources cap low
+ *  (TVmaze `medium` ~210px, TMDB `w185`), so large slots upscale to mush. We
+ *  derive the sharp sibling instead of re-seeding: TMDB resizes cleanly
+ *  (w342 + an h632 retina), TVmaze only has the unbounded original — worth it for
+ *  the single hero headshot, too heavy per thumbnail (so thumbs keep the medium).
+ *  `big` marks the hero/poster slot. */
+export const headshot = (
+  url: string | null,
+  big = false,
+): { src: string; srcset?: string } | null => {
+  if (!url) return null;
+  if (/\/t\/p\/w\d+\//.test(url)) {
+    const at = (s: string) => url.replace(/\/t\/p\/w\d+\//, `/t/p/${s}/`);
+    return big
+      ? { src: at("w342"), srcset: `${at("w342")} 1x, ${at("h632")} 2x` }
+      : { src: at("w185"), srcset: `${at("w185")} 1x, ${at("w342")} 2x` };
+  }
+  if (url.includes("/medium_portrait/"))
+    return big ? { src: url.replace("/medium_portrait/", "/original_untouched/") } : { src: url };
+  return { src: url };
+};
+
 /** ONE poster per show, everywhere: the backfilled TMDB one-sheet when the
  *  bridge exists, the TVmaze poster otherwise — same art on cards, heroes,
  *  and ledger rows. */

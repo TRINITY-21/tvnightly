@@ -258,7 +258,9 @@ app.get("/watch-order/:slug", async (c) => {
         )}
         <span class="wo-main">
           <span class="wo-title">
-            {m ? <a href={`/movie/${m.slug}`}>{e.title}</a> : <strong>{e.title}</strong>}{" "}
+            {/* link every entry — unmatched ones resolve live via the detail
+                page's TMDB fallback rather than rendering as dead text */}
+            <a href={`/movie/${m?.slug ?? slugifyName(e.title)}`}>{e.title}</a>{" "}
             <span class="muted">({e.year})</span>
             {e.note ? <span class="why-tag">{e.note}</span> : null}
           </span>

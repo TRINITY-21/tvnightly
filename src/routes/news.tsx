@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { Layout } from "../components/Layout";
+import { Layout, Honeypot } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
 import { FilterSelect } from "../components/forms";
 import { NEWS_TABS, SubNav } from "../components/nav";
@@ -204,6 +204,7 @@ app.get("/renewals", async (c) => {
           <label for="wire-email">Renewals and premieres in your inbox every evening:</label>
           <input id="wire-email" type="email" name="email" placeholder="you@example.com" required />
           <button type="submit">Sign me up</button>
+          <Honeypot />
         </form>
       </div>
     </Layout>,
@@ -395,6 +396,7 @@ app.get("/whats-new", async (c) => {
           <label for="shuffle-email">Get the streaming shuffle in your inbox every evening:</label>
           <input id="shuffle-email" type="email" name="email" placeholder="you@example.com" required />
           <button type="submit">Sign me up</button>
+          <Honeypot />
         </form>
       </div>
     </Layout>,

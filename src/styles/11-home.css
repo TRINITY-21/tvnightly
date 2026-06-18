@@ -676,6 +676,17 @@
 #trend-tv:checked ~ .panel-tv,
 #trend-movies:checked ~ .panel-movies { display: block; }
 
+/* premieres hub: TV / Movie premieres reuse the discover-tab grammar */
+#prem-tv:checked ~ .discover-tablist label[for="prem-tv"],
+#prem-movies:checked ~ .discover-tablist label[for="prem-movies"] {
+  color: var(--text);
+  font-weight: 700;
+  border-bottom-color: var(--accent);
+}
+#prem-tv:checked ~ .panel-tv,
+#prem-movies:checked ~ .panel-movies { display: block; }
+.prem-tabs .discover-tablist { margin-bottom: 1.4rem; }
+
 /* tools: unified bento grid — no settings-menu list */
 .home-tools h2 { margin: 0 0 1rem; }
 .tools-bento {

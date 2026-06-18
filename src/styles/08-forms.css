@@ -414,8 +414,57 @@ button, .verdict-btn {
   border-radius: 14px;
   border: 1px solid var(--line);
   display: block;
-  margin: 1.2rem 0;
   background: var(--plate);
+}
+.studio-preview-frame {
+  position: relative;
+  display: inline-block;
+  margin: 1.2rem 0 0.4rem;
+}
+.studio-safe {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 14px;
+  overflow: hidden;
+}
+/* 168px right rail + 300px bottom strip — matches src/lib/social.ts SR / SB */
+.studio-safe::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 15.56%; /* 168 / 1080 */
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 100, 100, 0.08),
+    rgba(255, 100, 100, 0.08) 6px,
+    rgba(255, 100, 100, 0.16) 6px,
+    rgba(255, 100, 100, 0.16) 12px
+  );
+  border-left: 1px dashed rgba(255, 120, 120, 0.45);
+}
+.studio-safe::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 15.63%; /* 300 / 1920 */
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 100, 100, 0.06),
+    rgba(255, 100, 100, 0.06) 6px,
+    rgba(255, 100, 100, 0.12) 6px,
+    rgba(255, 100, 100, 0.12) 12px
+  );
+  border-top: 1px dashed rgba(255, 120, 120, 0.35);
+}
+.studio-safe-note {
+  font-size: 0.78rem;
+  margin: 0 0 0.6rem;
+  max-width: 320px;
 }
 .studio-actions {
   display: flex;

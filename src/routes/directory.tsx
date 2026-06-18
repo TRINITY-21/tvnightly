@@ -8,9 +8,20 @@ import { FRANCHISE_BY_SLUG } from "../lib/franchises";
 import { networkLogo, networkLogoForBrand, providerBrand, visitorRegion } from "../lib/providers";
 import { genreDirectory, networkDirectory } from "../lib/queries";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
-import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import {
+  tmdbBackdrop,
+  tmdbMovieBackdrop,
+  tmdbTopRated,
+  tmdbDiscoverGenre,
+  tmdbDiscoverProvider,
+  tmdbGenreId,
+} from "../lib/tmdb";
+import { toShowRow, toMovieRow } from "../lib/tmdb-rows";
 import { VERTICALS, Vertical, genreBinds, genreOr, hubForGenres } from "../lib/verticals";
 import { Bindings, MovieRow, ShowRow } from "../types";
+
+// minimal context shape the live-blend helpers need (DB + TMDB key)
+type Ctx = { env: Bindings };
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -791,10 +802,25 @@ app.get("/lists", async (c) => {
 });
 
 app.get("/top/tv", async (c) => {
-  const { results } = await c.env.DB.prepare(
-    `SELECT * FROM shows WHERE rating IS NOT NULL AND weight >= 75
-     ORDER BY rating DESC, weight DESC LIMIT 100`,
-  ).all<ShowRow>();
+  const d1 = (
+    await c.env.DB.prepare(
+      `SELECT * FROM shows WHERE rating IS NOT NULL AND weight >= 75
+       ORDER BY rating DESC, weight DESC LIMIT 100`,
+    ).all<ShowRow>()
+  ).results;
+  // blend in TMDB's all-time top-rated chart so the ranking spans the live
+  // catalogue, not just our mirror; dedupe by tmdb id, re-rank by rating
+  let results = d1;
+  if (c.env.TMDB_API_KEY) {
+    const seen = new Set(d1.map((s) => s.tmdb_id).filter(Boolean));
+    const live = (await tmdbTopRated(c.env.TMDB_API_KEY, "tv"))
+      .map(toShowRow)
+      .filter((s) => !seen.has(s.tmdb_id));
+    results = [...d1, ...live]
+      .filter((s) => s.rating != null)
+      .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+      .slice(0, 100);
+  }
 
   const showYear = (s: ShowRow) => (s.premiered ? s.premiered.slice(0, 4) : null);
   const showHome = (s: ShowRow) => s.network ?? s.web_channel ?? null;
@@ -1305,12 +1331,31 @@ const regionTester = (region: string, brandName: string) => {
 /** A brand's shows are its originals AND its regional catalog, merged —
  *  "Top Hulu shows" must contain the show whose receipt said "Streaming
  *  on Hulu", not just Hulu originals; FX simply has no catalog side. */
+// confident US watch-provider ids for the big streamers — unmapped brands stay
+// D1-only (a wrong id would surface the wrong catalog, worse than a thin page)
+const TMDB_PROVIDER_IDS: Record<string, number> = {
+  netflix: 8,
+  hulu: 15,
+  "disney-plus": 337,
+  max: 1899,
+  "hbo-max": 1899,
+  "amazon-prime-video": 9,
+  "prime-video": 9,
+  "apple-tv-plus": 350,
+  "paramount-plus": 531,
+  peacock: 386,
+};
+const tmdbProviderId = (name: string): number | null =>
+  TMDB_PROVIDER_IDS[slugifyName(providerBrand(name))] ?? null;
+
 async function topNetworkShows(
-  db: D1Database,
+  c: Ctx,
   entry: NetEntry,
+  region: string,
   regionHas: (json: string | null) => boolean,
   limit: number,
 ): Promise<ShowRow[]> {
+  const db = c.env.DB;
   const [byNet, pool] = await Promise.all([
     db
       .prepare(
@@ -1327,24 +1372,44 @@ async function topNetworkShows(
       .all<ShowRow>(),
   ]);
   const seen = new Set<number>();
-  return [...byNet.results, ...pool.results.filter((s) => regionHas(s.providers_intl))]
+  let merged = [...byNet.results, ...pool.results.filter((s) => regionHas(s.providers_intl))]
     .filter((s) => !seen.has(s.id) && seen.add(s.id))
-    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.weight ?? 0) - (a.weight ?? 0))
-    .slice(0, limit);
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.weight ?? 0) - (a.weight ?? 0));
+  // blend the live catalogue for the major streamers we can id confidently
+  const pid = c.env.TMDB_API_KEY ? tmdbProviderId(entry.name) : null;
+  if (pid) {
+    const seenTmdb = new Set(merged.map((s) => s.tmdb_id).filter(Boolean));
+    const live = (await tmdbDiscoverProvider(c.env.TMDB_API_KEY!, "tv", pid, region))
+      .map(toShowRow)
+      .filter((s) => !seenTmdb.has(s.tmdb_id));
+    merged = [...merged, ...live];
+  }
+  return merged.slice(0, limit);
 }
 
 async function topNetworkMovies(
-  db: D1Database,
+  c: Ctx,
+  entry: NetEntry,
+  region: string,
   regionHas: (json: string | null) => boolean,
   limit: number,
 ): Promise<MovieRow[]> {
-  const { results } = await db
+  const { results } = await c.env.DB
     .prepare(
       `SELECT * FROM movies WHERE providers_intl IS NOT NULL AND rating IS NOT NULL
        AND votes >= 1000 ORDER BY rating DESC, votes DESC LIMIT 400`,
     )
     .all<MovieRow>();
-  return results.filter((m) => regionHas(m.providers_intl)).slice(0, limit);
+  let merged = results.filter((m) => regionHas(m.providers_intl));
+  const pid = c.env.TMDB_API_KEY ? tmdbProviderId(entry.name) : null;
+  if (pid) {
+    const seenTmdb = new Set(merged.map((m) => m.tmdb_id).filter(Boolean));
+    const live = (await tmdbDiscoverProvider(c.env.TMDB_API_KEY!, "movie", pid, region))
+      .map(toMovieRow)
+      .filter((m) => !seenTmdb.has(m.tmdb_id));
+    merged = [...merged, ...live];
+  }
+  return merged.slice(0, limit);
 }
 
 app.get("/network/:slug", async (c) => {
@@ -1352,14 +1417,15 @@ app.get("/network/:slug", async (c) => {
   const slug = c.req.param("slug");
   const entry = await resolveNetwork(db, slug);
   if (!entry) return c.notFound();
-  const regionHas = regionTester(visitorRegion(c), entry.name);
+  const region = visitorRegion(c);
+  const regionHas = regionTester(region, entry.name);
 
   // fetch a deep slice (same query cost — the 400-row pool runs regardless) so
   // the genre doors below can surface long-tail genres (Western, Romance, …),
   // then take the top 12 for the on-page grids.
   const [allShows, allMovies, airingRes] = await Promise.all([
-    topNetworkShows(db, entry, regionHas, 150),
-    topNetworkMovies(db, regionHas, 150),
+    topNetworkShows(c, entry, region, regionHas, 150),
+    topNetworkMovies(c, entry, region, regionHas, 150),
     db
       .prepare(
         `SELECT * FROM shows WHERE (network = ? OR web_channel = ?) AND status = 'Running'
@@ -1551,9 +1617,10 @@ app.get("/network/:slug/shows", async (c) => {
   const slug = c.req.param("slug");
   const entry = await resolveNetwork(db, slug);
   if (!entry) return c.notFound();
-  const regionHas = regionTester(visitorRegion(c), entry.name);
-  const rows = await topNetworkShows(db, entry, regionHas, 48);
-  const hasMovies = (await topNetworkMovies(db, regionHas, 1)).length > 0;
+  const region = visitorRegion(c);
+  const regionHas = regionTester(region, entry.name);
+  const rows = await topNetworkShows(c, entry, region, regionHas, 48);
+  const hasMovies = (await topNetworkMovies(c, entry, region, regionHas, 1)).length > 0;
   const { art, ambient } = await networkHeroArt(c.env.TMDB_API_KEY, rows, []);
 
   const years = rows
@@ -1629,9 +1696,10 @@ app.get("/network/:slug/movies", async (c) => {
   const slug = c.req.param("slug");
   const entry = await resolveNetwork(db, slug);
   if (!entry) return c.notFound();
-  const regionHas = regionTester(visitorRegion(c), entry.name);
-  const rows = await topNetworkMovies(db, regionHas, 48);
-  const hasShows = (await topNetworkShows(db, entry, regionHas, 1)).length > 0;
+  const region = visitorRegion(c);
+  const regionHas = regionTester(region, entry.name);
+  const rows = await topNetworkMovies(c, entry, region, regionHas, 48);
+  const hasShows = (await topNetworkShows(c, entry, region, regionHas, 1)).length > 0;
   const { art, ambient } = await networkHeroArt(c.env.TMDB_API_KEY, [], rows);
 
   const years = rows.map((m) => m.year).filter((y): y is number => y != null);
@@ -1726,10 +1794,11 @@ app.get("/network/:slug/:genre", async (c) => {
   if (!tvGenre && !movieGenre) return c.notFound();
   const label = tvGenre ?? movieGenre!;
 
-  const regionHas = regionTester(visitorRegion(c), entry.name);
+  const region = visitorRegion(c);
+  const regionHas = regionTester(region, entry.name);
   const [allShows, allMovies] = await Promise.all([
-    tvGenre ? topNetworkShows(db, entry, regionHas, 300) : Promise.resolve([] as ShowRow[]),
-    movieGenre ? topNetworkMovies(db, regionHas, 300) : Promise.resolve([] as MovieRow[]),
+    tvGenre ? topNetworkShows(c, entry, region, regionHas, 300) : Promise.resolve([] as ShowRow[]),
+    movieGenre ? topNetworkMovies(c, entry, region, regionHas, 300) : Promise.resolve([] as MovieRow[]),
   ]);
   const shows = tvGenre ? allShows.filter((s) => inGenre(s.genres, tvGenre)).slice(0, 36) : [];
   const movies = movieGenre ? allMovies.filter((m) => inGenre(m.genres, movieGenre)).slice(0, 36) : [];
@@ -1825,26 +1894,49 @@ app.get("/network/:slug/:genre", async (c) => {
 
 // ------------------------------------------------------------ genre pages
 
-async function topGenreShows(db: D1Database, genre: string, limit: number): Promise<ShowRow[]> {
-  const { results } = await db
+// blend the D1 mirror with TMDB /discover for this genre, so a genre page spans
+// the live catalogue instead of only our rated subset (deduped by tmdb id)
+async function blendGenre<T extends { tmdb_id: number | null; rating: number | null }>(
+  c: Ctx,
+  kind: "tv" | "movie",
+  genre: string,
+  d1: T[],
+  live: (h: import("../lib/tmdb").TmdbSearchHit) => T,
+  limit: number,
+): Promise<T[]> {
+  if (!c.env.TMDB_API_KEY) return d1;
+  const gid = tmdbGenreId(kind, slugifyName(genre));
+  if (!gid) return d1;
+  const seen = new Set(d1.map((x) => x.tmdb_id).filter(Boolean));
+  const extra = (await tmdbDiscoverGenre(c.env.TMDB_API_KEY, kind, gid))
+    .map(live)
+    .filter((x) => !seen.has(x.tmdb_id));
+  return [...d1, ...extra]
+    .filter((x) => x.rating != null)
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+    .slice(0, limit);
+}
+
+async function topGenreShows(c: Ctx, genre: string, limit: number): Promise<ShowRow[]> {
+  const { results } = await c.env.DB
     .prepare(
       `SELECT * FROM shows WHERE genres LIKE ? AND rating IS NOT NULL AND weight >= 60
        ORDER BY rating DESC, weight DESC LIMIT ?`,
     )
     .bind(`%"${genre}"%`, limit)
     .all<ShowRow>();
-  return results;
+  return blendGenre(c, "tv", genre, results, toShowRow, limit);
 }
 
-async function topGenreMovies(db: D1Database, genre: string, limit: number): Promise<MovieRow[]> {
-  const { results } = await db
+async function topGenreMovies(c: Ctx, genre: string, limit: number): Promise<MovieRow[]> {
+  const { results } = await c.env.DB
     .prepare(
       `SELECT * FROM movies WHERE genres LIKE ? AND rating IS NOT NULL AND votes >= 1000
        ORDER BY rating DESC, votes DESC LIMIT ?`,
     )
     .bind(`%"${genre}"%`, limit)
     .all<MovieRow>();
-  return results;
+  return blendGenre(c, "movie", genre, results, toMovieRow, limit);
 }
 
 app.get("/genre/:slug", async (c) => {
@@ -1856,8 +1948,8 @@ app.get("/genre/:slug", async (c) => {
   if (!tvGenre && !movieGenre) return c.notFound();
   const label = tvGenre ?? movieGenre!;
 
-  const shows = tvGenre ? await topGenreShows(db, tvGenre, 12) : [];
-  const movies = movieGenre ? await topGenreMovies(db, movieGenre, 12) : [];
+  const shows = tvGenre ? await topGenreShows(c, tvGenre, 12) : [];
+  const movies = movieGenre ? await topGenreMovies(c, movieGenre, 12) : [];
 
   // the genre opens on its own #1 — best-rated series first, films if
   // the genre only exists on the movie side
@@ -2022,7 +2114,7 @@ app.get("/genre/:slug/shows", async (c) => {
   const dir = await genreDirectory(db);
   const tvGenre = dir.tv.find((g) => slugifyName(g) === slug);
   if (!tvGenre) return c.notFound();
-  const rows = await topGenreShows(db, tvGenre, 48);
+  const rows = await topGenreShows(c, tvGenre, 48);
   const hasMovies = dir.movie.some((g) => slugifyName(g) === slug);
   const lower = tvGenre.toLowerCase();
 
@@ -2170,7 +2262,7 @@ app.get("/genre/:slug/movies", async (c) => {
   const dir = await genreDirectory(db);
   const movieGenre = dir.movie.find((g) => slugifyName(g) === slug);
   if (!movieGenre) return c.notFound();
-  const rows = await topGenreMovies(db, movieGenre, 48);
+  const rows = await topGenreMovies(c, movieGenre, 48);
   const hasShows = dir.tv.some((g) => slugifyName(g) === slug);
   const lower = movieGenre.toLowerCase();
 

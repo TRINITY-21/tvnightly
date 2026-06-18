@@ -189,15 +189,30 @@
   filter: blur(64px) saturate(1.15);
   opacity: 0.45;
 }
-.srch-hero-body {
+.srch-hero-row {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  min-height: 232px;
+  padding: 1.55rem 1.75rem 1.45rem;
+}
+.srch-poster {
+  flex: 0 0 auto;
+  width: 128px;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-2);
+}
+.srch-hero-body {
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 0.4rem;
-  max-width: 46rem;
-  min-height: 232px;
-  padding: 1.55rem 1.75rem 1.45rem;
+  min-width: 0;
+  max-width: 42rem;
 }
 .srch-kicker {
   margin: 0;
@@ -312,6 +327,9 @@
     padding-top: 4.2rem;
     justify-content: flex-end;
   }
+  /* the poster is a desktop affordance — mobile keeps the 16:9 banner layout */
+  .srch-hero-row { display: block; padding: 0; min-height: 0; }
+  .srch-poster { display: none; }
   .srch-hero-title { font-size: 1.5rem; }
   /* keep the CTA label and its chevron together, vertically aligned —
      inline flow was orphaning the arrow onto its own line */

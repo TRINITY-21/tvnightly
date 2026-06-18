@@ -8,6 +8,7 @@ import { FilterSelect, RateInline } from "../components/forms";
 import { MovieTabs } from "../components/nav";
 import { ProviderLine } from "../components/providers";
 import { ShareBar } from "../components/share";
+import { tmdbMovieData, resolveMovie, TMDB_PERSON_OFFSET } from "../lib/tmdb-show";
 import { buildMovieDossier } from "../lib/dossier";
 import { MONTHS, heroBg, longDate, movieComparePathFor, premiereDateParts, slugifyName, stripHtml, fmtRuntime } from "../lib/format";
 import { franchiseOfMovie } from "../lib/franchises";
@@ -19,7 +20,8 @@ import { breadcrumbTrail, canonical, faqLd, itemListLd, origin } from "../lib/se
 import { servePng } from "../lib/render";
 import { posterDataUri } from "../lib/signal";
 import { buildOgCard, buildCompareOgCard, type OgSide } from "../lib/social";
-import { tmdbMovieBackdrop, tmdbMovieCast, tmdbMovieCrew, tmdbMovieFacts, tmdbMovieMedia, tmdbUpcomingBackdrop } from "../lib/tmdb";
+import { tmdbMovieBackdrop, tmdbMovieCast, tmdbMovieCrew, tmdbMovieFacts, tmdbMovieMedia, tmdbUpcomingBackdrop, tmdbRecommendations, tmdbPopular, tmdbTopRated, tmdbDiscoverGenre, tmdbGenreId } from "../lib/tmdb";
+import { toMovieRow } from "../lib/tmdb-rows";
 import { hubForGenres } from "../lib/verticals";
 import { AppContext, Bindings, MovieRow } from "../types";
 
@@ -99,241 +101,25 @@ const movieProvLinks = (m: MovieRow, region: string) => {
   return links;
 };
 
-app.get("/movies/upcoming", async (c) => {
-  type UpcomingRow = {
-    tmdb_id: number;
-    title: string;
-    release_date: string;
-    poster_url: string | null;
-    overview: string | null;
-    slug: string | null;
-    imdb_id: string | null;
-  };
-  const { results } = await c.env.DB.prepare(
-    `SELECT u.tmdb_id, u.title, u.release_date, u.poster_url, u.overview,
-            m.slug, m.imdb_id
-     FROM upcoming_movies u
-     LEFT JOIN movies m ON m.tmdb_id = u.tmdb_id
-     WHERE u.release_date >= date('now')
-     ORDER BY u.release_date LIMIT 40`,
-  ).all<UpcomingRow>();
-
-  const daysUntil = (iso: string) => {
-    const d = Math.ceil((new Date(`${iso}T12:00:00`).getTime() - Date.now()) / 86400000);
-    if (d < 0) return null;
-    if (d === 0) return "Opens today";
-    if (d === 1) return "Tomorrow";
-    return `In ${d} days`;
-  };
-  const monthLabel = (ym: string) => `${MONTHS[Number(ym.slice(5, 7)) - 1] ?? ym} ${ym.slice(0, 4)}`;
-
-  // the nearest release supplies the hero backdrop; today's releases get the
-  // shelf, and everything after today groups by calendar month
-  const head = results[0] ?? null;
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const openingToday = results.filter((m) => m.release_date === todayStr);
-  const upcoming = results.filter((m) => m.release_date > todayStr);
-
-  const byMonth = new Map<string, UpcomingRow[]>();
-  for (const m of upcoming) {
-    const month = m.release_date.slice(0, 7);
-    if (!byMonth.has(month)) byMonth.set(month, []);
-    byMonth.get(month)!.push(m);
-  }
-
-  let art: { x1: string; x2?: string } | null = null;
-  let ambient = false;
-  if (head && c.env.TMDB_API_KEY) {
-    art =
-      (head.imdb_id ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, head.imdb_id) : null) ??
-      (await tmdbUpcomingBackdrop(c.env.TMDB_API_KEY, head.tmdb_id));
-  }
-  if (!art && head?.poster_url) {
-    art = { x1: head.poster_url };
-    ambient = true;
-  }
-
-  const Row = ({ m }: { m: UpcomingRow }) => {
-    const { day, month } = premiereDateParts(m.release_date);
-    const countdown = daysUntil(m.release_date);
-    const body = (
-      <>
-        <span class="sched-rail">{month ? `${month} ${day}` : "TBA"}</span>
-        {m.poster_url ? (
-          <img src={m.poster_url} alt="" width="46" height="69" loading="lazy" decoding="async" />
-        ) : (
-          <span class="sched-thumb-blank" aria-hidden="true"></span>
-        )}
-        <span class="sched-main">
-          <span class="sched-show">{m.title}</span>
-          <span class="sched-when">
-            <span class="sched-ep">{longDate(m.release_date)}</span>
-            {countdown ? <span class="upcoming-chip">{countdown}</span> : null}
-          </span>
-        </span>
-        {m.overview ? <span class="sched-blurb">{stripHtml(m.overview)}</span> : null}
-      </>
-    );
-    return (
-      <li>
-        {m.slug ? (
-          <a class="sched-row" href={`/movie/${m.slug}`}>
-            {body}
-          </a>
-        ) : (
-          <div class="sched-row sched-row-static">{body}</div>
-        )}
-      </li>
-    );
-  };
-
-  const site = origin(c);
-  c.header("Cache-Control", "public, max-age=3600");
-  return c.html(
-    <Layout
-      title="Upcoming movies — theatrical release dates | TV Nightly"
-      description="Every major movie heading to theaters soon, in release order — with dates, posters, and what to watch while you wait."
-      canonical={canonical(c)}
-      ld={[
-        itemListLd(
-          "Upcoming movies",
-          results
-            .filter((m) => m.slug)
-            .map((m) => ({ name: m.title, url: `${site}/movie/${m.slug}` })),
-        ),
-        breadcrumbTrail([
-          { name: "TV Nightly", url: site },
-          { name: "Movies", url: `${site}/movies` },
-          { name: "Upcoming", url: canonical(c) },
-        ]),
-      ]}
-    >
-      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
-        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
-        <div class="wo-hero-body">
-          <p class="section-eyebrow">Release radar</p>
-          <h1>Upcoming movies</h1>
-          <p class="wo-intro">
-            Every wide theatrical release we're tracking, in date order — bookmark it before the
-            trailers pile up.
-          </p>
-          <p class="hub-actions">
-            <a class="verdict-btn" href="/what-to-watch?type=movie">
-              Pick me a movie tonight
-            </a>
-            <a class="btn-ghost" href="/movies/best">
-              Best movies, ranked
-            </a>
-          </p>
-        </div>
-      </header>
-
-      {results.length === 0 ? (
-        <p class="muted">No upcoming snapshot loaded yet — the movie seed refreshes this chart.</p>
-      ) : null}
-
-      {openingToday.length ? (
-        <section class="upcoming-shelf">
-          <h2>
-            Opening today{" "}
-            <span class="sched-count">
-              {openingToday.length} premiere{openingToday.length === 1 ? "" : "s"}
-            </span>
-          </h2>
-          <p class="muted upcoming-lead">In theaters today.</p>
-          <ul class="poster-shelf">
-            {openingToday.map((m) => {
-              const { day, month } = premiereDateParts(m.release_date);
-              const href = m.slug ? `/movie/${m.slug}` : null;
-              const tile = (
-                <>
-                  {m.poster_url ? (
-                    <img src={m.poster_url} alt="" width="92" height="138" loading="lazy" decoding="async" />
-                  ) : (
-                    <span class="shelf-fallback">{m.title}</span>
-                  )}
-                  <span class="shelf-chip shelf-chip-date">
-                    {daysUntil(m.release_date) === "Tomorrow" || daysUntil(m.release_date) === "Opens today" ? (
-                      <span class="chip-soon">{daysUntil(m.release_date)}</span>
-                    ) : null}
-                    {month ? `${month} ${day}` : "Soon"}
-                  </span>
-                </>
-              );
-              return (
-                <li>
-                  {href ? (
-                    <a class="shelf-tile" href={href} title={`${m.title} · ${longDate(m.release_date)}`}>
-                      {tile}
-                    </a>
-                  ) : (
-                    <span class="shelf-tile shelf-tile-static" title={m.title}>
-                      {tile}
-                    </span>
-                  )}
-                  <span class="shelf-name">{m.title}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
-
-      {[...byMonth.entries()].map(([month, rows]) => (
-        <section class="sched-day">
-          <h2>
-            {monthLabel(month)}{" "}
-            <span class="sched-count">
-              {rows.length} film{rows.length === 1 ? "" : "s"}
-            </span>
-          </h2>
-          <ol class="sched-list">
-            {rows.map((m) => (
-              <Row m={m} />
-            ))}
-          </ol>
-        </section>
-      ))}
-
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="The chart"
-            title="The best films of all time"
-            desc="Every movie ranked by rating, with where to stream."
-            href="/movies/best"
-          />
-          <ExploreCard
-            icon="Tonight"
-            title="Upcoming TV premieres"
-            desc="Season premieres in the next ninety days — the small-screen calendar."
-            href="/premieres"
-          />
-          <ExploreCard
-            icon="Guides"
-            title="Watch every saga in order"
-            desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
-            href="/watch-orders"
-          />
-          <ExploreCard
-            icon="Tailored"
-            title="Rate one thing, get a pick"
-            desc="The recommender finds your next watch from one rating."
-            href="/recommend"
-          />
-        </div>
-      </section>
-    </Layout>,
-  );
-});
+// Retired as a standalone page — upcoming films now live in the unified
+// premieres hub (TV + Movie premieres together). Existing links 301 there.
+app.get("/movies/upcoming", (c) => c.redirect("/premieres", 301));
 
 // ------------------------------------------------------------- compare
 
 app.get("/movies", async (c) => {
-  const { results } = await c.env.DB.prepare(
-    "SELECT * FROM movies ORDER BY popularity DESC LIMIT 48",
-  ).all<MovieRow>();
+  // "Popular" should be what's popular *now* — lead with live TMDB (rating-floored,
+  // like the homepage rail), then fill from the D1 mirror, deduped by tmdb id, so
+  // the page reflects the live catalog rather than only the engaged subset.
+  const key = c.env.TMDB_API_KEY;
+  const live = key
+    ? (await tmdbPopular(key, "movie")).filter((h) => h.rating != null && h.rating >= 7).map(toMovieRow)
+    : [];
+  const d1 = (
+    await c.env.DB.prepare("SELECT * FROM movies WHERE rating >= 7 ORDER BY popularity DESC LIMIT 48").all<MovieRow>()
+  ).results;
+  const seen = new Set(live.map((m) => m.tmdb_id).filter(Boolean));
+  const results = [...live, ...d1.filter((m) => !m.tmdb_id || !seen.has(m.tmdb_id))].slice(0, 48);
   const region = visitorRegion(c);
 
   c.header("Cache-Control", "public, max-age=3600");
@@ -376,7 +162,7 @@ app.get("/movies", async (c) => {
                 <a class="chev-after" href="/what-to-watch?type=movie">
                   Pick one for me
                 </a>
-                <a class="chev-after" href="/movies/upcoming">
+                <a class="chev-after" href="/premieres?tab=movies">
                   Upcoming
                 </a>
               </span>
@@ -492,11 +278,29 @@ app.get("/movies/best", async (c) => {
     conds.push("genres LIKE ?");
     binds.push(`%"${genre}"%`);
   }
-  const { results } = await c.env.DB.prepare(
-    `SELECT * FROM movies WHERE ${conds.join(" AND ")} ORDER BY rating DESC, votes DESC LIMIT 50`,
-  )
-    .bind(...binds)
-    .all<MovieRow>();
+  const d1Best = (
+    await c.env.DB.prepare(
+      `SELECT * FROM movies WHERE ${conds.join(" AND ")} ORDER BY rating DESC, votes DESC LIMIT 50`,
+    )
+      .bind(...binds)
+      .all<MovieRow>()
+  ).results;
+  // blend in the live catalogue: TMDB top-rated overall, or /discover for a genre
+  let results = d1Best;
+  if (c.env.TMDB_API_KEY) {
+    const gid = genre ? tmdbGenreId("movie", slugifyName(genre)) : null;
+    const liveHits = genre
+      ? gid
+        ? await tmdbDiscoverGenre(c.env.TMDB_API_KEY, "movie", gid)
+        : []
+      : await tmdbTopRated(c.env.TMDB_API_KEY, "movie");
+    const seen = new Set(d1Best.map((m) => m.tmdb_id).filter(Boolean));
+    const live = liveHits.map(toMovieRow).filter((m) => !seen.has(m.tmdb_id));
+    results = [...d1Best, ...live]
+      .filter((m) => m.rating != null)
+      .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+      .slice(0, 50);
+  }
   const region = visitorRegion(c);
 
   // the chart opens on its own #1 — the reigning film's real backdrop
@@ -551,7 +355,7 @@ app.get("/movies/best", async (c) => {
             <a class="verdict-btn" href="/what-to-watch?type=movie">
               Pick me a movie
             </a>
-            <a class="btn-ghost" href="/movies/upcoming">
+            <a class="btn-ghost" href="/premieres?tab=movies">
               What's coming next
             </a>
           </p>
@@ -657,10 +461,9 @@ app.get("/movies/best", async (c) => {
 app.get("/movie/:slug/og.png", async (c) => {
   const slug = c.req.param("slug");
   return servePng(c, `movie/${slug}`, async () => {
-    const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
-      .bind(slug)
-      .first<MovieRow>();
-    if (!movie) return null;
+    const r = await resolveMovie(c, slug);
+    if (!r) return null;
+    const movie = r.movie;
     const bd =
       c.env.TMDB_API_KEY && movie.imdb_id
         ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id)
@@ -687,15 +490,25 @@ app.get("/movie/:slug/og.png", async (c) => {
 });
 
 app.get("/movie/:slug", async (c) => {
-  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
-    .bind(c.req.param("slug"))
-    .first<MovieRow>();
-  if (!movie) return c.notFound();
+  const slug = c.req.param("slug");
+  let movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?").bind(slug).first<MovieRow>();
+  let ratingRef: string;
+  let isTmdb = false;
+  if (movie) {
+    ratingRef = movie.imdb_id;
+  } else {
+    // hybrid: build the SAME page live from TMDB for a film not in the mirror
+    const built = await tmdbMovieData(c, slug);
+    if (!built) return c.notFound();
+    movie = built.movie;
+    ratingRef = `t${built.tmdbId}`;
+    isTmdb = true;
+  }
   const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
   const region = visitorRegion(c);
   const [stat, aggRating] = await Promise.all([
-    titleStat(c.env.DB, "movie", movie.imdb_id),
-    aggregateRatingLd(c.env.DB, "movie", movie.imdb_id),
+    titleStat(c.env.DB, "movie", ratingRef),
+    aggregateRatingLd(c.env.DB, "movie", ratingRef),
   ]);
   const simMovies = await similarMovies(c.env.DB, movie);
 
@@ -750,7 +563,7 @@ app.get("/movie/:slug", async (c) => {
   // risks a manual action; aggregateRatingLd returns null below a rater threshold.
   const site = origin(c);
   const directorNodes = directors.map((d) => {
-    const pid = directorLinks.get(d.id);
+    const pid = directorLinks.get(d.id) ?? (d.id ? TMDB_PERSON_OFFSET + d.id : undefined);
     return {
       "@type": "Person",
       name: d.name,
@@ -758,7 +571,7 @@ app.get("/movie/:slug", async (c) => {
     };
   });
   const actorNodes = cast.slice(0, 8).map((p) => {
-    const pid = linkable.get(p.name.toLowerCase());
+    const pid = linkable.get(p.name.toLowerCase()) ?? (p.id ? TMDB_PERSON_OFFSET + p.id : undefined);
     return {
       "@type": "Person",
       name: p.name,
@@ -818,7 +631,7 @@ app.get("/movie/:slug", async (c) => {
       canonical={canonical(c)}
       ogType="video.movie"
       ogTitle={`${movie.title}${movie.year ? ` (${movie.year})` : ""}`}
-      ogImage={`${canonical(c)}/og.png`}
+      ogImage={isTmdb ? (movie.poster_url ?? undefined) : `${canonical(c)}/og.png`}
       ogImageLarge
       ogImageAlt={`${movie.title} official poster`}
       preloadImage={backdrop?.x2 ? { x1: backdrop.x1, x2: backdrop.x2 } : undefined}
@@ -848,7 +661,7 @@ app.get("/movie/:slug", async (c) => {
               ) : (
                 <div class="poster card-fallback">{movie.title}</div>
               )}
-              <RateInline kind="movie" refId={movie.imdb_id} stat={stat} />
+              <RateInline kind="movie" refId={ratingRef} stat={stat} />
             </div>
             <div class="detail-info">
               <div class="detail-title-row">
@@ -897,7 +710,7 @@ app.get("/movie/:slug", async (c) => {
                     <span>
                       Directed by{" "}
                       {directors.map((d, i) => {
-                        const pid = directorLinks.get(d.id);
+                        const pid = directorLinks.get(d.id) ?? (d.id ? TMDB_PERSON_OFFSET + d.id : null);
                         return (
                           <>
                             {i > 0 ? ", " : ""}
@@ -942,7 +755,9 @@ app.get("/movie/:slug", async (c) => {
             </h2>
             <div class="cast-row">
               {cast.map((p) => {
-                const id = linkable.get(p.name.toLowerCase());
+                const id =
+                  linkable.get(p.name.toLowerCase()) ??
+                  (p.id ? TMDB_PERSON_OFFSET + p.id : null);
                 const inner = (
                   <>
                     {p.profile_path ? (
@@ -1098,11 +913,16 @@ app.get("/movie/:slug", async (c) => {
 
 // "Movies like X" gets the full dossier on its own page, same as shows.
 app.get("/movie/:slug/similar", async (c) => {
-  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
-    .bind(c.req.param("slug"))
-    .first<MovieRow>();
-  if (!movie) return c.notFound();
-  const simMovies = await similarMovies(c.env.DB, movie, 18);
+  const resolved = await resolveMovie(c, c.req.param("slug"));
+  if (!resolved) return c.notFound();
+  const movie = resolved.movie;
+  let simMovies = await similarMovies(c.env.DB, movie, 18);
+  // live-only / genre-less films get nothing from D1 — fall back to TMDB recs
+  if (!simMovies.length && movie.tmdb_id && c.env.TMDB_API_KEY) {
+    simMovies = (await tmdbRecommendations(c.env.TMDB_API_KEY, "movie", movie.tmdb_id))
+      .slice(0, 18)
+      .map(toMovieRow);
+  }
   if (!simMovies.length) return c.redirect(`/movie/${movie.slug}`, 302);
   const region = visitorRegion(c);
   const site = origin(c);
@@ -1221,10 +1041,9 @@ app.get("/movie/:slug/similar", async (c) => {
 
 // Media: the movie's artwork and YouTube trailers, one edge-cached call.
 app.get("/movie/:slug/media", async (c) => {
-  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
-    .bind(c.req.param("slug"))
-    .first<MovieRow>();
-  if (!movie) return c.notFound();
+  const resolved = await resolveMovie(c, c.req.param("slug"));
+  if (!resolved) return c.notFound();
+  const movie = resolved.movie;
   const media = c.env.TMDB_API_KEY
     ? await tmdbMovieMedia(c.env.TMDB_API_KEY, movie.imdb_id)
     : null;
@@ -1439,10 +1258,9 @@ app.get("/movie/:slug/media", async (c) => {
 
 // Full billed cast, linked into our person pages where we track the actor.
 app.get("/movie/:slug/cast", async (c) => {
-  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
-    .bind(c.req.param("slug"))
-    .first<MovieRow>();
-  if (!movie) return c.notFound();
+  const resolved = await resolveMovie(c, c.req.param("slug"));
+  if (!resolved) return c.notFound();
+  const movie = resolved.movie;
   const [cast, crew] = c.env.TMDB_API_KEY
     ? await Promise.all([
         tmdbMovieCast(c.env.TMDB_API_KEY, movie.imdb_id, 24),
@@ -1493,7 +1311,9 @@ app.get("/movie/:slug/cast", async (c) => {
           <p class="muted">{cast.length} credited, in billing order.</p>
           <div class="cast-grid">
             {cast.map((p) => {
-              const id = linkable.get(p.name.toLowerCase());
+              const id =
+                linkable.get(p.name.toLowerCase()) ??
+                (p.id ? TMDB_PERSON_OFFSET + p.id : null);
               const img = p.profile_path
                 ? `https://image.tmdb.org/t/p/w342${p.profile_path}`
                 : null;
@@ -1536,7 +1356,7 @@ app.get("/movie/:slug/cast", async (c) => {
               const img = p.profile_path
                 ? `https://image.tmdb.org/t/p/w185${p.profile_path}`
                 : null;
-              const pid = crewLinks.get(p.id);
+              const pid = crewLinks.get(p.id) ?? (p.id ? TMDB_PERSON_OFFSET + p.id : null);
               const inner = (
                 <>
                   {img ? (
@@ -1569,10 +1389,9 @@ app.get("/movie/:slug/cast", async (c) => {
 
 // Where to watch, region by region — the movie counterpart of the show page.
 app.get("/movie/:slug/where-to-watch", async (c) => {
-  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
-    .bind(c.req.param("slug"))
-    .first<MovieRow>();
-  if (!movie) return c.notFound();
+  const resolved = await resolveMovie(c, c.req.param("slug"));
+  if (!resolved) return c.notFound();
+  const movie = resolved.movie;
   const base = `/movie/${movie.slug}/where-to-watch`;
   const reqRegion = (c.req.query("region") ?? "").trim().toUpperCase();
   if (reqRegion && !REGIONS.includes(reqRegion)) return c.redirect(base, 301);
@@ -1867,10 +1686,9 @@ app.get("/movies/compare", async (c) => {
 
 // The matchup hub: every rival as a versus card, the tab's stable home.
 app.get("/movie/:slug/compare", async (c) => {
-  const movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?")
-    .bind(c.req.param("slug"))
-    .first<MovieRow>();
-  if (!movie) return c.notFound();
+  const resolved = await resolveMovie(c, c.req.param("slug"));
+  if (!resolved) return c.notFound();
+  const movie = resolved.movie;
   const rivals = await similarMovies(c.env.DB, movie, 6);
   if (!rivals.length) return c.redirect(`/movie/${movie.slug}`, 302);
   const [backdrop, ...rivalBackdrops] = c.env.TMDB_API_KEY
@@ -1940,16 +1758,12 @@ app.get("/compare/movie/:pair{[^/]+-vs-[^/]+}", async (c) => {
   while (idx !== -1) {
     const left = pair.slice(0, idx);
     const right = pair.slice(idx + 4);
-    const rows = await c.env.DB.prepare(
-      "SELECT * FROM movies WHERE slug IN (?, ?)",
-    )
-      .bind(left, right)
-      .all<MovieRow>();
-    const l = rows.results.find((m) => m.slug === left);
-    const r = rows.results.find((m) => m.slug === right);
+    // resolveMovie checks D1 then falls back to live TMDB, so two live-only films
+    // can be compared just like two mirrored ones
+    const [l, r] = await Promise.all([resolveMovie(c, left), resolveMovie(c, right)]);
     if (l && r) {
-      a = l;
-      b = r;
+      a = l.movie;
+      b = r.movie;
       break;
     }
     idx = pair.indexOf("-vs-", idx + 1);
@@ -2169,14 +1983,10 @@ app.get("/compare/movie/:pair{[^/]+-vs-[^/]+}/og.png", async (c) => {
     while (idx !== -1) {
       const left = pair.slice(0, idx);
       const right = pair.slice(idx + 4);
-      const rows = await c.env.DB.prepare("SELECT * FROM movies WHERE slug IN (?, ?)")
-        .bind(left, right)
-        .all<MovieRow>();
-      const l = rows.results.find((m) => m.slug === left);
-      const r = rows.results.find((m) => m.slug === right);
+      const [l, r] = await Promise.all([resolveMovie(c, left), resolveMovie(c, right)]);
       if (l && r) {
-        a = l;
-        b = r;
+        a = l.movie;
+        b = r.movie;
         break;
       }
       idx = pair.indexOf("-vs-", idx + 1);

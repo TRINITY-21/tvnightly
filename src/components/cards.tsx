@@ -15,8 +15,9 @@ export const ClampSummary: FC<PropsWithChildren<{ id: string }>> = ({ id, childr
 );
 
 export const StatusBadge: FC<{ status: string | null }> = ({ status }) => {
+  if (!status) return null; // no badge beats an "Unknown" one (e.g. live-TMDB rows)
   const cls = status === "Running" ? "ok" : status === "Ended" ? "ended" : "tbd";
-  return <span class={`badge ${cls}`}>{status ?? "Unknown"}</span>;
+  return <span class={`badge ${cls}`}>{status}</span>;
 };
 
 // width/height match the CSS `aspect-ratio: 2/2.8` so the poster box is reserved

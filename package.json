@@ -33,7 +33,10 @@
     "movies:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/movies.sql",
     "providers:tv:fetch": "node scripts/seed-show-providers.mjs",
     "providers:tv:load:local": "wrangler d1 execute tvnightly --local --file=seed/show-providers.sql",
-    "providers:tv:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/show-providers.sql"
+    "providers:tv:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/show-providers.sql",
+    "type:backfill:fetch": "node scripts/backfill-show-type.mjs",
+    "type:load:local": "wrangler d1 execute tvnightly --local --file=seed/show-type.sql",
+    "type:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/show-type.sql"
   },
   "dependencies": {
     "@cf-wasm/resvg": "^0.3.4",

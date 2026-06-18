@@ -2,10 +2,12 @@ import { Hono } from "hono";
 import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard, StatusBadge } from "../components/cards";
-import { heroBg, hiRes, retinaSet, slugifyName, stripHtml } from "../lib/format";
+import { heroBg, hiRes, posterSrc, retinaSet, slugifyName, stripHtml } from "../lib/format";
 import { diceSimilarity, foldSql, foldText } from "../lib/search";
 import { origin } from "../lib/seo";
-import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import { tmdbBackdrop, tmdbMovieBackdrop, tmdbSearch, tmdbSearchPeople } from "../lib/tmdb";
+import { toMovieRow as tmdbMovieRow, toShowRow as tmdbShowRow } from "../lib/tmdb-rows";
+import { TMDB_PERSON_OFFSET } from "../lib/tmdb-show";
 import { Bindings, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -40,38 +42,84 @@ app.get("/api/search", async (c) => {
       .bind(qf)
       .all<{ id: number; name: string; image_url: string | null }>(),
   ]);
+  const out: {
+    name: string;
+    slug: string;
+    ref: string | null;
+    year: string | null;
+    kind: string;
+    rating: number | null;
+    poster: string | null;
+  }[] = [
+    ...shows.results.map((r) => ({
+      name: r.name,
+      slug: r.slug,
+      ref: String(r.id), // recommend flow keys titles by kind+ref, never name
+      year: r.premiered?.slice(0, 4) ?? null,
+      kind: "tv",
+      rating: r.rating,
+      poster: r.poster,
+    })),
+    ...movies.results.map((r) => ({
+      name: r.title,
+      slug: r.slug,
+      ref: r.imdb_id,
+      year: r.year ? String(r.year) : null,
+      kind: "movie",
+      rating: r.rating,
+      poster: r.poster,
+    })),
+    ...people.results.map((r) => ({
+      name: r.name,
+      slug: `${slugifyName(r.name)}-${r.id}`,
+      ref: null,
+      year: null,
+      kind: "person",
+      rating: null,
+      poster: r.image_url,
+    })),
+  ];
+  // hybrid: surface TMDB titles + people the mirror doesn't have (deduped)
+  if (c.env.TMDB_API_KEY) {
+    const have = new Set(out.map((r) => r.slug));
+    // people first — the mirror is TVmaze-only, so a TMDB-only person would be
+    // completely unfindable from search otherwise
+    if (people.results.length < 3) {
+      const knownPeople = new Set(people.results.map((r) => foldText(r.name)));
+      for (const p of await tmdbSearchPeople(c.env.TMDB_API_KEY, q)) {
+        if (knownPeople.has(foldText(p.name))) continue;
+        knownPeople.add(foldText(p.name));
+        out.push({
+          name: p.name,
+          slug: `${slugifyName(p.name)}-${TMDB_PERSON_OFFSET + p.tmdbId}`,
+          ref: null,
+          year: null,
+          kind: "person",
+          rating: null,
+          poster: p.profilePath ? `https://image.tmdb.org/t/p/w185${p.profilePath}` : null,
+        });
+        if (out.filter((r) => r.kind === "person").length >= 3) break;
+      }
+    }
+    if (out.length < 9) {
+      for (const h of await tmdbSearch(c.env.TMDB_API_KEY, q)) {
+        const slug = slugifyName(h.name);
+        if (have.has(slug) || out.length >= 9) continue;
+        have.add(slug);
+        out.push({
+          name: h.name,
+          slug,
+          ref: null,
+          year: h.year,
+          kind: h.kind,
+          rating: h.rating,
+          poster: h.posterPath ? `https://image.tmdb.org/t/p/w185${h.posterPath}` : null,
+        });
+      }
+    }
+  }
   c.header("Cache-Control", "public, max-age=300");
-  return c.json(
-    [
-      ...shows.results.map((r) => ({
-        name: r.name,
-        slug: r.slug,
-        ref: String(r.id), // recommend flow keys titles by kind+ref, never name
-        year: r.premiered?.slice(0, 4) ?? null,
-        kind: "tv",
-        rating: r.rating,
-        poster: r.poster,
-      })),
-      ...movies.results.map((r) => ({
-        name: r.title,
-        slug: r.slug,
-        ref: r.imdb_id,
-        year: r.year ? String(r.year) : null,
-        kind: "movie",
-        rating: r.rating,
-        poster: r.poster,
-      })),
-      ...people.results.map((r) => ({
-        name: r.name,
-        slug: `${slugifyName(r.name)}-${r.id}`,
-        ref: null,
-        year: null,
-        kind: "person",
-        rating: null,
-        poster: r.image_url,
-      })),
-    ].slice(0, 9),
-  );
+  return c.json(out.slice(0, 9));
 });
 
 app.get("/search", async (c) => {
@@ -103,6 +151,34 @@ app.get("/search", async (c) => {
             .all<PersonHit>(),
         ])
       : [{ results: [] as ShowRow[] }, { results: [] as MovieRow[] }, { results: [] as PersonHit[] }];
+
+  // hybrid: backfill with live TMDB so any real title is findable, deduped vs the
+  // mirror. Appended after the D1 hits, so our curated/engaged rows still lead.
+  if (c.env.TMDB_API_KEY && qf.length >= 2) {
+    const haveTv = new Set(results.map((s) => s.tmdb_id).filter(Boolean));
+    const haveMovie = new Set(movieResults.map((m) => m.tmdb_id).filter(Boolean));
+    for (const h of await tmdbSearch(c.env.TMDB_API_KEY, q)) {
+      if (h.kind === "tv" && !haveTv.has(h.tmdbId) && results.length < 20) results.push(tmdbShowRow(h));
+      else if (h.kind === "movie" && !haveMovie.has(h.tmdbId) && movieResults.length < 12)
+        movieResults.push(tmdbMovieRow(h));
+    }
+    // people too — the mirror is TVmaze-only, so a TMDB-only person (and anyone
+    // newer than our seed) would otherwise be unsearchable
+    if (personResults.length < 8) {
+      const havePeople = new Set(personResults.map((p) => foldText(p.name)));
+      for (const p of await tmdbSearchPeople(c.env.TMDB_API_KEY, q)) {
+        if (havePeople.has(foldText(p.name)) || personResults.length >= 8) continue;
+        havePeople.add(foldText(p.name));
+        personResults.push({
+          id: TMDB_PERSON_OFFSET + p.tmdbId,
+          name: p.name,
+          image_url: p.profilePath ? `https://image.tmdb.org/t/p/w185${p.profilePath}` : null,
+          known_dept: null,
+          roles: 0,
+        });
+      }
+    }
+  }
 
   // the strongest hit takes the hero: an exact title match outranks the
   // weight order; otherwise TV (the house specialty) leads
@@ -203,6 +279,11 @@ app.get("/search", async (c) => {
       ? `/show/${best.show.slug}`
       : `/movie/${best.movie.slug}`
     : "#";
+  const bestPoster = best
+    ? best.kind === "tv"
+      ? posterSrc(best.show)
+      : posterSrc({ poster_url: best.movie.poster_url, image_url: null })
+    : null;
 
   const filterCounts = {
     all: total,
@@ -325,6 +406,18 @@ app.get("/search", async (c) => {
             {art ? (
               <div class="srch-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div>
             ) : null}
+            <div class="srch-hero-row">
+            {bestPoster ? (
+              <img
+                class="srch-poster"
+                src={bestPoster.src}
+                srcset={bestPoster.srcset}
+                alt=""
+                width="128"
+                height="192"
+                fetchpriority="high"
+              />
+            ) : null}
             <div class="srch-hero-body">
               <p class="srch-kicker">
                 Top match · {best.kind === "tv" ? "TV show" : "Movie"}
@@ -354,6 +447,7 @@ app.get("/search", async (c) => {
                   {best.kind === "tv" ? "Episode guide & ratings" : "Where to watch & details"}
                 </a>
               </p>
+            </div>
             </div>
           </article>
         ) : null}

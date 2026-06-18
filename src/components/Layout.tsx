@@ -5,6 +5,16 @@ import { jsonLd } from "../lib/seo";
 import { VERTICALS } from "../lib/verticals";
 import { networkLogo } from "../lib/providers";
 import { slugifyName } from "../lib/format";
+import { IconTikTok, IconInstagram, IconX } from "./icons";
+
+// Social handles — one place to update. Same @handle across platforms keeps the
+// brand findable and matches the tvnightly.com domain.
+const SOCIAL_HANDLE = "tvnightly";
+const SOCIALS: { label: string; url: string; Icon: FC<{ size?: number }> }[] = [
+  { label: "TikTok", url: `https://www.tiktok.com/@${SOCIAL_HANDLE}`, Icon: IconTikTok },
+  { label: "Instagram", url: `https://www.instagram.com/${SOCIAL_HANDLE}`, Icon: IconInstagram },
+  { label: "X", url: `https://x.com/${SOCIAL_HANDLE}`, Icon: IconX },
+];
 
 // Cloudflare Web Analytics beacon token. Request-invariant config: the token is
 // the same for every request, so a middleware setting it once per request (see
@@ -14,6 +24,15 @@ let cfBeaconToken: string | undefined;
 export const setBeaconToken = (token?: string) => {
   cfBeaconToken = token;
 };
+
+// Off-screen decoy field for the subscribe forms. Real visitors never see or fill
+// it; bots auto-fill every input, so a non-empty value on POST /subscribe is a
+// reliable bot tell. Zero UI, zero friction — and the double opt-in confirmation
+// email is the real guard on list quality (nothing subscribes until the link is
+// clicked). Reuses the .fb-hp off-screen style already shipped for feedback.
+export const Honeypot: FC = () => (
+  <input class="fb-hp" type="text" name="website" tabindex={-1} autocomplete="off" aria-hidden="true" />
+);
 
 // Live countdown band: four stat blocks ticking once a second. Renders "—"
 // placeholders until JS lands; flips to "Airing now" past zero.
@@ -411,6 +430,19 @@ export const Layout: FC<
               Episode rankings, release dates, and where to stream — checked around the clock,
               localized to your country.
             </p>
+            <div class="footer-socials" aria-label="Follow TV Nightly">
+              {SOCIALS.map(({ label, url, Icon }) => (
+                <a
+                  class="footer-social"
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`TV Nightly on ${label}`}
+                >
+                  <Icon size={18} />
+                </a>
+              ))}
+            </div>
           </div>
           <div>
             <h3>Explore</h3>
@@ -441,6 +473,7 @@ export const Layout: FC<
                 aria-label="Email address"
                 required
               />
+              <Honeypot />
               <button type="submit">Subscribe</button>
             </form>
             <p class="footer-sub-note">One evening email. No spam — unsubscribe anytime.</p>

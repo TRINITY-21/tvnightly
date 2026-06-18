@@ -3,7 +3,7 @@ import { IconStar, IconReel, IconDial, IconClapper, IconHearts, IconTvPlay, Icon
 import { FC, PropsWithChildren } from "hono/jsx";
 import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
 import { visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
-import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml, slugifyName } from "../lib/format";
+import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml, slugifyName, isNewYear } from "../lib/format";
 import { tmdbBackdrop, tmdbMovieBackdrop, tmdbPopular, tmdbTrendingList, tmdbUpcomingMovies } from "../lib/tmdb";
 import { toShowRow, toMovieRow } from "../lib/tmdb-rows";
 import { tmdbHeroShow } from "../lib/tmdb-show";
@@ -392,6 +392,11 @@ app.get("/", async (c) => {
                     <>
                       <span class="sep">·</span>
                       <span class="rating"><IconStar class="rating-star" />{spot.rating.toFixed(1)}</span>
+                    </>
+                  ) : isNewYear(spot.premiered ? Number(spot.premiered.slice(0, 4)) : null) ? (
+                    <>
+                      <span class="sep">·</span>
+                      <span class="meta-new">NEW</span>
                     </>
                   ) : null}
                 </p>

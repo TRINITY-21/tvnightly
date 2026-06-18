@@ -11,7 +11,7 @@ import { ProviderLine } from "../components/providers";
 import { ShareBar } from "../components/share";
 import { tmdbShowData, resolveShow } from "../lib/tmdb-show";
 import { buildDossier } from "../lib/dossier";
-import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml, fmtRuntime } from "../lib/format";
+import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml, fmtRuntime, isNewYear } from "../lib/format";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, visitorRegion } from "../lib/providers";
 import { getShow, similarShows, crewLinkMap } from "../lib/queries";
 import { titleStat, aggregateRatingLd } from "../lib/ratings";
@@ -278,6 +278,11 @@ app.get("/show/:slug", async (c) => {
                   <>
                     <span class="sep">·</span>
                     <span class="rating"><IconStar class="rating-star" />{show.rating.toFixed(1)}</span>
+                  </>
+                ) : isNewYear(show.premiered ? Number(show.premiered.slice(0, 4)) : null) ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span class="meta-new">NEW</span>
                   </>
                 ) : null}
                 {creators.length ? (

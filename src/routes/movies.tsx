@@ -10,7 +10,7 @@ import { ProviderLine } from "../components/providers";
 import { ShareBar } from "../components/share";
 import { tmdbMovieData, resolveMovie, TMDB_PERSON_OFFSET } from "../lib/tmdb-show";
 import { buildMovieDossier } from "../lib/dossier";
-import { MONTHS, heroBg, longDate, movieComparePathFor, premiereDateParts, slugifyName, stripHtml, fmtRuntime } from "../lib/format";
+import { MONTHS, heroBg, longDate, movieComparePathFor, premiereDateParts, slugifyName, stripHtml, fmtRuntime, isNewYear } from "../lib/format";
 import { franchiseOfMovie } from "../lib/franchises";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { crewLinkMap, similarMovies } from "../lib/queries";
@@ -702,6 +702,11 @@ app.get("/movie/:slug", async (c) => {
                     <span class="sep">·</span>
                     <span class="rating"><IconStar class="rating-star" />{movie.rating.toFixed(1)}</span>
                     {movie.votes ? <span> ({movie.votes.toLocaleString()})</span> : null}
+                  </>
+                ) : isNewYear(movie.year) ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span class="meta-new">NEW</span>
                   </>
                 ) : null}
                 {directors.length ? (

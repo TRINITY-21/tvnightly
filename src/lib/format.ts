@@ -115,6 +115,11 @@ export const posterSrc = (
 
 /** Inline style for a hero backdrop: image-set picks the heavy rendition
  *  only on dense screens (a CSS background can never use srcset). */
+// A title from this year or last is "new" — used to show a NEW badge where a
+// rating is hidden (too few votes for a stable average) instead of a blank slot.
+export const isNewYear = (year: number | null | undefined): boolean =>
+  year != null && !Number.isNaN(year) && year >= new Date().getFullYear() - 1;
+
 export const heroBg = (x1: string, x2?: string): string =>
   x2 && x2 !== x1
     ? `background-image:url('${x2}');` +

@@ -366,6 +366,13 @@ export type TmdbSearchHit = {
   genreIds?: number[];
 };
 
+// A rating from a handful of votes is noise — and it swings between cached
+// snapshots, so the same brand-new title reads 9.4 in the trending rail and 10.0
+// in the hero. Only surface an average once it has enough votes to be stable.
+export const MIN_RATING_VOTES = 50;
+export const liveRating = (avg: unknown, count: unknown): number | null =>
+  typeof avg === "number" && avg > 0 && Number(count) >= MIN_RATING_VOTES ? avg : null;
+
 /** Live TMDB multi-search (tv + movie), popularity-ordered, edge-cached 1h. */
 export async function tmdbSearch(key: string, query: string): Promise<TmdbSearchHit[]> {
   const q = query.trim();
@@ -399,7 +406,7 @@ export async function tmdbSearch(key: string, query: string): Promise<TmdbSearch
         year: String((r.first_air_date || r.release_date || "") as string).slice(0, 4) || null,
         posterPath: (r.poster_path as string) ?? null,
         rating:
-          typeof r.vote_average === "number" && r.vote_average > 0 ? (r.vote_average as number) : null,
+          liveRating(r.vote_average, r.vote_count),
         overview: (r.overview as string) || null,
         popularity: Number(r.popularity) || 0,
       }))
@@ -496,7 +503,7 @@ export async function tmdbTitle(
     genres: (data.genres ?? []).map((g: { name: string }) => g.name).filter(Boolean),
     overview: data.overview || null,
     rating:
-      typeof data.vote_average === "number" && data.vote_average > 0 ? data.vote_average : null,
+      liveRating(data.vote_average, data.vote_count),
     status: data.status ?? null,
     seasons: kind === "tv" ? (data.number_of_seasons ?? null) : null,
     runtime: kind === "movie" ? (data.runtime ?? null) : (data.episode_run_time?.[0] ?? null),
@@ -679,7 +686,7 @@ async function tmdbList(
         year: String((r.first_air_date || r.release_date || "") as string).slice(0, 4) || null,
         posterPath: (r.poster_path as string) ?? null,
         rating:
-          typeof r.vote_average === "number" && r.vote_average > 0 ? (r.vote_average as number) : null,
+          liveRating(r.vote_average, r.vote_count),
         overview: (r.overview as string) || null,
         popularity: Number(r.popularity) || 0,
         genreIds: (r.genre_ids as number[]) ?? [],

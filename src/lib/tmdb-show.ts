@@ -4,7 +4,7 @@
 import type { Context } from "hono";
 import { Bindings, EpisodeRow, MovieRow, PersonRow, ShowRow } from "../types";
 import { getShow } from "./queries";
-import { tmdbSearch } from "./tmdb";
+import { tmdbSearch, liveRating } from "./tmdb";
 import { slugifyName } from "./format";
 import { REGIONS } from "./providers";
 
@@ -140,7 +140,7 @@ export async function buildTmdbShow(
     ended: ended ? base.last_air_date || null : null,
     network: base.networks?.[0]?.name ?? null,
     web_channel: null,
-    rating: typeof base.vote_average === "number" && base.vote_average > 0 ? base.vote_average : null,
+    rating: liveRating(base.vote_average, base.vote_count),
     weight: 0,
     image_url: null,
     poster_url: IMG(base.poster_path, "w342"),
@@ -244,7 +244,7 @@ export async function tmdbHeroShow(key: string, tmdbId: number): Promise<ShowRow
     ended: ended ? base.last_air_date || null : null,
     network: base.networks?.[0]?.name ?? null,
     web_channel: null,
-    rating: typeof base.vote_average === "number" && base.vote_average > 0 ? base.vote_average : null,
+    rating: liveRating(base.vote_average, base.vote_count),
     weight: 0,
     image_url: null,
     poster_url: IMG(base.poster_path, "w342"),
@@ -301,7 +301,7 @@ export async function tmdbMovieData(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     genres: base.genres?.length ? JSON.stringify((base.genres as any[]).map((g) => g.name)) : null,
     runtime: base.runtime ?? null,
-    rating: typeof base.vote_average === "number" && base.vote_average > 0 ? base.vote_average : null,
+    rating: liveRating(base.vote_average, base.vote_count),
     votes: base.vote_count ?? null,
     popularity: base.popularity ?? null,
     poster_url: IMG(base.poster_path, "w342"),

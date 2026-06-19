@@ -156,11 +156,13 @@
   .wo-hero-person .wo-hero-body {
     display: flex;
     align-items: center;
-    gap: 1.6rem;
+    gap: 1.7rem;
   }
   .wo-hero-person .wo-hero-face {
     flex: none;
     margin-bottom: 0;
+    width: 118px;
+    height: 157px;
   }
   .wo-hero-person .wo-hero-text {
     min-width: 0;

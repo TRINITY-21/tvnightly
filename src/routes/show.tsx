@@ -70,7 +70,6 @@ app.get("/show/:slug", async (c) => {
   let show = await getShow(c.env.DB, slug);
   let episodes: EpisodeRow[];
   let ratingRef: string;
-  let isTmdb = false;
   if (show) {
     episodes = (
       await c.env.DB.prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
@@ -85,7 +84,6 @@ app.get("/show/:slug", async (c) => {
     show = built.show;
     episodes = built.episodes;
     ratingRef = `t${built.tmdbId}`;
-    isTmdb = true;
   }
 
   const seasons = new Map<number, EpisodeRow[]>();
@@ -186,13 +184,15 @@ app.get("/show/:slug", async (c) => {
     : [];
 
   c.header("Cache-Control", "public, max-age=300");
+  // og.png resolves live titles too, so a hybrid (non-D1) show still unfurls as the
+  // branded 1200×630 card, not a portrait poster mis-sized as a large card.
   return c.html(
     <Layout
       title={`${show.name} — episodes, ratings & renewals | TV Nightly`}
       description={showMetaDescription(show)}
       canonical={canonical(c)}
       ld={ld}
-      ogImage={isTmdb ? (show.poster_url ?? undefined) : `${canonical(c)}/og.png`}
+      ogImage={`${canonical(c)}/og.png`}
       ogImageLarge
       preloadImage={backdrop?.x2 ? { x1: backdrop.x1, x2: backdrop.x2 } : undefined}
       scripts={["/js/share.js"]}

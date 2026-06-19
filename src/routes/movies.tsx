@@ -493,7 +493,6 @@ app.get("/movie/:slug", async (c) => {
   const slug = c.req.param("slug");
   let movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?").bind(slug).first<MovieRow>();
   let ratingRef: string;
-  let isTmdb = false;
   if (movie) {
     ratingRef = movie.imdb_id;
   } else {
@@ -502,7 +501,6 @@ app.get("/movie/:slug", async (c) => {
     if (!built) return c.notFound();
     movie = built.movie;
     ratingRef = `t${built.tmdbId}`;
-    isTmdb = true;
   }
   const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
   const region = visitorRegion(c);
@@ -631,9 +629,9 @@ app.get("/movie/:slug", async (c) => {
       canonical={canonical(c)}
       ogType="video.movie"
       ogTitle={`${movie.title}${movie.year ? ` (${movie.year})` : ""}`}
-      ogImage={isTmdb ? (movie.poster_url ?? undefined) : `${canonical(c)}/og.png`}
+      ogImage={`${canonical(c)}/og.png`}
       ogImageLarge
-      ogImageAlt={`${movie.title} official poster`}
+      ogImageAlt={`${movie.title} — TV Nightly`}
       preloadImage={backdrop?.x2 ? { x1: backdrop.x1, x2: backdrop.x2 } : undefined}
       ld={[ld, breadcrumb]}
       scripts={["/js/share.js"]}
@@ -1063,8 +1061,9 @@ app.get("/movie/:slug/media", async (c) => {
 
   const heroArt = backdrops.length
     ? heroBg(
+        // bounded renditions — never the multi-MB `original` for an on-page hero
+        `https://image.tmdb.org/t/p/w780${backdrops[0]}`,
         `https://image.tmdb.org/t/p/w1280${backdrops[0]}`,
-        `https://image.tmdb.org/t/p/original${backdrops[0]}`,
       )
     : null;
 

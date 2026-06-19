@@ -142,8 +142,11 @@ export async function tmdbMovieFacts(
  *  soft frame grab. We take the community's top-voted backdrop, preferring
  *  textless art (iso null) so the still never carries a baked-in title
  *  under our own h1; backdrop_path is only the last resort.
- *  Returns both renditions: w1280 for 1x screens, the original (often 4K)
- *  for retina — a 1280-CSS-px band needs 2560 source px at DPR 2. */
+ *  Returns two BOUNDED renditions: w780 for 1x screens, w1280 for retina. We
+ *  deliberately avoid TMDB's `original` (often a 2–6 MB 4K frame) here — this is
+ *  the hero LCP image, and on a phone (high-DPR, the common case) the original
+ *  was multi-megabytes for a band no wider than ~1200 device px. w1280 is the
+ *  largest fixed TMDB backdrop size and is plenty for any hero band. */
 const pickBackdrop = (data: RawBundle): { x1: string; x2: string } | null => {
   const ranked = byVotes(data.images?.backdrops);
   const pick =
@@ -152,8 +155,8 @@ const pickBackdrop = (data: RawBundle): { x1: string; x2: string } | null => {
     data.backdrop_path;
   return pick
     ? {
-        x1: `https://image.tmdb.org/t/p/w1280${pick}`,
-        x2: `https://image.tmdb.org/t/p/original${pick}`,
+        x1: `https://image.tmdb.org/t/p/w780${pick}`,
+        x2: `https://image.tmdb.org/t/p/w1280${pick}`,
       }
     : null;
 };
@@ -166,8 +169,8 @@ const allBackdrops = (data: RawBundle): { x1: string; x2: string }[] => {
   const paths = (textless.length ? textless : ranked).map((i) => i.file_path);
   const finals = paths.length ? paths : data.backdrop_path ? [data.backdrop_path] : [];
   return finals.map((p) => ({
-    x1: `https://image.tmdb.org/t/p/w1280${p}`,
-    x2: `https://image.tmdb.org/t/p/original${p}`,
+    x1: `https://image.tmdb.org/t/p/w780${p}`,
+    x2: `https://image.tmdb.org/t/p/w1280${p}`,
   }));
 };
 /** Every hi-res text-less backdrop a show has (same cached bundle as

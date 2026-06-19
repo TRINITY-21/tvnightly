@@ -631,6 +631,9 @@ const rankedPage =
           eps[0] ? `"${eps[0].name}"` : "the top"
         } down.`}
         canonical={season != null ? `${site}${base}?season=${season}` : `${site}${base}`}
+        // a show (or filtered season) with no rated episodes yet is an empty
+        // ranking — keep it reachable but out of the index until it has content
+        noindex={eps.length === 0}
         ogImage={show.poster_url ?? show.image_url ?? undefined}
         scripts={["/js/votes.js"]}
         preloadImage={

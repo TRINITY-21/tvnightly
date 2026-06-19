@@ -645,7 +645,7 @@ app.get("/tv/featuring/:slug", async (c) => {
         faqLd(faqs),
       ]}
     >
-      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
+      <header class={`wo-hero wo-hero-bleed wo-hero-person${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
           {(() => {

@@ -153,9 +153,15 @@
    right. Phones keep the stack (the big title can't share a row with a portrait
    on a narrow screen) — handled by the default block flow + the bleed rules. */
 @media (min-width: 601px) {
-  .wo-hero-person .wo-hero-body {
+  /* `.wo-hero .wo-hero-body` (the base bleed lockup) forces flex-direction:column
+     + justify-content:flex-end at equal specificity, and wins on source order —
+     which stacked + centered the portrait. Beat it with a 3-class selector and
+     lay the portrait + text lockup in a ROW: portrait left, text to its right. */
+  .wo-hero.wo-hero-person .wo-hero-body {
     display: flex;
+    flex-direction: row;
     align-items: center;
+    justify-content: flex-start;
     gap: 1.7rem;
   }
   .wo-hero-person .wo-hero-face {

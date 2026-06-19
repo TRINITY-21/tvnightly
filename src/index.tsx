@@ -36,44 +36,11 @@ import whatToWatch from "./routes/what-to-watch";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-// Edge HTML cache. Worker responses aren't stored in Cloudflare's cache just for
-// carrying Cache-Control, so every hit otherwise re-runs SSR + the D1/TMDB
-// fan-out. This stores fully-rendered HTML in caches.default and serves it on a
-// hit, skipping the whole chain — big TTFB win as traffic grows.
-//
-// Safe because the site has NO accounts (no per-user variance) and air times are
-// localized client-side. The ONLY server-side variance is streaming availability
-// by country, so the key includes cf-ipcountry. We cache ONLY responses that
-// explicitly opted in with `Cache-Control: public, max-age=…` (so token/admin/
-// search/dynamic pages, which don't, are never cached), and skip a few dynamic
-// surfaces outright. Engagement counts can lag by up to the page's max-age — the
-// rate/vote scripts reconcile client-side, which is fine for a content site.
-const NO_HTML_CACHE = ["/admin", "/search", "/confirm", "/unsubscribe"];
-app.use("*", async (c, next) => {
-  if (c.req.method !== "GET" || NO_HTML_CACHE.some((p) => c.req.path.startsWith(p))) return next();
-  const country = c.req.header("cf-ipcountry") ?? "XX";
-  const u = new URL(c.req.url);
-  const key = new Request(`https://html-cache.tvnightly.com/${country}${u.pathname}${u.search}`);
-  const cache = caches.default;
-  const hit = await cache.match(key);
-  if (hit) {
-    const r = new Response(hit.body, hit);
-    r.headers.set("X-Edge-Cache", "HIT");
-    return r;
-  }
-  await next();
-  const res = c.res;
-  const cc = res.headers.get("Cache-Control") ?? "";
-  if (
-    res.status === 200 &&
-    (res.headers.get("Content-Type") ?? "").includes("text/html") &&
-    cc.includes("public") &&
-    /max-age=[1-9]/.test(cc) &&
-    !res.headers.get("Set-Cookie")
-  ) {
-    c.executionCtx.waitUntil(cache.put(key, res.clone()));
-  }
-});
+// NOTE: HTML edge-caching is deliberately NOT done in the Worker. caches.default
+// + Hono's post-handler response rewriting proved unreliable to verify, and it's
+// a no-op win at low traffic. When traffic justifies it, add a Cloudflare Cache
+// Rule (cache text/html on GET, honor Cache-Control, key incl. cf-ipcountry) —
+// it's monitorable via CF cache analytics and carries no Worker-code risk.
 
 // Baseline security headers on every response (set before the canonical redirect
 // below so 301s and error pages carry them too). No CSP/script-src: the site uses

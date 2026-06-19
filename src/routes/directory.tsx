@@ -847,6 +847,7 @@ app.get("/top/tv", async (c) => {
       title="The 100 top-rated TV shows | TV Nightly"
       description={`The best TV shows ranked by viewer rating${results[0] ? `, starting with ${results[0].name}` : ""}.`}
       canonical={canonical(c)}
+      noindex={!results.length}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
       ld={[
         {
@@ -1019,6 +1020,7 @@ app.get("/top/seasons", async (c) => {
       title="The 50 best TV seasons of all time | TV Nightly"
       description="Whole seasons ranked by their average episode rating — the greatest single runs in TV history."
       canonical={canonical(c)}
+      noindex={!results.length}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
       ld={[
         {
@@ -1199,6 +1201,7 @@ app.get("/top/networks", async (c) => {
       title="Top TV networks & streamers | TV Nightly"
       description="Netflix, Hulu, HBO, Disney+, and every major network and streamer — browse the best shows on each."
       canonical={canonical(c)}
+      noindex={!ranked.length}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
       ld={[
         itemListLd(
@@ -1485,6 +1488,7 @@ app.get("/network/:slug", async (c) => {
       }
       description={`Every ${entry.name} ${films.length ? "show and movie" : "show"} worth watching, ranked by rating, plus what's currently airing.`}
       canonical={canonical(c)}
+      noindex={!best.length && !films.length && !airing.length}
       ld={[
         itemListLd(`The best ${entry.name} shows`, [
           ...best.map((s) => ({ name: s.name, url: `${site}/show/${s.slug}` })),
@@ -1635,6 +1639,7 @@ app.get("/network/:slug/shows", async (c) => {
       title={`Top ${entry.name} shows — ranked | TV Nightly`}
       description={`The best TV shows on ${entry.name}, ranked by viewer rating.`}
       canonical={canonical(c)}
+      noindex={!rows.length}
       ld={[
         itemListLd(
           `Top ${entry.name} shows`,
@@ -1712,6 +1717,7 @@ app.get("/network/:slug/movies", async (c) => {
       title={`Top ${entry.name} movies — ranked | TV Nightly`}
       description={`The best movies on ${entry.name}, ranked by viewer rating.`}
       canonical={canonical(c)}
+      noindex={!rows.length}
       ld={[
         itemListLd(
           `Top ${entry.name} movies`,
@@ -1984,6 +1990,7 @@ app.get("/genre/:slug", async (c) => {
       title={`The best ${label.toLowerCase()} shows & movies | TV Nightly`}
       description={`Top-rated ${label.toLowerCase()} TV series and films, with streaming availability.`}
       canonical={canonical(c)}
+      noindex={!shows.length && !movies.length}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
       ld={[
         itemListLd(`The best ${label} shows & movies`, [
@@ -2143,6 +2150,7 @@ app.get("/genre/:slug/shows", async (c) => {
       title={`Top ${lower} shows — ranked | TV Nightly`}
       description={`The best ${lower} TV shows, ranked by viewer rating, with streaming availability.`}
       canonical={canonical(c)}
+      noindex={!rows.length}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
       ld={[
         itemListLd(
@@ -2288,6 +2296,7 @@ app.get("/genre/:slug/movies", async (c) => {
       title={`${movieGenre} Movies - Best ${movieGenre} Films to Watch | TV Nightly`}
       description={`Discover the best ${lower} movies. Browse our curated collection of ${lower} films with viewer ratings, streaming availability, and personalized recommendations.`}
       canonical={canonical(c)}
+      noindex={!rows.length}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
       ld={[
         itemListLd(

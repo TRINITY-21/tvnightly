@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { Bindings } from "../types";
 import { origin } from "../lib/seo";
 import { MessagePage } from "../components/Layout";
@@ -15,7 +15,15 @@ const VALID_KINDS = new Set(["renewal", "premiere", "daily"]);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 app.post("/subscribe", async (c) => {
-  const body = await c.req.parseBody();
+  let body: Awaited<ReturnType<typeof c.req.parseBody>>;
+  try {
+    body = await c.req.parseBody();
+  } catch {
+    return c.html(
+      <MessagePage title="Something's off" body="Please check the email address and try again." />,
+      400,
+    );
+  }
 
   // Honeypot: real visitors never see/fill this off-screen field; bots fill every
   // input. Pretend success so the bot doesn't learn it was caught — subscribe nobody.
@@ -73,7 +81,7 @@ app.post("/subscribe", async (c) => {
     const what =
       kind === "daily" ? "the TV Nightly daily email" : `${show!.name} renewal & schedule alerts`;
     const confirmUrl = `${origin(c)}/confirm?token=${token}`;
-    await sendEmails(c.env, [
+    const [sent] = await sendEmails(c.env, [
       {
         to: email,
         subject: `Confirm: ${what}`,
@@ -89,6 +97,18 @@ app.post("/subscribe", async (c) => {
         }),
       },
     ]);
+    // The row is already pending; if the confirm email didn't go out, don't tell
+    // the visitor to "check their inbox" for a mail that never sent. A retry POST
+    // re-sends (the row stays via ON CONFLICT DO NOTHING).
+    if (!sent) {
+      return c.html(
+        <MessagePage
+          title="Couldn't send that email"
+          body="We couldn't send your confirmation email just now. Please try again in a moment."
+        />,
+        502,
+      );
+    }
   }
 
   return c.html(
@@ -122,21 +142,36 @@ app.get("/confirm", async (c) => {
   );
 });
 
-app.get("/unsubscribe", async (c) => {
+// Verify an unsubscribe token and remove the matching subscription. Returns true
+// if a valid token was processed. Shared by the human GET page and the RFC-8058
+// one-click POST.
+async function applyUnsubscribe(c: Context<{ Bindings: Bindings }>): Promise<boolean> {
   const token = c.req.query("token") ?? "";
   const payload = c.env.SECRET ? await verifyToken(token, c.env.SECRET) : null;
-  if (!payload || payload.action !== "unsub") {
-    return c.html(
-      <MessagePage title="Invalid link" body="This unsubscribe link is invalid or expired." />,
-      400,
-    );
-  }
+  if (!payload || payload.action !== "unsub") return false;
   await c.env.DB.prepare(
     "DELETE FROM subscriptions WHERE email = ? AND kind = ? AND show_id IS ?",
   )
     .bind(payload.email, payload.kind, payload.showId)
     .run();
+  return true;
+}
+
+app.get("/unsubscribe", async (c) => {
+  if (!(await applyUnsubscribe(c))) {
+    return c.html(
+      <MessagePage title="Invalid link" body="This unsubscribe link is invalid or expired." />,
+      400,
+    );
+  }
   return c.html(<MessagePage title="Unsubscribed" body="You won't hear from us about this again." />);
+});
+
+// One-click unsubscribe (RFC 8058): Gmail/Apple Mail POST `List-Unsubscribe=One-Click`
+// to the List-Unsubscribe URL. No body to render — the mail client shows its own UI.
+app.post("/unsubscribe", async (c) => {
+  const ok = await applyUnsubscribe(c);
+  return c.text(ok ? "Unsubscribed" : "Invalid link", ok ? 200 : 400);
 });
 
 export default app;

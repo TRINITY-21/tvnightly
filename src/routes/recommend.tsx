@@ -657,7 +657,12 @@ app.get("/recommend", async (c) => {
 // ---- POST /recommend (save a verdict) -------------------------------------
 
 app.post("/recommend", async (c) => {
-  const body = await c.req.parseBody();
+  let body: Awaited<ReturnType<typeof c.req.parseBody>>;
+  try {
+    body = await c.req.parseBody();
+  } catch {
+    return c.body(null, 400);
+  }
   const kind = String(body.kind ?? "");
   const ref = String(body.ref ?? "").trim();
   const verdict = String(body.verdict ?? "");

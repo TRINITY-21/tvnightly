@@ -223,16 +223,23 @@
   padding-top: 1.1rem;
 }
 .footer-base-links {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.6rem;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.6rem;
 }
-.footer-base-links a { color: var(--muted); font-weight: 400; }
+/* keep each multi-word link on one line — without this they break mid-phrase
+   ("How we / pick") when the row is tight */
+.footer-base-links a { color: var(--muted); font-weight: 400; white-space: nowrap; }
 .footer-base-links a:hover { color: var(--text); text-decoration: none; }
 .footer-sep { color: var(--line); }
 .footer-copy { color: var(--muted); opacity: 0.85; }
 @media (max-width: 520px) {
-  .footer-base { flex-direction: column-reverse; align-items: flex-start; gap: 0.7rem; }
+  .footer-base { flex-direction: column-reverse; align-items: flex-start; gap: 0.9rem; }
+  /* on phones the wrap gap is the divider — drop the dots so a wrapped line
+     never starts with a stray "·", and give the links room to breathe */
+  .footer-base-links { gap: 0.5rem 1.1rem; }
+  .footer-sep { display: none; }
 }
 
 /* ---- mobile pass ---- */

@@ -11,6 +11,9 @@ export interface EmailMessage {
   to: string;
   subject: string;
   html: string;
+  // Extra RFC-5322 headers — used to attach List-Unsubscribe / one-click on bulk
+  // mail (the daily digest + alerts) so Gmail/Yahoo render a native unsubscribe.
+  headers?: Record<string, string>;
 }
 
 export interface EmailEnv {
@@ -79,6 +82,7 @@ async function sendViaSmtp(env: EmailEnv, messages: EmailMessage[]): Promise<boo
         to: m.to,
         subject: m.subject,
         html: m.html,
+        ...(m.headers ? { headers: m.headers } : {}),
       });
       results.push(true);
     } catch (e) {
@@ -96,22 +100,31 @@ async function sendViaResend(env: EmailEnv, messages: EmailMessage[]): Promise<b
   }
   const from = env.EMAIL_FROM ?? "TV Nightly <onboarding@resend.dev>";
   const replyTo = env.EMAIL_REPLY_TO;
-  const res = await fetch("https://api.resend.com/emails/batch", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${env.RESEND_API_KEY}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(
-      messages.map((m) => ({
-        from,
-        to: [m.to],
-        subject: m.subject,
-        html: m.html,
-        ...(replyTo ? { reply_to: replyTo } : {}),
-      })),
-    ),
-  });
+  let res: Response;
+  try {
+    res = await fetch("https://api.resend.com/emails/batch", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(
+        messages.map((m) => ({
+          from,
+          to: [m.to],
+          subject: m.subject,
+          html: m.html,
+          ...(replyTo ? { reply_to: replyTo } : {}),
+          ...(m.headers ? { headers: m.headers } : {}),
+        })),
+      ),
+    });
+  } catch (e) {
+    // A network-level throw (DNS, reset, timeout) must not bubble into the
+    // request handler as a 500 — degrade to "all failed" like the SMTP path.
+    console.error(`[email:resend] batch threw: ${e instanceof Error ? e.message : e}`);
+    return messages.map(() => false);
+  }
   if (!res.ok) {
     console.error(`[email:resend] batch failed: ${res.status} ${await res.text()}`);
     return messages.map(() => false);

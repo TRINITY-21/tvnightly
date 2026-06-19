@@ -26,7 +26,6 @@ app.get("/best-episodes", async (c) => {
 
   const anyStill = results.some((e) => e.image_url);
   const plates = 3;
-  const heroSrc = (url: string) => url.replace("/medium_landscape/", "/original_untouched/");
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -36,7 +35,7 @@ app.get("/best-episodes", async (c) => {
         results[0] ? `, starting with ${results[0].show_name}'s "${results[0].name}"` : ""
       }.`}
       canonical={canonical(c)}
-      ogImage={results[0]?.image_url ? heroSrc(results[0].image_url) : undefined}
+      ogImage={results[0]?.image_url ? largeStill(results[0].image_url) : undefined}
       ogImageLarge={!!results[0]?.image_url}
       ld={[
         {
@@ -95,12 +94,10 @@ app.get("/best-episodes", async (c) => {
                       {e.image_url ? (
                         <img
                           class="epreg-still"
-                          src={i < plates ? heroSrc(e.image_url) : e.image_url}
-                          srcset={
-                            i < plates
-                              ? `${heroSrc(e.image_url)} 1920w`
-                              : `${e.image_url} 1x, ${largeStill(e.image_url)} 2x`
-                          }
+                          src={e.image_url}
+                          // medium for 1x, the bounded large_landscape sibling for
+                          // 2x — never TVmaze's unbounded original for a ≤256px slot.
+                          srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
                           width={i < plates ? 256 : 168}
                           height={i < plates ? 144 : 95}
                           alt=""

@@ -9,7 +9,7 @@ import { FilterSelect, RateInline, SubscribeForm } from "../components/forms";
 import { SeasonTabs, ShowTabs } from "../components/nav";
 import { ProviderLine } from "../components/providers";
 import { ShareBar } from "../components/share";
-import { tmdbShowData, resolveShow } from "../lib/tmdb-show";
+import { tmdbShowData, resolveShow, tmdbShowCast } from "../lib/tmdb-show";
 import { buildDossier } from "../lib/dossier";
 import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml, fmtRuntime, isNewYear } from "../lib/format";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, visitorRegion } from "../lib/providers";
@@ -70,7 +70,6 @@ app.get("/show/:slug", async (c) => {
   let show = await getShow(c.env.DB, slug);
   let episodes: EpisodeRow[];
   let ratingRef: string;
-  let isTmdb = false;
   if (show) {
     episodes = (
       await c.env.DB.prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
@@ -85,7 +84,6 @@ app.get("/show/:slug", async (c) => {
     show = built.show;
     episodes = built.episodes;
     ratingRef = `t${built.tmdbId}`;
-    isTmdb = true;
   }
 
   const seasons = new Map<number, EpisodeRow[]>();
@@ -96,8 +94,17 @@ app.get("/show/:slug", async (c) => {
   }
   const netName = show.network ?? show.web_channel;
   const region = visitorRegion(c);
+  // Cast: the mirror's stored cast_json, or — for a freshly-seeded show that
+  // hasn't been cast-synced yet — fetched live from TMDB so the section never
+  // comes up empty. Same {n,c,img} shape; live entries also carry a person id.
+  type CastTile = { n: string; c: string | null; img: string | null; id?: number };
+  const castFetch: Promise<CastTile[]> = show.cast_json
+    ? Promise.resolve(JSON.parse(show.cast_json) as CastTile[])
+    : show.tmdb_id && c.env.TMDB_API_KEY
+      ? tmdbShowCast(c.env.TMDB_API_KEY, show.tmdb_id)
+      : Promise.resolve([] as CastTile[]);
   // one bound COUNT instead of the full network GROUP-BY scan per pageview
-  const [similar, stat, aggRating, netCount] = await Promise.all([
+  const [similar, stat, aggRating, netCount, cast] = await Promise.all([
     similarShows(c.env.DB, show),
     titleStat(c.env.DB, "tv", ratingRef),
     aggregateRatingLd(c.env.DB, "tv", ratingRef),
@@ -108,6 +115,7 @@ app.get("/show/:slug", async (c) => {
           .bind(netName, netName)
           .first<{ c: number }>()
       : Promise.resolve(null),
+    castFetch,
   ]);
   const netEntry =
     netName && (netCount?.c ?? 0) >= 3 ? { name: netName, slug: slugifyName(netName) } : undefined;
@@ -186,13 +194,15 @@ app.get("/show/:slug", async (c) => {
     : [];
 
   c.header("Cache-Control", "public, max-age=300");
+  // og.png resolves live titles too, so a hybrid (non-D1) show still unfurls as the
+  // branded 1200×630 card, not a portrait poster mis-sized as a large card.
   return c.html(
     <Layout
       title={`${show.name} — episodes, ratings & renewals | TV Nightly`}
       description={showMetaDescription(show)}
       canonical={canonical(c)}
       ld={ld}
-      ogImage={isTmdb ? (show.poster_url ?? undefined) : `${canonical(c)}/og.png`}
+      ogImage={`${canonical(c)}/og.png`}
       ogImageLarge
       preloadImage={backdrop?.x2 ? { x1: backdrop.x1, x2: backdrop.x2 } : undefined}
       scripts={["/js/share.js"]}
@@ -384,9 +394,6 @@ app.get("/show/:slug", async (c) => {
           ) : null;
         })()}
         {(() => {
-          const cast: { n: string; c: string | null; img: string | null }[] = show.cast_json
-            ? JSON.parse(show.cast_json)
-            : [];
           return cast.length ? (
             <section id="cast">
               <h2>

@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { IconStar, IconInstagram, IconX, IconGlobe } from "../components/icons";
 import { Context } from "hono";
-import { Bindings, ShowRow, MovieRow, PersonRow } from "../types";
+import { Bindings, ShowRow, PersonRow } from "../types";
 import { stripHtml, slugifyName, headshot, longDate, ageOf } from "../lib/format";
-import { tmdbPersonData, tmdbPersonByName, TMDB_PERSON_OFFSET, resolveShow } from "../lib/tmdb-show";
+import { TMDB_PERSON_OFFSET, resolveShow, resolvePersonProfile, tmdbShowCast } from "../lib/tmdb-show";
 import { origin, canonical, breadcrumbLd, breadcrumbTrail } from "../lib/seo";
 import { crewLinkMap } from "../lib/queries";
 import { Layout } from "../components/Layout";
@@ -309,6 +309,23 @@ app.get("/show/:slug/cast", async (c) => {
       .bind(show.id)
       .all<CreditRow>();
     credits = res.results;
+    // mirrored show not cast-synced yet (bulk seed carries no credits) — fall
+    // back to live TMDB cast so the page isn't empty
+    if (!credits.length && show.tmdb_id && c.env.TMDB_API_KEY) {
+      const live = await tmdbShowCast(c.env.TMDB_API_KEY, show.tmdb_id);
+      credits = live.map(
+        (p) =>
+          ({
+            id: p.id,
+            name: p.n,
+            image_url: p.img,
+            character: p.c,
+            voice: 0,
+            episodes: null,
+            guest: 0,
+          }) as unknown as CreditRow,
+      );
+    }
   }
   const main = credits.filter((r) => !r.guest);
   const guests = credits.filter((r) => r.guest);
@@ -412,100 +429,9 @@ app.get("/person/:slug", async (c) => {
   const idMatch = /-(\d+)$/.exec(slug);
   if (!idMatch) return c.notFound();
   const pid = Number(idMatch[1]);
-  let person = await c.env.DB.prepare("SELECT * FROM people WHERE id = ?").bind(pid).first<PersonRow>();
-  let roles: (ShowRow & { character: string | null; voice: number; episodes: number | null })[];
-  let films: (MovieRow & { character: string | null })[];
-  if (person) {
-    const [r, f] = await Promise.all([
-      c.env.DB.prepare(
-        `SELECT cr.character, cr.voice, cr.episodes, s.*
-         FROM credits cr JOIN shows s ON s.id = cr.show_id
-         WHERE cr.person_id = ?
-         ORDER BY s.rating IS NULL, s.rating DESC, cr.episodes DESC LIMIT 50`,
-      )
-        .bind(person.id)
-        .all<ShowRow & { character: string | null; voice: number; episodes: number | null }>(),
-      c.env.DB.prepare(
-        `SELECT mc.character, m.* FROM movie_credits mc JOIN movies m ON m.imdb_id = mc.movie_id
-         WHERE mc.person_id = ?
-         ORDER BY m.rating IS NULL, m.rating DESC, m.popularity DESC LIMIT 50`,
-      )
-        .bind(person.id)
-        .all<MovieRow & { character: string | null }>(),
-    ]);
-    roles = r.results;
-    films = f.results;
-    // our D1 credits table only mirrors a slice of the catalogue, so a mirrored
-    // person would otherwise show 1–2 titles. Fill out the rest of their real
-    // filmography from TMDB, keeping D1 rows (canonical slug + community data)
-    // wherever a title is already mirrored. People are TVmaze-seeded with no
-    // tmdb_id, so we resolve by name, verified against titles we already know.
-    {
-      // match on the normalized title, not the D1 slug — a mirrored slug can carry
-      // a disambiguation suffix (the-office-us) that TMDB's name-slug won't have
-      const knownSlugs = new Set<string>([
-        ...roles.map((r) => slugifyName(r.name)),
-        ...films.map((m) => slugifyName(m.title)),
-      ]);
-      const extra = person.tmdb_id
-        ? await tmdbPersonData(c, person.tmdb_id)
-        : await tmdbPersonByName(c, person.name, knownSlugs);
-      if (extra) {
-        // overlay TMDB's bio/profile onto the D1 person wherever we hold nothing —
-        // our people are TVmaze-seeded with no biography, birthday or socials
-        const t = extra.person;
-        person = {
-          ...person,
-          bio: person.bio ?? t.bio,
-          birthday: person.birthday ?? t.birthday,
-          deathday: person.deathday ?? t.deathday,
-          birthplace: person.birthplace ?? t.birthplace,
-          country: person.country ?? t.country,
-          image_url: person.image_url ?? t.image_url,
-          known_dept: person.known_dept ?? t.known_dept,
-          tmdb_id: person.tmdb_id ?? t.tmdb_id,
-          imdb_id: person.imdb_id ?? t.imdb_id,
-          socials: person.socials ?? t.socials,
-          homepage: person.homepage ?? t.homepage,
-        };
-        const haveShow = new Set<string>();
-        for (const x of roles) {
-          if (x.tmdb_id != null) haveShow.add(`t${x.tmdb_id}`);
-          haveShow.add(`s${x.slug}`);
-        }
-        const haveFilm = new Set<string>();
-        for (const x of films) {
-          if (x.tmdb_id != null) haveFilm.add(`t${x.tmdb_id}`);
-          haveFilm.add(`s${x.slug}`);
-        }
-        // mirrored (D1) titles carry our community data, so they're always kept;
-        // TMDB extras only fill the remaining slots up to the display cap.
-        const byRating = (a: { rating: number | null }, b: { rating: number | null }) =>
-          (b.rating ?? -1) - (a.rating ?? -1);
-        const extraRoles = extra.roles
-          .filter((x) => !haveShow.has(`t${x.tmdb_id}`) && !haveShow.has(`s${x.slug}`))
-          .sort((a, b) => byRating(a, b) || (b.episodes ?? 0) - (a.episodes ?? 0));
-        roles = [...roles, ...extraRoles.slice(0, Math.max(0, 40 - roles.length))].sort(
-          (a, b) => byRating(a, b) || (b.episodes ?? 0) - (a.episodes ?? 0),
-        );
-        const extraFilms = extra.films
-          .filter((x) => !haveFilm.has(`t${x.tmdb_id}`) && !haveFilm.has(`s${x.slug}`))
-          .sort((a, b) => byRating(a, b) || (b.popularity ?? 0) - (a.popularity ?? 0));
-        films = [...films, ...extraFilms.slice(0, Math.max(0, 30 - films.length))].sort(
-          (a, b) => byRating(a, b) || (b.popularity ?? 0) - (a.popularity ?? 0),
-        );
-      }
-    }
-  } else if (pid >= TMDB_PERSON_OFFSET) {
-    // hybrid: build the SAME person page live from TMDB when not mirrored
-    const built = await tmdbPersonData(c, pid - TMDB_PERSON_OFFSET);
-    if (!built) return c.notFound();
-    person = built.person;
-    roles = built.roles;
-    films = built.films;
-  } else {
-    return c.notFound();
-  }
+  const profile = await resolvePersonProfile(c, pid);
+  if (!profile) return c.notFound();
+  const { person, roles, films } = profile;
   // one canonical URL per person — name drift 301s home
   const canonicalSlug = `${slugifyName(person.name)}-${person.id}`;
   if (slug !== canonicalSlug) return c.redirect(`/person/${canonicalSlug}`, 301);
@@ -686,29 +612,35 @@ app.get("/person/:slug", async (c) => {
             <div class="detail-info">
               <h1>{person.name}</h1>
               <p class="meta-strip">
-                {person.known_dept && person.known_dept !== "Acting" ? (
-                  <>
-                    <span>{person.known_dept}</span>
-                    <span class="sep">·</span>
-                  </>
-                ) : null}
-                {years ? (
-                  <span>
-                    {years}
-                    {age != null ? ` (aged ${age})` : ""}
-                  </span>
-                ) : age != null ? (
-                  <span>
-                    Age {age}
-                    {person.birthday ? ` — born ${longDate(person.birthday)}` : ""}
-                  </span>
-                ) : null}
-                {person.birthplace || person.country ? (
-                  <>
-                    {age != null || years ? <span class="sep sep-loc">·</span> : null}
-                    <span class="ms-birthplace">{person.birthplace ?? person.country}</span>
-                  </>
-                ) : null}
+                {(() => {
+                  const hasDept = Boolean(person.known_dept && person.known_dept !== "Acting");
+                  const lifeSpan = Boolean(years || age != null);
+                  const place = person.birthplace || person.country;
+                  return (
+                    <>
+                      {hasDept ? <span>{person.known_dept}</span> : null}
+                      {/* only print the separator when something actually follows */}
+                      {hasDept && (lifeSpan || place) ? <span class="sep">·</span> : null}
+                      {years ? (
+                        <span>
+                          {years}
+                          {age != null ? ` (aged ${age})` : ""}
+                        </span>
+                      ) : age != null ? (
+                        <span>
+                          Age {age}
+                          {person.birthday ? ` — born ${longDate(person.birthday)}` : ""}
+                        </span>
+                      ) : null}
+                      {place ? (
+                        <>
+                          {lifeSpan ? <span class="sep sep-loc">·</span> : null}
+                          <span class="ms-birthplace">{person.birthplace ?? person.country}</span>
+                        </>
+                      ) : null}
+                    </>
+                  );
+                })()}
               </p>
               {person.bio ? (
                 stripHtml(person.bio).length > 280 ? (

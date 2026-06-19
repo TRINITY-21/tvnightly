@@ -9,13 +9,14 @@ import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard } from "../components/cards";
 import { FilterSelect } from "../components/forms";
-import { fmtRuntime, heroBg, slugifyName } from "../lib/format";
+import { fmtRuntime, headshot, heroBg, slugifyName } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { genreDirectory } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
-import { tmdbMovieBackdrop } from "../lib/tmdb";
+import { tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
+import { resolvePersonProfile } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
-import { AppContext, Bindings, MovieRow, PersonRow } from "../types";
+import { AppContext, Bindings, MovieRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -42,7 +43,15 @@ const titleList = (rows: MovieRow[], n: number) => rows.slice(0, n).map((m) => m
 async function topArt(c: AppContext, top: MovieRow | undefined) {
   let art: { x1: string; x2?: string } | null = null;
   let ambient = false;
-  if (top && c.env.TMDB_API_KEY) art = await tmdbMovieBackdrop(c.env.TMDB_API_KEY, top.imdb_id);
+  if (top && c.env.TMDB_API_KEY) {
+    // D1 films carry a real imdb tt-id; a live-enriched film carries only a
+    // tmdb id (synthetic "tmdb-<id>" imdb_id), so look that up by tmdb id.
+    art = /^tt\d+$/.test(top.imdb_id)
+      ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, top.imdb_id)
+      : top.tmdb_id
+        ? await tmdbUpcomingBackdrop(c.env.TMDB_API_KEY, top.tmdb_id)
+        : null;
+  }
   if (!art && top?.poster_url) {
     art = { x1: top.poster_url };
     ambient = true;
@@ -572,21 +581,15 @@ app.get("/movies/featuring/:slug", async (c) => {
   const slug = c.req.param("slug");
   const idMatch = /-(\d+)$/.exec(slug);
   if (!idMatch) return c.notFound();
-  const person = await c.env.DB.prepare("SELECT * FROM people WHERE id = ?")
-    .bind(Number(idMatch[1]))
-    .first<PersonRow>();
-  if (!person) return c.notFound();
+  // Use the SAME enriched filmography as the person page (D1 + the rest from
+  // TMDB) — querying movie_credits alone returned ~0 rows for a live-led actor
+  // and bounced this page straight back to /person.
+  const profile = await resolvePersonProfile(c, Number(idMatch[1]));
+  if (!profile) return c.notFound();
+  const { person, films } = profile;
   // one canonical URL per person — name drift 301s to the real slug
   const canonicalSlug = `${slugifyName(person.name)}-${person.id}`;
   if (slug !== canonicalSlug) return c.redirect(`/movies/featuring/${canonicalSlug}`, 301);
-
-  const { results: films } = await c.env.DB.prepare(
-    `SELECT mc.character, m.* FROM movie_credits mc JOIN movies m ON m.imdb_id = mc.movie_id
-     WHERE mc.person_id = ?
-     ORDER BY m.rating IS NULL, m.rating DESC, m.popularity DESC, m.votes DESC LIMIT 40`,
-  )
-    .bind(person.id)
-    .all<MovieRow & { character: string | null }>();
   // no films on record → the person page is the right destination
   if (!films.length) return c.redirect(`/person/${canonicalSlug}`, 302);
 
@@ -649,9 +652,25 @@ app.get("/movies/featuring/:slug", async (c) => {
         faqLd(faqs),
       ]}
     >
-      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
+      <header class={`wo-hero wo-hero-bleed wo-hero-person${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
+          {(() => {
+            const face = person.image_url ? headshot(person.image_url, true) : null;
+            return face ? (
+              <img
+                class="wo-hero-face"
+                src={face.src}
+                srcset={face.srcset}
+                width="84"
+                height="112"
+                alt={person.name}
+                loading="eager"
+                decoding="async"
+              />
+            ) : null;
+          })()}
+          <div class="wo-hero-text">
           <p class="section-eyebrow">Filmography</p>
           <h1>Best movies featuring {person.name}</h1>
           <p class="wo-intro">
@@ -667,6 +686,7 @@ app.get("/movies/featuring/:slug", async (c) => {
               Best movies, ranked
             </a>
           </p>
+          </div>
         </div>
       </header>
 

@@ -493,7 +493,6 @@ app.get("/movie/:slug", async (c) => {
   const slug = c.req.param("slug");
   let movie = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?").bind(slug).first<MovieRow>();
   let ratingRef: string;
-  let isTmdb = false;
   if (movie) {
     ratingRef = movie.imdb_id;
   } else {
@@ -502,7 +501,6 @@ app.get("/movie/:slug", async (c) => {
     if (!built) return c.notFound();
     movie = built.movie;
     ratingRef = `t${built.tmdbId}`;
-    isTmdb = true;
   }
   const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
   const region = visitorRegion(c);
@@ -515,13 +513,20 @@ app.get("/movie/:slug", async (c) => {
   // the movie's real designed backdrop + billed cast (TMDB takes the IMDb id
   // directly; both ride one edge-cached bundle). Blurred poster = fallback.
   // `facts` (original title/language/studio/trailer) rides the SAME cached
-  // bundle, so enriching the Movie JSON-LD costs no extra round-trip.
+  // bundle, so enriching the Movie JSON-LD costs no extra round-trip. A live
+  // film without an IMDb id carries a synthetic "tmdb-<id>" — look it up by its
+  // tmdb id instead so cast/backdrop don't silently come up empty.
+  const bundleId = /^tt\d+$/.test(movie.imdb_id)
+    ? movie.imdb_id
+    : movie.tmdb_id
+      ? String(movie.tmdb_id)
+      : movie.imdb_id;
   const [backdrop, cast, crew, facts] = c.env.TMDB_API_KEY
     ? await Promise.all([
-        tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id),
-        tmdbMovieCast(c.env.TMDB_API_KEY, movie.imdb_id, 8),
-        tmdbMovieCrew(c.env.TMDB_API_KEY, movie.imdb_id, 12),
-        tmdbMovieFacts(c.env.TMDB_API_KEY, movie.imdb_id),
+        tmdbMovieBackdrop(c.env.TMDB_API_KEY, bundleId),
+        tmdbMovieCast(c.env.TMDB_API_KEY, bundleId, 8),
+        tmdbMovieCrew(c.env.TMDB_API_KEY, bundleId, 12),
+        tmdbMovieFacts(c.env.TMDB_API_KEY, bundleId),
       ])
     : [null, [], [], null];
   // the director is the headline credit on a film — pulled from the same cached
@@ -631,9 +636,9 @@ app.get("/movie/:slug", async (c) => {
       canonical={canonical(c)}
       ogType="video.movie"
       ogTitle={`${movie.title}${movie.year ? ` (${movie.year})` : ""}`}
-      ogImage={isTmdb ? (movie.poster_url ?? undefined) : `${canonical(c)}/og.png`}
+      ogImage={`${canonical(c)}/og.png`}
       ogImageLarge
-      ogImageAlt={`${movie.title} official poster`}
+      ogImageAlt={`${movie.title} — TV Nightly`}
       preloadImage={backdrop?.x2 ? { x1: backdrop.x1, x2: backdrop.x2 } : undefined}
       ld={[ld, breadcrumb]}
       scripts={["/js/share.js"]}
@@ -1063,8 +1068,9 @@ app.get("/movie/:slug/media", async (c) => {
 
   const heroArt = backdrops.length
     ? heroBg(
+        // bounded renditions — never the multi-MB `original` for an on-page hero
+        `https://image.tmdb.org/t/p/w780${backdrops[0]}`,
         `https://image.tmdb.org/t/p/w1280${backdrops[0]}`,
-        `https://image.tmdb.org/t/p/original${backdrops[0]}`,
       )
     : null;
 
@@ -1266,10 +1272,17 @@ app.get("/movie/:slug/cast", async (c) => {
   const resolved = await resolveMovie(c, c.req.param("slug"));
   if (!resolved) return c.notFound();
   const movie = resolved.movie;
+  // a live film without an IMDb id carries a synthetic "tmdb-<id>" — look it up
+  // by tmdb id so the full cast doesn't come up empty
+  const bundleId = /^tt\d+$/.test(movie.imdb_id)
+    ? movie.imdb_id
+    : movie.tmdb_id
+      ? String(movie.tmdb_id)
+      : movie.imdb_id;
   const [cast, crew] = c.env.TMDB_API_KEY
     ? await Promise.all([
-        tmdbMovieCast(c.env.TMDB_API_KEY, movie.imdb_id, 24),
-        tmdbMovieCrew(c.env.TMDB_API_KEY, movie.imdb_id, 12),
+        tmdbMovieCast(c.env.TMDB_API_KEY, bundleId, 24),
+        tmdbMovieCrew(c.env.TMDB_API_KEY, bundleId, 12),
       ])
     : [[], []];
   const linkable = new Map<string, number>();

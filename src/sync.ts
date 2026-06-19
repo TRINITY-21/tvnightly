@@ -392,7 +392,19 @@ export async function drainOutbox(env: SyncEnv): Promise<number> {
 
   const flags = await sendEmails(
     env,
-    pending.map((p) => ({ to: p.to_email, subject: p.subject, html: p.html })),
+    pending.map((p) => {
+      // The unsubscribe link is already embedded in the footer; lift it back out
+      // for the List-Unsubscribe header so Gmail/Yahoo render a native unsubscribe
+      // (and one-click POST works — RFC 8058). No header if a message has none.
+      const m = p.html.match(/href="([^"]*\/unsubscribe\?token=[^"]+)"/);
+      const headers = m
+        ? {
+            "List-Unsubscribe": `<${m[1]}>`,
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+          }
+        : undefined;
+      return { to: p.to_email, subject: p.subject, html: p.html, ...(headers ? { headers } : {}) };
+    }),
   );
   const sentIds = pending.filter((_, i) => flags[i]).map((p) => p.id);
   if (sentIds.length) {

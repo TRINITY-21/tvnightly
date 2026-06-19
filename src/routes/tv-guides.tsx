@@ -12,13 +12,14 @@ import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, ShowCard } from "../components/cards";
 import { FilterSelect } from "../components/forms";
-import { heroBg, hiRes, posterSrc, slugifyName } from "../lib/format";
+import { headshot, heroBg, hiRes, posterSrc, slugifyName } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { genreDirectory } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
+import { resolvePersonProfile } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
-import { AppContext, Bindings, PersonRow, ShowRow } from "../types";
+import { AppContext, Bindings, ShowRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -573,21 +574,15 @@ app.get("/tv/featuring/:slug", async (c) => {
   const slug = c.req.param("slug");
   const idMatch = /-(\d+)$/.exec(slug);
   if (!idMatch) return c.notFound();
-  const person = await c.env.DB.prepare("SELECT * FROM people WHERE id = ?")
-    .bind(Number(idMatch[1]))
-    .first<PersonRow>();
-  if (!person) return c.notFound();
+  // Same enriched roles as the person page (D1 + the rest from TMDB) — the
+  // credits table alone misses most of a live-led actor's shows and bounced
+  // this page straight back to /person.
+  const profile = await resolvePersonProfile(c, Number(idMatch[1]));
+  if (!profile) return c.notFound();
+  const { person, roles: shows } = profile;
   // one canonical URL per person — name drift 301s to the real slug
   const canonicalSlug = `${slugifyName(person.name)}-${person.id}`;
   if (slug !== canonicalSlug) return c.redirect(`/tv/featuring/${canonicalSlug}`, 301);
-
-  const { results: shows } = await c.env.DB.prepare(
-    `SELECT cr.character, s.* FROM credits cr JOIN shows s ON s.id = cr.show_id
-     WHERE cr.person_id = ?
-     ORDER BY s.rating IS NULL, s.rating DESC, s.weight DESC LIMIT 40`,
-  )
-    .bind(person.id)
-    .all<ShowRow & { character: string | null }>();
   // no TV roles on record → the person page is the right destination
   if (!shows.length) return c.redirect(`/person/${canonicalSlug}`, 302);
 
@@ -650,9 +645,25 @@ app.get("/tv/featuring/:slug", async (c) => {
         faqLd(faqs),
       ]}
     >
-      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
+      <header class={`wo-hero wo-hero-bleed wo-hero-person${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
+          {(() => {
+            const face = person.image_url ? headshot(person.image_url, true) : null;
+            return face ? (
+              <img
+                class="wo-hero-face"
+                src={face.src}
+                srcset={face.srcset}
+                width="84"
+                height="112"
+                alt={person.name}
+                loading="eager"
+                decoding="async"
+              />
+            ) : null;
+          })()}
+          <div class="wo-hero-text">
           <p class="section-eyebrow">TV roles</p>
           <h1>Best TV shows featuring {person.name}</h1>
           <p class="wo-intro">
@@ -668,6 +679,7 @@ app.get("/tv/featuring/:slug", async (c) => {
               Top TV shows, ranked
             </a>
           </p>
+          </div>
         </div>
       </header>
 

@@ -4,6 +4,13 @@ import { ShowRow, MovieRow } from "../types";
 import { posterSrc } from "../lib/format";
 import { IconStar, IconStarBadge } from "./icons";
 
+// A live title too new to have a stable rating (we hide flukey low-vote averages)
+// still deserves a badge — show "NEW" so the slot reads intentional, not missing.
+const CUR_YEAR = new Date().getFullYear();
+const isFreshYear = (year: number | null): boolean => year != null && year >= CUR_YEAR - 1;
+const showYearNum = (s: ShowRow): number | null =>
+  s.premiered ? Number(s.premiered.slice(0, 4)) || null : null;
+
 // Long synopses clamp to 3 lines with a pure-CSS show more/less toggle
 // (hidden checkbox — no JS; the label is the control).
 export const ClampSummary: FC<PropsWithChildren<{ id: string }>> = ({ id, children }) => (
@@ -15,8 +22,9 @@ export const ClampSummary: FC<PropsWithChildren<{ id: string }>> = ({ id, childr
 );
 
 export const StatusBadge: FC<{ status: string | null }> = ({ status }) => {
+  if (!status) return null; // no badge beats an "Unknown" one (e.g. live-TMDB rows)
   const cls = status === "Running" ? "ok" : status === "Ended" ? "ended" : "tbd";
-  return <span class={`badge ${cls}`}>{status ?? "Unknown"}</span>;
+  return <span class={`badge ${cls}`}>{status}</span>;
 };
 
 // width/height match the CSS `aspect-ratio: 2/2.8` so the poster box is reserved
@@ -47,6 +55,8 @@ export const ShowCard: FC<{ show: ShowRow; eager?: boolean }> = ({ show, eager }
           <IconStarBadge class="card-rating-star" />
           {show.rating.toFixed(1)}
         </span>
+      ) : isFreshYear(showYearNum(show)) ? (
+        <span class="card-rating card-new">NEW</span>
       ) : null}
       <span class="card-hover-title" aria-hidden="true">{show.name}</span>
     </div>
@@ -77,6 +87,8 @@ export const MovieCard: FC<{ movie: MovieRow; eager?: boolean }> = ({ movie, eag
           <IconStarBadge class="card-rating-star" />
           {movie.rating.toFixed(1)}
         </span>
+      ) : isFreshYear(movie.year) ? (
+        <span class="card-rating card-new">NEW</span>
       ) : null}
       <span class="card-hover-title" aria-hidden="true">{movie.title}</span>
     </div>

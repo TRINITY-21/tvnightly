@@ -70,7 +70,6 @@ app.get("/sitemaps/:file", async (c) => {
       "/what-to-watch",
       "/movies",
       "/movies/best",
-      "/movies/upcoming",
       "/movies/underrated",
       `/movies/best/${year}`,
       "/tv/underrated",

@@ -16,6 +16,7 @@ export interface EmailMessage {
 export interface EmailEnv {
   EMAIL_PROVIDER?: string;
   EMAIL_FROM?: string; // used by resend; SMTP sends from the authenticated user
+  EMAIL_REPLY_TO?: string; // resend Reply-To — a monitored inbox; header omitted if unset
   // SMTP — works for Gmail or any host. SMTP_* are preferred; the GMAIL_* names
   // are kept as aliases so older configs keep working.
   SMTP_HOST?: string;
@@ -94,13 +95,22 @@ async function sendViaResend(env: EmailEnv, messages: EmailMessage[]): Promise<b
     return messages.map(() => false);
   }
   const from = env.EMAIL_FROM ?? "TV Nightly <onboarding@resend.dev>";
+  const replyTo = env.EMAIL_REPLY_TO;
   const res = await fetch("https://api.resend.com/emails/batch", {
     method: "POST",
     headers: {
       authorization: `Bearer ${env.RESEND_API_KEY}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify(messages.map((m) => ({ from, to: [m.to], subject: m.subject, html: m.html }))),
+    body: JSON.stringify(
+      messages.map((m) => ({
+        from,
+        to: [m.to],
+        subject: m.subject,
+        html: m.html,
+        ...(replyTo ? { reply_to: replyTo } : {}),
+      })),
+    ),
   });
   if (!res.ok) {
     console.error(`[email:resend] batch failed: ${res.status} ${await res.text()}`);

@@ -194,11 +194,109 @@
     });
   }
 
-  // record a 9:16 clip: rasterize the card, then a Ken-Burns zoom + fade over a
-  // canvas captureStream, recorded by MediaRecorder. Prefers mp4 (what TikTok/IG
-  // want); falls back to webm where the browser can't encode mp4.
+  // record a cinematic 9:16 clip — a designed motion sequence composited live on a
+  // canvas (brand sting → focus-pull reveal → film-grain drift with a light sweep
+  // → animated brand lower-third), captured by MediaRecorder. Prefers mp4 (what
+  // TikTok/IG want); falls back to webm where the browser can't encode mp4.
   var vid = document.getElementById("studio-vid");
   if (vid && card) {
+    var W = 1080,
+      H = 1920,
+      SM = 56,
+      SR = 168,
+      CR = W - SR,
+      CW = CR - SM,
+      SB = 300,
+      FOOT_Y = H - SB;
+    var PLATE = "#0e0e11",
+      AMBER = "#FFA94D",
+      INK = "#F2F5FA";
+
+    // --- easing ---
+    function clamp01(x) {
+      return x < 0 ? 0 : x > 1 ? 1 : x;
+    }
+    function seg(t, a, b) {
+      return clamp01((t - a) / (b - a));
+    }
+    function outCubic(x) {
+      return 1 - Math.pow(1 - x, 3);
+    }
+    function inCubic(x) {
+      return x * x * x;
+    }
+    function inOutCubic(x) {
+      return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    }
+    function outBack(x) {
+      var c1 = 1.70158,
+        c3 = c1 + 1;
+      return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+    }
+
+    // rounded-rect path
+    function rr(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    // a grayscale-noise pattern (mean ~128 so it reads as neutral grain in overlay)
+    function grainPattern(ctx, size) {
+      var g = document.createElement("canvas");
+      g.width = g.height = size;
+      var gx = g.getContext("2d"),
+        id = gx.createImageData(size, size),
+        d = id.data;
+      for (var i = 0; i < d.length; i += 4) {
+        var v = (Math.random() * 255) | 0;
+        d[i] = d[i + 1] = d[i + 2] = v;
+        d[i + 3] = 255;
+      }
+      gx.putImageData(id, 0, 0);
+      return ctx.createPattern(g, "repeat");
+    }
+
+    function vignetteCanvas() {
+      var v = document.createElement("canvas");
+      v.width = W;
+      v.height = H;
+      var vx = v.getContext("2d");
+      var g = vx.createRadialGradient(W / 2, H * 0.44, H * 0.18, W / 2, H * 0.5, H * 0.72);
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(1, "rgba(0,0,0,0.52)");
+      vx.fillStyle = g;
+      vx.fillRect(0, 0, W, H);
+      return v;
+    }
+
+    // brand lockup: rounded TV frame + glowing amber dot
+    function mark(ctx, cx, cy, s, alpha) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(cx, cy);
+      ctx.scale(s, s);
+      var w = 128,
+        h = 86,
+        r = 22;
+      ctx.lineWidth = 9;
+      ctx.strokeStyle = INK;
+      ctx.lineJoin = "round";
+      rr(ctx, -w / 2, -h / 2, w, h, r);
+      ctx.stroke();
+      ctx.shadowColor = "rgba(255,169,77,0.8)";
+      ctx.shadowBlur = 26;
+      ctx.fillStyle = AMBER;
+      ctx.beginPath();
+      ctx.arc(w / 2 - 26, h / 2 - 23, 12.5, 0, 7);
+      ctx.fill();
+      ctx.restore();
+    }
+
     vid.addEventListener("click", function () {
       if (!window.MediaRecorder) {
         alert("This browser can't record video — try Chrome.");
@@ -224,24 +322,35 @@
             return false;
           }
         })[0] || "video/webm";
-      fetch(card.src)
-        .then(function (r) {
-          return r.text();
-        })
-        .then(function (svgText) {
+
+      // make sure the brand font is rasterizable on the canvas before we record
+      var fontReady =
+        document.fonts && document.fonts.load
+          ? Promise.all([
+              document.fonts.load("900 66px Archivo"),
+              document.fonts.load("800 44px Archivo"),
+              document.fonts.load("600 26px Archivo"),
+            ]).catch(function () {})
+          : Promise.resolve();
+
+      Promise.all([fetch(card.src).then(function (r) { return r.text(); }), fontReady])
+        .then(function (out) {
+          var svgText = out[0];
           var url = URL.createObjectURL(new Blob([svgText], { type: "image/svg+xml;charset=utf-8" }));
           var base = new Image();
           base.onload = function () {
             URL.revokeObjectURL(url);
-            var W = 1080,
-              H = 1920;
             var canvas = document.createElement("canvas");
             canvas.width = W;
             canvas.height = H;
             var ctx = canvas.getContext("2d");
+            var grains = [];
+            for (var gi = 0; gi < 7; gi++) grains.push(grainPattern(ctx, 150));
+            var vig = vignetteCanvas();
+
             var rec = new MediaRecorder(canvas.captureStream(30), {
               mimeType: mime,
-              videoBitsPerSecond: 9000000,
+              videoBitsPerSecond: 12000000,
             });
             var chunks = [];
             rec.ondataavailable = function (e) {
@@ -261,30 +370,161 @@
               }, 1500);
               vreset();
             };
-            var DUR = 5200,
+
+            var DUR = 7000,
               t0 = performance.now();
-            rec.start();
-            function frame(now) {
-              var t = Math.min(1, (now - t0) / DUR);
-              ctx.fillStyle = "#0e0e11";
+
+            function render(t) {
+              ctx.globalCompositeOperation = "source-over";
+              ctx.filter = "none";
+              ctx.globalAlpha = 1;
+              ctx.fillStyle = PLATE;
               ctx.fillRect(0, 0, W, H);
-              var scale = 1 + 0.06 * t; // slow push-in
-              var fade = Math.min(1, t / 0.07); // fade in over the first ~7%
-              ctx.save();
-              ctx.globalAlpha = fade;
-              ctx.translate(W / 2, H * 0.42);
-              ctx.scale(scale, scale);
-              ctx.translate(-W / 2, -H * 0.42);
-              ctx.drawImage(base, 0, 0, W, H);
-              ctx.restore();
-              if (t < 1) requestAnimationFrame(frame);
+
+              // card: focus-pull reveal, then a slow cinematic push-in + drift
+              var rev = outCubic(seg(t, 500, 1600));
+              if (rev > 0) {
+                var drift = inOutCubic(seg(t, 1600, DUR - 1200));
+                var scale = 1.08 - 0.08 * rev + 0.04 * drift;
+                var blur = 16 * (1 - rev);
+                var bright = 0.5 + 0.5 * rev;
+                var yd = -20 * drift;
+                var xd = 8 * Math.sin(drift * Math.PI);
+                ctx.save();
+                ctx.globalAlpha = rev;
+                ctx.filter = "blur(" + blur.toFixed(2) + "px) brightness(" + bright.toFixed(3) + ")";
+                ctx.translate(W / 2 + xd, H / 2 + yd);
+                ctx.scale(scale, scale);
+                ctx.translate(-W / 2, -H / 2);
+                ctx.drawImage(base, 0, 0, W, H);
+                ctx.restore();
+                ctx.filter = "none";
+
+                // subtle amber edge vignette during reveal
+                if (rev > 0.4 && rev < 0.95) {
+                  ctx.save();
+                  ctx.globalCompositeOperation = "screen";
+                  ctx.globalAlpha = 0.04 * Math.sin(rev * Math.PI);
+                  var eg = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.72);
+                  eg.addColorStop(0, "rgba(255,169,77,0)");
+                  eg.addColorStop(1, "rgba(255,169,77,1)");
+                  ctx.fillStyle = eg;
+                  ctx.fillRect(0, 0, W, H);
+                  ctx.restore();
+                }
+              }
+
+              // a single diagonal light sheen sweeping across the card
+              var sh = seg(t, 1700, 3000);
+              if (sh > 0 && sh < 1 && rev > 0.65) {
+                var cxs = -W * 0.5 + W * 1.9 * inOutCubic(sh);
+                ctx.save();
+                ctx.globalCompositeOperation = "screen";
+                ctx.globalAlpha = Math.sin(sh * Math.PI) * 0.16;
+                var grd = ctx.createLinearGradient(cxs - 200, 0, cxs + 200, H);
+                grd.addColorStop(0, "rgba(255,255,255,0)");
+                grd.addColorStop(0.5, "rgba(255,238,205,1)");
+                grd.addColorStop(1, "rgba(255,255,255,0)");
+                ctx.fillStyle = grd;
+                ctx.fillRect(cxs - 240, 0, 480, H);
+                ctx.restore();
+              }
+
+              // animated film grain
+              if (rev > 0.55) {
+                ctx.save();
+                ctx.globalCompositeOperation = "overlay";
+                ctx.globalAlpha = 0.055;
+                ctx.fillStyle = grains[Math.floor(t / 55) % grains.length];
+                ctx.fillRect(0, 0, W, H);
+                ctx.restore();
+              }
+
+              // vignette
+              if (rev > 0.25) {
+                ctx.save();
+                ctx.globalAlpha = rev;
+                ctx.drawImage(vig, 0, 0);
+                ctx.restore();
+              }
+
+              // intro brand sting (on the dark, before the card resolves under it)
+              var iA = outCubic(seg(t, 0, 340)) * (1 - inOutCubic(seg(t, 640, 980)));
+              if (iA > 0.001) {
+                var iS = 0.84 + 0.16 * outBack(seg(t, 0, 520));
+                mark(ctx, W / 2, H * 0.43, iS, iA);
+                ctx.save();
+                ctx.globalAlpha = iA;
+                ctx.fillStyle = INK;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.font = "900 66px Archivo, sans-serif";
+                var ty = H * 0.43 + 104;
+                ctx.fillText("TV NIGHTLY", W / 2, ty);
+                var tw = ctx.measureText("TV NIGHTLY").width;
+                ctx.fillStyle = AMBER;
+                ctx.beginPath();
+                ctx.arc(W / 2 + tw / 2 + 20, ty + 22, 7.5, 0, 7);
+                ctx.fill();
+                ctx.restore();
+              }
+
+              // brand lower-third outro — gradient slab with lockup (safe column)
+              var oRise = outBack(seg(t, 5200, 5700));
+              if (oRise > 0.001) {
+                var slabH = 300,
+                  oy = FOOT_Y - slabH * 0.35 * (1 - oRise);
+                ctx.save();
+                var sg = ctx.createLinearGradient(0, oy - 80, 0, H);
+                sg.addColorStop(0, "rgba(14,14,17,0)");
+                sg.addColorStop(0.35, "rgba(14,14,17,0.9)");
+                sg.addColorStop(1, "rgba(14,14,17,0.98)");
+                ctx.fillStyle = sg;
+                ctx.fillRect(0, oy - 80, W, slabH + 160);
+                ctx.globalAlpha = clamp01(oRise);
+                ctx.fillStyle = AMBER;
+                ctx.fillRect(SM, oy, CW, 3);
+                ctx.restore();
+
+                var cx = SM + CW / 2;
+                var tA = clamp01(seg(t, 5500, 5950));
+                mark(ctx, SM + 52, oy + 96, 0.55, tA);
+                ctx.save();
+                ctx.globalAlpha = tA;
+                ctx.textAlign = "left";
+                ctx.textBaseline = "alphabetic";
+                ctx.fillStyle = AMBER;
+                ctx.fillRect(SM, oy, 96, 4);
+                ctx.font = "900 46px Archivo, sans-serif";
+                ctx.fillText("tvnightly.com", SM, oy + 196);
+                ctx.fillStyle = "rgba(255,255,255,0.55)";
+                ctx.textBaseline = "middle";
+                ctx.font = "600 24px Archivo, sans-serif";
+                ctx.fillText("Best episodes · release dates · where to stream", SM, oy + 242);
+                ctx.restore();
+              }
+            }
+
+            function loop(now) {
+              var t = now - t0;
+              render(t);
+              if (t < DUR) requestAnimationFrame(loop);
               else
                 setTimeout(function () {
-                  rec.stop();
-                }, 120);
+                  try {
+                    rec.stop();
+                  } catch (e) {}
+                }, 140);
             }
+
             vid.textContent = "Recording…";
-            requestAnimationFrame(frame);
+            try {
+              rec.start();
+            } catch (e) {
+              vreset();
+              return;
+            }
+            requestAnimationFrame(loop);
           };
           base.onerror = function () {
             URL.revokeObjectURL(url);

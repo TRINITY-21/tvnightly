@@ -79,6 +79,26 @@
   flex: none;
   font-size: 1.02em;
 }
+/* "NEW" status chip — amber on dark, so it never reads as a score */
+.card-new {
+  background: var(--accent);
+  color: #16130d;
+  gap: 0;
+  letter-spacing: 0.06em;
+}
+/* the hero/meta-strip equivalent — same amber chip, inline with the meta line */
+.meta-new {
+  display: inline-block;
+  background: var(--accent);
+  color: #16130d;
+  font-weight: 800;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  padding: 0.18rem 0.42rem;
+  border-radius: 5px;
+  vertical-align: middle;
+}
 .card-body {
   display: flex;
   justify-content: space-between;

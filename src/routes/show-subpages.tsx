@@ -10,7 +10,8 @@ import { ShareBar } from "../components/share";
 import { buildDossier } from "../lib/dossier";
 import { epCode, epHref, heroBg, largeStill, longDate, posterSrc, stripHtml, fmtRuntime } from "../lib/format";
 import { providersFor, visitorRegion } from "../lib/providers";
-import { getShow, similarShows } from "../lib/queries";
+import { similarShows } from "../lib/queries";
+import { resolveShow } from "../lib/tmdb-show";
 import { servePng } from "../lib/render";
 import { breadcrumbLd, canonical, faqLd, origin } from "../lib/seo";
 import { archivoFontCss, buildSignalSvg, posterDataUri } from "../lib/signal";
@@ -73,13 +74,9 @@ function essentialPicks(eps: EpisodeRow[], n: number, ended: boolean): Essential
 }
 
 app.get("/show/:slug/essential", async (c) => {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
-  const { results: allEps } = await c.env.DB.prepare(
-    "SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number",
-  )
-    .bind(show.id)
-    .all<EpisodeRow>();
+  const r = await resolveShow(c, c.req.param("slug"));
+  if (!r) return c.notFound();
+  const { show, episodes: allEps } = r;
 
   // Optional per-season scope: the skip guide for one season.
   const path = `/show/${show.slug}/essential`;
@@ -280,13 +277,9 @@ app.get("/show/:slug/essential", async (c) => {
 
 /** Loads a show + scoped episodes with the shared ?season validation. */
 async function ratingsScope(c: Context<{ Bindings: Bindings }, "/show/:slug">, redirectTo: string) {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return null;
-  const { results: allEps } = await c.env.DB.prepare(
-    "SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number",
-  )
-    .bind(show.id)
-    .all<EpisodeRow>();
+  const r = await resolveShow(c, c.req.param("slug"));
+  if (!r) return null;
+  const { show, episodes: allEps } = r;
   // null seasons ride the specials bucket (0), matching the grid builder;
   // specials sort last, like the grid's SP column
   const raw0 = [...new Set(allEps.map((e) => e.season ?? 0))].sort((a, b) => a - b);
@@ -367,8 +360,9 @@ function ogShowData(show: ShowRow, posterUri: string | null, backdropUri: string
 app.get("/show/:slug/og.png", async (c) => {
   const slug = c.req.param("slug");
   return servePng(c, `show/${slug}`, async () => {
-    const show = await getShow(c.env.DB, slug);
-    if (!show) return null;
+    const r = await resolveShow(c, slug);
+    if (!r) return null;
+    const show = r.show;
     const bd =
       show.tmdb_id && c.env.TMDB_API_KEY ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id) : null;
     const [posterUri, backdropUri] = await Promise.all([
@@ -383,13 +377,14 @@ app.get("/show/:slug/og.png", async (c) => {
 app.get("/show/:slug/ratings/og.png", async (c) => {
   const slug = c.req.param("slug");
   return servePng(c, `ratings/${slug}`, async () => {
-    const show = await getShow(c.env.DB, slug);
-    if (!show) return null;
-    const { results: eps } = await c.env.DB.prepare(
-      "SELECT season, number, rating FROM episodes WHERE show_id = ? ORDER BY season, number",
-    )
-      .bind(show.id)
-      .all<RatingsEp>();
+    const r = await resolveShow(c, slug);
+    if (!r) return null;
+    const show = r.show;
+    const eps: RatingsEp[] = r.episodes.map((e) => ({
+      season: e.season,
+      number: e.number,
+      rating: e.rating,
+    }));
     if (!eps.length) return null;
     const bd =
       show.tmdb_id && c.env.TMDB_API_KEY ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id) : null;
@@ -538,20 +533,22 @@ app.get("/show/:slug/ratings", async (c) => {
 
 const rankedPage =
   (order: "DESC" | "ASC") => async (c: Context<{ Bindings: Bindings }, "/show/:slug">) => {
-    const show = await getShow(c.env.DB, c.req.param("slug"));
-    if (!show) return c.notFound();
+    const resolved = await resolveShow(c, c.req.param("slug"));
+    if (!resolved) return c.notFound();
+    const show = resolved.show;
     const kind = order === "DESC" ? "best" : "worst";
     const base = `/show/${show.slug}/${kind}-episodes`;
 
     // One grouped pass: validates the ?season filter and sizes the run
     // spectrum (one cell per episode slot).
-    const { results: seasonRows } = await c.env.DB.prepare(
-      `SELECT season AS s, MAX(number) AS maxn
-       FROM episodes WHERE show_id = ? AND season IS NOT NULL
-       GROUP BY season ORDER BY season`,
-    )
-      .bind(show.id)
-      .all<{ s: number; maxn: number | null }>();
+    const maxBySeason = new Map<number, number>();
+    for (const e of resolved.episodes) {
+      if (e.season == null) continue;
+      maxBySeason.set(e.season, Math.max(maxBySeason.get(e.season) ?? 0, e.number ?? 0));
+    }
+    const seasonRows = [...maxBySeason.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([s, maxn]) => ({ s, maxn }));
     const seasons = seasonRows.map((r) => r.s);
     const rawSeason = (c.req.query("season") ?? "").trim();
     let season: number | null = null;
@@ -561,14 +558,30 @@ const rankedPage =
       season = n;
     }
 
-    const { results: eps } = await c.env.DB.prepare(
-      `SELECT e.*, v.up, v.down FROM episodes e
-       LEFT JOIN episode_votes v ON v.episode_id = e.id
-       WHERE e.show_id = ? AND e.rating IS NOT NULL${season != null ? " AND e.season = ?" : ""}
-       ORDER BY e.rating ${order}, e.season, e.number LIMIT 25`,
-    )
-      .bind(...(season != null ? [show.id, season] : [show.id]))
-      .all<EpisodeRow & { up: number | null; down: number | null }>();
+    let eps: (EpisodeRow & { up: number | null; down: number | null })[];
+    if (resolved.isTmdb) {
+      const dir = order === "DESC" ? -1 : 1;
+      eps = resolved.episodes
+        .filter((e) => e.rating != null && (season == null || e.season === season))
+        .map((e) => ({ ...e, up: null, down: null }))
+        .sort(
+          (a, b) =>
+            dir * ((a.rating ?? 0) - (b.rating ?? 0)) ||
+            (a.season ?? 0) - (b.season ?? 0) ||
+            (a.number ?? 0) - (b.number ?? 0),
+        )
+        .slice(0, 25);
+    } else {
+      const res = await c.env.DB.prepare(
+        `SELECT e.*, v.up, v.down FROM episodes e
+         LEFT JOIN episode_votes v ON v.episode_id = e.id
+         WHERE e.show_id = ? AND e.rating IS NOT NULL${season != null ? " AND e.season = ?" : ""}
+         ORDER BY e.rating ${order}, e.season, e.number LIMIT 25`,
+      )
+        .bind(...(season != null ? [show.id, season] : [show.id]))
+        .all<EpisodeRow & { up: number | null; down: number | null }>();
+      eps = res.results;
+    }
 
     // the run spectrum: one cell per episode slot, the listed 25 lit —
     // top-list membership is printed nowhere else on the page
@@ -813,24 +826,47 @@ function premierePattern(firsts: SeasonFirst[]): { month: string; n: number; tot
 }
 
 app.get("/show/:slug/next-episode", async (c) => {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
-  const [next, recentRes, similar] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT * FROM episodes WHERE show_id = ? AND airstamp > datetime('now')
-       ORDER BY airstamp LIMIT 1`,
-    )
-      .bind(show.id)
-      .first<EpisodeRow>(),
-    c.env.DB.prepare(
-      `SELECT * FROM episodes WHERE show_id = ? AND airstamp <= datetime('now')
-       ORDER BY airstamp DESC LIMIT 3`,
-    )
-      .bind(show.id)
-      .all<EpisodeRow>(),
-    similarShows(c.env.DB, show),
-  ]);
-  const recent = recentRes.results;
+  const r = await resolveShow(c, c.req.param("slug"));
+  if (!r) return c.notFound();
+  const show = r.show;
+  let next: EpisodeRow | null;
+  let recent: EpisodeRow[];
+  if (r.isTmdb) {
+    const now = Date.now();
+    const dated = r.episodes.filter((e) => e.airstamp);
+    next =
+      dated
+        .filter((e) => new Date(e.airstamp as string).getTime() > now)
+        .sort(
+          (a, b) =>
+            new Date(a.airstamp as string).getTime() - new Date(b.airstamp as string).getTime(),
+        )[0] ?? null;
+    recent = dated
+      .filter((e) => new Date(e.airstamp as string).getTime() <= now)
+      .sort(
+        (a, b) =>
+          new Date(b.airstamp as string).getTime() - new Date(a.airstamp as string).getTime(),
+      )
+      .slice(0, 3);
+  } else {
+    const [nextRes, recentRes] = await Promise.all([
+      c.env.DB.prepare(
+        `SELECT * FROM episodes WHERE show_id = ? AND airstamp > datetime('now')
+         ORDER BY airstamp LIMIT 1`,
+      )
+        .bind(show.id)
+        .first<EpisodeRow>(),
+      c.env.DB.prepare(
+        `SELECT * FROM episodes WHERE show_id = ? AND airstamp <= datetime('now')
+         ORDER BY airstamp DESC LIMIT 3`,
+      )
+        .bind(show.id)
+        .all<EpisodeRow>(),
+    ]);
+    next = nextRes;
+    recent = recentRes.results;
+  }
+  const similar = await similarShows(c.env.DB, show);
   const lastAired = recent[0] ?? null;
   const region = visitorRegion(c);
 
@@ -1018,33 +1054,67 @@ app.get("/show/:slug/next-episode", async (c) => {
 // ---------------------------------------------------------- release date
 
 app.get("/show/:slug/release-date", async (c) => {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
+  const r = await resolveShow(c, c.req.param("slug"));
+  if (!r) return c.notFound();
+  const show = r.show;
   const db = c.env.DB;
 
-  const next = await db
-    .prepare(
-      `SELECT * FROM episodes WHERE show_id = ? AND airstamp > datetime('now')
-       ORDER BY airstamp LIMIT 1`,
-    )
-    .bind(show.id)
-    .first<EpisodeRow>();
-  const lastAired = await db
-    .prepare(
-      `SELECT * FROM episodes WHERE show_id = ? AND airstamp <= datetime('now')
-       ORDER BY airstamp DESC LIMIT 1`,
-    )
-    .bind(show.id)
-    .first<EpisodeRow>();
-  const { results: history } = await db
-    .prepare(
-      `SELECT type, season, old_value, new_value, detected_at FROM show_events
-       WHERE show_id = ? ORDER BY detected_at DESC LIMIT 10`,
-    )
-    .bind(show.id)
-    .all<Omit<EventRow, "name" | "slug">>();
-
-  const firsts = await seasonPremieres(db, show.id);
+  let next: EpisodeRow | null;
+  let lastAired: EpisodeRow | null;
+  let history: Omit<EventRow, "name" | "slug">[];
+  let firsts: SeasonFirst[];
+  if (r.isTmdb) {
+    const now = Date.now();
+    const dated = r.episodes.filter((e) => e.airstamp);
+    next =
+      dated
+        .filter((e) => new Date(e.airstamp as string).getTime() > now)
+        .sort(
+          (a, b) =>
+            new Date(a.airstamp as string).getTime() - new Date(b.airstamp as string).getTime(),
+        )[0] ?? null;
+    lastAired =
+      dated
+        .filter((e) => new Date(e.airstamp as string).getTime() <= now)
+        .sort(
+          (a, b) =>
+            new Date(b.airstamp as string).getTime() - new Date(a.airstamp as string).getTime(),
+        )[0] ?? null;
+    history = [];
+    const firstBySeason = new Map<number, string>();
+    for (const e of r.episodes) {
+      if (e.season == null || !e.airdate) continue;
+      const cur = firstBySeason.get(e.season);
+      if (!cur || e.airdate < cur) firstBySeason.set(e.season, e.airdate);
+    }
+    firsts = [...firstBySeason.entries()]
+      .map(([s, first]) => ({ s, first }))
+      .sort((a, b) => b.s - a.s);
+  } else {
+    next = await db
+      .prepare(
+        `SELECT * FROM episodes WHERE show_id = ? AND airstamp > datetime('now')
+         ORDER BY airstamp LIMIT 1`,
+      )
+      .bind(show.id)
+      .first<EpisodeRow>();
+    lastAired = await db
+      .prepare(
+        `SELECT * FROM episodes WHERE show_id = ? AND airstamp <= datetime('now')
+         ORDER BY airstamp DESC LIMIT 1`,
+      )
+      .bind(show.id)
+      .first<EpisodeRow>();
+    const histRes = await db
+      .prepare(
+        `SELECT type, season, old_value, new_value, detected_at FROM show_events
+         WHERE show_id = ? ORDER BY detected_at DESC LIMIT 10`,
+      )
+      .bind(show.id)
+      .all<Omit<EventRow, "name" | "slug">>();
+    history = histRes.results;
+    firsts = await seasonPremieres(db, show.id);
+  }
   const pattern = premierePattern(firsts);
 
   // the date over the show's own frame: the dated episode's still when one

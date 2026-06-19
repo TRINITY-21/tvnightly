@@ -45,6 +45,17 @@ export async function getRatedTitle(
     const movie = await db.prepare("SELECT * FROM movies WHERE imdb_id = ?").bind(ref).first<MovieRow>();
     return movie ? { movie, name: movie.year ? `${movie.title} (${movie.year})` : movie.title, image: movie.poster_url } : null;
   }
+  // materialized live-TMDB title (ref "t<tmdbId>") — its snapshot stands in for a
+  // mirror row so community lists can render it without a TMDB call.
+  if (/^t\d+$/.test(ref)) {
+    const snap = await db
+      .prepare("SELECT name, year, poster_url FROM title_snapshots WHERE kind = ? AND ref = ?")
+      .bind(kind, ref)
+      .first<{ name: string; year: string | null; poster_url: string | null }>();
+    return snap
+      ? { name: snap.year ? `${snap.name} (${snap.year})` : snap.name, image: snap.poster_url }
+      : null;
+  }
   return null;
 }
 
@@ -60,10 +71,10 @@ export function parseRated(s: string | undefined): RatedEntry[] {
   if (!s) return [];
   const out: RatedEntry[] = [];
   for (const part of s.split(",").slice(0, 10)) {
-    const m = /^(tv|movie):(\d+|tt\d+):(love|like|meh|awful)$/.exec(part);
+    const m = /^(tv|movie):(\d+|tt\d+|t\d+):(love|like|meh|awful)$/.exec(part);
     if (!m) continue;
-    if (m[1] === "tv" && !/^\d+$/.test(m[2])) continue;
-    if (m[1] === "movie" && !/^tt\d+$/.test(m[2])) continue;
+    if (m[1] === "tv" && !/^\d+$/.test(m[2]) && !/^t\d+$/.test(m[2])) continue;
+    if (m[1] === "movie" && !/^tt\d+$/.test(m[2]) && !/^t\d+$/.test(m[2])) continue;
     if (!out.some((e) => e.kind === m[1] && e.ref === m[2]))
       out.push({
         kind: m[1] as RatedEntry["kind"],

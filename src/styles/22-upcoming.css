@@ -2,6 +2,15 @@
    Hero + headline card + opening-soon shelf + monthly rows — same grammar
    as premieres and the chart pages, tuned for films without slugs yet. */
 
+/* premieres hub: the TV / Movies band dividers — bigger, amber, room above so
+   the two regions read as distinct halves of one page (no card chrome). */
+.premiere-band {
+  font-size: 0.86rem;
+  color: var(--accent);
+  margin: 2.6rem 0 1.1rem;
+}
+.premiere-band:first-of-type { margin-top: 1.6rem; }
+
 .wo-hero .wo-hero-body {
   min-height: 15rem;
   display: flex;

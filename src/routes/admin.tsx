@@ -227,7 +227,11 @@ app.get("/admin/studio", async (c) => {
       ) : null}
 
       <div class="studio-preview">
-        <img id="studio-card" src={src} alt="Social card preview" width="1080" height="1920" />
+        <div class="studio-preview-frame">
+          <img id="studio-card" src={src} alt="Social card preview" width="1080" height="1920" />
+          <div class="studio-safe" aria-hidden="true" title="TikTok / Shorts UI safe zone"></div>
+        </div>
+        <p class="studio-safe-note muted">Content stays left of the shaded rail — clears like, comment &amp; share buttons.</p>
       </div>
       <p class="studio-actions">
         <button type="button" id="studio-dl" class="studio-dl-btn">

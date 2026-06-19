@@ -25,7 +25,12 @@
     // but nothing else breaks. ('gmail' rewrote From to the Gmail account + capped
     // ~500/day — that's why we moved off it.)
     "EMAIL_PROVIDER": "resend",
-    "EMAIL_FROM": "TV Nightly <alerts@tvnightly.com>"
+    "EMAIL_FROM": "TV Nightly <alerts@tvnightly.com>",
+    // Reply-To on outbound mail → the monitored public inbox (Email Routing forwards
+    // it to the team), so subscriber replies reach a human, not the alerts sender.
+    "EMAIL_REPLY_TO": "contact@tvnightly.com",
+    // /feedback notifications land here (contact@ forwards to the team inbox)
+    "FEEDBACK_TO": "contact@tvnightly.com"
     // CF_BEACON_TOKEN — paste here (it's public, not a secret) AFTER creating the
     // Cloudflare Web Analytics site post-deploy; the beacon renders only when set.
     // TURNSTILE_SITE_KEY — paste the Turnstile widget sitekey (public) after

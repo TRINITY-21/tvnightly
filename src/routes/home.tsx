@@ -3,8 +3,11 @@ import { IconStar, IconReel, IconDial, IconClapper, IconHearts, IconTvPlay, Icon
 import { FC, PropsWithChildren } from "hono/jsx";
 import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
 import { visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
-import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml, slugifyName } from "../lib/format";
-import { tmdbBackdrop, tmdbMovieBackdrop, tmdbTrending } from "../lib/tmdb";
+import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml, slugifyName, isNewYear } from "../lib/format";
+import { tmdbBackdrop, tmdbMovieBackdrop, tmdbPopular, tmdbTrendingList, tmdbUpcomingMovies } from "../lib/tmdb";
+import { toShowRow, toMovieRow } from "../lib/tmdb-rows";
+import { tmdbHeroShow } from "../lib/tmdb-show";
+import { liveTonight } from "../lib/schedule-live";
 import { canonical, origin, siteIdentityLd } from "../lib/seo";
 import { Layout } from "../components/Layout";
 import { StatusBadge, ShowCard, MovieCard } from "../components/cards";
@@ -22,6 +25,13 @@ const HUB_LANES = [
   { href: "/classics", name: "Classic film", genre: null, dek: "The canon before 1980, streamable tonight." },
 ] as const;
 const GENRE_LANES = ["Drama", "Crime", "Comedy", "Thriller", "Fantasy", "Mystery", "Romance", "Action"] as const;
+
+// Real series & films only for the marquee surfaces — keeps live-broadcast filler
+// (talk shows, news, reality, sports, variety, game/award/panel shows) out of the
+// hero, the tonight rail and premieres. type is TVmaze's own classification
+// (migration 0021_show_type); rows whose type is still NULL are simply not surfaced.
+const MARQUEE_TYPE_LIST = ["Scripted", "Animation", "Documentary"] as const;
+const MARQUEE_TYPES = MARQUEE_TYPE_LIST.map((t) => `'${t}'`).join(", ");
 
 /** Backdrop of a lane's reigning #1 — its genre's top show (or, for the
  *  classics lane, the top pre-1980 film). All TMDB calls ride the 7-day
@@ -86,30 +96,104 @@ const ShelfRail: FC<PropsWithChildren<{ label: string; ordered?: boolean }>> = (
   </div>
 );
 
-/** TMDB's weekly worldwide trending list, matched against our own mirror
- *  in their trending order — only titles we can actually take the reader to. */
-async function trendingRows<T extends { tmdb_id: number | null }>(
-  c: { env: Bindings },
-  kind: "tv" | "movie",
-  table: "shows" | "movies",
-  limit = 18,
-): Promise<T[]> {
-  if (!c.env.TMDB_API_KEY) return [];
-  const ids = await tmdbTrending(c.env.TMDB_API_KEY, kind);
-  if (!ids.length) return [];
-  const rows = await c.env.DB.prepare(
-    `SELECT * FROM ${table} WHERE tmdb_id IN (${ids.map(() => "?").join(",")})`,
-  )
-    .bind(...ids)
-    .all<T>()
-    .then((r) => r.results);
-  const rank = new Map(ids.map((id, i) => [id, i]));
-  return rows
-    .sort((a, b) => (rank.get(a.tmdb_id!) ?? 99) - (rank.get(b.tmdb_id!) ?? 99))
-    .slice(0, limit);
+// ---------------------------------------------------------------- home
+
+// homepage discovery rails: live TMDB (always current), card-shaped so the cards
+// render + their links resolve via the detail fallback. A D1 fallback keeps the
+// rail from emptying if the key is missing / TMDB hiccups.
+//
+// "Popular" stays ranked by TMDB popularity (the heat signal — distinct from the
+// Top-rated rail), but we keep a quality floor: a card must actually be rated and
+// clear a watchable bar, so brand-new unrated titles and low-rated noise never
+// ride the popularity wave onto the shelf.
+const POPULAR_MIN_RATING = 7.0;
+const isRated = (h: { rating: number | null }) => h.rating != null && h.rating >= POPULAR_MIN_RATING;
+async function popularShowRail(c: { env: Bindings }): Promise<ShowRow[]> {
+  const key = c.env.TMDB_API_KEY;
+  if (key) {
+    const hits = (await tmdbPopular(key, "tv")).filter(isRated);
+    if (hits.length) return hits.slice(0, 18).map(toShowRow);
+  }
+  return (
+    await c.env.DB.prepare(
+      "SELECT * FROM shows WHERE rating >= ? ORDER BY weight DESC LIMIT 18",
+    )
+      .bind(POPULAR_MIN_RATING)
+      .all<ShowRow>()
+  ).results;
+}
+async function popularMovieRail(c: { env: Bindings }): Promise<MovieRow[]> {
+  const key = c.env.TMDB_API_KEY;
+  if (key) {
+    const hits = (await tmdbPopular(key, "movie")).filter(isRated);
+    if (hits.length) return hits.slice(0, 18).map(toMovieRow);
+  }
+  return (
+    await c.env.DB.prepare(
+      "SELECT * FROM movies WHERE rating >= ? ORDER BY popularity DESC LIMIT 18",
+    )
+      .bind(POPULAR_MIN_RATING)
+      .all<MovieRow>()
+  ).results;
+}
+async function trendingShowRail(c: { env: Bindings }): Promise<ShowRow[]> {
+  return c.env.TMDB_API_KEY
+    ? (await tmdbTrendingList(c.env.TMDB_API_KEY, "tv")).slice(0, 18).map(toShowRow)
+    : [];
+}
+async function trendingMovieRail(c: { env: Bindings }): Promise<MovieRow[]> {
+  return c.env.TMDB_API_KEY
+    ? (await tmdbTrendingList(c.env.TMDB_API_KEY, "movie")).slice(0, 18).map(toMovieRow)
+    : [];
 }
 
-// ---------------------------------------------------------------- home
+// the movie half of the marquee: upcoming releases, popularity-ranked, mirrored
+// titles linked to their canonical page (the rest resolve via the detail hint).
+type ComingMovie = {
+  title: string;
+  slug: string | null;
+  tmdb_id: number;
+  poster_url: string | null;
+  release_date: string;
+};
+async function upcomingMovieRail(c: { env: Bindings }): Promise<ComingMovie[]> {
+  const key = c.env.TMDB_API_KEY;
+  if (!key) return [];
+  const today = new Date().toISOString().slice(0, 10);
+  const top = (await tmdbUpcomingMovies(key))
+    .filter((m) => m.releaseDate >= today)
+    .sort((a, b) => b.popularity - a.popularity)
+    .slice(0, 12);
+  if (!top.length) return [];
+  const slugByTmdb = new Map<number, string>();
+  const ids = top.map((m) => m.tmdbId);
+  const { results } = await c.env.DB.prepare(
+    `SELECT tmdb_id, slug FROM movies WHERE tmdb_id IN (${ids.map(() => "?").join(",")})`,
+  )
+    .bind(...ids)
+    .all<{ tmdb_id: number; slug: string }>();
+  for (const r of results) slugByTmdb.set(r.tmdb_id, r.slug);
+  return top.map((m) => ({
+    title: m.title,
+    slug: slugByTmdb.get(m.tmdbId) ?? null,
+    tmdb_id: m.tmdbId,
+    poster_url: m.posterPath ? `https://image.tmdb.org/t/p/w342${m.posterPath}` : null,
+    release_date: m.releaseDate,
+  }));
+}
+
+// the marquee: the week's #1 trending series, period — live from TMDB so it's
+// always the genuine chart-topper, mirrored or not. We skip the reality/news/
+// soap/talk genres the hero has always kept out (no AGT, no broadcast news),
+// then build the full row (genres, network, providers) for the rich treatment.
+const HERO_SKIP_GENRES = new Set([10763, 10764, 10766, 10767]); // news, reality, soap, talk
+async function trendingHeroShow(c: { env: Bindings }): Promise<ShowRow | null> {
+  const key = c.env.TMDB_API_KEY;
+  if (!key) return null;
+  const list = await tmdbTrendingList(key, "tv");
+  const top = list.find((h) => !(h.genreIds ?? []).some((g) => HERO_SKIP_GENRES.has(g)));
+  return top ? await tmdbHeroShow(key, top.tmdbId) : null;
+}
 
 app.get("/", async (c) => {
   type SpotRow = ShowRow & {
@@ -119,42 +203,20 @@ app.get("/", async (c) => {
     ep_airdate: string | null;
     ep_airstamp: string | null;
   };
-  const [top, topMovies, tonight, premieres, spotTonight, spotPremiere, topStill, trendTv, trendMovies, arts] = await Promise.all([
-    // weight-only ORDER BY rides idx_shows_weight; a rating tiebreak would
-    // force a full scan + temp sort (weights are near-unique anyway)
-    c.env.DB.prepare("SELECT * FROM shows ORDER BY weight DESC LIMIT 18")
-      .all<ShowRow>()
-      .then((r) => r.results),
-    c.env.DB.prepare("SELECT * FROM movies ORDER BY popularity DESC LIMIT 18")
-      .all<MovieRow>()
-      .then((r) => r.results),
-    c.env.DB.prepare(
-      `SELECT e.*, s.name AS show_name, s.slug AS show_slug, s.network AS network,
-              s.poster_url AS show_poster, s.image_url AS show_image
-       FROM episodes e JOIN shows s ON s.id = e.show_id
-       WHERE e.airstamp >= datetime('now','start of day')
-         AND e.airstamp < datetime('now','start of day','+1 day')
-       ORDER BY e.airstamp LIMIT 8`,
-    )
-      .all<TonightRow>()
-      .then((r) => r.results),
-    c.env.DB.prepare(
-      `SELECT e.airdate, e.season, s.name AS show_name, s.slug AS show_slug,
-              s.poster_url AS show_poster, s.image_url AS show_image
-       FROM episodes e JOIN shows s ON s.id = e.show_id
-       WHERE e.number = 1 AND e.airstamp > datetime('now')
-         AND e.airstamp < datetime('now', '+21 days')
-       ORDER BY e.airstamp LIMIT 6`,
-    )
-      .all<{
-        airdate: string | null;
-        season: number | null;
-        show_name: string;
-        show_slug: string;
-        show_poster: string | null;
-        show_image: string | null;
-      }>()
-      .then((r) => r.results),
+  const [top, topMovies, tonight, comingMovies, spotTonight, spotPremiere, topStill, heroTop, trendMovies, trendTvRail, arts, heroFallback] = await Promise.all([
+    // "Popular" rails — live TMDB (always current), card-shaped; D1 fallback inside
+    popularShowRail(c),
+    popularMovieRail(c),
+    // On tonight: live from TVmaze's schedule API — accurate, current, scripted
+    // streaming titles in air-time order (see src/lib/schedule-live.ts), not our
+    // stale D1 snapshot that skewed to daytime soaps.
+    // most-popular subset (liveTonight is weight-ordered), then back into
+    // air-time order so the rail's times read top-to-bottom as they air
+    liveTonight(c).then((r) =>
+      r.slice(0, 12).sort((a, b) => (a.airstamp ?? "").localeCompare(b.airstamp ?? "")),
+    ),
+    // Coming up (movie half of the marquee): upcoming releases, popularity-ranked
+    upcomingMovieRail(c),
     // spotlight: tonight's biggest show by popularity weight
     c.env.DB.prepare(
       `SELECT s.*, e.name AS ep_name, e.season AS ep_season, e.number AS ep_number,
@@ -162,7 +224,10 @@ app.get("/", async (c) => {
        FROM episodes e JOIN shows s ON s.id = e.show_id
        WHERE e.airstamp >= datetime('now','start of day')
          AND e.airstamp < datetime('now','start of day','+1 day')
-       ORDER BY s.weight DESC LIMIT 1`,
+         AND s.type IN (${MARQUEE_TYPES})
+         AND s.tmdb_id IS NOT NULL
+         AND s.rating >= 7.5
+       ORDER BY s.rating DESC, s.weight DESC LIMIT 1`,
     ).first<SpotRow>(),
     // fallback spotlight: the biggest premiere of the next three weeks
     c.env.DB.prepare(
@@ -171,6 +236,9 @@ app.get("/", async (c) => {
        FROM episodes e JOIN shows s ON s.id = e.show_id
        WHERE e.number = 1 AND e.airstamp > datetime('now')
          AND e.airstamp < datetime('now', '+21 days')
+         AND s.type IN (${MARQUEE_TYPES})
+         AND s.tmdb_id IS NOT NULL
+         AND s.rating >= 7.5
        ORDER BY s.weight DESC LIMIT 1`,
     ).first<SpotRow>(),
     // the current #1 episode's still — the greatest-episodes tile wears it
@@ -179,38 +247,56 @@ app.get("/", async (c) => {
        WHERE image_url IS NOT NULL AND rating IS NOT NULL
        ORDER BY rating DESC LIMIT 1`,
     ).first<{ image_url: string }>(),
-    trendingRows<ShowRow>(c, "tv", "shows"),
-    trendingRows<MovieRow>(c, "movie", "movies"),
+    trendingHeroShow(c),
+    trendingMovieRail(c),
+    trendingShowRail(c),
     laneArts(c),
+    // ultimate hero fallback: the biggest scripted/animation/doc title overall, so
+    // the marquee is never a talk show or reality broadcast even on a quiet night
+    c.env.DB.prepare(
+      `SELECT * FROM shows WHERE type IN (${MARQUEE_TYPES}) AND tmdb_id IS NOT NULL AND rating IS NOT NULL
+         AND weight >= 40 AND status IN ('Running', 'To Be Determined')
+       ORDER BY rating DESC, weight DESC LIMIT 1`,
+    ).first<ShowRow>(),
   ]);
 
-  const spot: SpotRow | null =
-    spotTonight ??
-    spotPremiere ??
-    (top[0]
-      ? {
-          ...top[0],
-          ep_name: null,
-          ep_season: null,
-          ep_number: null,
-          ep_airdate: null,
-          ep_airstamp: null,
-        }
-      : null);
-  const spotEyebrow = spotTonight
-    ? "On tonight"
-    : spotPremiere
-      ? `Premieres ${spotPremiere.ep_airdate ? longDate(spotPremiere.ep_airdate) : "soon"}`
-      : "Tonight's pick";
-  const spotAirTime = spotTonight?.ep_airstamp ? airTime(spotTonight.ep_airstamp) : null;
+  // wrap a plain show row as a hero row (no specific episode attached)
+  const asSpot = (s: ShowRow): SpotRow => ({
+    ...s,
+    ep_name: null,
+    ep_season: null,
+    ep_number: null,
+    ep_airdate: null,
+    ep_airstamp: null,
+  });
+  // the marquee always leads with the week's #1 trending series — the genuine
+  // chart-topper, live from TMDB (mirrored or not), reality/news/soap/talk kept
+  // out. Falls back to tonight's premium airing, a premiere, then a top series.
+  const trendingHero = heroTop;
+  const spot: SpotRow | null = trendingHero
+    ? asSpot(trendingHero)
+    : spotTonight ?? spotPremiere ?? (heroFallback ? asSpot(heroFallback) : null);
+  // only the genuine on-tonight hero carries a live dot + air time and de-dupes
+  // itself from the schedule rail below
+  const heroIsTonight = spot != null && spot === spotTonight;
+  const spotEyebrow = trendingHero
+    ? "Trending now"
+    : spotTonight
+      ? "On tonight"
+      : spotPremiere
+        ? `Premieres ${spotPremiere.ep_airdate ? longDate(spotPremiere.ep_airdate) : "soon"}`
+        : "Tonight's pick";
+  const spotAirTime = heroIsTonight && spotTonight?.ep_airstamp ? airTime(spotTonight.ep_airstamp) : null;
   // canonical UTC instant for client-side localization; the UTC string stays the
   // truthful no-JS fallback and localtime.js swaps in the viewer's local time
-  const spotAirIso = spotTonight?.ep_airstamp ? new Date(spotTonight.ep_airstamp).toISOString() : null;
+  const spotAirIso =
+    heroIsTonight && spotTonight?.ep_airstamp ? new Date(spotTonight.ep_airstamp).toISOString() : null;
   const spotGenres: string[] = spot?.genres ? JSON.parse(spot.genres) : [];
   const spotNet: string | null = spot?.network ?? spot?.web_channel ?? null;
-  const alsoTonight = spotTonight ? tonight.filter((e) => e.show_slug !== spotTonight.slug) : tonight;
+  const alsoTonight =
+    heroIsTonight && spotTonight ? tonight.filter((e) => e.show_slug !== spotTonight.slug) : tonight;
   // a trending rail needs enough matched titles to read as a rail at all
-  const hasTrendTv = trendTv.length >= 4;
+  const hasTrendTv = trendTvRail.length >= 4;
   const hasTrendMovies = trendMovies.length >= 4;
 
   // the sign-on frame: the spotlight show's real designed backdrop (one
@@ -264,7 +350,7 @@ app.get("/", async (c) => {
               })()}
               <div class="spot-info">
                 <p class="eyebrow">
-                  {spotTonight ? <span class="live-dot"></span> : null}
+                  {heroIsTonight ? <span class="live-dot"></span> : null}
                   {homeDateline()}
                   <span class="eyebrow-sep">·</span>
                   {spotEyebrow}
@@ -307,6 +393,11 @@ app.get("/", async (c) => {
                       <span class="sep">·</span>
                       <span class="rating"><IconStar class="rating-star" />{spot.rating.toFixed(1)}</span>
                     </>
+                  ) : isNewYear(spot.premiered ? Number(spot.premiered.slice(0, 4)) : null) ? (
+                    <>
+                      <span class="sep">·</span>
+                      <span class="meta-new">NEW</span>
+                    </>
                   ) : null}
                 </p>
                 {spot.summary ? <p class="spot-dek">{stripHtml(spot.summary)}</p> : null}
@@ -342,7 +433,7 @@ app.get("/", async (c) => {
               <div class="evening-head">
                 <div class="evening-head-top">
                   <h2>
-                    {spotTonight ? (
+                    {heroIsTonight ? (
                       <>
                         <span class="live-dot"></span>Also on tonight
                       </>
@@ -356,7 +447,7 @@ app.get("/", async (c) => {
                     full schedule
                   </a>
                 </div>
-                <p class="section-lead muted">Every episode airing today, in air-time order.</p>
+                <p class="section-lead muted">Today's most-watched shows, in air-time order — your local time.</p>
               </div>
               {alsoTonight.length ? (
                 <ShelfRail label="also on tonight" ordered>
@@ -396,7 +487,7 @@ app.get("/", async (c) => {
                 </ShelfRail>
               ) : (
                 <p class="muted">
-                  {spotTonight
+                  {heroIsTonight
                     ? "Nothing else on the schedule tonight — the spotlight has the room."
                     : "Quiet night in the schedule — a good one to start something."}
                 </p>
@@ -405,28 +496,31 @@ app.get("/", async (c) => {
             <div class="evening-card evening-aside">
               <div class="evening-head">
                 <div class="evening-head-top">
-                  <h2>Coming up</h2>
-                  <a class="more" href="/premieres">
+                  <h2>New movies</h2>
+                  <a class="more" href="/premieres?tab=movies">
                     all premieres
                   </a>
                 </div>
-                <p class="section-lead muted">Season premieres in the next three weeks.</p>
+                <p class="section-lead muted">The most anticipated films coming to theaters &amp; streaming.</p>
               </div>
-              {premieres.length ? (
-                <ShelfRail label="coming up premieres">
-                  {premieres.map((p) => {
-                    const { day, month } = premiereDateParts(p.airdate);
+              {comingMovies.length ? (
+                <ShelfRail label="new movies">
+                  {comingMovies.map((m) => {
+                    const { day, month } = premiereDateParts(m.release_date);
+                    const href = m.slug
+                      ? `/movie/${m.slug}`
+                      : `/movie/${slugifyName(m.title)}?t=${m.tmdb_id}`;
                     return (
                       <li>
                         <a
                           class="shelf-tile"
-                          href={`/show/${p.show_slug}/release-date`}
-                          title={`${p.show_name} — Season ${p.season} premiere`}
-                          aria-label={`${p.show_name} Season ${p.season} premieres ${month ? `${month} ${day}` : "soon"}`}
+                          href={href}
+                          title={`${m.title} — ${longDate(m.release_date)}`}
+                          aria-label={`${m.title}, out ${month ? `${month} ${day}` : "soon"}`}
                         >
-                          {(p.show_poster ?? p.show_image) ? (
+                          {m.poster_url ? (
                             <img
-                              src={(p.show_poster ?? p.show_image)!}
+                              src={m.poster_url}
                               alt=""
                               width="92"
                               height="138"
@@ -434,20 +528,20 @@ app.get("/", async (c) => {
                               decoding="async"
                             />
                           ) : (
-                            <span class="shelf-fallback">{p.show_name}</span>
+                            <span class="shelf-fallback">{m.title}</span>
                           )}
                           <span class="shelf-chip shelf-chip-date">
                             <span class="chip-soon">Soon</span>
                             {month ? `${month} ${day}` : null}
                           </span>
                         </a>
-                        <span class="shelf-name">{p.show_name}</span>
+                        <span class="shelf-name">{m.title}</span>
                       </li>
                     );
                   })}
                 </ShelfRail>
               ) : (
-                <p class="muted">No premieres in the next three weeks.</p>
+                <p class="muted">No upcoming movies on the calendar right now.</p>
               )}
             </div>
           </div>
@@ -525,7 +619,7 @@ app.get("/", async (c) => {
               {hasTrendTv ? (
                 <div class={hasTrendMovies ? "discover-panel panel-tv" : undefined}>
                   <Rail label="trending shows" ranked>
-                    {trendTv.map((s) => (
+                    {trendTvRail.map((s) => (
                       <ShowCard show={s} />
                     ))}
                   </Rail>

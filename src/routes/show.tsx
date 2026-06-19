@@ -9,13 +9,15 @@ import { FilterSelect, RateInline, SubscribeForm } from "../components/forms";
 import { SeasonTabs, ShowTabs } from "../components/nav";
 import { ProviderLine } from "../components/providers";
 import { ShareBar } from "../components/share";
+import { tmdbShowData, resolveShow } from "../lib/tmdb-show";
 import { buildDossier } from "../lib/dossier";
-import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml, fmtRuntime } from "../lib/format";
+import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml, fmtRuntime, isNewYear } from "../lib/format";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, visitorRegion } from "../lib/providers";
 import { getShow, similarShows, crewLinkMap } from "../lib/queries";
 import { titleStat, aggregateRatingLd } from "../lib/ratings";
 import { breadcrumbLd, breadcrumbTrail, canonical, faqLd, origin } from "../lib/seo";
-import { tmdbBackdrop, tmdbMedia, tmdbShowCreators } from "../lib/tmdb";
+import { tmdbBackdrop, tmdbMedia, tmdbShowCreators, tmdbRecommendations } from "../lib/tmdb";
+import { toShowRow } from "../lib/tmdb-rows";
 import { hubForGenres } from "../lib/verticals";
 import { Bindings, EpisodeRow, ShowRow } from "../types";
 
@@ -64,13 +66,27 @@ const HeroPoster = (show: ShowRow) => {
 };
 
 app.get("/show/:slug", async (c) => {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
-  const { results: episodes } = await c.env.DB.prepare(
-    "SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number",
-  )
-    .bind(show.id)
-    .all<EpisodeRow>();
+  const slug = c.req.param("slug");
+  let show = await getShow(c.env.DB, slug);
+  let episodes: EpisodeRow[];
+  let ratingRef: string;
+  let isTmdb = false;
+  if (show) {
+    episodes = (
+      await c.env.DB.prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
+        .bind(show.id)
+        .all<EpisodeRow>()
+    ).results;
+    ratingRef = String(show.id);
+  } else {
+    // hybrid: build the SAME page live from TMDB for a title not in the mirror
+    const built = await tmdbShowData(c, slug);
+    if (!built) return c.notFound();
+    show = built.show;
+    episodes = built.episodes;
+    ratingRef = `t${built.tmdbId}`;
+    isTmdb = true;
+  }
 
   const seasons = new Map<number, EpisodeRow[]>();
   for (const e of episodes) {
@@ -83,8 +99,8 @@ app.get("/show/:slug", async (c) => {
   // one bound COUNT instead of the full network GROUP-BY scan per pageview
   const [similar, stat, aggRating, netCount] = await Promise.all([
     similarShows(c.env.DB, show),
-    titleStat(c.env.DB, "tv", String(show.id)),
-    aggregateRatingLd(c.env.DB, "tv", String(show.id)),
+    titleStat(c.env.DB, "tv", ratingRef),
+    aggregateRatingLd(c.env.DB, "tv", ratingRef),
     netName
       ? c.env.DB.prepare(
           "SELECT COUNT(*) AS c FROM shows WHERE (network = ? OR web_channel = ?) AND weight >= 60",
@@ -176,7 +192,7 @@ app.get("/show/:slug", async (c) => {
       description={showMetaDescription(show)}
       canonical={canonical(c)}
       ld={ld}
-      ogImage={`${canonical(c)}/og.png`}
+      ogImage={isTmdb ? (show.poster_url ?? undefined) : `${canonical(c)}/og.png`}
       ogImageLarge
       preloadImage={backdrop?.x2 ? { x1: backdrop.x1, x2: backdrop.x2 } : undefined}
       scripts={["/js/share.js"]}
@@ -189,7 +205,7 @@ app.get("/show/:slug", async (c) => {
           <div class="detail-head">
             <div class="detail-side">
               {HeroPoster(show)}
-              <RateInline kind="tv" refId={String(show.id)} stat={stat} />
+              <RateInline kind="tv" refId={ratingRef} stat={stat} />
             </div>
             <div class="detail-info">
               <div class="detail-title-row">
@@ -262,6 +278,11 @@ app.get("/show/:slug", async (c) => {
                   <>
                     <span class="sep">·</span>
                     <span class="rating"><IconStar class="rating-star" />{show.rating.toFixed(1)}</span>
+                  </>
+                ) : isNewYear(show.premiered ? Number(show.premiered.slice(0, 4)) : null) ? (
+                  <>
+                    <span class="sep">·</span>
+                    <span class="meta-new">NEW</span>
                   </>
                 ) : null}
                 {creators.length ? (
@@ -700,14 +721,16 @@ app.get("/show/:slug", async (c) => {
 // ----------------------------------------------------- ICS calendar feed
 
 app.get("/show/:slug/calendar.ics", async (c) => {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
-  const { results: eps } = await c.env.DB.prepare(
-    `SELECT * FROM episodes WHERE show_id = ? AND airstamp > datetime('now', '-7 days')
-     ORDER BY airstamp LIMIT 100`,
-  )
-    .bind(show.id)
-    .all<EpisodeRow>();
+  const r = await resolveShow(c, c.req.param("slug"));
+  if (!r) return c.notFound();
+  const show = r.show;
+  const cutoff = Date.now() - 7 * 86_400_000;
+  const eps = r.episodes
+    .filter((e) => e.airstamp && new Date(e.airstamp).getTime() > cutoff)
+    .sort(
+      (a, b) => new Date(a.airstamp as string).getTime() - new Date(b.airstamp as string).getTime(),
+    )
+    .slice(0, 100);
 
   const icsEsc = (s: string) =>
     s.replace(/\\/g, "\\\\").replace(/[;,]/g, (m) => "\\" + m).replace(/\n/g, "\\n");
@@ -745,8 +768,9 @@ app.get("/show/:slug/calendar.ics", async (c) => {
 // "Where to watch X" is one of TV's biggest query patterns; we answer it
 // region by region from the mirror the provider patrol keeps fresh.
 app.get("/show/:slug/where-to-watch", async (c) => {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
+  const r = await resolveShow(c, c.req.param("slug"));
+  if (!r) return c.notFound();
+  const show = r.show;
   const base = `/show/${show.slug}/where-to-watch`;
   const reqRegion = (c.req.query("region") ?? "").trim().toUpperCase();
   if (reqRegion && !REGIONS.includes(reqRegion)) return c.redirect(base, 301);
@@ -899,9 +923,17 @@ app.get("/show/:slug/where-to-watch", async (c) => {
 
 // "Shows like X" is its own query pattern — the full dossier gets a page.
 app.get("/show/:slug/similar", async (c) => {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
-  const similar = await similarShows(c.env.DB, show, 18);
+  const r = await resolveShow(c, c.req.param("slug"));
+  if (!r) return c.notFound();
+  const show = r.show;
+  let similar = await similarShows(c.env.DB, show, 18);
+  // live-only or genre-less titles get nothing from the D1 genre-overlap query —
+  // fall back to TMDB's own recommendations so the page never bounces
+  if (!similar.length && show.tmdb_id && c.env.TMDB_API_KEY) {
+    similar = (await tmdbRecommendations(c.env.TMDB_API_KEY, "tv", show.tmdb_id))
+      .slice(0, 18)
+      .map(toShowRow);
+  }
   if (!similar.length) return c.redirect(`/show/${show.slug}`, 302);
   const region = visitorRegion(c);
   const base = `/show/${show.slug}/similar`;
@@ -1008,8 +1040,9 @@ app.get("/show/:slug/similar", async (c) => {
 // Media: the show's designed artwork and its YouTube trailers/clips,
 // straight from TMDB (one edge-cached call) — no mirror tables touched.
 app.get("/show/:slug/media", async (c) => {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
+  const r = await resolveShow(c, c.req.param("slug"));
+  if (!r) return c.notFound();
+  const show = r.show;
   const media =
     show.tmdb_id && c.env.TMDB_API_KEY
       ? await tmdbMedia(c.env.TMDB_API_KEY, show.tmdb_id)
@@ -1208,18 +1241,30 @@ app.get("/show/:slug/media", async (c) => {
 });
 
 app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
+  const r = await resolveShow(c, c.req.param("slug"));
+  if (!r) return c.notFound();
+  const show = r.show;
   const n = Number(c.req.param("n"));
-  const [{ results: eps }, maxRow, similar] = await Promise.all([
-    c.env.DB.prepare("SELECT * FROM episodes WHERE show_id = ? AND season = ? ORDER BY number")
-      .bind(show.id, n)
-      .all<EpisodeRow>(),
-    c.env.DB.prepare("SELECT MAX(season) AS m FROM episodes WHERE show_id = ?")
-      .bind(show.id)
-      .first<{ m: number | null }>(),
-    similarShows(c.env.DB, show),
-  ]);
+  let eps: EpisodeRow[];
+  let maxRow: { m: number | null } | null;
+  if (r.isTmdb) {
+    eps = r.episodes
+      .filter((e) => e.season === n)
+      .sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
+    maxRow = { m: r.episodes.reduce((m, e) => Math.max(m, e.season ?? 0), 0) || null };
+  } else {
+    const [epsRes, mx] = await Promise.all([
+      c.env.DB.prepare("SELECT * FROM episodes WHERE show_id = ? AND season = ? ORDER BY number")
+        .bind(show.id, n)
+        .all<EpisodeRow>(),
+      c.env.DB.prepare("SELECT MAX(season) AS m FROM episodes WHERE show_id = ?")
+        .bind(show.id)
+        .first<{ m: number | null }>(),
+    ]);
+    eps = epsRes.results;
+    maxRow = mx;
+  }
+  const similar = await similarShows(c.env.DB, show);
   if (eps.length === 0) return c.notFound();
   const region = visitorRegion(c);
 

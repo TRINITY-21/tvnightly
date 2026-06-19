@@ -191,8 +191,9 @@ app.get("/how-we-pick", (c) =>
       </p>
       <h2>Freshness &amp; corrections</h2>
       <p>
-        Schedules and episode data sync hourly; streaming availability is re-checked on a tighter
-        loop. If something's wrong, <a href="/feedback">tell us</a> and we'll fix it.
+        The catalog is fetched live, so titles and details are always current; schedules, ratings and
+        streaming availability for tracked shows refresh on a continuous loop. If something's wrong,{" "}
+        <a href="/feedback">tell us</a> and we'll fix it.
       </p>
     </Layout>,
   ),

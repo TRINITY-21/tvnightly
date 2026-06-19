@@ -10,7 +10,20 @@ const MUTED = "#b6b1a9";
 const GOLD = "#EAC54F";
 const AMBER = "#FFA94D";
 const LINE = "#2b2b32";
+const PANEL = "#141418";
+const PANEL_HI = "#1c1c22";
 const SYS = "-apple-system,'Segoe UI',Roboto,sans-serif";
+
+const SW = 1080;
+const SH = 1920;
+const SM = 56; // left content margin
+// Shorts + TikTok action rail (like / comment / share) — keep all readable UI left of this
+const SR = 168;
+const CR = SW - SR; // right edge of the safe content column (~912px)
+const CW = CR - SM; // usable content width (~856px)
+// Bottom clearance — Shorts subscribe bar + caption strip (conservative but not crushing layout)
+const SB = 300;
+const FOOT_Y = SH - SB; // top of the footer block
 
 const esc = (s: string) =>
   s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -70,173 +83,241 @@ export interface CardEntry {
 const metaLine = (e: CardEntry) =>
   [e.genres.slice(0, 2).join(" · "), e.year].filter(Boolean).join(" · ");
 
-// a poster image clipped to a rounded rect with a hairline border; falls back
-// to a lettered tile when the art didn't inline
-function poster(uri: string | null, name: string, x: number, y: number, w: number, h: number, id: string) {
-  const rx = 16;
+// a poster clipped to rounded rect; optional rank + rating badges on the art
+function poster(
+  uri: string | null,
+  name: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  id: string,
+  badges?: { rank?: number; rating?: number | null },
+) {
+  const rx = 14;
+  const out: string[] = [];
   if (!uri) {
-    return (
-      `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="#1a1a1f" stroke="${LINE}"/>` +
-      txt(x + w / 2, y + h / 2 + 18, trunc(name, 12), { size: 44, fill: MUTED, anchor: "middle", wght: 800 })
+    out.push(
+      `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="#18181e" stroke="${LINE}"/>` +
+        txt(x + w / 2, y + h / 2 + 12, trunc(name, 11), { size: 32, fill: MUTED, anchor: "middle", wght: 800 }),
+    );
+  } else {
+    out.push(
+      `<g filter="url(#posterShadow)">` +
+        `<clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}"/></clipPath>` +
+        `<image href="${uri}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>` +
+        `<rect x="${x + 0.5}" y="${y + 0.5}" width="${w - 1}" height="${h - 1}" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)"/>` +
+        `</g>`,
     );
   }
-  return (
-    `<clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}"/></clipPath>` +
-    `<image href="${uri}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>` +
-    `<rect x="${x + 0.5}" y="${y + 0.5}" width="${w - 1}" height="${h - 1}" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.12)"/>`
-  );
-}
-
-// vector star + number (resvg's font has no ★ glyph); right-anchored.
-const ratingTag = (x: number, y: number, rating: number | null, size: number) =>
-  rating != null ? ratingMark(x, y, size, rating, GOLD, "end") : "";
-
-const brandBar = () =>
-  txt(80, 96, "TV NIGHTLY", { size: 34, fill: TEXT, wght: 800, wdth: 118, ls: 2 }) +
-  `<circle cx="348" cy="86" r="7" fill="${AMBER}"/>`;
-
-const footer = (W: number, H: number, line: string) =>
-  `<line x1="80" y1="${H - 158}" x2="${W - 80}" y2="${H - 158}" stroke="${LINE}"/>` +
-  txt(W / 2, H - 100, line, { size: 32, fill: MUTED, anchor: "middle", wght: 600 }) +
-  txt(W / 2, H - 50, "tvnightly.com", { size: 40, fill: AMBER, anchor: "middle", wght: 800, ls: 1 });
-
-// one ranked recommendation row: rank numeral, poster, wrapped name, meta, score
-function pickRow(e: CardEntry, i: number, y0: number, W: number, M: number): string {
-  const out: string[] = [];
-  const px = 186;
-  const pw = 196;
-  const ph = 290;
-  out.push(
-    txt(M + 6, y0 + 168, String(i + 1).padStart(2, "0"), {
-      size: 76,
-      fill: AMBER,
-      wght: 900,
-      wdth: 66,
-      opacity: 0.9,
-    }),
-  );
-  out.push(poster(e.posterUri, e.name, px, y0, pw, ph, `pk-${i}`));
-  const nx = px + pw + 36;
-  const nameLines = wrap(e.name, 14, 2);
-  nameLines.forEach((ln, k) =>
-    out.push(txt(nx, y0 + 82 + k * 58, ln, { size: 48, fill: TEXT, wght: 800, wdth: 105 })),
-  );
-  out.push(
-    txt(nx, y0 + 82 + nameLines.length * 58 + 14, trunc(metaLine(e), 26), {
-      size: 31,
-      fill: MUTED,
-      wght: 600,
-    }),
-  );
-  out.push(ratingTag(W - M, y0 + 156, e.rating, 58));
+  if (badges?.rank != null) {
+    const bx = x + 10;
+    const by = y + 10;
+    out.push(
+      `<rect x="${bx}" y="${by}" width="40" height="34" rx="8" fill="${AMBER}"/>` +
+        txt(bx + 20, by + 24, String(badges.rank).padStart(2, "0"), {
+          size: 20,
+          fill: PLATE,
+          anchor: "middle",
+          wght: 900,
+          wdth: 90,
+        }),
+    );
+  }
+  if (badges?.rating != null) {
+    const chipW = 68;
+    const chipH = 30;
+    const cx = x + 10;
+    const cy = y + h - chipH - 10;
+    out.push(
+      `<rect x="${cx}" y="${cy}" width="${chipW}" height="${chipH}" rx="15" fill="rgba(0,0,0,0.78)"/>` +
+        studioRatingMark(cx + chipW / 2, cy + chipH * 0.7, 19, badges.rating, GOLD, "middle"),
+    );
+  }
   return out.join("");
 }
 
-/** "If you liked X, watch these next" — the flagship recommendation card.
- *  A cinematic backdrop hero (when available) carries the hook; posters carry
- *  the payoff. Falls back to a poster hero when there's no backdrop. */
+// vector star path — shared by portrait studio cards and OG cards
+function starPath(cx: number, cy: number, r: number): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const ang = (-90 + i * 36) * (Math.PI / 180);
+    const rad = i % 2 === 0 ? r : r * 0.5;
+    pts.push(`${r2(cx + rad * Math.cos(ang))} ${r2(cy + rad * Math.sin(ang))}`);
+  }
+  return `M${pts.join("L")}Z`;
+}
+
+// vector star + number for portrait studio cards
+const studioRatingMark = (
+  x: number,
+  y: number,
+  size: number,
+  value: number,
+  fill: string,
+  anchor: "start" | "middle" | "end" = "start",
+): string => {
+  const t = value.toFixed(1);
+  const r = size * 0.46;
+  const gap = size * 0.3;
+  const textW = t.length * size * 0.56;
+  const groupW = r * 2 + gap + textW;
+  const left = anchor === "start" ? x : anchor === "end" ? x - groupW : x - groupW / 2;
+  return (
+    `<path d="${starPath(left + r, y - size * 0.33, r)}" fill="${fill}"/>` +
+    txt(left + r * 2 + gap, y, t, { size, fill, wght: 800, anchor: "start" })
+  );
+};
+
+// the "Standby Glow" TV mark — same vector as OG cards, scaled for portrait
+const studioMark = (mx: number, my: number, h: number) => {
+  const s = h / 24;
+  return (
+    `<g transform="translate(${r2(mx)},${r2(my)}) scale(${r2(s)})">` +
+    `<rect x="1.25" y="1.25" width="33.5" height="21.5" rx="5.5" fill="none" stroke="#F2F5FA" stroke-width="2.5"/>` +
+    `<circle cx="26.5" cy="16.5" r="3.4" fill="${AMBER}" opacity="0.22"/>` +
+    `<circle cx="26.5" cy="16.5" r="2.2" fill="${AMBER}"/>` +
+    `</g>`
+  );
+};
+
+const studioBrand = (y = 76) => {
+  const markH = 28;
+  const markW = (markH * 36) / 24;
+  const wordX = SM + markW + 12;
+  return (
+    `<g opacity="0.92" filter="url(#textGlow)">` +
+    studioMark(SM, y - 24, markH) +
+    txt(wordX, y, "TV NIGHTLY", { size: 26, fill: TEXT, wght: 800, wdth: 118, ls: 2 }) +
+    `<circle cx="${wordX + 178}" cy="${y - 7}" r="5" fill="${AMBER}"/>` +
+    `</g>`
+  );
+};
+
+const studioFooter = (line: string) => {
+  const fy = FOOT_Y;
+  return (
+    `<rect x="0" y="${fy - 100}" width="${SW}" height="${SH - fy + 100}" fill="url(#footFade)"/>` +
+    `<rect x="${SM}" y="${fy}" width="96" height="4" rx="2" fill="${AMBER}"/>` +
+    txt(SM, fy + 44, line, { size: 26, fill: MUTED, wght: 600 }) +
+    txt(SM, fy + 96, "tvnightly.com", { size: 46, fill: AMBER, wght: 900, ls: 0.3 })
+  );
+};
+
+// shared <defs> for portrait studio cards
+const studioDefs = (fontCss: string | null) =>
+  `<defs>${fontCss ? `<style>${fontCss}</style>` : ""}` +
+  `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#121218"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+  `<linearGradient id="heroTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.75"/><stop offset="0.4" stop-color="${PLATE}" stop-opacity="0.15"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0"/></linearGradient>` +
+  `<linearGradient id="heroBot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0"/><stop offset="0.55" stop-color="${PLATE}" stop-opacity="0.7"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+  `<linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.12"/><stop offset="0.55" stop-color="${PLATE}" stop-opacity="0.5"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+  `<linearGradient id="scrimUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}"/><stop offset="0.55" stop-color="${PLATE}" stop-opacity="0.5"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.08"/></linearGradient>` +
+  `<filter id="textGlow" x="-30%" y="-30%" width="160%" height="200%"><feDropShadow dx="0" dy="2" stdDeviation="8" flood-color="#000" flood-opacity="0.75"/></filter>` +
+  `<filter id="posterShadow" x="-12%" y="-8%" width="124%" height="130%"><feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#000" flood-opacity="0.65"/></filter>` +
+  `<linearGradient id="footFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+  `</defs>`;
+
+// cinematic backdrop block — full width art + scrims (hero image is decorative; text stays in safe column)
+const heroBackdrop = (uri: string | null, posterUri: string | null, name: string, heroH: number, id: string) => {
+  const out: string[] = [];
+  if (uri) {
+    out.push(`<image href="${uri}" x="0" y="0" width="${SW}" height="${heroH}" preserveAspectRatio="xMidYMid slice"/>`);
+    out.push(`<rect x="0" y="0" width="${SW}" height="${heroH}" fill="url(#scrim)"/>`);
+    out.push(`<rect x="0" y="0" width="${SW}" height="${heroH * 0.42}" fill="url(#heroTop)"/>`);
+    out.push(`<rect x="0" y="${heroH - 340}" width="${SW}" height="340" fill="url(#heroBot)"/>`);
+  } else {
+    out.push(poster(posterUri, name, SM + 40, 120, 200, 300, id));
+    out.push(`<rect x="0" y="0" width="${SW}" height="${heroH}" fill="url(#heroBot)"/>`);
+  }
+  return out.join("");
+};
+
+// hero title stack — always anchored in the safe column
+const heroTitle = (eyebrow: string, title: string, meta: string, rating: number | null, baseY: number) => {
+  const lines = wrap(title.toUpperCase(), 13, 2);
+  const sz = lines.length > 1 ? 76 : 92;
+  const top = baseY - lines.length * (sz + 6) - 48;
+  let g = `<g filter="url(#textGlow)">`;
+  g += txt(SM, top - 8, eyebrow, { size: 30, fill: AMBER, wght: 800, wdth: 112, ls: 9 });
+  lines.forEach((ln, i) => {
+    g += txt(SM, top + 44 + i * (sz + 6), ln, { size: sz, fill: TEXT, wght: 900, wdth: 108 });
+  });
+  g += txt(SM, baseY, meta, { size: 28, fill: "#e0dcd4", wght: 600 });
+  if (rating != null) {
+    const mw = meta ? meta.length * 28 * 0.5 + 20 : 0;
+    g += studioRatingMark(SM + mw, baseY, 26, rating, GOLD, "start");
+  }
+  g += `</g>`;
+  return g;
+};
+
+// three-up poster grid for "watch next" — the visual hook on social
+function picksGrid(picks: CardEntry[], y0: number): string {
+  const n = Math.min(3, picks.length);
+  if (!n) return "";
+  const gap = 40;
+  const pw = Math.floor((CW - gap * (n - 1)) / n);
+  const ph = Math.round(pw * 1.5);
+  const out: string[] = [];
+  out.push(txt(SM, y0, "WATCH THESE NEXT", { size: 30, fill: MUTED, wght: 700, ls: 5 }));
+  const py = y0 + 52;
+  picks.slice(0, n).forEach((e, i) => {
+    const px = SM + i * (pw + gap);
+    out.push(poster(e.posterUri, e.name, px, py, pw, ph, `pg-${i}`, { rank: i + 1, rating: e.rating }));
+    const title = trunc(e.name, 18);
+    out.push(txt(px + pw / 2, py + ph + 36, title, { size: 30, fill: TEXT, wght: 800, anchor: "middle", wdth: 105 }));
+    out.push(
+      txt(px + pw / 2, py + ph + 72, trunc(metaLine(e), 22), {
+        size: 22,
+        fill: MUTED,
+        anchor: "middle",
+        wght: 600,
+      }),
+    );
+  });
+  return out.join("");
+}
+
+// vertical pick row for ranked lists (4–5 items) — poster-led, no boxes
+function pickRow(e: CardEntry, i: number, y0: number, rowH: number, last: boolean): string {
+  const ph = Math.min(Math.round(rowH * 0.82), 210);
+  const pw = Math.round(ph * 0.667);
+  const px = SM;
+  const py = y0 + (rowH - ph) / 2;
+  const nx = px + pw + 28;
+  const out: string[] = [];
+  out.push(poster(e.posterUri, e.name, px, py, pw, ph, `pr-${i}`, { rank: i + 1, rating: e.rating }));
+  const nameLines = wrap(e.name, 15, 2);
+  const ns = nameLines.length > 1 ? 36 : 40;
+  const ty = py + ph / 2 - (nameLines.length === 2 ? ns * 0.4 : -4);
+  nameLines.forEach((ln, k) => out.push(txt(nx, ty + k * (ns + 8), ln, { size: ns, fill: TEXT, wght: 800, wdth: 105 })));
+  out.push(txt(nx, ty + nameLines.length * (ns + 8) + 6, trunc(metaLine(e), 26), { size: 24, fill: MUTED, wght: 600 }));
+  if (!last) out.push(`<line x1="${SM}" y1="${y0 + rowH - 1}" x2="${CR}" y2="${y0 + rowH - 1}" stroke="${LINE}" stroke-width="1" opacity="0.6"/>`);
+  return out.join("");
+}
+
+/** "If you liked X, watch these next" — cinematic hero + three-up poster grid. */
 export function buildLikedCard(
   hero: CardEntry,
   picks: CardEntry[],
   fontCss: string | null,
   backdropUri: string | null,
 ): string {
-  const W = 1080;
-  const H = 1920;
-  const M = 80;
-  const heroH = 640;
+  const heroH = 900;
   const p: string[] = [];
-  p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`);
-  p.push(
-    `<defs>${fontCss ? `<style>${fontCss}</style>` : ""}` +
-      `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#17171c"/><stop offset="0.5" stop-color="${PLATE}"/></linearGradient>` +
-      `<linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.05"/><stop offset="0.45" stop-color="${PLATE}" stop-opacity="0.5"/><stop offset="1" stop-color="${PLATE}" stop-opacity="1"/></linearGradient>` +
-      `<filter id="ds" x="-20%" y="-20%" width="140%" height="180%"><feDropShadow dx="0" dy="2" stdDeviation="9" flood-color="#000" flood-opacity="0.6"/></filter>` +
-      `</defs>`,
-  );
-  p.push(`<rect width="${W}" height="${H}" fill="url(#bg)"/>`);
-
-  // ---- hero: a cinematic backdrop (preferred) or a poster on the right ----
-  if (backdropUri) {
-    p.push(
-      `<image href="${backdropUri}" x="0" y="0" width="${W}" height="${heroH}" preserveAspectRatio="xMidYMid slice"/>`,
-    );
-    p.push(`<rect x="0" y="0" width="${W}" height="${heroH}" fill="url(#scrim)"/>`);
-  } else {
-    p.push(poster(hero.posterUri, hero.name, W - M - 230, 250, 230, 345, "ph-hero"));
-  }
-  p.push(`<g filter="url(#ds)">${brandBar()}</g>`);
-
-  // hook + title, anchored near the hero's lower edge
-  const nameLines = wrap(hero.name.toUpperCase(), 15, 2);
-  const titleSize = nameLines.length > 1 ? 84 : 98;
-  const titleTop = heroH - 150 - (nameLines.length - 1) * (titleSize + 4);
-  let g = `<g filter="url(#ds)">`;
-  g += txt(M, titleTop - 64, "IF YOU LIKED", { size: 40, fill: AMBER, wght: 800, wdth: 112, ls: 7 });
-  nameLines.forEach((ln, i) => {
-    g += txt(M, titleTop + i * (titleSize + 4), ln, { size: titleSize, fill: TEXT, wght: 900, wdth: 108 });
-  });
-  const meta = metaLine(hero);
-  g += txt(M, heroH - 34, meta, { size: 33, fill: "#e7e3db", wght: 600 });
-  if (hero.rating != null) {
-    // metaLine width is estimated (Archivo advance ≈ 0.52·size); the rating
-    // trails it as a vector star + number in gold (resvg's font has no ★ glyph)
-    const metaW = meta ? meta.length * 33 * 0.52 + 40 : 0;
-    g += ratingMark(M + metaW, heroH - 34, 33, hero.rating, GOLD, "start");
-  }
-  g += `</g>`;
-  p.push(g);
-
-  // ---- "WATCH THESE NEXT" ----
-  p.push(txt(M, heroH + 96, "WATCH THESE NEXT", { size: 54, fill: TEXT, wght: 900, wdth: 110, ls: 1 }));
-  p.push(`<rect x="${M}" y="${heroH + 118}" width="92" height="7" rx="3" fill="${AMBER}"/>`);
-
-  // ---- the three picks ----
-  const top = heroH + 170;
-  const rowH = 310;
-  picks.slice(0, 3).forEach((e, i) => p.push(pickRow(e, i, top + i * rowH, W, M)));
-
-  p.push(footer(W, H, "Full ranked list & where to stream at"));
+  p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SW} ${SH}" font-family="Archivo, ${SYS}">`);
+  p.push(studioDefs(fontCss));
+  p.push(`<rect width="${SW}" height="${SH}" fill="url(#bg)"/>`);
+  p.push(heroBackdrop(backdropUri, hero.posterUri, hero.name, heroH, "ph-hero"));
+  p.push(studioBrand());
+  p.push(heroTitle("IF YOU LIKED", hero.name, metaLine(hero), hero.rating, heroH - 36));
+  p.push(picksGrid(picks, heroH + 44));
+  p.push(studioFooter("Full ranked list & where to stream at"));
   p.push(`</svg>`);
   return p.join("");
 }
 
-// one ranked row in an N-up list card; poster + numerals scale with row height
-function listRow(e: CardEntry, i: number, y0: number, rowH: number, W: number, M: number): string {
-  const ph = Math.min(rowH - 26, 300);
-  const pw = Math.round(ph * 0.667);
-  const px = 176;
-  const out: string[] = [];
-  out.push(
-    txt(M, y0 + rowH / 2 + 24, String(i + 1).padStart(2, "0"), {
-      size: Math.min(rowH * 0.36, 74),
-      fill: AMBER,
-      wght: 900,
-      wdth: 66,
-      opacity: 0.9,
-    }),
-  );
-  out.push(poster(e.posterUri, e.name, px, y0 + (rowH - ph) / 2, pw, ph, `lr-${i}`));
-  const nx = px + pw + 32;
-  const nameLines = wrap(e.name, 16, 2);
-  const nsize = Math.min(rowH * 0.2, 48);
-  const blockTop = y0 + rowH / 2 - (nameLines.length === 2 ? nsize * 0.65 : -8);
-  nameLines.forEach((ln, k) =>
-    out.push(txt(nx, blockTop + k * (nsize + 8), ln, { size: nsize, fill: TEXT, wght: 800, wdth: 105 })),
-  );
-  out.push(
-    txt(nx, blockTop + nameLines.length * (nsize + 8) + 4, trunc(metaLine(e), 26), {
-      size: Math.min(rowH * 0.13, 31),
-      fill: MUTED,
-      wght: 600,
-    }),
-  );
-  out.push(ratingTag(W - M, y0 + rowH / 2 + 20, e.rating, Math.min(rowH * 0.24, 58)));
-  return out.join("");
-}
-
-/** A ranked-list card (Hidden gems, Top 5 by genre, …): a bold typographic
- *  header, then N poster rows scaled to fit the column. */
+/** A ranked-list card — typographic header + poster rows. */
 export function buildListCard(o: {
   eyebrow: string;
   title: string;
@@ -244,49 +325,33 @@ export function buildListCard(o: {
   footerLine: string;
   fontCss: string | null;
 }): string {
-  const W = 1080;
-  const H = 1920;
-  const M = 80;
   const p: string[] = [];
-  p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`);
-  p.push(
-    `<defs>${o.fontCss ? `<style>${o.fontCss}</style>` : ""}` +
-      `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1b22"/><stop offset="0.45" stop-color="${PLATE}"/></linearGradient>` +
-      `</defs>`,
-  );
-  p.push(`<rect width="${W}" height="${H}" fill="url(#bg)"/>`);
-  p.push(brandBar());
+  p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SW} ${SH}" font-family="Archivo, ${SYS}">`);
+  p.push(studioDefs(o.fontCss));
+  p.push(`<rect width="${SW}" height="${SH}" fill="url(#bg)"/>`);
+  p.push(studioBrand());
 
-  const titleLines = wrap(o.title.toUpperCase(), 16, 2);
-  const titleSize = titleLines.length > 1 ? 80 : 92;
-  p.push(txt(M, 240, o.eyebrow, { size: 42, fill: AMBER, wght: 800, wdth: 112, ls: 6 }));
-  const titleTop = 332;
+  const titleLines = wrap(o.title.toUpperCase(), 13, 2);
+  const titleSize = titleLines.length > 1 ? 64 : 76;
+  p.push(txt(SM, 188, o.eyebrow, { size: 28, fill: AMBER, wght: 800, wdth: 112, ls: 8 }));
+  const titleTop = 252;
   titleLines.forEach((ln, i) =>
-    p.push(txt(M, titleTop + i * (titleSize + 6), ln, { size: titleSize, fill: TEXT, wght: 900, wdth: 108 })),
+    p.push(txt(SM, titleTop + i * (titleSize + 8), ln, { size: titleSize, fill: TEXT, wght: 900, wdth: 108 })),
   );
-  const headEnd = titleTop + titleLines.length * (titleSize + 6);
-  p.push(`<rect x="${M}" y="${headEnd + 6}" width="110" height="8" rx="4" fill="${AMBER}"/>`);
+  const headEnd = titleTop + titleLines.length * (titleSize + 8) + 20;
 
-  const listTop = headEnd + 64;
-  const listBottom = H - 180;
+  const listTop = headEnd + 36;
+  const listBottom = FOOT_Y - 32;
   const n = Math.max(1, o.entries.length);
   const rowH = (listBottom - listTop) / n;
-  o.entries.forEach((e, i) => p.push(listRow(e, i, listTop + i * rowH, rowH, W, M)));
+  o.entries.forEach((e, i) => p.push(pickRow(e, i, listTop + i * rowH, rowH, i === n - 1)));
 
-  p.push(footer(W, H, o.footerLine));
+  p.push(studioFooter(o.footerLine));
   p.push(`</svg>`);
   return p.join("");
 }
 
-const CARD_DEFS = (fontCss: string | null) =>
-  `<defs>${fontCss ? `<style>${fontCss}</style>` : ""}` +
-  `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#17171c"/><stop offset="0.5" stop-color="${PLATE}"/></linearGradient>` +
-  `<linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.05"/><stop offset="0.5" stop-color="${PLATE}" stop-opacity="0.55"/><stop offset="1" stop-color="${PLATE}" stop-opacity="1"/></linearGradient>` +
-  `<linearGradient id="scrimUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="1"/><stop offset="0.5" stop-color="${PLATE}" stop-opacity="0.55"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.05"/></linearGradient>` +
-  `<filter id="ds" x="-20%" y="-20%" width="140%" height="180%"><feDropShadow dx="0" dy="2" stdDeviation="9" flood-color="#000" flood-opacity="0.6"/></filter>` +
-  `</defs>`;
-
-/** Renewed / cancelled status card: a backdrop hero + a big colored verdict. */
+/** Renewed / cancelled status card. */
 export function buildStatusCard(o: {
   name: string;
   meta: string;
@@ -297,46 +362,26 @@ export function buildStatusCard(o: {
   posterUri: string | null;
   fontCss: string | null;
 }): string {
-  const W = 1080;
-  const H = 1920;
-  const M = 80;
-  const heroH = 600;
+  const heroH = 720;
   const p: string[] = [];
-  p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`);
-  p.push(CARD_DEFS(o.fontCss));
-  p.push(`<rect width="${W}" height="${H}" fill="url(#bg)"/>`);
-  if (o.backdropUri) {
-    p.push(`<image href="${o.backdropUri}" x="0" y="0" width="${W}" height="${heroH}" preserveAspectRatio="xMidYMid slice"/>`);
-    p.push(`<rect x="0" y="0" width="${W}" height="${heroH}" fill="url(#scrim)"/>`);
-  } else {
-    p.push(poster(o.posterUri, o.name, W - M - 230, 240, 230, 345, "st-hero"));
-  }
-  p.push(`<g filter="url(#ds)">${brandBar()}</g>`);
+  p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SW} ${SH}" font-family="Archivo, ${SYS}">`);
+  p.push(studioDefs(o.fontCss));
+  p.push(`<rect width="${SW}" height="${SH}" fill="url(#bg)"/>`);
+  p.push(heroBackdrop(o.backdropUri, o.posterUri, o.name, heroH, "st-hero"));
+  p.push(studioBrand());
+  p.push(heroTitle("RENEWAL STATUS", o.name, o.meta, null, heroH - 36));
 
-  const nameLines = wrap(o.name.toUpperCase(), 16, 2);
-  const nameSize = nameLines.length > 1 ? 70 : 82;
-  const nameTop = heroH - 120 - (nameLines.length - 1) * (nameSize + 4);
-  let g = `<g filter="url(#ds)">`;
-  g += txt(M, nameTop - 56, "RENEWAL STATUS", { size: 38, fill: AMBER, wght: 800, wdth: 112, ls: 6 });
-  nameLines.forEach((ln, i) => {
-    g += txt(M, nameTop + i * (nameSize + 4), ln, { size: nameSize, fill: TEXT, wght: 900, wdth: 108 });
-  });
-  g += txt(M, heroH - 32, o.meta, { size: 31, fill: "#e7e3db", wght: 600 });
-  g += `</g>`;
-  p.push(g);
-
-  // the verdict — the answer the card exists to give
-  const vLines = wrap(o.verdict.toUpperCase(), 11, 2);
-  const vSize = vLines.length > 1 ? 108 : 150;
-  const vTop = heroH + 230;
+  const vLines = wrap(o.verdict.toUpperCase(), 9, 2);
+  const vSize = vLines.length > 1 ? 88 : 120;
+  const vTop = heroH + 100;
   vLines.forEach((ln, i) =>
-    p.push(txt(M, vTop + i * (vSize + 2), ln, { size: vSize, fill: o.verdictColor, wght: 900, wdth: 104 })),
+    p.push(txt(SM, vTop + i * (vSize + 6), ln, { size: vSize, fill: o.verdictColor, wght: 900, wdth: 104 })),
   );
-  const subLines = wrap(o.subLine, 34, 3);
-  const subTop = vTop + vLines.length * (vSize + 2) + 64;
-  subLines.forEach((ln, i) => p.push(txt(M, subTop + i * 52, ln, { size: 38, fill: MUTED, wght: 600 })));
+  const subLines = wrap(o.subLine, 30, 3);
+  const subTop = vTop + vLines.length * (vSize + 6) + 48;
+  subLines.forEach((ln, i) => p.push(txt(SM, subTop + i * 44, ln, { size: 32, fill: MUTED, wght: 600 })));
 
-  p.push(footer(W, H, "Track every renewal & date at"));
+  p.push(studioFooter("Track every renewal & date at"));
   p.push(`</svg>`);
   return p.join("");
 }
@@ -348,45 +393,47 @@ export interface VsSide {
   posterUri: string | null;
 }
 
-/** Head-to-head: two titles split top/bottom, a VS badge, ratings, a verdict. */
+/** Head-to-head: split-screen backdrops, VS medallion. */
 export function buildVsCard(a: VsSide, b: VsSide, verdict: string, fontCss: string | null): string {
-  const W = 1080;
-  const H = 1920;
-  const M = 80;
-  const half = 850;
+  const half = 820;
   const p: string[] = [];
-  p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`);
-  p.push(CARD_DEFS(fontCss));
-  p.push(`<rect width="${W}" height="${H}" fill="${PLATE}"/>`);
+  p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SW} ${SH}" font-family="Archivo, ${SYS}">`);
+  p.push(studioDefs(fontCss));
+  p.push(`<rect width="${SW}" height="${SH}" fill="${PLATE}"/>`);
 
-  const band = (t: VsSide, y0: number, h: number, scrimId: string, nameY: number, rateY: number) => {
+  const band = (t: VsSide, y0: number, h: number, scrimId: string, nameY: number) => {
     let s = "";
     if (t.backdropUri) {
-      s += `<image href="${t.backdropUri}" x="0" y="${y0}" width="${W}" height="${h}" preserveAspectRatio="xMidYMid slice"/>`;
-      s += `<rect x="0" y="${y0}" width="${W}" height="${h}" fill="url(#${scrimId})"/>`;
+      s += `<image href="${t.backdropUri}" x="0" y="${y0}" width="${SW}" height="${h}" preserveAspectRatio="xMidYMid slice"/>`;
+      s += `<rect x="0" y="${y0}" width="${SW}" height="${h}" fill="url(#${scrimId})"/>`;
     } else if (t.posterUri) {
-      s += poster(t.posterUri, t.name, (W - 220) / 2, y0 + (h - 330) / 2, 220, 330, `vs-${scrimId}`);
+      s += poster(t.posterUri, t.name, SM + 80, y0 + (h - 280) / 2, 186, 280, `vs-${scrimId}`);
     }
-    const nameLines = wrap(t.name.toUpperCase(), 16, 2);
-    const nsize = nameLines.length > 1 ? 62 : 76;
-    let g = `<g filter="url(#ds)">`;
+    const nameLines = wrap(t.name.toUpperCase(), 12, 2);
+    const nsize = nameLines.length > 1 ? 52 : 64;
+    let g = `<g filter="url(#textGlow)">`;
     nameLines.forEach((ln, i) =>
-      (g += txt(M, nameY + i * (nsize + 2), ln, { size: nsize, fill: TEXT, wght: 900, wdth: 106 })),
+      (g += txt(SM, nameY + i * (nsize + 4), ln, { size: nsize, fill: TEXT, wght: 900, wdth: 106 })),
     );
-    if (t.rating != null) g += ratingMark(M, rateY, 60, t.rating, GOLD, "start");
+    if (t.rating != null) {
+      const ly = nameY + (nameLines.length - 1) * (nsize + 4);
+      g += studioRatingMark(SM, ly + nsize + 22, 26, t.rating, GOLD, "start");
+    }
     g += `</g>`;
     return s + g;
   };
 
-  p.push(band(a, 0, half, "scrim", 600, 690));
-  p.push(band(b, half, half, "scrimUp", half + 200, half + 290));
-  p.push(`<g filter="url(#ds)">${brandBar()}</g>`);
+  p.push(band(a, 0, half, "scrim", 520));
+  p.push(band(b, half, half, "scrimUp", half + 140));
+  p.push(studioBrand());
 
-  // the VS medallion on the seam
-  p.push(`<circle cx="${W / 2}" cy="${half}" r="82" fill="${PLATE}" stroke="${AMBER}" stroke-width="5"/>`);
-  p.push(txt(W / 2, half + 26, "VS", { size: 68, fill: AMBER, anchor: "middle", wght: 900, wdth: 100 }));
+  const vsX = SM + CW / 2;
+  p.push(`<circle cx="${vsX}" cy="${half}" r="76" fill="${PLATE}" stroke="${LINE}" stroke-width="2"/>`);
+  p.push(`<circle cx="${vsX}" cy="${half}" r="68" fill="${PLATE}" stroke="${AMBER}" stroke-width="3.5"/>`);
+  p.push(txt(vsX, half + 22, "VS", { size: 56, fill: AMBER, anchor: "middle", wght: 900, wdth: 100 }));
 
-  p.push(footer(W, H, verdict));
+  p.push(txt(SM, FOOT_Y - 40, trunc(verdict, 40), { size: 28, fill: MUTED, wght: 600 }));
+  p.push(studioFooter("Compare episode ratings at"));
   p.push(`</svg>`);
   return p.join("");
 }
@@ -448,19 +495,7 @@ const txtR = (x: number, y: number, s: string, o: TxtROpts) =>
     o.opacity != null ? ` opacity="${o.opacity}"` : ""
   } style="font-variant-numeric:tabular-nums">${esc(s)}</text>`;
 
-// resvg's font has no U+2605 (★), so the star is drawn as a vector path. Inner
-// radius 0.5 matches the chunky on-site star (components/icons IconStar) so the
-// rating mark on generated cards reads the same as everywhere else on the site.
-function starPath(cx: number, cy: number, r: number): string {
-  const pts: string[] = [];
-  for (let i = 0; i < 10; i++) {
-    const ang = (-90 + i * 36) * (Math.PI / 180);
-    const rad = i % 2 === 0 ? r : r * 0.5;
-    pts.push(`${r2(cx + rad * Math.cos(ang))} ${r2(cy + rad * Math.sin(ang))}`);
-  }
-  return `M${pts.join("L")}Z`;
-}
-// "★ 9.3" as a vector star + number, honoring the text anchor (widths estimated)
+// "★ 9.3" as a vector star + number for OG cards (resvg-safe txtR)
 const ratingMark = (
   x: number,
   y: number,

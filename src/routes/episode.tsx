@@ -4,9 +4,10 @@
 import { Hono } from "hono";
 import { IconStar, ChevUp, ChevDown } from "../components/icons";
 import { Bindings, EpisodeRow } from "../types";
-import { stripHtml, epCode, epHref, hiRes, retinaSet, posterSrc, longDate, slugifyName, fmtRuntime } from "../lib/format";
+import { stripHtml, epCode, epHref, hiRes, heroBg, retinaSet, posterSrc, longDate, slugifyName, fmtRuntime } from "../lib/format";
+import { tmdbBackdrops } from "../lib/tmdb";
 import { origin, canonical } from "../lib/seo";
-import { getShow } from "../lib/queries";
+import { resolveShow, TMDB_PERSON_OFFSET } from "../lib/tmdb-show";
 import { servePng } from "../lib/render";
 import { posterDataUri } from "../lib/signal";
 import { buildOgCard } from "../lib/social";
@@ -57,6 +58,50 @@ async function guestCredits(
   }
 }
 
+/** Guest cast + crew for a live (TMDB) episode — the TVmaze call above 404s on a
+ *  synthetic id, so live shows would lose these sections without this. People key
+ *  at the 10M offset so the tiles link to live person pages. Edge-cached a week. */
+async function tmdbEpisodeCredits(
+  apiKey: string,
+  tmdbId: number,
+  season: number,
+  number: number,
+): Promise<{ cast: GuestCredit[]; crew: GuestCrewCredit[] }> {
+  const cacheKey = new Request(
+    `https://edge-cache.tvnightly.com/tmdbep/v1/${tmdbId}/${season}/${number}`,
+  );
+  const cache = caches.default;
+  try {
+    let res = await cache.match(cacheKey);
+    if (!res) {
+      const live = await fetch(
+        `https://api.themoviedb.org/3/tv/${tmdbId}/season/${season}/episode/${number}/credits?api_key=${apiKey}`,
+        { headers: { accept: "application/json" } },
+      );
+      if (!live.ok) return { cast: [], crew: [] };
+      res = new Response(live.body, live);
+      res.headers.set("Cache-Control", "public, max-age=604800");
+      await cache.put(cacheKey, res.clone());
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = (await res.json()) as { guest_stars?: any[]; crew?: any[] };
+    const img = (p: string | null): { medium: string } | null =>
+      p ? { medium: `https://image.tmdb.org/t/p/w185${p}` } : null;
+    const cast: GuestCredit[] = (data.guest_stars ?? []).slice(0, 20).map((g) => ({
+      person: { id: TMDB_PERSON_OFFSET + g.id, name: g.name, image: img(g.profile_path ?? null) },
+      character: g.character ? { name: g.character } : null,
+      voice: false,
+    }));
+    const crew: GuestCrewCredit[] = (data.crew ?? []).map((cr) => ({
+      person: { id: TMDB_PERSON_OFFSET + cr.id, name: cr.name, image: img(cr.profile_path ?? null) },
+      guestCrewType: cr.job ?? null,
+    }));
+    return { cast, crew };
+  } catch {
+    return { cast: [], crew: [] };
+  }
+}
+
 // the episode credits a fan recognizes, director first; unknown types rank last
 const EP_CREW_RANK = [
   "Director",
@@ -97,20 +142,25 @@ function keyEpCrew(crew: GuestCrewCredit[], limit = 10) {
 }
 
 app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
-  const show = await getShow(c.env.DB, c.req.param("slug"));
-  if (!show) return c.notFound();
+  const r = await resolveShow(c, c.req.param("slug"));
+  if (!r) return c.notFound();
+  const show = r.show;
   const m = /^s(\d{1,3})e(\d{1,3})$/i.exec(c.req.param("code"));
   if (!m) return c.notFound();
   const seasonNo = Number(m[1]);
   const epNo = Number(m[2]);
 
-  const { results: episodes } = await c.env.DB.prepare(
-    `SELECT e.*, v.up, v.down FROM episodes e
-     LEFT JOIN episode_votes v ON v.episode_id = e.id
-     WHERE e.show_id = ? ORDER BY e.season, e.number`,
-  )
-    .bind(show.id)
-    .all<EpisodeRow & { up: number | null; down: number | null }>();
+  const episodes: (EpisodeRow & { up: number | null; down: number | null })[] = r.isTmdb
+    ? r.episodes.map((e) => ({ ...e, up: null, down: null }))
+    : (
+        await c.env.DB.prepare(
+          `SELECT e.*, v.up, v.down FROM episodes e
+           LEFT JOIN episode_votes v ON v.episode_id = e.id
+           WHERE e.show_id = ? ORDER BY e.season, e.number`,
+        )
+          .bind(show.id)
+          .all<EpisodeRow & { up: number | null; down: number | null }>()
+      ).results;
 
   const idx = episodes.findIndex((e) => e.season === seasonNo && e.number === epNo);
   if (idx === -1) return c.notFound();
@@ -137,7 +187,10 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
   const seriesRank = rankIn(episodes);
   const vsAvg = ep.rating != null && seasonAvg != null ? ep.rating - seasonAvg : null;
 
-  const credits = await guestCredits(ep.id);
+  const credits =
+    r.isTmdb && show.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbEpisodeCredits(c.env.TMDB_API_KEY, show.tmdb_id, seasonNo, epNo)
+      : await guestCredits(ep.id);
   const guests = credits.cast.slice(0, 14);
   const crew = keyEpCrew(credits.crew);
   // link anyone we already track: guests by TVmaze id, crew by id or — for
@@ -201,6 +254,22 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
     return (sp > 120 ? cut.slice(0, sp) : cut).trimEnd() + "…";
   })();
 
+  // a sharp, full-res hero: pull the show's whole hi-res TMDB backdrop gallery
+  // and give each episode a *different* frame (deterministic by S/E, so it's
+  // stable across loads) — no more the same lead art on every episode. The
+  // TVmaze still (~210px, soft full-bleed) is only the last-resort fallback.
+  const gallery =
+    show.tmdb_id && c.env.TMDB_API_KEY ? await tmdbBackdrops(c.env.TMDB_API_KEY, show.tmdb_id) : [];
+  const heroArt = gallery.length
+    ? gallery[(((ep.season ?? 0) * 31 + (ep.number ?? 0)) % gallery.length + gallery.length) % gallery.length]
+    : null;
+  const heroStill = hiRes(ep.image_url ?? show.image_url);
+  const heroStyle = heroArt
+    ? heroBg(heroArt.x1, heroArt.x2)
+    : heroStill
+      ? `background-image:url('${heroStill}')`
+      : null;
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
@@ -212,16 +281,11 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
       ogImageLarge
       scripts={["/js/votes.js", "/js/share.js"]}
     >
-      <article class={`show-hub${(ep.image_url ?? show.image_url) ? " hub-backdrop" : ""}`}>
-        {/* Serializd-style hero: the episode's own frame, sharp and full-bleed,
-            with a legibility scrim; the show's poster anchors the facts. */}
+      <article class={`show-hub${heroStyle ? " hub-backdrop" : ""}`}>
+        {/* Full-bleed hero behind a legibility scrim; the show's poster anchors
+            the facts. The backdrop prefers the show's hi-res TMDB art. */}
         <header class="detail-hero frame-hero">
-          {(ep.image_url ?? show.image_url) ? (
-            <div
-              class="hero-backdrop"
-              style={`background-image:url('${hiRes(ep.image_url ?? show.image_url)}')`}
-            ></div>
-          ) : null}
+          {heroStyle ? <div class="hero-backdrop" style={heroStyle}></div> : null}
           <div class="detail-head">
             <div class="detail-side">
               {(() => {
@@ -359,7 +423,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
                     </span>
                   </>
                 );
-                return known.has(g.person.id) ? (
+                return known.has(g.person.id) || g.person.id >= TMDB_PERSON_OFFSET ? (
                   <a class="guest-row" href={`/person/${slugifyName(g.person.name)}-${g.person.id}`}>
                     {inner}
                   </a>
@@ -376,7 +440,9 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             <div class="guest-list">
               {crew.map((x) => {
                 const img = x.person.image?.medium ?? null;
-                const pid = crewLink.get(x.person.id);
+                const pid =
+                  crewLink.get(x.person.id) ??
+                  (x.person.id >= TMDB_PERSON_OFFSET ? x.person.id : undefined);
                 const inner = (
                   <>
                     {img ? (
@@ -455,15 +521,12 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}/og.png", async (c) => {
   const slug = c.req.param("slug");
   const code = c.req.param("code").toLowerCase();
   return servePng(c, `ep/${slug}/${code}`, async () => {
-    const show = await getShow(c.env.DB, slug);
-    if (!show) return null;
+    const r = await resolveShow(c, slug);
+    if (!r) return null;
+    const show = r.show;
     const m = /^s(\d{1,3})e(\d{1,3})$/i.exec(code);
     if (!m) return null;
-    const ep = await c.env.DB.prepare(
-      "SELECT * FROM episodes WHERE show_id = ? AND season = ? AND number = ?",
-    )
-      .bind(show.id, Number(m[1]), Number(m[2]))
-      .first<EpisodeRow>();
+    const ep = r.episodes.find((e) => e.season === Number(m[1]) && e.number === Number(m[2])) ?? null;
     if (!ep) return null;
     const [backdropUri, posterUri] = await Promise.all([
       posterDataUri(hiRes(ep.image_url ?? show.image_url)),

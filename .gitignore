@@ -4,3 +4,6 @@ node_modules/
 seed/
 *.log
 .DS_Store
+
+# generated brand exports (scripts/gen-logo-png.mjs)
+/tvnightly-*.png

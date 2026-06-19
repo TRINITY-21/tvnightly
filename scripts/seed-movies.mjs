@@ -65,6 +65,29 @@ for (let p = 1; p <= PAGES; p++) {
   if (p >= (page.total_pages ?? 1)) break;
 }
 
+// Phase 1a: current heat — trending / now-playing / popular, so the mirror
+// carries this week's releases (vote_count.desc alone misses brand-new titles,
+// which is exactly what TMDB's weekly-trending rail and fresh searches want).
+{
+  const seen = new Set(ids);
+  for (const [path, params] of [
+    ["/trending/movie/week", ""],
+    ["/movie/now_playing", "&region=US"],
+    ["/movie/popular", "&region=US"],
+  ]) {
+    for (let p = 1; p <= 5; p++) {
+      const page = await get(path, `${params}&page=${p}`);
+      for (const r of page.results ?? [])
+        if (!seen.has(r.id)) {
+          seen.add(r.id);
+          ids.push(r.id);
+        }
+      if (p >= (page.total_pages ?? 1)) break;
+    }
+    console.log(`current ${path}: total ${ids.length}`);
+  }
+}
+
 // Phase 1b: franchise backfill — watch-order guides must have every entry in
 // the mirror regardless of vote rank. Search each curated title and add it.
 // Logs TITLE FIX lines when the curated title differs from TMDB's exact title.

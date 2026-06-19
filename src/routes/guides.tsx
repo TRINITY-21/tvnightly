@@ -263,7 +263,7 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
             <a class="btn-ghost" href={genre ? `/movies/underrated/${genreSlug}` : "/movies/underrated"}>
               Underrated {genre ? lower : ""} picks
             </a>
-            <a class="btn-ghost" href="/movies/upcoming">
+            <a class="btn-ghost" href="/premieres?tab=movies">
               What's coming next
             </a>
           </p>

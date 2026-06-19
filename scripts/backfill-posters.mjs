@@ -26,8 +26,9 @@ if (!KEY) {
 const REMOTE = process.env.REMOTE ? "--remote" : "--local";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const ONLY_NEW = process.env.ONLY_NEW ? "AND poster_url IS NULL" : "";
 const out = execSync(
-  `npx wrangler d1 execute tvnightly ${REMOTE} --json --command "SELECT id, tmdb_id FROM shows WHERE tmdb_id IS NOT NULL"`,
+  `npx wrangler d1 execute tvnightly ${REMOTE} --json --command "SELECT id, tmdb_id FROM shows WHERE tmdb_id IS NOT NULL ${ONLY_NEW}"`,
   { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
 );
 const rows = JSON.parse(out)[0].results;

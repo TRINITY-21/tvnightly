@@ -9,7 +9,7 @@ import { FilterSelect, RateInline, SubscribeForm } from "../components/forms";
 import { SeasonTabs, ShowTabs } from "../components/nav";
 import { ProviderLine } from "../components/providers";
 import { ShareBar } from "../components/share";
-import { tmdbShowData, resolveShow } from "../lib/tmdb-show";
+import { tmdbShowData, resolveShow, tmdbShowCast } from "../lib/tmdb-show";
 import { buildDossier } from "../lib/dossier";
 import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml, fmtRuntime, isNewYear } from "../lib/format";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, visitorRegion } from "../lib/providers";
@@ -94,8 +94,17 @@ app.get("/show/:slug", async (c) => {
   }
   const netName = show.network ?? show.web_channel;
   const region = visitorRegion(c);
+  // Cast: the mirror's stored cast_json, or — for a freshly-seeded show that
+  // hasn't been cast-synced yet — fetched live from TMDB so the section never
+  // comes up empty. Same {n,c,img} shape; live entries also carry a person id.
+  type CastTile = { n: string; c: string | null; img: string | null; id?: number };
+  const castFetch: Promise<CastTile[]> = show.cast_json
+    ? Promise.resolve(JSON.parse(show.cast_json) as CastTile[])
+    : show.tmdb_id && c.env.TMDB_API_KEY
+      ? tmdbShowCast(c.env.TMDB_API_KEY, show.tmdb_id)
+      : Promise.resolve([] as CastTile[]);
   // one bound COUNT instead of the full network GROUP-BY scan per pageview
-  const [similar, stat, aggRating, netCount] = await Promise.all([
+  const [similar, stat, aggRating, netCount, cast] = await Promise.all([
     similarShows(c.env.DB, show),
     titleStat(c.env.DB, "tv", ratingRef),
     aggregateRatingLd(c.env.DB, "tv", ratingRef),
@@ -106,6 +115,7 @@ app.get("/show/:slug", async (c) => {
           .bind(netName, netName)
           .first<{ c: number }>()
       : Promise.resolve(null),
+    castFetch,
   ]);
   const netEntry =
     netName && (netCount?.c ?? 0) >= 3 ? { name: netName, slug: slugifyName(netName) } : undefined;
@@ -384,9 +394,6 @@ app.get("/show/:slug", async (c) => {
           ) : null;
         })()}
         {(() => {
-          const cast: { n: string; c: string | null; img: string | null }[] = show.cast_json
-            ? JSON.parse(show.cast_json)
-            : [];
           return cast.length ? (
             <section id="cast">
               <h2>

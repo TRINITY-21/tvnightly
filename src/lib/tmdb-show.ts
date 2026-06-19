@@ -159,6 +159,29 @@ export async function buildTmdbShow(
   return { show, episodes, tmdbId };
 }
 
+/** Series-regular cast for a MIRRORED show whose cast_json is empty — the bulk
+ *  TVmaze seed carries no cast until the hourly sync or the cast backfill fills
+ *  it, so without this a freshly-seeded show renders no Cast section. Fetched
+ *  live from TMDB (edge-cached) in the SAME {id, n, c, img} shape as cast_json,
+ *  carrying a person id (TMDB people live at 10M + their id) so the cards link. */
+export async function tmdbShowCast(
+  key: string,
+  tmdbId: number,
+  limit = 30,
+): Promise<{ id: number; n: string; c: string | null; img: string | null }[]> {
+  const data = await cachedJson(
+    `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${key}&append_to_response=credits`,
+    `tvcast/v1/${tmdbId}`,
+  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data?.credits?.cast ?? []) as any[]).slice(0, limit).map((p) => ({
+    id: TMDB_PERSON_OFFSET + p.id,
+    n: p.name,
+    c: p.character ?? null,
+    img: IMG(p.profile_path, "w185"),
+  }));
+}
+
 /** Save a live TMDB show (+ episodes) into D1 the first time someone engages with
  *  it (subscribe, vote). Returns the D1 show id. Idempotent: if already mirrored
  *  (by tmdb_id or slug) it just returns the existing id. This is the founder's
@@ -383,6 +406,107 @@ export async function tmdbPersonData(
   return { person, roles, films };
 }
 
+/** A person's FULL profile — D1 community data where mirrored, enriched with the
+ *  rest of their TMDB filmography (or built entirely live for an unmirrored
+ *  person at id ≥ TMDB_PERSON_OFFSET). The single source of truth for the person
+ *  page AND the /tv|/movies featuring pages, so all three show the same credits
+ *  (the D1 credits table only mirrors a slice of the catalogue — querying it
+ *  alone makes a real actor look like they did 1–2 titles). Returns null when no
+ *  such person resolves anywhere. */
+export async function resolvePersonProfile(
+  c: Context<{ Bindings: Bindings }>,
+  pid: number,
+): Promise<{ person: PersonRow; roles: PersonRoles; films: PersonFilms } | null> {
+  let person = await c.env.DB.prepare("SELECT * FROM people WHERE id = ?").bind(pid).first<PersonRow>();
+  let roles: PersonRoles;
+  let films: PersonFilms;
+  if (person) {
+    const [r, f] = await Promise.all([
+      c.env.DB.prepare(
+        `SELECT cr.character, cr.voice, cr.episodes, s.*
+         FROM credits cr JOIN shows s ON s.id = cr.show_id
+         WHERE cr.person_id = ?
+         ORDER BY s.rating IS NULL, s.rating DESC, cr.episodes DESC LIMIT 50`,
+      )
+        .bind(person.id)
+        .all<ShowRow & { character: string | null; voice: number; episodes: number | null }>(),
+      c.env.DB.prepare(
+        `SELECT mc.character, m.* FROM movie_credits mc JOIN movies m ON m.imdb_id = mc.movie_id
+         WHERE mc.person_id = ?
+         ORDER BY m.rating IS NULL, m.rating DESC, m.popularity DESC LIMIT 50`,
+      )
+        .bind(person.id)
+        .all<MovieRow & { character: string | null }>(),
+    ]);
+    roles = r.results as PersonRoles;
+    films = f.results as PersonFilms;
+    // Fill out the rest of their real filmography from TMDB, keeping D1 rows
+    // (canonical slug + community data) wherever a title is already mirrored.
+    // People are TVmaze-seeded with no tmdb_id, so resolve by name, verified
+    // against titles we already know — match on normalized title, not the D1
+    // slug (a mirrored slug can carry a disambiguation suffix TMDB won't have).
+    const knownSlugs = new Set<string>([
+      ...roles.map((x) => slugifyName(x.name)),
+      ...films.map((x) => slugifyName(x.title)),
+    ]);
+    const extra = person.tmdb_id
+      ? await tmdbPersonData(c, person.tmdb_id)
+      : await tmdbPersonByName(c, person.name, knownSlugs);
+    if (extra) {
+      // overlay TMDB bio/profile onto the D1 person wherever we hold nothing
+      const t = extra.person;
+      person = {
+        ...person,
+        bio: person.bio ?? t.bio,
+        birthday: person.birthday ?? t.birthday,
+        deathday: person.deathday ?? t.deathday,
+        birthplace: person.birthplace ?? t.birthplace,
+        country: person.country ?? t.country,
+        image_url: person.image_url ?? t.image_url,
+        known_dept: person.known_dept ?? t.known_dept,
+        tmdb_id: person.tmdb_id ?? t.tmdb_id,
+        imdb_id: person.imdb_id ?? t.imdb_id,
+        socials: person.socials ?? t.socials,
+        homepage: person.homepage ?? t.homepage,
+      };
+      const haveShow = new Set<string>();
+      for (const x of roles) {
+        if (x.tmdb_id != null) haveShow.add(`t${x.tmdb_id}`);
+        haveShow.add(`s${x.slug}`);
+      }
+      const haveFilm = new Set<string>();
+      for (const x of films) {
+        if (x.tmdb_id != null) haveFilm.add(`t${x.tmdb_id}`);
+        haveFilm.add(`s${x.slug}`);
+      }
+      const byRating = (a: { rating: number | null }, b: { rating: number | null }) =>
+        (b.rating ?? -1) - (a.rating ?? -1);
+      const extraRoles = extra.roles
+        .filter((x) => !haveShow.has(`t${x.tmdb_id}`) && !haveShow.has(`s${x.slug}`))
+        .sort((a, b) => byRating(a, b) || (b.episodes ?? 0) - (a.episodes ?? 0));
+      roles = [...roles, ...extraRoles.slice(0, Math.max(0, 40 - roles.length))].sort(
+        (a, b) => byRating(a, b) || (b.episodes ?? 0) - (a.episodes ?? 0),
+      ) as PersonRoles;
+      const extraFilms = extra.films
+        .filter((x) => !haveFilm.has(`t${x.tmdb_id}`) && !haveFilm.has(`s${x.slug}`))
+        .sort((a, b) => byRating(a, b) || (b.popularity ?? 0) - (a.popularity ?? 0));
+      films = [...films, ...extraFilms.slice(0, Math.max(0, 30 - films.length))].sort(
+        (a, b) => byRating(a, b) || (b.popularity ?? 0) - (a.popularity ?? 0),
+      ) as PersonFilms;
+    }
+  } else if (pid >= TMDB_PERSON_OFFSET) {
+    // hybrid: build the SAME profile live from TMDB when not mirrored
+    const built = await tmdbPersonData(c, pid - TMDB_PERSON_OFFSET);
+    if (!built) return null;
+    person = built.person;
+    roles = built.roles;
+    films = built.films;
+  } else {
+    return null;
+  }
+  return { person, roles, films };
+}
+
 // Build TV roles + films from a TMDB combined_credits cast array. Shared by the
 // live person page and the D1-person enrichment, so a mirrored person still
 // shows their FULL filmography — not just the handful of titles in our mirror.
@@ -392,8 +516,12 @@ function buildPersonCredits(
   tvLimit: number,
   movieLimit: number,
 ): { roles: PersonRoles; films: PersonFilms } {
-  // talk shows (10767), news (10763) and reality (10764) where the person plays
-  // "self" are promo-tour noise, not acting roles — keep them out of a filmography
+  // "self" appearances — talk shows (10767), news (10763), reality (10764), and
+  // making-of / behind-the-scenes documentaries where the actor plays themselves
+  // — are promo-tour noise, not roles. Keep them out of the filmography on BOTH
+  // sides: a "Self" documentary was ranking #1 on actors' movie lists (thin-vote
+  // 10.0s), and the genre ids only ever match TV so the character regex is what
+  // catches the film case.
   const SELF = /\b(self|himself|herself|themselves)\b/i;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isSelfAppearance = (cr: any) =>
@@ -403,7 +531,7 @@ function buildPersonCredits(
   const seen = new Set<string>();
   const dedupTop = (mt: string, n: number) =>
     credits
-      .filter((cr) => cr.media_type === mt && (mt !== "tv" || !isSelfAppearance(cr)))
+      .filter((cr) => cr.media_type === mt && !isSelfAppearance(cr))
       .sort((a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0))
       .filter((cr) => {
         const k = mt + cr.id;

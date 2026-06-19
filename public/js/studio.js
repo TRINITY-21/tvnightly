@@ -100,7 +100,7 @@
     var fmt = holder ? holder.getAttribute("data-format") : "liked";
     attachSearch(single, document.getElementById("studio-ta"), function (it) {
       window.location.href =
-        "/admin/studio?format=" +
+        "/admin/studio?cat=" +
         encodeURIComponent(fmt) +
         "&slug=" +
         encodeURIComponent(it.slug) +
@@ -130,7 +130,7 @@
           return;
         }
         window.location.href =
-          "/admin/studio?format=vs&a=" +
+          "/admin/studio?cat=vs&a=" +
           encodeURIComponent(pick.a.slug) +
           "&ka=" +
           encodeURIComponent(pick.a.kind) +
@@ -158,20 +158,25 @@
           return r.text();
         })
         .then(function (svgText) {
+          // size the canvas from the SVG's own viewBox (cards are 9:16, the
+          // ratings graph is its own ratio), at 2x for a crisp export
+          var vb = svgText.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+          var vw = vb ? Math.round(+vb[1]) : 1080;
+          var vh = vb ? Math.round(+vb[2]) : 1920;
           var url = URL.createObjectURL(new Blob([svgText], { type: "image/svg+xml;charset=utf-8" }));
           var img = new Image();
           img.onload = function () {
             var canvas = document.createElement("canvas");
-            canvas.width = 1080;
-            canvas.height = 1920;
-            canvas.getContext("2d").drawImage(img, 0, 0, 1080, 1920);
+            canvas.width = vw * 2;
+            canvas.height = vh * 2;
+            canvas.getContext("2d").drawImage(img, 0, 0, vw * 2, vh * 2);
             URL.revokeObjectURL(url);
             canvas.toBlob(function (b) {
               if (!b) {
                 reset();
                 return;
               }
-              var fm = card.src.match(/format=([^&]+)/);
+              var fm = card.src.match(/[?&](?:cat|format)=([^&]+)/);
               var a = document.createElement("a");
               a.href = URL.createObjectURL(b);
               a.download = "tvnightly-" + (fm ? fm[1] : "card") + ".png";
@@ -535,4 +540,33 @@
         .catch(vreset);
     });
   }
+
+  // copy a caption to the clipboard
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest(".studio-copy");
+    if (!btn) return;
+    var box = btn.closest(".studio-cap");
+    var ta = box && box.querySelector(".studio-cap-text");
+    if (!ta) return;
+    var done = function () {
+      var prev = btn.textContent;
+      btn.textContent = "Copied ✓";
+      btn.classList.add("is-done");
+      setTimeout(function () {
+        btn.textContent = prev;
+        btn.classList.remove("is-done");
+      }, 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(done).catch(function () {
+        ta.select();
+        document.execCommand("copy");
+        done();
+      });
+    } else {
+      ta.select();
+      document.execCommand("copy");
+      done();
+    }
+  });
 })();

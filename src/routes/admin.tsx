@@ -12,7 +12,7 @@ import {
   VsSide,
 } from "../lib/social";
 import { loadOgFonts, svgToPng } from "../lib/render";
-import { getPromoMoments, promoCaptions, promoBase, type PromoMoment } from "../lib/promo";
+import { getPromoMoments, promoCaptions, promoBase, type PromoMoment, type PromoTheme } from "../lib/promo";
 import { tmdbBackdrop, tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
 import { AppContext, Bindings, MovieRow, ShowRow } from "../types";
 
@@ -28,7 +28,6 @@ const STUDIO_GENRES = [
   "Mystery",
   "Romance",
 ];
-const FORMATS = ["liked", "gems", "top", "tonight", "vs", "status"] as const;
 const VERDICT_GREEN = "#5ec57d";
 const VERDICT_RED = "#e0644a";
 const VERDICT_BLUE = "#7aa6e0";
@@ -147,12 +146,47 @@ app.get("/admin/feedback", async (c) => {
   );
 });
 
-// ---- social studio: short-form post generator ----
+// ---- social studio: a category-driven post generator ----
+// Two engines feed one beautiful surface:
+//   promo   → single-subject moment cards (buildPromoCard) in 1:1 / 9:16 / 16:9,
+//             with platform captions and a direct-download PNG
+//   classic → the composite cards (If you liked X, X vs Y, Top 5, gems) rendered
+//             as 9:16 SVG and saved client-side (studio.js canvas)
+//   ratings → a show's episode-ratings graph (the public ratings.svg)
+type StudioCat = {
+  id: string;
+  label: string;
+  group: "Moments" | "Composer" | "Graphs";
+  engine: "promo" | "classic" | "ratings";
+  themes?: PromoTheme[];
+  needs?: "title" | "genre" | "vs";
+  blurb?: string;
+};
+const STUDIO_CATS: StudioCat[] = [
+  { id: "trending", label: "Trending now", group: "Moments", engine: "promo", themes: ["trending"], blurb: "This week's hottest titles — live." },
+  { id: "tonight", label: "On tonight", group: "Moments", engine: "promo", themes: ["tonight"], blurb: "What's airing tonight — live." },
+  { id: "renewed", label: "Renewed & premieres", group: "Moments", engine: "promo", themes: ["renewed", "premiere"], blurb: "Renewal & premiere news from the sync." },
+  { id: "classic", label: "Instant classics", group: "Moments", engine: "promo", themes: ["classic"], blurb: "Episodes that just hit must-watch." },
+  { id: "liked", label: "If you liked X", group: "Composer", engine: "classic", needs: "title" },
+  { id: "vs", label: "X vs Y", group: "Composer", engine: "classic", needs: "vs" },
+  { id: "top", label: "Top 5 by genre", group: "Composer", engine: "classic", needs: "genre" },
+  { id: "gems", label: "Hidden gems", group: "Composer", engine: "classic", blurb: "Highly rated, under-watched — auto-picked." },
+  { id: "status", label: "Renewed?", group: "Composer", engine: "classic", needs: "title" },
+  { id: "ratings", label: "Episode ratings graph", group: "Graphs", engine: "ratings", needs: "title" },
+];
+const FMT_LABEL: Record<string, string> = { square: "1:1 Feed", story: "9:16 Story", wide: "16:9 Wide" };
+
 app.get("/admin/studio", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const fq = c.req.query("format") ?? "liked";
-  const format = (FORMATS as readonly string[]).includes(fq) ? fq : "liked";
+  const enc = encodeURIComponent;
+  const catId = c.req.query("cat") ?? "trending";
+  const cat = STUDIO_CATS.find((x) => x.id === catId) ?? STUDIO_CATS[0];
+  const fmtQ = c.req.query("fmt") ?? "story";
+  const fmt = fmtQ in PROMO_DIMS ? fmtQ : "story";
+  const base = promoBase(c);
+
+  // classic-engine inputs
   const slug = (c.req.query("slug") ?? "breaking-bad").trim();
   const kind = c.req.query("kind") === "movie" ? "movie" : "tv";
   const genre = (c.req.query("genre") ?? "Drama").trim();
@@ -161,92 +195,179 @@ app.get("/admin/studio", async (c) => {
   const vsB = (c.req.query("b") ?? "").trim();
   const vsKb = c.req.query("kb") === "movie" ? "movie" : "tv";
 
-  const enc = encodeURIComponent;
-  let src = `/admin/studio/card.svg?format=${format}`;
-  if (format === "liked" || format === "status") src += `&slug=${enc(slug)}&kind=${kind}`;
-  if (format === "top") src += `&genre=${enc(genre)}`;
-  if (format === "vs") src += `&a=${enc(vsA)}&ka=${vsKa}&b=${enc(vsB)}&kb=${vsKb}`;
+  // promo-engine: the moments for this category
+  let moments: PromoMoment[] = [];
+  let active: PromoMoment | undefined;
+  let caps: ReturnType<typeof promoCaptions> | null = null;
+  if (cat.engine === "promo") {
+    const all = await getPromoMoments(c);
+    moments = all.filter((m) => cat.themes!.includes(m.theme));
+    active = moments.find((m) => m.id === c.req.query("pick")) ?? moments[0];
+    if (active) caps = promoCaptions(active, base);
+  }
 
-  const tab = (f: string, label: string) => (
-    <a class={`studio-tab${f === format ? " on" : ""}`} href={`/admin/studio?format=${f}`}>
-      {label}
-    </a>
-  );
+  // the preview source + aspect class
+  let src = "";
+  let aspect: "square" | "story" | "wide" = "story";
+  let dlName = `tvnightly-${cat.id}.png`;
+  if (cat.engine === "promo" && active) {
+    src = promoCardUrl(active, fmt);
+    aspect = fmt as "square" | "story" | "wide";
+    dlName = `tvnightly-${active.id}-${fmt}.png`;
+  } else if (cat.engine === "classic") {
+    src = `/admin/studio/card.svg?format=${cat.id}`;
+    if (cat.id === "liked" || cat.id === "status") src += `&slug=${enc(slug)}&kind=${kind}`;
+    if (cat.id === "top") src += `&genre=${enc(genre)}`;
+    if (cat.id === "vs") src += `&a=${enc(vsA)}&ka=${vsKa}&b=${enc(vsB)}&kb=${vsKb}`;
+  } else if (cat.engine === "ratings") {
+    src = `/show/${enc(slug)}/ratings.svg`;
+  }
+
+  const catHref = (id: string) => `/admin/studio?cat=${id}`;
+  const groups: StudioCat["group"][] = ["Moments", "Composer", "Graphs"];
 
   return c.html(
-    <Layout title="Social studio — admin" noindex scripts={["/js/studio.js"]}>
-      <p class="adm-nav">
-        <a href="/admin/feedback"><span class="chev-icon chev-icon-sm chev-icon-prev" aria-hidden="true"></span> Feedback</a>
-      </p>
-      <h1>Social studio</h1>
-      <div class="studio-tabs">
-        {tab("liked", "If you liked X")}
-        {tab("tonight", "On tonight")}
-        {tab("gems", "Hidden gems")}
-        {tab("top", "Top 5 by genre")}
-        {tab("vs", "X vs Y")}
-        {tab("status", "Renewed?")}
-      </div>
+    <Layout title="Studio — admin" noindex scripts={["/js/studio.js"]}>
+      <div class="studio">
+        <aside class="studio-rail">
+          <a class="studio-back" href="/admin/feedback">← Feedback inbox</a>
+          <h1 class="studio-h1">Studio</h1>
+          {groups.map((g) => (
+            <div class="studio-group">
+              <h2 class="studio-group-h">{g}</h2>
+              {STUDIO_CATS.filter((x) => x.group === g).map((x) => (
+                <a class={`studio-cat${x.id === cat.id ? " on" : ""}`} href={catHref(x.id)}>
+                  {x.label}
+                </a>
+              ))}
+            </div>
+          ))}
+        </aside>
 
-      {format === "liked" || format === "status" ? (
-        <div class="studio-search" data-format={format}>
-          <input id="studio-q" type="search" placeholder="Search a show or movie…" autocomplete="off" />
-          <div id="studio-ta" class="studio-ta" hidden></div>
-        </div>
-      ) : null}
-      {format === "vs" ? (
-        <div class="studio-vs">
-          <div class="studio-search">
-            <input id="studio-qa" type="search" placeholder="First title…" autocomplete="off" />
-            <div id="studio-taa" class="studio-ta" hidden></div>
-          </div>
-          <div class="studio-search">
-            <input id="studio-qb" type="search" placeholder="Second title…" autocomplete="off" />
-            <div id="studio-tab" class="studio-ta" hidden></div>
-          </div>
-          <button type="button" id="studio-gen" class="studio-dl-btn">
-            Generate
-          </button>
-        </div>
-      ) : null}
-      {format === "top" ? (
-        <form method="get" action="/admin/studio" class="studio-genre">
-          <input type="hidden" name="format" value="top" />
-          <select name="genre">
-            {STUDIO_GENRES.map((g) => (
-              <option value={g} selected={g === genre}>
-                {g === "Science-Fiction" ? "Sci-Fi" : g}
-              </option>
-            ))}
-          </select>
-          <button type="submit">Preview</button>
-        </form>
-      ) : null}
-      {format === "gems" ? (
-        <p class="muted">Highly rated, under-watched shows — auto-picked from the catalogue.</p>
-      ) : null}
-      {format === "tonight" ? (
-        <p class="muted">Tonight's airings, ranked by rating — auto-pulled from the schedule.</p>
-      ) : null}
+        <main class="studio-main">
+          <header class="studio-bar">
+            <div>
+              <h2 class="studio-title">{cat.label}</h2>
+              {cat.blurb ? <p class="muted studio-sub">{cat.blurb}</p> : null}
+            </div>
+            {cat.engine === "promo" && active ? (
+              <div class="studio-fmts" role="group" aria-label="Format">
+                {(["square", "story", "wide"] as const).map((f) => (
+                  <a
+                    class={`studio-fmt${f === fmt ? " on" : ""}`}
+                    href={`/admin/studio?cat=${cat.id}&pick=${enc(active!.id)}&fmt=${f}`}
+                  >
+                    {FMT_LABEL[f]}
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <span class="studio-fmt-static">9:16 vertical</span>
+            )}
+          </header>
 
-      <div class="studio-preview">
-        <div class="studio-preview-frame">
-          <img id="studio-card" src={src} alt="Social card preview" width="1080" height="1920" />
-          <div class="studio-safe" aria-hidden="true" title="TikTok / Shorts UI safe zone"></div>
-        </div>
-        <p class="studio-safe-note muted">Content stays left of the shaded rail — clears like, comment &amp; share buttons.</p>
+          {/* controls per category */}
+          {cat.engine === "classic" && (cat.id === "liked" || cat.id === "status") ? (
+            <div class="studio-search" data-format={cat.id}>
+              <input id="studio-q" type="search" placeholder="Search a show or movie…" autocomplete="off" />
+              <div id="studio-ta" class="studio-ta" hidden></div>
+            </div>
+          ) : null}
+          {cat.engine === "ratings" ? (
+            <div class="studio-search" data-format="ratings">
+              <input id="studio-q" type="search" placeholder="Search a show for its ratings graph…" autocomplete="off" />
+              <div id="studio-ta" class="studio-ta" hidden></div>
+            </div>
+          ) : null}
+          {cat.id === "vs" ? (
+            <div class="studio-vs">
+              <div class="studio-search">
+                <input id="studio-qa" type="search" placeholder="First title…" autocomplete="off" />
+                <div id="studio-taa" class="studio-ta" hidden></div>
+              </div>
+              <div class="studio-search">
+                <input id="studio-qb" type="search" placeholder="Second title…" autocomplete="off" />
+                <div id="studio-tab" class="studio-ta" hidden></div>
+              </div>
+              <button type="button" id="studio-gen" class="studio-dl-btn">Generate</button>
+            </div>
+          ) : null}
+          {cat.id === "top" ? (
+            <form method="get" action="/admin/studio" class="studio-genre">
+              <input type="hidden" name="cat" value="top" />
+              <select name="genre">
+                {STUDIO_GENRES.map((g) => (
+                  <option value={g} selected={g === genre}>{g === "Science-Fiction" ? "Sci-Fi" : g}</option>
+                ))}
+              </select>
+              <button type="submit">Preview</button>
+            </form>
+          ) : null}
+          {cat.engine === "promo" && moments.length ? (
+            <div class="studio-picker">
+              {moments.map((m) => (
+                <a
+                  class={`studio-pick${m.id === active?.id ? " on" : ""}`}
+                  href={`/admin/studio?cat=${cat.id}&pick=${enc(m.id)}&fmt=${fmt}`}
+                >
+                  {m.title}
+                </a>
+              ))}
+            </div>
+          ) : null}
+
+          <div class="studio-stage">
+            <div class={`studio-canvas is-${aspect}`}>
+              {cat.engine === "promo" && !active ? (
+                <p class="studio-empty muted">
+                  Nothing here yet — this fills in from live data + the hourly sync. Try Trending or
+                  On tonight, which are always live.
+                </p>
+              ) : (
+                <div class="studio-frame">
+                  <img id="studio-card" src={src} alt="Card preview" />
+                  {aspect === "story" ? <div class="studio-safe" aria-hidden="true" title="TikTok / Shorts safe zone"></div> : null}
+                </div>
+              )}
+            </div>
+
+            <div class="studio-side">
+              {src ? (
+                <p class="studio-actions">
+                  {cat.engine === "promo" ? (
+                    <a id="studio-dl-link" class="studio-dl-btn" href={src} download={dlName}>↓ Download PNG</a>
+                  ) : (
+                    <button type="button" id="studio-dl" class="studio-dl-btn">↓ Download PNG</button>
+                  )}
+                  <a href={src} target="_blank" rel="noopener" class="studio-open">Open ↗</a>
+                </p>
+              ) : null}
+              {caps ? (
+                <div class="studio-caps">
+                  <h3 class="studio-caps-h">Captions</h3>
+                  {[
+                    { label: "X / Twitter", text: caps.x },
+                    { label: "Instagram", text: caps.instagram },
+                    { label: "TikTok", text: caps.tiktok },
+                  ].map((pl) => (
+                    <div class="studio-cap">
+                      <div class="studio-cap-head">
+                        <span>{pl.label}</span>
+                        <button type="button" class="studio-copy">Copy</button>
+                      </div>
+                      <textarea class="studio-cap-text" readonly rows={5}>{pl.text}</textarea>
+                    </div>
+                  ))}
+                </div>
+              ) : cat.engine !== "promo" ? (
+                <p class="muted studio-note">
+                  Composer & graph cards are vertical (9:16) — ideal for Stories, Shorts & TikTok.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </main>
       </div>
-      <p class="studio-actions">
-        <button type="button" id="studio-dl" class="studio-dl-btn">
-          Download PNG
-        </button>
-        <button type="button" id="studio-vid" class="studio-dl-btn studio-vid-btn">
-          Record video
-        </button>
-        <a href={src} target="_blank" rel="noopener">
-          Open the SVG ↗
-        </a>
-      </p>
     </Layout>,
   );
 });
@@ -469,9 +590,9 @@ const PROMO_DIMS = {
   wide: [1920, 1080],
 } as const;
 
-// The card PNG (resvg). Stateless — every field comes from the query string, so
-// the studio page can build a URL per moment × format. Admin-gated (founder-only).
-app.get("/admin/promo/card.png", async (c) => {
+// The multi-format moment card PNG (resvg). Stateless — every field comes from
+// the query string, so the studio builds a URL per moment × format (1:1/9:16/16:9).
+app.get("/admin/studio/promo.png", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const q = c.req.query();
@@ -519,84 +640,8 @@ const promoCardUrl = (m: PromoMoment, fmt: string) => {
   if (m.meta) p.set("meta", m.meta);
   if (m.posterUrl) p.set("poster", m.posterUrl);
   if (m.tmdbId != null) p.set("tmdbId", String(m.tmdbId));
-  return `/admin/promo/card.png?${p.toString()}`;
+  return `/admin/studio/promo.png?${p.toString()}`;
 };
 
-app.get("/admin/promo", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const [moments, base] = [await getPromoMoments(c), promoBase(c)];
-  return c.html(
-    <Layout title="Promo Studio | TV Nightly" noindex scripts={["/js/promo.js"]}>
-      <div class="promo-studio">
-        <header class="promo-head">
-          <h1>Promo Studio</h1>
-          <p class="muted">
-            Today's post-worthy moments — pick a format, grab the graphic + a caption, and post.
-            {moments.length ? ` ${moments.length} ready.` : ""}
-          </p>
-        </header>
-        {moments.length === 0 ? (
-          <p class="muted promo-empty">
-            No moments yet — trending + tonight populate from live data, and renewals / instant
-            classics / streaming news fill in as the hourly sync runs. Check back soon.
-          </p>
-        ) : (
-          <div class="promo-grid">
-            {moments.map((m) => {
-              const cap = promoCaptions(m, base);
-              const sq = promoCardUrl(m, "square");
-              const platforms = [
-                { id: "x", label: "X", text: cap.x },
-                { id: "instagram", label: "Instagram", text: cap.instagram },
-                { id: "tiktok", label: "TikTok", text: cap.tiktok },
-              ];
-              return (
-                <article class="promo-item">
-                  <div class="promo-preview">
-                    <img
-                      class="promo-img"
-                      src={sq}
-                      data-square={sq}
-                      data-story={promoCardUrl(m, "story")}
-                      data-wide={promoCardUrl(m, "wide")}
-                      alt={`${m.title} promo card`}
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                  <div class="promo-body">
-                    <span class="promo-tag">{m.tag}</span>
-                    <h2 class="promo-title">{m.title}</h2>
-                    {m.note ? <p class="promo-note muted">{m.note}</p> : null}
-                    <div class="promo-fmts">
-                      <button type="button" class="promo-fmt is-on" data-fmt="square">1:1 Feed</button>
-                      <button type="button" class="promo-fmt" data-fmt="story">9:16 Story</button>
-                      <button type="button" class="promo-fmt" data-fmt="wide">16:9 X</button>
-                      <a class="promo-dl" href={sq} download={`tvnightly-${m.id}.png`}>↓ Download</a>
-                    </div>
-                    <div class="promo-caps">
-                      {platforms.map((pl) => (
-                        <div class="promo-cap">
-                          <div class="promo-cap-head">
-                            <span>{pl.label}</span>
-                            <button type="button" class="promo-copy">Copy</button>
-                          </div>
-                          <textarea class="promo-cap-text" readonly rows={4}>
-                            {pl.text}
-                          </textarea>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </Layout>,
-  );
-});
 
 export default app;

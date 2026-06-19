@@ -1,0 +1,344 @@
+/* ---- Social Studio (admin) ---- */
+.studio {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  gap: 1.6rem;
+  align-items: start;
+}
+.studio-rail {
+  position: sticky;
+  top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.studio-back {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.studio-back:hover {
+  color: var(--text);
+}
+.studio-h1 {
+  margin: 0.2rem 0 0.6rem;
+  font-size: 1.6rem;
+}
+.studio-group {
+  margin-bottom: 0.7rem;
+}
+.studio-group-h {
+  margin: 0.4rem 0 0.3rem;
+  font-family: var(--display);
+  font-stretch: 75%;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+.studio-cat {
+  display: block;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  color: var(--text);
+  border: 1px solid transparent;
+}
+.studio-cat:hover {
+  background: var(--surface);
+  text-decoration: none;
+}
+.studio-cat.on {
+  background: rgba(255, 169, 77, 0.12);
+  border-color: rgba(255, 169, 77, 0.4);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.studio-main {
+  min-width: 0;
+}
+.studio-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+.studio-title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+.studio-sub {
+  margin: 0.15rem 0 0;
+  font-size: 0.86rem;
+}
+.studio-fmts {
+  display: inline-flex;
+  gap: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem;
+}
+.studio-fmt {
+  padding: 0.3rem 0.6rem;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.studio-fmt:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.studio-fmt.on {
+  background: var(--accent);
+  color: #16130d;
+}
+.studio-fmt-static {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* per-category controls */
+.studio-search {
+  position: relative;
+  max-width: 460px;
+  margin-bottom: 1rem;
+}
+.studio-search input,
+.studio-genre select {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.7rem;
+}
+.studio-genre {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.studio-genre select {
+  width: auto;
+  min-width: 180px;
+}
+.studio-vs {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+.studio-vs .studio-search {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 200px;
+}
+.studio-ta {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-2);
+}
+
+/* the auto-moment picker chips */
+.studio-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.1rem;
+}
+.studio-pick {
+  padding: 0.34rem 0.66rem;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.studio-pick:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.studio-pick.on {
+  color: #16130d;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+/* preview + side panel */
+.studio-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 1.6rem;
+  align-items: start;
+}
+.studio-canvas {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: #0b0b0e;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.2rem;
+  min-height: 320px;
+}
+.studio-frame {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+#studio-card {
+  display: block;
+  max-width: 100%;
+  border-radius: 10px;
+  box-shadow: var(--shadow-2);
+}
+.is-story #studio-card {
+  max-height: 560px;
+}
+.is-square #studio-card {
+  max-height: 440px;
+}
+.is-wide #studio-card {
+  max-height: 360px;
+}
+/* TikTok/Shorts safe rail, only on 9:16 */
+.studio-safe {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 15.5%;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 92, 138, 0.16),
+    rgba(255, 92, 138, 0.16) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  border-left: 1px dashed rgba(255, 92, 138, 0.5);
+  pointer-events: none;
+  border-radius: 0 10px 10px 0;
+}
+.studio-empty {
+  max-width: 40ch;
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.studio-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.studio-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0;
+}
+.studio-dl-btn {
+  font: inherit;
+  font-weight: 700;
+  color: #16130d;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+}
+.studio-dl-btn:hover {
+  text-decoration: none;
+  filter: brightness(1.05);
+}
+.studio-open {
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.studio-note {
+  font-size: 0.84rem;
+}
+
+/* captions */
+.studio-caps {
+  display: grid;
+  gap: 0.6rem;
+}
+.studio-caps-h {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.studio-cap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.2rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.studio-copy {
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.16rem 0.5rem;
+  cursor: pointer;
+}
+.studio-copy.is-done {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.studio-cap-text {
+  width: 100%;
+  resize: vertical;
+  font-family: var(--system, -apple-system, "Segoe UI", Roboto, sans-serif);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.6rem;
+}
+
+@media (max-width: 900px) {
+  .studio {
+    grid-template-columns: 1fr;
+  }
+  .studio-rail {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+  }
+  .studio-group {
+    margin-bottom: 0;
+  }
+  .studio-stage {
+    grid-template-columns: 1fr;
+  }
+}

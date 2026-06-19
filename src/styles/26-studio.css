@@ -184,19 +184,21 @@
 /* preview + side panel */
 .studio-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 1.6rem;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 2rem;
   align-items: start;
 }
 .studio-canvas {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  background: #0b0b0e;
+  background:
+    radial-gradient(130% 90% at 50% 0%, rgba(255, 169, 77, 0.06), transparent 60%),
+    linear-gradient(180deg, #16161c, #0b0b0e);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 1.2rem;
-  min-height: 320px;
+  padding: 2rem;
+  min-height: 440px;
 }
 .studio-frame {
   position: relative;
@@ -206,35 +208,59 @@
 #studio-card {
   display: block;
   max-width: 100%;
-  border-radius: 10px;
-  box-shadow: var(--shadow-2);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 .is-story #studio-card {
-  max-height: 560px;
+  max-height: 620px;
 }
 .is-square #studio-card {
-  max-height: 440px;
+  max-height: 480px;
 }
 .is-wide #studio-card {
-  max-height: 360px;
+  max-height: 400px;
 }
-/* TikTok/Shorts safe rail, only on 9:16 */
+/* Where the platform UI overlays a 9:16 post: the like/comment/share buttons
+   sit in a right rail, the caption + handle along the bottom. Keep card content
+   clear of both. Shown only on the Story format. */
 .studio-safe {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.studio-safe::before {
+  content: "";
+  position: absolute;
+  top: 8%;
   right: 0;
-  width: 15.5%;
+  bottom: 0;
+  width: 15.5%; /* action buttons rail */
   background: repeating-linear-gradient(
     -45deg,
-    rgba(255, 92, 138, 0.16),
-    rgba(255, 92, 138, 0.16) 6px,
+    rgba(255, 92, 138, 0.14),
+    rgba(255, 92, 138, 0.14) 6px,
     transparent 6px,
     transparent 12px
   );
-  border-left: 1px dashed rgba(255, 92, 138, 0.5);
-  pointer-events: none;
-  border-radius: 0 10px 10px 0;
+  border-left: 1px dashed rgba(255, 92, 138, 0.45);
+}
+.studio-safe::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 13%; /* caption + handle strip */
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 92, 138, 0.1),
+    rgba(255, 92, 138, 0.1) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  border-top: 1px dashed rgba(255, 92, 138, 0.4);
 }
 .studio-empty {
   max-width: 40ch;

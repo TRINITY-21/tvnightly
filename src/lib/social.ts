@@ -691,109 +691,81 @@ function kickerPill(text: string, x: number, y: number, centered: boolean): stri
   );
 }
 
-const promoFooter = (m: number, w: number, h: number, centered: boolean) =>
-  `<line x1="${m}" y1="${r2(h - m - 26)}" x2="${r2(w - m)}" y2="${r2(h - m - 26)}" stroke="${LINE}"/>` +
-  txtR(centered ? w / 2 : m, h - m, "tvnightly.com", {
-    size: 27,
-    w: "black",
-    fill: AMBER,
-    anchor: centered ? "middle" : "start",
-    ls: 0.5,
-  });
-
-/** A marketing card for a "post-worthy moment" — backdrop + poster + a kicker
- *  badge, title, and hook line — rendered at ANY aspect ratio: 1080×1080 (IG
- *  feed), 1080×1920 (IG story / TikTok), 1920×1080 (X). Same resvg-safe dialect
- *  as the OG cards. Stacked layout (poster over centered text) for square &
- *  portrait; side layout (poster right, text left) for landscape. */
+/** A marketing card for a "post-worthy moment", rendered at ANY aspect ratio:
+ *  1080² (IG feed), 1080×1920 (IG story / TikTok), 1920×1080 (X). The artwork
+ *  (backdrop, or the poster as a fallback) fills the frame; a bottom scrim carries
+ *  a left-aligned lockup — kicker badge, big title, rating + hook. Resvg-safe
+ *  dialect, so it rasterizes server-side. Text stays left + above the bottom so
+ *  it clears a 9:16 platform's right button rail and bottom caption strip. */
 export function buildPromoCard(d: PromoCardData, W: number, H: number): string {
-  const ratio = W / H;
-  const portrait = ratio < 0.85;
-  const landscape = ratio > 1.3;
-  const M = Math.round(Math.min(W, H) * 0.075);
+  const landscape = W / H > 1.3;
+  const M = Math.round(Math.min(W, H) * 0.072);
+  const bg = d.backdropUri ?? d.posterUri ?? null;
   const p: string[] = [];
   p.push(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`,
   );
-  p.push(ogDefs());
-  p.push(`<rect width="${W}" height="${H}" fill="url(#bg)"/>`);
-  if (d.backdropUri) {
-    p.push(
-      `<image href="${d.backdropUri}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice" opacity="0.9"/>`,
-    );
-    if (landscape) p.push(`<rect width="${W}" height="${H}" fill="url(#hscrim)"/>`);
-    p.push(`<rect width="${W}" height="${H}" fill="url(#vscrim)"/>`);
-    p.push(`<rect x="0" y="${r2(H * 0.52)}" width="${W}" height="${r2(H * 0.48)}" fill="${PLATE}" opacity="0.4"/>`);
+  p.push(
+    `<defs>` +
+      `<linearGradient id="pbg" x1="0" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#1b1b22"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+      `<linearGradient id="psc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.5"/><stop offset="0.38" stop-color="${PLATE}" stop-opacity="0.08"/><stop offset="0.64" stop-color="${PLATE}" stop-opacity="0.62"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.99"/></linearGradient>` +
+      `<linearGradient id="pside" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.92"/><stop offset="0.55" stop-color="${PLATE}" stop-opacity="0.32"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0"/></linearGradient>` +
+      `</defs>`,
+  );
+  p.push(`<rect width="${W}" height="${H}" fill="url(#pbg)"/>`);
+  if (bg) {
+    p.push(`<image href="${bg}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>`);
+    if (landscape) p.push(`<rect width="${W}" height="${H}" fill="url(#pside)"/>`);
+    p.push(`<rect width="${W}" height="${H}" fill="url(#psc)"/>`);
   }
-  p.push(ogBrand(M, M + 36));
+  p.push(ogBrand(M, M + 34));
 
-  if (landscape) {
-    const ph = Math.round(H * 0.66);
-    const pw = Math.round(ph / 1.5);
-    const px = W - M - pw;
-    const py = Math.round((H - ph) / 2);
-    p.push(`<g filter="url(#ds)">${poster(d.posterUri ?? null, d.title, px, py, pw, ph, "promo-p")}</g>`);
-    const titleLines = wrap(d.title.toUpperCase(), 15, 3);
-    const tSize = titleLines.length >= 3 ? 70 : titleLines.length === 2 ? 92 : 112;
-    const lead = tSize + 12;
-    const blockH =
-      66 + titleLines.length * lead + (d.rating != null ? 70 : 0) + (d.note ? 56 : 0) + (d.meta ? 46 : 0);
-    let cy = Math.max(H * 0.26, (H - blockH) / 2) + 30;
-    p.push(kickerPill(d.kicker, M, cy, false));
-    cy += 86;
-    for (const ln of titleLines) {
-      cy += tSize;
-      p.push(txtR(M, cy, ln, { size: tSize, w: "black", fill: TEXT }));
-      cy += lead - tSize;
-    }
-    cy += 18;
-    if (d.rating != null) {
-      cy += 30;
-      p.push(ratingMark(M + 2, cy, 48, d.rating, GOLD, "start"));
-      cy += 30;
-    }
-    if (d.note) {
-      cy += 44;
-      p.push(`<circle cx="${M + 9}" cy="${r2(cy - 12)}" r="7" fill="${AMBER}"/>`);
-      p.push(txtR(M + 32, cy, trunc(d.note, 36), { size: 38, w: "semi", fill: "#e7e3db" }));
-    }
-    if (d.meta) {
-      cy += 46;
-      p.push(txtR(M, cy, trunc(d.meta, 50), { size: 30, w: "semi", fill: MUTED }));
-    }
-    p.push(promoFooter(M, W, H, false));
-  } else {
-    const ph = Math.round(H * (portrait ? 0.42 : 0.5));
-    const pw = Math.round(ph / 1.5);
-    const px = Math.round((W - pw) / 2);
-    const py = Math.round(H * (portrait ? 0.12 : 0.08));
-    p.push(`<g filter="url(#ds)">${poster(d.posterUri ?? null, d.title, px, py, pw, ph, "promo-p")}</g>`);
-    let cy = py + ph + (portrait ? 96 : 80);
-    p.push(kickerPill(d.kicker, W / 2, cy, true));
-    cy += portrait ? 96 : 84;
-    const titleLines = wrap(d.title.toUpperCase(), 16, 3);
-    const tSize = titleLines.length >= 3 ? 60 : titleLines.length === 2 ? 76 : 92;
-    for (const ln of titleLines) {
-      cy += tSize;
-      p.push(txtR(W / 2, cy, ln, { size: tSize, w: "black", fill: TEXT, anchor: "middle" }));
-      cy += 16;
-    }
-    cy += 18;
-    if (d.rating != null) {
-      cy += 44;
-      p.push(ratingMark(W / 2, cy, 46, d.rating, GOLD, "middle"));
-      cy += 14;
-    }
-    if (d.note) {
-      cy += 54;
-      p.push(txtR(W / 2, cy, trunc(d.note, 34), { size: 40, w: "semi", fill: AMBER, anchor: "middle" }));
-    }
-    if (d.meta) {
-      cy += 48;
-      p.push(txtR(W / 2, cy, trunc(d.meta, 42), { size: 30, w: "semi", fill: MUTED, anchor: "middle" }));
-    }
-    p.push(promoFooter(M, W, H, true));
+  // text block, bottom-left, anchored just above the footer
+  const titleLines = wrap(d.title.toUpperCase(), landscape ? 17 : 15, 3);
+  const tSize = landscape
+    ? titleLines.length >= 3
+      ? 78
+      : titleLines.length === 2
+        ? 104
+        : 130
+    : titleLines.length >= 3
+      ? 64
+      : titleLines.length === 2
+        ? 84
+        : 106;
+  const lead = tSize + 6;
+  const hookSize = landscape ? 40 : 36;
+  const footerY = landscape ? H - M : H - Math.round(H * 0.13);
+  const blockBottom = footerY - (landscape ? 30 : 42);
+  const tail = 6 + (d.rating != null ? 42 : 0) + (d.note ? 56 : 0) + (d.meta ? 42 : 0);
+  let cy = blockBottom - (80 + titleLines.length * lead + tail);
+
+  p.push(kickerPill(d.kicker, M, cy, false));
+  cy += 80;
+  for (const ln of titleLines) {
+    cy += tSize;
+    p.push(txtR(M, cy, ln, { size: tSize, w: "black", fill: TEXT }));
+    cy += lead - tSize;
   }
+  cy += 6;
+  if (d.rating != null) {
+    cy += 42;
+    p.push(ratingMark(M + 2, cy, 48, d.rating, GOLD, "start"));
+  }
+  if (d.note) {
+    cy += 56;
+    p.push(`<circle cx="${M + 8}" cy="${r2(cy - 13)}" r="6.5" fill="${AMBER}"/>`);
+    p.push(txtR(M + 30, cy, trunc(d.note, landscape ? 44 : 34), { size: hookSize, w: "semi", fill: "#efe9df" }));
+  }
+  if (d.meta) {
+    cy += 42;
+    p.push(txtR(M, cy, trunc(d.meta, 46), { size: 27, w: "semi", fill: MUTED }));
+  }
+
+  p.push(
+    `<line x1="${M}" y1="${r2(footerY - 24)}" x2="${r2(landscape ? W * 0.46 : W - M)}" y2="${r2(footerY - 24)}" stroke="rgba(255,255,255,0.16)"/>`,
+  );
+  p.push(txtR(M, footerY, "tvnightly.com", { size: 26, w: "black", fill: AMBER, ls: 0.5 }));
   p.push(`</svg>`);
   return p.join("");
 }

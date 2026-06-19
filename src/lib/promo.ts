@@ -111,9 +111,25 @@ export async function getPromoMoments(c: AppContext): Promise<PromoMoment[]> {
     }
   }
 
-  // 2. On tonight (live TVmaze schedule)
-  const tonight = await settle(liveTonight(c), []);
-  for (const r of tonight.slice(0, 3)) {
+  // 2. On tonight (live TVmaze schedule) — enrich with D1's tmdb_id + poster so
+  // the card gets a real backdrop and a reliable TMDB poster (the raw TVmaze
+  // original sometimes fails to inline → an empty card)
+  const tonight = (await settle(liveTonight(c), [])).slice(0, 3);
+  const tslugs = tonight.map((r) => r.show_slug);
+  const enrich = new Map<string, { tmdb_id: number | null; poster_url: string | null }>();
+  if (tslugs.length) {
+    const rows = await safeAll(
+      db
+        .prepare(
+          `SELECT slug, tmdb_id, poster_url FROM shows WHERE slug IN (${tslugs.map(() => "?").join(",")})`,
+        )
+        .bind(...tslugs)
+        .all<{ slug: string; tmdb_id: number | null; poster_url: string | null }>(),
+    );
+    for (const x of rows) enrich.set(x.slug, x);
+  }
+  for (const r of tonight) {
+    const d = enrich.get(r.show_slug);
     out.push({
       id: `tonight-${r.show_slug}-${r.season}-${r.number}`,
       theme: "tonight",
@@ -124,8 +140,8 @@ export async function getPromoMoments(c: AppContext): Promise<PromoMoment[]> {
       note: `New episode tonight — S${pad2(r.season)}E${pad2(r.number)}`,
       meta: r.network,
       kind: "tv",
-      tmdbId: null,
-      posterUrl: r.show_poster ?? r.show_image,
+      tmdbId: d?.tmdb_id ?? null,
+      posterUrl: d?.poster_url ?? r.show_poster ?? r.show_image,
       path: `/show/${r.show_slug}`,
     });
   }

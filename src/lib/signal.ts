@@ -514,7 +514,7 @@ export function buildSignalSvg(
     const markScale = wfs / 24;
     const markW = 36 * markScale;
     const wordX = m + markW + 12;
-    const wordW = "TV NIGHTLY".length * wfs * 0.58;
+    const wordW = "TV NIGHTLY".length * wfs * 0.7;
     parts.push(
       `<line x1="${m}" y1="${r2(hairY)}" x2="${W - m}" y2="${r2(hairY)}" stroke="${LINE}" stroke-width="1"/>`,
       `<g transform="translate(${m}, ${r2(baseY - 19)}) scale(${r2(markScale)})">` +

@@ -670,6 +670,134 @@ export function buildBrandOgCard(): string {
   return p.join("");
 }
 
+export interface PromoCardData {
+  kicker: string; // the moment badge: "TRENDING NOW" | "JUST RENEWED" | "ON TONIGHT" …
+  title: string;
+  rating?: number | null;
+  note?: string | null; // the hook: "Season 3 confirmed" | "Now on Netflix" | "9:00 PM tonight"
+  meta?: string | null; // "Drama · Crime · 2002"
+  posterUri?: string | null;
+  backdropUri?: string | null;
+}
+
+// an amber kicker pill, centered on x or left-anchored at x (resvg-safe)
+function kickerPill(text: string, x: number, y: number, centered: boolean): string {
+  const label = text.toUpperCase();
+  const w = label.length * 16.5 + 56;
+  const bx = centered ? x - w / 2 : x;
+  return (
+    `<rect x="${r2(bx)}" y="${r2(y - 36)}" width="${r2(w)}" height="48" rx="24" fill="${AMBER}"/>` +
+    txtR(centered ? x : bx + w / 2, y - 2, label, { size: 25, w: "black", fill: PLATE, anchor: "middle", ls: 2 })
+  );
+}
+
+const promoFooter = (m: number, w: number, h: number, centered: boolean) =>
+  `<line x1="${m}" y1="${r2(h - m - 26)}" x2="${r2(w - m)}" y2="${r2(h - m - 26)}" stroke="${LINE}"/>` +
+  txtR(centered ? w / 2 : m, h - m, "tvnightly.com", {
+    size: 27,
+    w: "black",
+    fill: AMBER,
+    anchor: centered ? "middle" : "start",
+    ls: 0.5,
+  });
+
+/** A marketing card for a "post-worthy moment" — backdrop + poster + a kicker
+ *  badge, title, and hook line — rendered at ANY aspect ratio: 1080×1080 (IG
+ *  feed), 1080×1920 (IG story / TikTok), 1920×1080 (X). Same resvg-safe dialect
+ *  as the OG cards. Stacked layout (poster over centered text) for square &
+ *  portrait; side layout (poster right, text left) for landscape. */
+export function buildPromoCard(d: PromoCardData, W: number, H: number): string {
+  const ratio = W / H;
+  const portrait = ratio < 0.85;
+  const landscape = ratio > 1.3;
+  const M = Math.round(Math.min(W, H) * 0.075);
+  const p: string[] = [];
+  p.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`,
+  );
+  p.push(ogDefs());
+  p.push(`<rect width="${W}" height="${H}" fill="url(#bg)"/>`);
+  if (d.backdropUri) {
+    p.push(
+      `<image href="${d.backdropUri}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice" opacity="0.9"/>`,
+    );
+    if (landscape) p.push(`<rect width="${W}" height="${H}" fill="url(#hscrim)"/>`);
+    p.push(`<rect width="${W}" height="${H}" fill="url(#vscrim)"/>`);
+    p.push(`<rect x="0" y="${r2(H * 0.52)}" width="${W}" height="${r2(H * 0.48)}" fill="${PLATE}" opacity="0.4"/>`);
+  }
+  p.push(ogBrand(M, M + 36));
+
+  if (landscape) {
+    const ph = Math.round(H * 0.66);
+    const pw = Math.round(ph / 1.5);
+    const px = W - M - pw;
+    const py = Math.round((H - ph) / 2);
+    p.push(`<g filter="url(#ds)">${poster(d.posterUri ?? null, d.title, px, py, pw, ph, "promo-p")}</g>`);
+    const titleLines = wrap(d.title.toUpperCase(), 15, 3);
+    const tSize = titleLines.length >= 3 ? 70 : titleLines.length === 2 ? 92 : 112;
+    const lead = tSize + 12;
+    const blockH =
+      66 + titleLines.length * lead + (d.rating != null ? 70 : 0) + (d.note ? 56 : 0) + (d.meta ? 46 : 0);
+    let cy = Math.max(H * 0.26, (H - blockH) / 2) + 30;
+    p.push(kickerPill(d.kicker, M, cy, false));
+    cy += 86;
+    for (const ln of titleLines) {
+      cy += tSize;
+      p.push(txtR(M, cy, ln, { size: tSize, w: "black", fill: TEXT }));
+      cy += lead - tSize;
+    }
+    cy += 18;
+    if (d.rating != null) {
+      cy += 30;
+      p.push(ratingMark(M + 2, cy, 48, d.rating, GOLD, "start"));
+      cy += 30;
+    }
+    if (d.note) {
+      cy += 44;
+      p.push(`<circle cx="${M + 9}" cy="${r2(cy - 12)}" r="7" fill="${AMBER}"/>`);
+      p.push(txtR(M + 32, cy, trunc(d.note, 36), { size: 38, w: "semi", fill: "#e7e3db" }));
+    }
+    if (d.meta) {
+      cy += 46;
+      p.push(txtR(M, cy, trunc(d.meta, 50), { size: 30, w: "semi", fill: MUTED }));
+    }
+    p.push(promoFooter(M, W, H, false));
+  } else {
+    const ph = Math.round(H * (portrait ? 0.42 : 0.5));
+    const pw = Math.round(ph / 1.5);
+    const px = Math.round((W - pw) / 2);
+    const py = Math.round(H * (portrait ? 0.12 : 0.08));
+    p.push(`<g filter="url(#ds)">${poster(d.posterUri ?? null, d.title, px, py, pw, ph, "promo-p")}</g>`);
+    let cy = py + ph + (portrait ? 96 : 80);
+    p.push(kickerPill(d.kicker, W / 2, cy, true));
+    cy += portrait ? 96 : 84;
+    const titleLines = wrap(d.title.toUpperCase(), 16, 3);
+    const tSize = titleLines.length >= 3 ? 60 : titleLines.length === 2 ? 76 : 92;
+    for (const ln of titleLines) {
+      cy += tSize;
+      p.push(txtR(W / 2, cy, ln, { size: tSize, w: "black", fill: TEXT, anchor: "middle" }));
+      cy += 16;
+    }
+    cy += 18;
+    if (d.rating != null) {
+      cy += 44;
+      p.push(ratingMark(W / 2, cy, 46, d.rating, GOLD, "middle"));
+      cy += 14;
+    }
+    if (d.note) {
+      cy += 54;
+      p.push(txtR(W / 2, cy, trunc(d.note, 34), { size: 40, w: "semi", fill: AMBER, anchor: "middle" }));
+    }
+    if (d.meta) {
+      cy += 48;
+      p.push(txtR(W / 2, cy, trunc(d.meta, 42), { size: 30, w: "semi", fill: MUTED, anchor: "middle" }));
+    }
+    p.push(promoFooter(M, W, H, true));
+  }
+  p.push(`</svg>`);
+  return p.join("");
+}
+
 /** Square brand mark for Organization.logo — Google's logo rich result wants a
  *  raster image, not the SVG favicon. App-icon treatment: the standby mark
  *  centered on the plate in a rounded square. */

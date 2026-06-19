@@ -5,12 +5,15 @@ import { archivoFontCss, posterDataUri } from "../lib/signal";
 import {
   buildLikedCard,
   buildListCard,
+  buildPromoCard,
   buildStatusCard,
   buildVsCard,
   toCardEntry,
   VsSide,
 } from "../lib/social";
-import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import { loadOgFonts, svgToPng } from "../lib/render";
+import { getPromoMoments, promoCaptions, promoBase, type PromoMoment } from "../lib/promo";
+import { tmdbBackdrop, tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
 import { AppContext, Bindings, MovieRow, ShowRow } from "../types";
 
 const STUDIO_GENRES = [
@@ -456,6 +459,144 @@ app.get("/admin/studio/card.svg", async (c) => {
   c.header("Content-Type", "image/svg+xml; charset=utf-8");
   c.header("Cache-Control", "no-store");
   return c.body(buildLikedCard(hero, pickEntries, fontCss, backdropUri));
+});
+
+// ---- Promo Studio: ready-to-post marketing cards for social ----
+
+const PROMO_DIMS = {
+  square: [1080, 1080],
+  story: [1080, 1920],
+  wide: [1920, 1080],
+} as const;
+
+// The card PNG (resvg). Stateless — every field comes from the query string, so
+// the studio page can build a URL per moment × format. Admin-gated (founder-only).
+app.get("/admin/promo/card.png", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+  const q = c.req.query();
+  const [W, H] = PROMO_DIMS[(q.fmt as keyof typeof PROMO_DIMS) in PROMO_DIMS ? (q.fmt as keyof typeof PROMO_DIMS) : "square"];
+  const key = c.env.TMDB_API_KEY;
+  const tmdbId = q.tmdbId ? Number(q.tmdbId) : null;
+  let backdropUrl: string | null = null;
+  if (key && tmdbId) {
+    const bd = q.kind === "movie" ? await tmdbUpcomingBackdrop(key, tmdbId) : await tmdbBackdrop(key, tmdbId);
+    backdropUrl = bd?.x1 ?? null;
+  }
+  const [posterUri, backdropUri] = await Promise.all([
+    posterDataUri(q.poster || null),
+    posterDataUri(backdropUrl),
+  ]);
+  const svg = buildPromoCard(
+    {
+      kicker: q.kicker ?? "",
+      title: q.title ?? "",
+      rating: q.rating ? Number(q.rating) : null,
+      note: q.note || null,
+      meta: q.meta || null,
+      posterUri,
+      backdropUri,
+    },
+    W,
+    H,
+  );
+  const fonts = await loadOgFonts(c.env.ASSETS);
+  const png = await svgToPng(svg, fonts, W);
+  return new Response(png, {
+    headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store" },
+  });
+});
+
+const promoCardUrl = (m: PromoMoment, fmt: string) => {
+  const p = new URLSearchParams({
+    fmt,
+    kicker: m.kicker,
+    title: m.title,
+    kind: m.kind,
+  });
+  if (m.rating != null) p.set("rating", String(m.rating));
+  if (m.note) p.set("note", m.note);
+  if (m.meta) p.set("meta", m.meta);
+  if (m.posterUrl) p.set("poster", m.posterUrl);
+  if (m.tmdbId != null) p.set("tmdbId", String(m.tmdbId));
+  return `/admin/promo/card.png?${p.toString()}`;
+};
+
+app.get("/admin/promo", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+  const [moments, base] = [await getPromoMoments(c), promoBase(c)];
+  return c.html(
+    <Layout title="Promo Studio | TV Nightly" noindex scripts={["/js/promo.js"]}>
+      <div class="promo-studio">
+        <header class="promo-head">
+          <h1>Promo Studio</h1>
+          <p class="muted">
+            Today's post-worthy moments — pick a format, grab the graphic + a caption, and post.
+            {moments.length ? ` ${moments.length} ready.` : ""}
+          </p>
+        </header>
+        {moments.length === 0 ? (
+          <p class="muted promo-empty">
+            No moments yet — trending + tonight populate from live data, and renewals / instant
+            classics / streaming news fill in as the hourly sync runs. Check back soon.
+          </p>
+        ) : (
+          <div class="promo-grid">
+            {moments.map((m) => {
+              const cap = promoCaptions(m, base);
+              const sq = promoCardUrl(m, "square");
+              const platforms = [
+                { id: "x", label: "X", text: cap.x },
+                { id: "instagram", label: "Instagram", text: cap.instagram },
+                { id: "tiktok", label: "TikTok", text: cap.tiktok },
+              ];
+              return (
+                <article class="promo-item">
+                  <div class="promo-preview">
+                    <img
+                      class="promo-img"
+                      src={sq}
+                      data-square={sq}
+                      data-story={promoCardUrl(m, "story")}
+                      data-wide={promoCardUrl(m, "wide")}
+                      alt={`${m.title} promo card`}
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                  <div class="promo-body">
+                    <span class="promo-tag">{m.tag}</span>
+                    <h2 class="promo-title">{m.title}</h2>
+                    {m.note ? <p class="promo-note muted">{m.note}</p> : null}
+                    <div class="promo-fmts">
+                      <button type="button" class="promo-fmt is-on" data-fmt="square">1:1 Feed</button>
+                      <button type="button" class="promo-fmt" data-fmt="story">9:16 Story</button>
+                      <button type="button" class="promo-fmt" data-fmt="wide">16:9 X</button>
+                      <a class="promo-dl" href={sq} download={`tvnightly-${m.id}.png`}>↓ Download</a>
+                    </div>
+                    <div class="promo-caps">
+                      {platforms.map((pl) => (
+                        <div class="promo-cap">
+                          <div class="promo-cap-head">
+                            <span>{pl.label}</span>
+                            <button type="button" class="promo-copy">Copy</button>
+                          </div>
+                          <textarea class="promo-cap-text" readonly rows={4}>
+                            {pl.text}
+                          </textarea>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Layout>,
+  );
 });
 
 export default app;

@@ -134,6 +134,22 @@
 .wo-hero-bare .wo-hero-body { padding: 0; }
 .wo-hero h1 { margin: 0.2rem 0 0.6rem; }
 
+/* a person's headshot anchoring the "best of <person>" hero — a rounded portrait
+   (the poster idiom, not a generic avatar circle), lifted off the backdrop with
+   a hairline ring + drop shadow, sitting above the eyebrow + title lockup */
+.wo-hero-face {
+  display: block;
+  width: 84px;
+  height: 112px;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  background: var(--surface-2);
+  margin-bottom: 0.95rem;
+}
+
 /* full-bleed variant (/top/tv, /movies/best): no card chrome — the #1's still
    runs up to the nav and edge-to-edge, the lockup rides the page column over
    a scrim that resolves to --bg, so the chart below just becomes the page */

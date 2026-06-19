@@ -11,7 +11,7 @@ import { buildDossier } from "../lib/dossier";
 import { epCode, epHref, heroBg, largeStill, longDate, posterSrc, stripHtml, fmtRuntime } from "../lib/format";
 import { providersFor, visitorRegion } from "../lib/providers";
 import { similarShows } from "../lib/queries";
-import { resolveShow } from "../lib/tmdb-show";
+import { resolveShow, buildTmdbShow } from "../lib/tmdb-show";
 import { servePng } from "../lib/render";
 import { breadcrumbLd, canonical, faqLd, origin } from "../lib/seo";
 import { archivoFontCss, buildSignalSvg, posterDataUri } from "../lib/signal";
@@ -279,7 +279,16 @@ app.get("/show/:slug/essential", async (c) => {
 async function ratingsScope(c: Context<{ Bindings: Bindings }, "/show/:slug">, redirectTo: string) {
   const r = await resolveShow(c, c.req.param("slug"));
   if (!r) return null;
-  const { show, episodes: allEps } = r;
+  const { show } = r;
+  let allEps = r.episodes;
+  // A mirrored show whose episodes were never rating-synced (TVmaze episode
+  // ratings are sparse, or the episodes predate a sync) has nothing to plot, so
+  // the graph comes up blank. Pull the episodes live from TMDB — which carries
+  // per-episode ratings — so every show with a tmdb bridge gets a graph.
+  if (!r.isTmdb && show.tmdb_id && c.env.TMDB_API_KEY && !allEps.some((e) => e.rating != null)) {
+    const live = await buildTmdbShow(c, show.tmdb_id);
+    if (live?.episodes.some((e) => e.rating != null)) allEps = live.episodes;
+  }
   // null seasons ride the specials bucket (0), matching the grid builder;
   // specials sort last, like the grid's SP column
   const raw0 = [...new Set(allEps.map((e) => e.season ?? 0))].sort((a, b) => a - b);
@@ -380,7 +389,13 @@ app.get("/show/:slug/ratings/og.png", async (c) => {
     const r = await resolveShow(c, slug);
     if (!r) return null;
     const show = r.show;
-    const eps: RatingsEp[] = r.episodes.map((e) => ({
+    let episodes = r.episodes;
+    // same blank-graph guard as the page: fall back to live TMDB episode ratings
+    if (!r.isTmdb && show.tmdb_id && c.env.TMDB_API_KEY && !episodes.some((e) => e.rating != null)) {
+      const live = await buildTmdbShow(c, show.tmdb_id);
+      if (live?.episodes.some((e) => e.rating != null)) episodes = live.episodes;
+    }
+    const eps: RatingsEp[] = episodes.map((e) => ({
       season: e.season,
       number: e.number,
       rating: e.rating,

@@ -9,7 +9,7 @@ import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard } from "../components/cards";
 import { FilterSelect } from "../components/forms";
-import { fmtRuntime, heroBg, slugifyName } from "../lib/format";
+import { fmtRuntime, headshot, heroBg, slugifyName } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { genreDirectory } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
@@ -655,6 +655,21 @@ app.get("/movies/featuring/:slug", async (c) => {
       <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
+          {(() => {
+            const face = person.image_url ? headshot(person.image_url, true) : null;
+            return face ? (
+              <img
+                class="wo-hero-face"
+                src={face.src}
+                srcset={face.srcset}
+                width="84"
+                height="112"
+                alt={person.name}
+                loading="eager"
+                decoding="async"
+              />
+            ) : null;
+          })()}
           <p class="section-eyebrow">Filmography</p>
           <h1>Best movies featuring {person.name}</h1>
           <p class="wo-intro">

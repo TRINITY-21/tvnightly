@@ -28,7 +28,7 @@ export const DossierRow: FC<{
           srcset={poster.srcset}
           width="64"
           height="90"
-          alt=""
+          alt={`${name} poster`}
           loading="lazy"
           decoding="async"
         />

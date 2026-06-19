@@ -101,7 +101,7 @@ const ContenderCard: FC<{ p: Pick; bg: string | null }> = ({ p, bg }) => (
             class="rec-cont-poster"
             src={p.poster}
             srcset={posterSet(p.poster)}
-            alt=""
+            alt={`${p.name} poster`}
             loading="lazy"
             decoding="async"
           />
@@ -573,7 +573,7 @@ app.get("/recommend", async (c) => {
                 <li>
                   <a href={`/recommend?kind=tv&ref=${s.id}${ratedQS}`}>
                     <span class="rec-pick-thumb">
-                      {s.poster ? <img src={s.poster} alt="" width="40" height="60" loading="lazy" /> : <span class="rec-pick-blank"></span>}
+                      {s.poster ? <img src={s.poster} alt={`${s.name} poster`} width="40" height="60" loading="lazy" /> : <span class="rec-pick-blank"></span>}
                     </span>
                     <span class="rec-pick-main">
                       <span class="rec-pick-name">{s.name}{s.premiered ? ` (${s.premiered.slice(0, 4)})` : ""}</span>
@@ -587,7 +587,7 @@ app.get("/recommend", async (c) => {
                 <li>
                   <a href={`/recommend?kind=movie&ref=${m.imdb_id}${ratedQS}`}>
                     <span class="rec-pick-thumb">
-                      {m.poster ? <img src={m.poster} alt="" width="40" height="60" loading="lazy" /> : <span class="rec-pick-blank"></span>}
+                      {m.poster ? <img src={m.poster} alt={`${m.title} poster`} width="40" height="60" loading="lazy" /> : <span class="rec-pick-blank"></span>}
                     </span>
                     <span class="rec-pick-main">
                       <span class="rec-pick-name">{m.title}{m.year ? ` (${m.year})` : ""}</span>
@@ -907,7 +907,7 @@ app.get("/loved", async (c) => {
                       {String(i + 4).padStart(2, "0")}
                     </span>
                     {r.poster ? (
-                      <img src={r.poster} alt="" width="46" height="69" loading="lazy" decoding="async" />
+                      <img src={r.poster} alt={`${r.label} poster`} width="46" height="69" loading="lazy" decoding="async" />
                     ) : (
                       <span class="loved-thumb-blank" aria-hidden="true"></span>
                     )}

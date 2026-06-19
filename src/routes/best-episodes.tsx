@@ -100,7 +100,7 @@ app.get("/best-episodes", async (c) => {
                           srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
                           width={i < plates ? 256 : 168}
                           height={i < plates ? 144 : 95}
-                          alt=""
+                          alt={`${e.show_name} ${epCode(e)}`}
                           loading={i === 0 ? "eager" : "lazy"}
                           fetchpriority={i === 0 ? "high" : undefined}
                           decoding="async"

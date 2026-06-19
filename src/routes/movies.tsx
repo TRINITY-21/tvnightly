@@ -185,7 +185,7 @@ app.get("/movies", async (c) => {
                     <img
                       class="wo-poster"
                       src={m.poster_url}
-                      alt=""
+                      alt={`${m.title} poster`}
                       width="46"
                       height="69"
                       loading={i < 8 ? "eager" : "lazy"}
@@ -384,7 +384,7 @@ app.get("/movies/best", async (c) => {
                 {String(i + 1).padStart(2, "0")}
               </span>
               {m.poster_url ? (
-                <img class="wo-poster" src={m.poster_url} alt="" width="46" height="69" loading="lazy" decoding="async" />
+                <img class="wo-poster" src={m.poster_url} alt={`${m.title} poster`} width="46" height="69" loading="lazy" decoding="async" />
               ) : (
                 <span class="wo-poster wo-poster-blank" aria-hidden="true"></span>
               )}
@@ -1209,7 +1209,7 @@ app.get("/movie/:slug/media", async (c) => {
                   <img
                     src={`https://image.tmdb.org/t/p/w780${p}`}
                     srcset={`https://image.tmdb.org/t/p/w780${p} 1x, https://image.tmdb.org/t/p/w1280${p} 2x`}
-                    alt=""
+                    alt={`${movie.title} backdrop ${i + 1}`}
                     width="780"
                     height="439"
                     loading="lazy"
@@ -1237,7 +1237,7 @@ app.get("/movie/:slug/media", async (c) => {
                   <img
                     src={`https://image.tmdb.org/t/p/w342${p}`}
                     srcset={`https://image.tmdb.org/t/p/w342${p} 1x, https://image.tmdb.org/t/p/w780${p} 2x`}
-                    alt=""
+                    alt={`${movie.title} poster ${i + 1}`}
                     width="342"
                     height="513"
                     loading="lazy"

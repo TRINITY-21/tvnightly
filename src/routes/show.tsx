@@ -374,7 +374,7 @@ app.get("/show/:slug", async (c) => {
                     <li>
                       <span class="top3-num">{String(i + 1).padStart(2, "0")}</span>
                       {e.image_url ? (
-                        <img class="top3-still" src={e.image_url} alt="" loading="lazy" />
+                        <img class="top3-still" src={e.image_url} alt={`${show.name} ${epCode(e)}`} loading="lazy" />
                       ) : null}
                       <span class="top3-main">
                         <span class="top3-name">
@@ -560,7 +560,7 @@ app.get("/show/:slug", async (c) => {
                                       src={e.image_url}
                                       width="84"
                                       height="47"
-                                      alt=""
+                                      alt={`${show.name} ${epCode(e)}`}
                                       loading="lazy"
                                       decoding="async"
                                     />
@@ -1188,7 +1188,7 @@ app.get("/show/:slug/media", async (c) => {
                   <img
                     src={`https://image.tmdb.org/t/p/w780${p}`}
                     srcset={`https://image.tmdb.org/t/p/w780${p} 1x, https://image.tmdb.org/t/p/w1280${p} 2x`}
-                    alt=""
+                    alt={`${show.name} backdrop ${i + 1}`}
                     width="780"
                     height="439"
                     loading="lazy"
@@ -1216,7 +1216,7 @@ app.get("/show/:slug/media", async (c) => {
                   <img
                     src={`https://image.tmdb.org/t/p/w342${p}`}
                     srcset={`https://image.tmdb.org/t/p/w342${p} 1x, https://image.tmdb.org/t/p/w780${p} 2x`}
-                    alt=""
+                    alt={`${show.name} poster ${i + 1}`}
                     width="342"
                     height="513"
                     loading="lazy"
@@ -1311,7 +1311,7 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
                         srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
                         width="168"
                         height="95"
-                        alt=""
+                        alt={`${show.name} ${epCode(e)}`}
                         loading={i === 0 ? "eager" : "lazy"}
                         fetchpriority={i === 0 ? "high" : undefined}
                         decoding="async"

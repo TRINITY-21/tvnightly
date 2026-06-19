@@ -731,7 +731,7 @@ app.get("/person/:slug", async (c) => {
                 <li class="rank-row">
                   <span class="rank-num">{i + 1}</span>
                   {(r.poster_url ?? r.image_url) ? (
-                    <img class="rank-thumb" src={r.poster_url ?? r.image_url!} alt="" loading="lazy" />
+                    <img class="rank-thumb" src={r.poster_url ?? r.image_url!} alt={`${r.name} poster`} loading="lazy" />
                   ) : (
                     <span class="rank-thumb rank-thumb-empty" aria-hidden="true"></span>
                   )}
@@ -778,7 +778,7 @@ app.get("/person/:slug", async (c) => {
                 <li class="rank-row">
                   <span class="rank-num">{i + 1}</span>
                   {m.poster_url ? (
-                    <img class="rank-thumb" src={m.poster_url} alt="" loading="lazy" />
+                    <img class="rank-thumb" src={m.poster_url} alt={`${m.title} poster`} loading="lazy" />
                   ) : (
                     <span class="rank-thumb rank-thumb-empty" aria-hidden="true"></span>
                   )}

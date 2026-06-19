@@ -43,7 +43,7 @@ const SchedRow: FC<{
       {(e.show_poster ?? e.show_image) ? (
         <img
           src={(e.show_poster ?? e.show_image)!}
-          alt=""
+          alt={`${e.show_name} poster`}
           width="46"
           height="69"
           loading="lazy"
@@ -464,7 +464,7 @@ app.get("/premieres", async (c) => {
                           {m.poster_url ? (
                             <img
                               src={m.poster_url}
-                              alt=""
+                              alt={`${m.title} poster`}
                               width="46"
                               height="69"
                               loading="lazy"

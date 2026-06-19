@@ -108,7 +108,7 @@ app.get("/renewals", async (c) => {
       <a class="sched-row" href={`/show/${r.slug}/release-date`}>
         <span class="sched-rail">{shortDate(r.detected_at)}</span>
         {r.poster ? (
-          <img src={r.poster} alt="" width="46" height="69" loading="lazy" decoding="async" />
+          <img src={r.poster} alt={`${r.name} poster`} width="46" height="69" loading="lazy" decoding="async" />
         ) : (
           <span class="sched-thumb-blank" aria-hidden="true"></span>
         )}
@@ -298,7 +298,7 @@ app.get("/whats-new", async (c) => {
               aria-label={`${r.title} — ${r.kind === "movie" ? "movie" : "TV show"}`}
             >
               {posterOf(r) ? (
-                <img src={posterOf(r)!} alt="" width="92" height="138" loading="lazy" decoding="async" />
+                <img src={posterOf(r)!} alt={`${r.title} poster`} width="92" height="138" loading="lazy" decoding="async" />
               ) : (
                 <span class="shelf-fallback">{r.title}</span>
               )}

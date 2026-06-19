@@ -192,7 +192,7 @@ app.get("/show/:slug/essential", async (c) => {
                           srcset={`${ep.image_url} 1x, ${largeStill(ep.image_url)} 2x`}
                           width="168"
                           height="95"
-                          alt=""
+                          alt={`${show.name} ${epCode(ep)}`}
                           loading={i === 0 ? "eager" : "lazy"}
                           fetchpriority={i === 0 ? "high" : undefined}
                           decoding="async"
@@ -707,7 +707,7 @@ const rankedPage =
                         srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
                         width={i < plates ? "256" : "168"}
                         height={i < plates ? "144" : "95"}
-                        alt=""
+                        alt={`${show.name} ${epCode(e)}`}
                         loading={i === 0 ? "eager" : "lazy"}
                         fetchpriority={i === 0 ? "high" : undefined}
                         decoding="async"
@@ -1012,7 +1012,7 @@ app.get("/show/:slug/next-episode", async (c) => {
                         srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
                         width="168"
                         height="95"
-                        alt=""
+                        alt={`${show.name} ${epCode(e)}`}
                         loading="lazy"
                         decoding="async"
                       />

@@ -412,7 +412,7 @@ app.get("/search", async (c) => {
                 class="srch-poster"
                 src={bestPoster.src}
                 srcset={bestPoster.srcset}
-                alt=""
+                alt={`${best.kind === "tv" ? best.show.name : best.movie.title} poster`}
                 width="128"
                 height="192"
                 fetchpriority="high"
@@ -548,7 +548,7 @@ app.get("/search", async (c) => {
                 <li>
                   <a class="shelf-tile" href={`/show/${s.slug}`} title={s.name}>
                     {s.poster ? (
-                      <img src={s.poster} alt="" width="92" height="138" loading="lazy" decoding="async" />
+                      <img src={s.poster} alt={`${s.name} poster`} width="92" height="138" loading="lazy" decoding="async" />
                     ) : (
                       <span class="shelf-fallback">{s.name}</span>
                     )}

@@ -12,6 +12,14 @@
   // public serving) so the card renderers can inline the brand fonts (src/lib/render.ts,
   // signal.ts). Without it c.env.ASSETS is undefined and resvg renders no text.
   "assets": { "directory": "./public", "binding": "ASSETS" },
+  // Custom domains: on deploy, wrangler attaches these to the Worker and creates
+  // the proxied DNS records + TLS certs automatically (the zone is already on
+  // Cloudflare). Apex is canonical (SITE_ORIGIN); www is served too and 301s to
+  // apex in the Worker (see the host-canonicalize middleware in src/index.tsx).
+  "routes": [
+    { "pattern": "tvnightly.com", "custom_domain": true },
+    { "pattern": "www.tvnightly.com", "custom_domain": true }
+  ],
   // Three crons, each with its own 50-subrequest budget:
   //   :00 hourly — TVmaze sync (shows/episodes/events/alerts + outbox drain)
   //   :30 hourly — provider patrol (availability diffing -> /whats-new)

@@ -50,19 +50,27 @@ app.use("*", async (c, next) => {
   return next();
 });
 
-// SEO URL canonicalization: one address per page. Lowercase the path and drop
-// trailing slashes, 301ing variants to the canonical form so "/Show/The-Wire/"
-// and "/show/the-wire" never split into duplicate URLs (and uppercase typos
-// resolve instead of 404ing). GET/HEAD only — never redirect a form POST; skips
-// %-encoded paths so escape sequences aren't mangled.
+// SEO URL canonicalization: one address per page. Collapse www → apex (canonical
+// host is SITE_ORIGIN, the bare domain), lowercase the path, and drop trailing
+// slashes — 301ing variants to the canonical form so "www.tvnightly.com",
+// "/Show/The-Wire/" and "/show/the-wire" never split into duplicate URLs (and
+// uppercase typos resolve instead of 404ing). GET/HEAD only — never redirect a
+// form POST; skips %-encoded paths so escape sequences aren't mangled. Host +
+// path collapse in a single redirect to avoid a double 301.
 app.use("*", async (c, next) => {
   if (c.req.method === "GET" || c.req.method === "HEAD") {
     const url = new URL(c.req.url);
+    const apex = url.hostname.startsWith("www.") ? url.hostname.slice(4) : url.hostname;
     const p = url.pathname;
+    let norm = p;
     if (!p.includes("%")) {
-      let norm = p.toLowerCase();
+      norm = p.toLowerCase();
       if (norm.length > 1) norm = norm.replace(/\/+$/, "");
-      if (norm !== p) return c.redirect(norm + url.search, 301);
+    }
+    if (apex !== url.hostname || norm !== p) {
+      url.hostname = apex;
+      url.pathname = norm;
+      return c.redirect(url.toString(), 301);
     }
   }
   return next();

@@ -462,7 +462,7 @@ app.get("/", async (c) => {
                         {(e.show_poster ?? e.show_image) ? (
                           <img
                             src={(e.show_poster ?? e.show_image)!}
-                            alt=""
+                            alt={`${e.show_name} poster`}
                             width="92"
                             height="138"
                             loading="lazy"
@@ -521,7 +521,7 @@ app.get("/", async (c) => {
                           {m.poster_url ? (
                             <img
                               src={m.poster_url}
-                              alt=""
+                              alt={`${m.title} poster`}
                               width="92"
                               height="138"
                               loading="lazy"

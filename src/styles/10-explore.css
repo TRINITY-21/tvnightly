@@ -149,6 +149,23 @@
   background: var(--surface-2);
   margin-bottom: 0.95rem;
 }
+/* desktop: portrait on the left, the eyebrow/title/intro/actions lockup to its
+   right. Phones keep the stack (the big title can't share a row with a portrait
+   on a narrow screen) — handled by the default block flow + the bleed rules. */
+@media (min-width: 601px) {
+  .wo-hero-person .wo-hero-body {
+    display: flex;
+    align-items: center;
+    gap: 1.6rem;
+  }
+  .wo-hero-person .wo-hero-face {
+    flex: none;
+    margin-bottom: 0;
+  }
+  .wo-hero-person .wo-hero-text {
+    min-width: 0;
+  }
+}
 
 /* full-bleed variant (/top/tv, /movies/best): no card chrome — the #1's still
    runs up to the nav and edge-to-edge, the lockup rides the page column over

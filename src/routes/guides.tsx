@@ -652,7 +652,7 @@ app.get("/movies/featuring/:slug", async (c) => {
         faqLd(faqs),
       ]}
     >
-      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
+      <header class={`wo-hero wo-hero-bleed wo-hero-person${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
           {(() => {
@@ -670,6 +670,7 @@ app.get("/movies/featuring/:slug", async (c) => {
               />
             ) : null;
           })()}
+          <div class="wo-hero-text">
           <p class="section-eyebrow">Filmography</p>
           <h1>Best movies featuring {person.name}</h1>
           <p class="wo-intro">
@@ -685,6 +686,7 @@ app.get("/movies/featuring/:slug", async (c) => {
               Best movies, ranked
             </a>
           </p>
+          </div>
         </div>
       </header>
 

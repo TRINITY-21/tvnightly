@@ -663,6 +663,7 @@ app.get("/tv/featuring/:slug", async (c) => {
               />
             ) : null;
           })()}
+          <div class="wo-hero-text">
           <p class="section-eyebrow">TV roles</p>
           <h1>Best TV shows featuring {person.name}</h1>
           <p class="wo-intro">
@@ -678,6 +679,7 @@ app.get("/tv/featuring/:slug", async (c) => {
               Top TV shows, ranked
             </a>
           </p>
+          </div>
         </div>
       </header>
 

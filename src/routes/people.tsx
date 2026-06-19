@@ -612,29 +612,35 @@ app.get("/person/:slug", async (c) => {
             <div class="detail-info">
               <h1>{person.name}</h1>
               <p class="meta-strip">
-                {person.known_dept && person.known_dept !== "Acting" ? (
-                  <>
-                    <span>{person.known_dept}</span>
-                    <span class="sep">·</span>
-                  </>
-                ) : null}
-                {years ? (
-                  <span>
-                    {years}
-                    {age != null ? ` (aged ${age})` : ""}
-                  </span>
-                ) : age != null ? (
-                  <span>
-                    Age {age}
-                    {person.birthday ? ` — born ${longDate(person.birthday)}` : ""}
-                  </span>
-                ) : null}
-                {person.birthplace || person.country ? (
-                  <>
-                    {age != null || years ? <span class="sep sep-loc">·</span> : null}
-                    <span class="ms-birthplace">{person.birthplace ?? person.country}</span>
-                  </>
-                ) : null}
+                {(() => {
+                  const hasDept = Boolean(person.known_dept && person.known_dept !== "Acting");
+                  const lifeSpan = Boolean(years || age != null);
+                  const place = person.birthplace || person.country;
+                  return (
+                    <>
+                      {hasDept ? <span>{person.known_dept}</span> : null}
+                      {/* only print the separator when something actually follows */}
+                      {hasDept && (lifeSpan || place) ? <span class="sep">·</span> : null}
+                      {years ? (
+                        <span>
+                          {years}
+                          {age != null ? ` (aged ${age})` : ""}
+                        </span>
+                      ) : age != null ? (
+                        <span>
+                          Age {age}
+                          {person.birthday ? ` — born ${longDate(person.birthday)}` : ""}
+                        </span>
+                      ) : null}
+                      {place ? (
+                        <>
+                          {lifeSpan ? <span class="sep sep-loc">·</span> : null}
+                          <span class="ms-birthplace">{person.birthplace ?? person.country}</span>
+                        </>
+                      ) : null}
+                    </>
+                  );
+                })()}
               </p>
               {person.bio ? (
                 stripHtml(person.bio).length > 280 ? (

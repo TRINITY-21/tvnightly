@@ -402,7 +402,12 @@ export async function tmdbPersonData(
     socials: ig || tw ? JSON.stringify({ ...(ig ? { ig } : {}), ...(tw ? { tw } : {}) }) : null,
   } as unknown as PersonRow;
 
-  const { roles, films } = buildPersonCredits(data.combined_credits?.cast ?? [], 40, 30);
+  const { roles, films } = buildPersonCredits(
+    data.combined_credits?.cast ?? [],
+    data.combined_credits?.crew ?? [],
+    40,
+    30,
+  );
   return { person, roles, films };
 }
 
@@ -449,8 +454,13 @@ export async function resolvePersonProfile(
       ...roles.map((x) => slugifyName(x.name)),
       ...films.map((x) => slugifyName(x.title)),
     ]);
-    const extra = person.tmdb_id
-      ? await tmdbPersonData(c, person.tmdb_id)
+    // Crew, guest and movie-cast people are stored at id = 10M + their TMDB id, so
+    // the TMDB id is recoverable from the id even when the tmdb_id column is unset
+    // — use it directly (name-search can't verify a crew person with no D1 cast).
+    const tmdbId =
+      person.tmdb_id ?? (person.id >= TMDB_PERSON_OFFSET ? person.id - TMDB_PERSON_OFFSET : null);
+    const extra = tmdbId
+      ? await tmdbPersonData(c, tmdbId)
       : await tmdbPersonByName(c, person.name, knownSlugs);
     if (extra) {
       // overlay TMDB bio/profile onto the D1 person wherever we hold nothing
@@ -507,41 +517,80 @@ export async function resolvePersonProfile(
   return { person, roles, films };
 }
 
-// Build TV roles + films from a TMDB combined_credits cast array. Shared by the
-// live person page and the D1-person enrichment, so a mirrored person still
-// shows their FULL filmography — not just the handful of titles in our mirror.
+// Build TV roles + films from a TMDB combined_credits payload — BOTH cast and
+// crew, so a director / writer / composer (who has no acting credits) still gets
+// a full filmography instead of an empty "no roles on record" page. Shared by the
+// live person page and the D1-person enrichment.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildPersonCredits(
-  credits: any[],
+  cast: any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+  crew: any[], // eslint-disable-line @typescript-eslint/no-explicit-any
   tvLimit: number,
   movieLimit: number,
 ): { roles: PersonRoles; films: PersonFilms } {
   // "self" appearances — talk shows (10767), news (10763), reality (10764), and
-  // making-of / behind-the-scenes documentaries where the actor plays themselves
-  // — are promo-tour noise, not roles. Keep them out of the filmography on BOTH
-  // sides: a "Self" documentary was ranking #1 on actors' movie lists (thin-vote
-  // 10.0s), and the genre ids only ever match TV so the character regex is what
-  // catches the film case.
+  // making-of documentaries where the person plays themselves — are promo-tour
+  // noise, not roles. The genre ids only match TV, so the character regex catches
+  // the film case.
   const SELF = /\b(self|himself|herself|themselves)\b/i;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isSelfAppearance = (cr: any) =>
     SELF.test(cr.character ?? "") ||
     (cr.genre_ids ?? []).some((g: number) => g === 10767 || g === 10763 || g === 10764);
 
-  const seen = new Set<string>();
-  const dedupTop = (mt: string, n: number) =>
-    credits
-      .filter((cr) => cr.media_type === mt && !isSelfAppearance(cr))
-      .sort((a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0))
-      .filter((cr) => {
-        const k = mt + cr.id;
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      })
-      .slice(0, n);
+  // A crew credit's job(s) stand in for a character. TMDB lists one row per job,
+  // so merge rows for the same title and show the most relevant one or two.
+  const JOB_RANK = [
+    "Director", "Creator", "Writer", "Screenplay", "Story", "Executive Producer",
+    "Co-Executive Producer", "Producer", "Original Music Composer", "Composer",
+    "Director of Photography", "Editor",
+  ];
+  const jobLabel = (jobs: Set<string>): string | null => {
+    const ranked = [...jobs].sort(
+      (a, b) => ((JOB_RANK.indexOf(a) + 1) || 99) - ((JOB_RANK.indexOf(b) + 1) || 99),
+    );
+    return ranked.slice(0, 2).join(" · ") || null;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const crewByTitle = new Map<string, { cr: any; jobs: Set<string>; episodes: number | null }>();
+  for (const cr of crew) {
+    if (cr.media_type !== "tv" && cr.media_type !== "movie") continue;
+    const key = `${cr.media_type}:${cr.id}`;
+    const cur = crewByTitle.get(key);
+    if (cur) {
+      if (cr.job) cur.jobs.add(cr.job);
+      cur.episodes = Math.max(cur.episodes ?? 0, cr.episode_count ?? 0) || cur.episodes;
+    } else {
+      crewByTitle.set(key, {
+        cr,
+        jobs: new Set<string>(cr.job ? [cr.job] : []),
+        episodes: cr.episode_count ?? null,
+      });
+    }
+  }
 
-  const roles = dedupTop("tv", tvLimit).map((cr) => ({
+  // Per media type: cast (label = character) ∪ crew (label = job), deduped by
+  // title id with the acting credit winning, ranked by viewer rating, capped.
+  const collect = (mt: "tv" | "movie", limit: number) => {
+    const titleField = mt === "tv" ? "name" : "title";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const byId = new Map<number, { cr: any; label: string | null; episodes: number | null }>();
+    for (const cr of cast) {
+      if (cr.media_type !== mt || !cr[titleField] || isSelfAppearance(cr)) continue;
+      if (!byId.has(cr.id))
+        byId.set(cr.id, { cr, label: cr.character || null, episodes: cr.episode_count ?? null });
+    }
+    for (const e of crewByTitle.values()) {
+      if (e.cr.media_type !== mt || !e.cr[titleField]) continue;
+      if (!byId.has(e.cr.id))
+        byId.set(e.cr.id, { cr: e.cr, label: jobLabel(e.jobs), episodes: e.episodes });
+    }
+    return [...byId.values()]
+      .sort((a, b) => (b.cr.vote_average ?? 0) - (a.cr.vote_average ?? 0))
+      .slice(0, limit);
+  };
+
+  const roles = collect("tv", tvLimit).map(({ cr, label, episodes }) => ({
     id: cr.id,
     slug: slugifyName(cr.name),
     name: cr.name,
@@ -563,12 +612,12 @@ function buildPersonCredits(
     providers_intl: null,
     tmdb_id: cr.id,
     type: null,
-    character: cr.character || null,
+    character: label,
     voice: 0,
-    episodes: cr.episode_count ?? null,
+    episodes,
   })) as unknown as PersonRoles;
 
-  const films = dedupTop("movie", movieLimit).map((cr) => ({
+  const films = collect("movie", movieLimit).map(({ cr, label }) => ({
     imdb_id: `tmdb-${cr.id}`,
     slug: slugifyName(cr.title),
     title: cr.title,
@@ -584,7 +633,7 @@ function buildPersonCredits(
     tmdb_id: cr.id,
     providers: null,
     providers_intl: null,
-    character: cr.character || null,
+    character: label,
   })) as unknown as PersonFilms;
 
   return { roles, films };

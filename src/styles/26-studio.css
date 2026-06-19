@@ -211,13 +211,20 @@
   border-radius: 12px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
+/* The composer + ratings cards are SVGs that carry only a viewBox (no intrinsic
+   px size), so as an <img> they collapse unless given a definite dimension.
+   Portrait formats size by height; the wide PNG sizes by width. */
 .is-story #studio-card {
-  max-height: 620px;
+  width: auto;
+  height: 600px;
 }
 .is-square #studio-card {
-  max-height: 480px;
+  width: auto;
+  height: 460px;
 }
 .is-wide #studio-card {
+  width: 100%;
+  height: auto;
   max-height: 400px;
 }
 /* Where the platform UI overlays a 9:16 post: the like/comment/share buttons

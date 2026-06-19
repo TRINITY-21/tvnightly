@@ -38,9 +38,10 @@
     // it to the team), so subscriber replies reach a human, not the alerts sender.
     "EMAIL_REPLY_TO": "contact@tvnightly.com",
     // /feedback notifications land here (contact@ forwards to the team inbox)
-    "FEEDBACK_TO": "contact@tvnightly.com"
-    // CF_BEACON_TOKEN — paste here (it's public, not a secret) AFTER creating the
-    // Cloudflare Web Analytics site post-deploy; the beacon renders only when set.
+    "FEEDBACK_TO": "contact@tvnightly.com",
+    // Public Cloudflare Web Analytics beacon token (not a secret); renders the
+    // beacon (src/components/Layout.tsx) only when set.
+    "CF_BEACON_TOKEN": "d2cc01d40f2e459eb7979de5211d1c38"
     // TURNSTILE_SITE_KEY — paste the Turnstile widget sitekey (public) after
     // creating the widget; /feedback renders the anti-spam widget only when set.
   },

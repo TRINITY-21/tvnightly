@@ -12,6 +12,13 @@ Disallow: /admin/
 Disallow: /api/
 Disallow: /confirm
 Disallow: /unsubscribe
+# High-volume, low-priority crawl surface kept out while the domain is young
+# (also dropped from the sitemap). Person profiles are the biggest offender;
+# the valuable /tv/featuring & /movies/featuring pages stay crawlable.
+Disallow: /person/
+# Politeness for bots that honor it (Bing, Yandex) — Googlebot ignores Crawl-delay
+# but its crawl budget tracks the (now much smaller) sitemap instead.
+Crawl-delay: 10
 # Search is noindex and an infinite ?q= space — keep crawlers out of it entirely
 # (the bare /search landing stays crawlable so its noindex is still seen).
 Disallow: /search?
@@ -24,7 +31,7 @@ Disallow: /*?session=
 Disallow: /*?sort=
 Disallow: /*?filter=
 
-# Single sitemap entry: /sitemap.xml is a sitemap INDEX that already fans out to
-# every child shard (static, shows, movies, people, episodes) — listing the
-# children here too would duplicate them and 404 the non-existent flat files.
+# Single sitemap entry: /sitemap.xml is a sitemap INDEX that fans out to its
+# child shards (static, top shows, top movies) — listing the children here too
+# would duplicate them and 404 the non-existent flat files.
 Sitemap: https://tvnightly.com/sitemap.xml

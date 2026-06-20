@@ -167,6 +167,9 @@ export const Layout: FC<
     ogImageAlt?: string;
     scripts?: string[];
     noindex?: boolean;
+    /** Drop the public site header + marketing footer — for admin tooling
+     *  (the studio, inbox) that should read as a focused app, not a page. */
+    bare?: boolean;
     /** Meta-refresh auto-forward (no-JS path for the synth interstitial). */
     refresh?: { delay: number; url: string };
     /** LCP insurance for full-bleed CSS-background heroes, which browsers
@@ -260,6 +263,7 @@ export const Layout: FC<
     </head>
     <body>
       <div class="nprogress" aria-hidden="true"><span class="nprogress-bar"></span><span class="nprogress-spin"></span></div>
+      {props.bare ? null : (
       <header class="site-header">
         {/* inner rail centers on the same 948px column as main content */}
         <div class="header-inner">
@@ -412,7 +416,9 @@ export const Layout: FC<
           </div>
         </div>
       </header>
+      )}
       <main>{props.children}</main>
+      {props.bare ? null : (
       <footer class="site-footer">
         <div class="footer-inner">
         <div class="footer-cols">
@@ -513,6 +519,7 @@ export const Layout: FC<
         </div>
         </div>
       </footer>
+      )}
       {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", "/js/localtime.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>
       ))}

@@ -1,60 +1,152 @@
-/* ---- Social Studio (admin) ---- */
+/* ============================================================
+   Social Studio (admin) — a creative workbench.
+   Same "Standby Glow" grammar as the cards it makes: dark theater,
+   posters are the spectacle, amber is the only interactive color,
+   an amber spine as the recurring signature.
+   ============================================================ */
+
+/* break out of the 980px reading column into an app workspace */
+main:has(.studio) {
+  max-width: 1340px;
+}
+
 .studio {
+  --rail-w: 234px;
+  --insp-w: 366px;
+}
+
+/* ── masthead ───────────────────────────────────────────── */
+.studio-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.2rem 0 1.1rem;
+  margin-bottom: 1.3rem;
+  border-bottom: 1px solid var(--line);
+}
+.studio-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.studio-mark {
+  width: 38px;
+  height: auto;
+  filter: drop-shadow(0 0 10px rgba(255, 169, 77, 0.25));
+}
+.studio-lockup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  line-height: 1;
+}
+.studio-kicker {
+  font-family: var(--display);
+  font-stretch: 110%;
+  font-weight: 700;
+  font-size: 0.6rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.studio-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-family: var(--display);
+  font-stretch: 125%;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 1.6rem;
+  color: var(--text);
+}
+.studio-wordmark .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--glow);
+}
+.studio-top-link {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.studio-top-link:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* ── workspace grid ─────────────────────────────────────── */
+.studio-body {
   display: grid;
-  grid-template-columns: 210px 1fr;
-  gap: 1.6rem;
+  grid-template-columns: var(--rail-w) 1fr;
+  gap: 1.4rem;
   align-items: start;
 }
+
+/* ── left rail (the tool panel) ─────────────────────────── */
 .studio-rail {
   position: sticky;
   top: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  box-shadow: var(--shadow-1);
 }
-.studio-back {
-  font-size: 0.82rem;
-  color: var(--muted);
-}
-.studio-back:hover {
-  color: var(--text);
-}
-.studio-h1 {
-  margin: 0.2rem 0 0.6rem;
-  font-size: 1.6rem;
-}
-.studio-group {
-  margin-bottom: 0.7rem;
+.studio-group + .studio-group {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
 }
 .studio-group-h {
-  margin: 0.4rem 0 0.3rem;
+  margin: 0.1rem 0 0.5rem 0.35rem;
   font-family: var(--display);
-  font-stretch: 75%;
-  font-size: 0.68rem;
-  font-weight: 600;
+  font-stretch: 78%;
+  font-size: 0.66rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.13em;
   color: var(--muted);
 }
 .studio-cat {
+  position: relative;
   display: block;
-  padding: 0.4rem 0.6rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
+  padding: 0.46rem 0.66rem;
+  border-radius: var(--radius);
+  font-size: 0.92rem;
+  font-weight: 500;
   color: var(--text);
-  border: 1px solid transparent;
+  transition: background var(--speed) var(--ease);
 }
 .studio-cat:hover {
-  background: var(--surface);
+  background: var(--surface-2);
   text-decoration: none;
 }
 .studio-cat.on {
-  background: rgba(255, 169, 77, 0.12);
-  border-color: rgba(255, 169, 77, 0.4);
+  background: rgba(255, 169, 77, 0.1);
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 700;
+}
+/* the amber spine — the same signature the cards carry */
+.studio-cat.on::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
 }
 
+/* ── main column ────────────────────────────────────────── */
 .studio-main {
   min-width: 0;
 }
@@ -64,32 +156,39 @@
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  margin-bottom: 1rem;
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid var(--line);
+  margin-bottom: 1.1rem;
 }
 .studio-title {
   margin: 0;
-  font-size: 1.5rem;
+  font-family: var(--display);
+  font-stretch: 118%;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 1.55rem;
+  line-height: 1.1;
 }
 .studio-sub {
-  margin: 0.15rem 0 0;
-  font-size: 0.86rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.88rem;
 }
+
+/* format segmented control */
 .studio-fmts {
   display: inline-flex;
-  gap: 0.3rem;
+  gap: 0.25rem;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0.2rem;
+  border-radius: var(--radius);
+  padding: 0.22rem;
 }
 .studio-fmt {
-  padding: 0.3rem 0.6rem;
+  padding: 0.32rem 0.7rem;
   border-radius: 5px;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--muted);
+  transition: all var(--speed) var(--ease);
 }
 .studio-fmt:hover {
   color: var(--text);
@@ -101,14 +200,17 @@
 }
 .studio-fmt-static {
   font-size: 0.78rem;
+  font-weight: 600;
   color: var(--muted);
 }
 
-/* per-category controls */
+/* per-category controls (search / vs / genre / picker) sit in a toolbar tray */
+.studio-tray {
+  margin-bottom: 1.2rem;
+}
 .studio-search {
   position: relative;
   max-width: 460px;
-  margin-bottom: 1rem;
 }
 .studio-search input,
 .studio-genre select {
@@ -117,28 +219,42 @@
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius);
+  padding: 0.55rem 0.75rem;
+  transition: border-color var(--speed) var(--ease);
+}
+.studio-search input:focus,
+.studio-genre select:focus {
+  border-color: var(--accent);
+  outline: none;
 }
 .studio-genre {
   display: flex;
   gap: 0.5rem;
   align-items: center;
-  margin-bottom: 1rem;
 }
 .studio-genre select {
   width: auto;
   min-width: 180px;
+}
+.studio-genre button,
+#studio-gen {
+  font: inherit;
+  font-weight: 700;
+  color: #16130d;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
 }
 .studio-vs {
   display: flex;
   gap: 0.6rem;
   flex-wrap: wrap;
   align-items: flex-start;
-  margin-bottom: 1rem;
 }
 .studio-vs .studio-search {
-  margin-bottom: 0;
   flex: 1;
   min-width: 200px;
 }
@@ -148,9 +264,9 @@
   left: 0;
   right: 0;
   top: calc(100% + 4px);
-  background: var(--surface);
+  background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   overflow: hidden;
   box-shadow: var(--shadow-2);
 }
@@ -160,72 +276,90 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  margin-bottom: 1.1rem;
+  margin-top: 0.9rem;
 }
 .studio-pick {
-  padding: 0.34rem 0.66rem;
+  padding: 0.36rem 0.7rem;
   border-radius: 999px;
   font-size: 0.84rem;
+  font-weight: 500;
   color: var(--muted);
   background: var(--surface);
   border: 1px solid var(--line);
+  transition: all var(--speed) var(--ease);
 }
 .studio-pick:hover {
   color: var(--text);
+  border-color: var(--surface-2);
   text-decoration: none;
 }
 .studio-pick.on {
   color: #16130d;
   background: var(--accent);
   border-color: var(--accent);
-  font-weight: 600;
+  font-weight: 700;
 }
 
-/* preview + side panel */
+/* ── stage (preview viewport) + inspector ───────────────── */
 .studio-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 2rem;
+  grid-template-columns: minmax(0, 1fr) var(--insp-w);
+  gap: 1.4rem;
   align-items: start;
 }
 .studio-canvas {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(130% 90% at 50% 0%, rgba(255, 169, 77, 0.06), transparent 60%),
-    linear-gradient(180deg, #16161c, #0b0b0e);
+    radial-gradient(120% 80% at 50% -10%, rgba(255, 169, 77, 0.09), transparent 55%),
+    radial-gradient(closest-side at 50% 50%, transparent, rgba(0, 0, 0, 0.45)),
+    linear-gradient(180deg, #17171d, #0b0b0e);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 2rem;
-  min-height: 440px;
+  padding: 2.4rem;
+  min-height: 560px;
+  overflow: hidden;
+}
+/* faint dot-grid so the stage reads as a workspace, not an empty box */
+.studio-canvas::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 22px 22px;
+  pointer-events: none;
 }
 .studio-frame {
   position: relative;
   display: inline-block;
   line-height: 0;
+  z-index: 1;
 }
 #studio-card {
   display: block;
   max-width: 100%;
-  border-radius: 12px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 /* The composer + ratings cards are SVGs that carry only a viewBox (no intrinsic
    px size), so as an <img> they collapse unless given a definite dimension.
    Portrait formats size by height; the wide PNG sizes by width. */
 .is-story #studio-card {
   width: auto;
-  height: 600px;
+  height: 640px;
 }
 .is-square #studio-card {
   width: auto;
-  height: 460px;
+  height: 500px;
 }
 .is-wide #studio-card {
   width: 100%;
   height: auto;
-  max-height: 400px;
+  max-height: 430px;
 }
 /* Where the platform UI overlays a 9:16 post: the like/comment/share buttons
    sit in a right rail, the caption + handle along the bottom. Keep card content
@@ -234,7 +368,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
 }
 .studio-safe::before {
@@ -243,7 +377,7 @@
   top: 8%;
   right: 0;
   bottom: 0;
-  width: 15.5%; /* action buttons rail */
+  width: 15.5%;
   background: repeating-linear-gradient(
     -45deg,
     rgba(255, 92, 138, 0.14),
@@ -259,7 +393,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: 13%; /* caption + handle strip */
+  height: 13%;
   background: repeating-linear-gradient(
     45deg,
     rgba(255, 92, 138, 0.1),
@@ -269,68 +403,140 @@
   );
   border-top: 1px dashed rgba(255, 92, 138, 0.4);
 }
+/* a small dimension caption under the card, like a viewport readout */
+.studio-dims {
+  position: absolute;
+  left: 50%;
+  bottom: 0.9rem;
+  transform: translateX(-50%);
+  z-index: 1;
+  font-family: var(--display);
+  font-stretch: 88%;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.22rem 0.7rem;
+}
 .studio-empty {
+  position: relative;
+  z-index: 1;
   max-width: 40ch;
   text-align: center;
   padding: 2rem 1rem;
 }
 
+/* ── inspector ──────────────────────────────────────────── */
 .studio-side {
+  position: sticky;
+  top: 1rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.1rem;
+  box-shadow: var(--shadow-1);
 }
 .studio-actions {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: 0.7rem;
   margin: 0;
 }
 .studio-dl-btn {
+  flex: 1;
+  text-align: center;
   font: inherit;
-  font-weight: 700;
+  font-weight: 800;
   color: #16130d;
   background: var(--accent);
   border: none;
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius);
+  padding: 0.6rem 0.9rem;
   cursor: pointer;
+  transition: filter var(--speed) var(--ease);
 }
 .studio-dl-btn:hover {
   text-decoration: none;
-  filter: brightness(1.05);
+  filter: brightness(1.06);
+}
+.studio-vid-btn {
+  flex: 1;
+  text-align: center;
+  font: inherit;
+  font-weight: 800;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  transition: background var(--speed) var(--ease);
+}
+.studio-vid-btn:hover {
+  background: rgba(255, 169, 77, 0.12);
+}
+.studio-vid-btn:disabled {
+  opacity: 0.75;
+  cursor: default;
+}
+.studio-vid-note {
+  margin: -0.4rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 .studio-open {
-  font-size: 0.86rem;
+  font-size: 0.84rem;
+  font-weight: 600;
   color: var(--muted);
+  white-space: nowrap;
+}
+.studio-open:hover {
+  color: var(--text);
 }
 .studio-note {
+  margin: 0;
   font-size: 0.84rem;
 }
 
 /* captions */
 .studio-caps {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.7rem;
 }
 .studio-caps-h {
   margin: 0;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-weight: 700;
   font-size: 0.95rem;
+}
+.studio-cap {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.65rem;
 }
 .studio-cap-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.2rem;
-  font-size: 0.76rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--muted);
 }
 .studio-copy {
   font: inherit;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0;
@@ -338,8 +544,12 @@
   background: none;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 0.16rem 0.5rem;
+  padding: 0.16rem 0.55rem;
   cursor: pointer;
+  transition: all var(--speed) var(--ease);
+}
+.studio-copy:hover {
+  border-color: var(--accent);
 }
 .studio-copy.is-done {
   color: var(--ok);
@@ -350,28 +560,39 @@
   resize: vertical;
   font-family: var(--system, -apple-system, "Segoe UI", Roboto, sans-serif);
   font-size: 0.82rem;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.6rem;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.studio-cap-text:focus {
+  outline: none;
 }
 
-@media (max-width: 900px) {
-  .studio {
+@media (max-width: 980px) {
+  .studio-body {
     grid-template-columns: 1fr;
   }
   .studio-rail {
     position: static;
     flex-direction: row;
     flex-wrap: wrap;
-    align-items: baseline;
+    gap: 0.6rem;
   }
   .studio-group {
-    margin-bottom: 0;
+    flex: 1;
+    min-width: 150px;
+  }
+  .studio-group + .studio-group {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
   }
   .studio-stage {
     grid-template-columns: 1fr;
+  }
+  .studio-side {
+    position: static;
   }
 }

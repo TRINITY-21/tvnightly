@@ -93,7 +93,11 @@
     });
   }
 
-  // single search (liked / status): navigate to that format's preview on pick
+  // preserve the chosen aspect (1:1 / 9:16) across search-driven reloads
+  var aspect = new URLSearchParams(window.location.search).get("fmt");
+  var aspectQ = aspect ? "&fmt=" + encodeURIComponent(aspect) : "";
+
+  // single search (liked / status / ratings): navigate to that format's preview on pick
   var single = document.getElementById("studio-q");
   if (single) {
     var holder = single.closest("[data-format]");
@@ -105,7 +109,8 @@
         "&slug=" +
         encodeURIComponent(it.slug) +
         "&kind=" +
-        encodeURIComponent(it.kind);
+        encodeURIComponent(it.kind) +
+        aspectQ;
     });
   }
 
@@ -137,7 +142,8 @@
           "&b=" +
           encodeURIComponent(pick.b.slug) +
           "&kb=" +
-          encodeURIComponent(pick.b.kind);
+          encodeURIComponent(pick.b.kind) +
+          aspectQ;
       });
   }
 
@@ -205,13 +211,15 @@
   // TikTok/IG want); falls back to webm where the browser can't encode mp4.
   var vid = document.getElementById("studio-vid");
   if (vid && card) {
-    var W = 1080,
-      H = 1920,
+    // dimensions come from the button (9:16 = 1080×1920, 1:1 = 1080×1080) so the
+    // clip adapts to whichever format is on screen. Bottom clearance scales with H.
+    var W = parseInt(vid.getAttribute("data-w"), 10) || 1080,
+      H = parseInt(vid.getAttribute("data-h"), 10) || 1920,
       SM = 56,
       SR = 168,
       CR = W - SR,
       CW = CR - SM,
-      SB = 300,
+      SB = Math.round(H * 0.156),
       FOOT_Y = H - SB;
     var PLATE = "#0e0e11",
       AMBER = "#FFA94D",
@@ -303,8 +311,8 @@
     }
 
     vid.addEventListener("click", function () {
-      if (!window.MediaRecorder) {
-        alert("This browser can't record video — try Chrome.");
+      if (!window.MediaRecorder && !window.VideoEncoder) {
+        alert("This browser can't render video — try Chrome.");
         return;
       }
       vid.disabled = true;
@@ -338,13 +346,12 @@
             ]).catch(function () {})
           : Promise.resolve();
 
-      Promise.all([fetch(card.src).then(function (r) { return r.text(); }), fontReady])
-        .then(function (out) {
-          var svgText = out[0];
-          var url = URL.createObjectURL(new Blob([svgText], { type: "image/svg+xml;charset=utf-8" }));
+      fontReady
+        .then(function () {
+          // same-origin card source (no canvas taint): load directly so both the
+          // promo PNG and the composer SVG work as the base layer.
           var base = new Image();
           base.onload = function () {
-            URL.revokeObjectURL(url);
             var canvas = document.createElement("canvas");
             canvas.width = W;
             canvas.height = H;
@@ -353,31 +360,22 @@
             for (var gi = 0; gi < 7; gi++) grains.push(grainPattern(ctx, 150));
             var vig = vignetteCanvas();
 
-            var rec = new MediaRecorder(canvas.captureStream(30), {
-              mimeType: mime,
-              videoBitsPerSecond: 12000000,
-            });
-            var chunks = [];
-            rec.ondataavailable = function (e) {
-              if (e.data && e.data.size) chunks.push(e.data);
-            };
-            rec.onstop = function () {
-              var ext = mime.indexOf("mp4") >= 0 ? "mp4" : "webm";
-              var fm = card.src.match(/format=([^&]+)/);
+            var DUR = 7000,
+              FPS = 30;
+            var fm = card.src.match(/format=([^&]+)/);
+            var fmtM = card.src.match(/[?&]fmt=([^&]+)/);
+            var fname = "tvnightly-" + (fm ? fm[1] : "clip") + (fmtM ? "-" + fmtM[1] : "");
+            function download(blob, ext) {
               var a = document.createElement("a");
-              a.href = URL.createObjectURL(new Blob(chunks, { type: mime }));
-              a.download = "tvnightly-" + (fm ? fm[1] : "card") + "." + ext;
+              a.href = URL.createObjectURL(blob);
+              a.download = fname + "." + ext;
               document.body.appendChild(a);
               a.click();
               a.remove();
               setTimeout(function () {
                 URL.revokeObjectURL(a.href);
               }, 1500);
-              vreset();
-            };
-
-            var DUR = 7000,
-              t0 = performance.now();
+            }
 
             function render(t) {
               ctx.globalCompositeOperation = "source-over";
@@ -474,68 +472,177 @@
                 ctx.restore();
               }
 
-              // brand lower-third outro — gradient slab with lockup (safe column)
+              // brand sign-off: a SOLID slab fully covers the card's own baked
+              // footer (no ghost wordmark, no double line), then one amber tick +
+              // the lockup fade/slide in. Single accent — clean.
               var oRise = outBack(seg(t, 5200, 5700));
               if (oRise > 0.001) {
-                var slabH = 300,
-                  oy = FOOT_Y - slabH * 0.35 * (1 - oRise);
+                var prog = clamp01(oRise);
+                var slabTop = FOOT_Y - 96 + (1 - prog) * 70;
                 ctx.save();
-                var sg = ctx.createLinearGradient(0, oy - 80, 0, H);
+                ctx.globalAlpha = prog;
+                var sg = ctx.createLinearGradient(0, slabTop - 130, 0, slabTop);
                 sg.addColorStop(0, "rgba(14,14,17,0)");
-                sg.addColorStop(0.35, "rgba(14,14,17,0.9)");
-                sg.addColorStop(1, "rgba(14,14,17,0.98)");
+                sg.addColorStop(1, "rgba(14,14,17,1)");
                 ctx.fillStyle = sg;
-                ctx.fillRect(0, oy - 80, W, slabH + 160);
-                ctx.globalAlpha = clamp01(oRise);
+                ctx.fillRect(0, slabTop - 130, W, 130);
+                ctx.fillStyle = PLATE;
+                ctx.fillRect(0, slabTop, W, H - slabTop);
+                // one amber tick — the brand section marker
                 ctx.fillStyle = AMBER;
-                ctx.fillRect(SM, oy, CW, 3);
-                ctx.restore();
-
-                var cx = SM + CW / 2;
-                var tA = clamp01(seg(t, 5500, 5950));
-                mark(ctx, SM + 52, oy + 96, 0.55, tA);
-                ctx.save();
-                ctx.globalAlpha = tA;
+                ctx.fillRect(SM, slabTop + 54, 88, 5);
+                // lockup: mark + wordmark on a line, tagline beneath
+                var ly = slabTop + 150;
+                mark(ctx, SM + 34, ly - 16, 0.5, 1);
                 ctx.textAlign = "left";
                 ctx.textBaseline = "alphabetic";
                 ctx.fillStyle = AMBER;
-                ctx.fillRect(SM, oy, 96, 4);
                 ctx.font = "900 46px Archivo, sans-serif";
-                ctx.fillText("tvnightly.com", SM, oy + 196);
-                ctx.fillStyle = "rgba(255,255,255,0.55)";
-                ctx.textBaseline = "middle";
+                ctx.fillText("tvnightly.com", SM + 82, ly);
+                ctx.fillStyle = "rgba(255,255,255,0.6)";
                 ctx.font = "600 24px Archivo, sans-serif";
-                ctx.fillText("Best episodes · release dates · where to stream", SM, oy + 242);
+                ctx.fillText("Best episodes · release dates · where to stream", SM, ly + 46);
                 ctx.restore();
               }
             }
 
-            function loop(now) {
-              var t = now - t0;
-              render(t);
-              if (t < DUR) requestAnimationFrame(loop);
-              else
-                setTimeout(function () {
-                  try {
-                    rec.stop();
-                  } catch (e) {}
-                }, 140);
+            // --- Primary: frame-perfect H.264 via WebCodecs, muxed to real MP4.
+            // Each frame is rendered then encoded (not realtime), so the motion is
+            // buttery at exactly FPS no matter how loaded the machine is — the
+            // professional path. Falls back to realtime MediaRecorder elsewhere. ---
+            function recordMediaRecorder() {
+              var rec;
+              try {
+                rec = new MediaRecorder(canvas.captureStream(FPS), {
+                  mimeType: mime,
+                  videoBitsPerSecond: 12000000,
+                });
+              } catch (e) {
+                vreset();
+                return;
+              }
+              var chunks = [];
+              rec.ondataavailable = function (e) {
+                if (e.data && e.data.size) chunks.push(e.data);
+              };
+              rec.onstop = function () {
+                download(new Blob(chunks, { type: mime }), mime.indexOf("mp4") >= 0 ? "mp4" : "webm");
+                vreset();
+              };
+              var t0 = performance.now();
+              function loop(now) {
+                render(now - t0);
+                if (now - t0 < DUR) requestAnimationFrame(loop);
+                else setTimeout(function () { try { rec.stop(); } catch (e) {} }, 140);
+              }
+              vid.textContent = "Recording…";
+              try {
+                rec.start();
+              } catch (e) {
+                vreset();
+                return;
+              }
+              requestAnimationFrame(loop);
             }
 
-            vid.textContent = "Recording…";
-            try {
-              rec.start();
-            } catch (e) {
-              vreset();
-              return;
+            var didFallback = false;
+            function fallbackRecord() {
+              if (didFallback) return;
+              didFallback = true;
+              recordMediaRecorder();
             }
-            requestAnimationFrame(loop);
+
+            function encodeWebCodecs(codec) {
+              var muxer = new Mp4Muxer.Muxer({
+                target: new Mp4Muxer.ArrayBufferTarget(),
+                video: { codec: "avc", width: W, height: H, frameRate: FPS },
+                fastStart: "in-memory",
+              });
+              var enc = new VideoEncoder({
+                output: function (chunk, meta) {
+                  muxer.addVideoChunk(chunk, meta);
+                },
+                error: function (e) {
+                  console.error("VideoEncoder error:", e);
+                  fallbackRecord();
+                },
+              });
+              try {
+                enc.configure({ codec: codec, width: W, height: H, bitrate: 12000000, framerate: FPS });
+              } catch (e) {
+                fallbackRecord();
+                return;
+              }
+              var total = Math.round((DUR / 1000) * FPS);
+              var i = 0;
+              function step() {
+                try {
+                  for (var k = 0; k < 3 && i < total; k++, i++) {
+                    render((i / FPS) * 1000);
+                    var frame = new VideoFrame(canvas, {
+                      timestamp: Math.round((i * 1e6) / FPS),
+                      duration: Math.round(1e6 / FPS),
+                    });
+                    enc.encode(frame, { keyFrame: i % FPS === 0 });
+                    frame.close();
+                  }
+                } catch (e) {
+                  console.error(e);
+                  try { enc.close(); } catch (e2) {}
+                  fallbackRecord();
+                  return;
+                }
+                vid.textContent = "Rendering… " + Math.round((i / total) * 100) + "%";
+                if (i < total) {
+                  setTimeout(step, 0);
+                  return;
+                }
+                enc
+                  .flush()
+                  .then(function () {
+                    muxer.finalize();
+                    download(new Blob([muxer.target.buffer], { type: "video/mp4" }), "mp4");
+                    vreset();
+                  })
+                  .catch(function (e) {
+                    console.error(e);
+                    fallbackRecord();
+                  });
+              }
+              vid.textContent = "Rendering… 0%";
+              step();
+            }
+
+            if (window.VideoEncoder && window.VideoFrame && window.Mp4Muxer) {
+              var cands = ["avc1.640034", "avc1.640033", "avc1.640032", "avc1.4d0034", "avc1.42e034"];
+              (function pick(idx) {
+                if (idx >= cands.length) {
+                  recordMediaRecorder();
+                  return;
+                }
+                VideoEncoder.isConfigSupported({
+                  codec: cands[idx],
+                  width: W,
+                  height: H,
+                  bitrate: 12000000,
+                  framerate: FPS,
+                })
+                  .then(function (s) {
+                    if (s && s.supported) encodeWebCodecs(cands[idx]);
+                    else pick(idx + 1);
+                  })
+                  .catch(function () {
+                    pick(idx + 1);
+                  });
+              })(0);
+            } else {
+              recordMediaRecorder();
+            }
           };
           base.onerror = function () {
-            URL.revokeObjectURL(url);
             vreset();
           };
-          base.src = url;
+          base.src = card.src;
         })
         .catch(vreset);
     });

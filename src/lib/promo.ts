@@ -316,4 +316,31 @@ export function promoCaptions(
   return { x, instagram, tiktok };
 }
 
+/** Generic platform captions for any studio card (composer + graphs). Same voice
+ *  as promoCaptions: a hook + link + hashtags, flavored per platform. The caller
+ *  supplies the subject (emoji, title, hook, optional IG sub-line, link, tags). */
+export function buildCaptions(o: {
+  emoji: string;
+  title: string;
+  hook: string;
+  sub?: string;
+  link: string;
+  tags: string[];
+}): { x: string; instagram: string; tiktok: string } {
+  const tg = [...HASH_BASE, ...o.tags]
+    .map((t) => camel(t).slice(0, 28))
+    .filter(Boolean)
+    .map((t) => `#${t}`);
+  const dot = /[.?!]$/.test(o.hook) ? "" : "."; // don't double-punctuate a "?" hook
+  // X / Twitter — punchy, link inline, fewer tags
+  const x = `${o.emoji} ${o.title} — ${o.hook}${dot}\n\n${o.link}\n\n${tg.slice(0, 3).join(" ")}`;
+  // Instagram — caption-style, "link in bio", full tag block
+  const instagram =
+    `${o.emoji} ${o.title}\n\n${o.hook}${dot}${o.sub ? " " + o.sub : ""}\n\n` +
+    `More at TV Nightly — link in bio.\n\n${tg.join(" ")} #StreamingTV #BingeWatch`;
+  // TikTok — hook-first, short
+  const tiktok = `${o.title} ${o.emoji}\n${o.hook} 👀\n${o.link}\n\n${tg.join(" ")} #fyp #TVTok`;
+  return { x, instagram, tiktok };
+}
+
 export const promoBase = (c: AppContext) => origin(c);

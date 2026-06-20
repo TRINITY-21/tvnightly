@@ -6,13 +6,15 @@ import {
   buildLikedCard,
   buildListCard,
   buildPromoCard,
+  buildRatingsCard,
   buildStatusCard,
   buildVsCard,
   toCardEntry,
   VsSide,
+  type RatingsEp,
 } from "../lib/social";
 import { loadOgFonts, svgToPng } from "../lib/render";
-import { getPromoMoments, promoCaptions, promoBase, type PromoMoment, type PromoTheme } from "../lib/promo";
+import { getPromoMoments, promoCaptions, buildCaptions, promoBase, type PromoMoment, type PromoTheme } from "../lib/promo";
 import { tmdbBackdrop, tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
 import { AppContext, Bindings, MovieRow, ShowRow } from "../types";
 
@@ -204,8 +206,107 @@ app.get("/admin/studio", async (c) => {
     moments = all.filter((m) => cat.themes!.includes(m.theme));
     active = moments.find((m) => m.id === c.req.query("pick")) ?? moments[0];
     if (active) caps = promoCaptions(active, base);
+  } else {
+    // captions + tags for composer + graph cards (same panel as the moment cards)
+    const nameOf = async (sl: string, kd: string): Promise<string | null> => {
+      if (!sl) return null;
+      if (kd === "movie") {
+        const m = await c.env.DB.prepare("SELECT title FROM movies WHERE slug = ?").bind(sl).first<{ title: string }>();
+        return m?.title ?? null;
+      }
+      return (await getShow(c.env.DB, sl))?.name ?? null;
+    };
+    if (cat.engine === "ratings") {
+      const show = await getShow(c.env.DB, slug);
+      if (show) {
+        const { results } = await c.env.DB.prepare(
+          "SELECT season, number, rating FROM episodes WHERE show_id = ? AND rating IS NOT NULL ORDER BY rating DESC",
+        )
+          .bind(show.id)
+          .all<{ season: number | null; number: number | null; rating: number | null }>();
+        const ratedN = results.length;
+        const avg = ratedN ? results.reduce((s, e) => s + (e.rating as number), 0) / ratedN : null;
+        const peak = results[0];
+        const seasons = new Set(results.map((e) => e.season ?? 0)).size;
+        const pk = (n: number | null) => String(n ?? 0).padStart(2, "0");
+        const peakStr = peak ? `S${pk(peak.season)}E${pk(peak.number)} (${(peak.rating as number).toFixed(1)})` : null;
+        caps = buildCaptions({
+          emoji: "📺",
+          title: show.name,
+          hook: `every episode rated${avg != null ? ` — series avg ★${avg.toFixed(1)}` : ""}`,
+          sub: peak ? `${seasons} seasons, ${ratedN} episodes — peaks at ${peakStr}.` : `${seasons} seasons, ${ratedN} episodes.`,
+          link: `${base}/show/${slug}/ratings`,
+          tags: ["EpisodeRatings", show.name, "TVShow"],
+        });
+      }
+    } else if (cat.id === "liked") {
+      const name = await nameOf(slug, kind);
+      if (name)
+        caps = buildCaptions({
+          emoji: "🍿",
+          title: `If you liked ${name}`,
+          hook: "here's what to watch next",
+          sub: "Matched by taste, genre & era — no account needed.",
+          link: `${base}/recommend`,
+          tags: ["IfYouLiked", name, kind === "movie" ? "Movies" : "TVShow"],
+        });
+    } else if (cat.id === "status") {
+      const name = await nameOf(slug, kind);
+      if (name)
+        caps = buildCaptions({
+          emoji: "🔔",
+          title: name,
+          hook: "renewed or cancelled?",
+          sub: "Track every renewal, cancellation & premiere date.",
+          link: `${base}/show/${slug}/release-date`,
+          tags: ["Renewed", name, "TVShow"],
+        });
+    } else if (cat.id === "vs") {
+      const [a, b] = await Promise.all([nameOf(vsA, vsKa), nameOf(vsB, vsKb)]);
+      if (a && b) {
+        const pair = `${vsA}-vs-${vsB}`;
+        const path = vsKa === "movie" && vsKb === "movie" ? `compare/movie/${pair}` : `compare/${pair}`;
+        caps = buildCaptions({
+          emoji: "⚔️",
+          title: `${a} vs ${b}`,
+          hook: "which is better? The episode ratings settle it",
+          sub: "Head-to-head, season by season.",
+          link: `${base}/${path}`,
+          tags: ["Versus", a, b],
+        });
+      }
+    } else if (cat.id === "top") {
+      const g = genre === "Science-Fiction" ? "Sci-Fi" : genre;
+      const top1 = await c.env.DB.prepare(
+        "SELECT name FROM shows WHERE genres LIKE ? AND weight >= 60 ORDER BY rating DESC LIMIT 1",
+      )
+        .bind(`%"${genre}"%`)
+        .first<{ name: string }>();
+      caps = buildCaptions({
+        emoji: "🏆",
+        title: `The best ${g} shows`,
+        hook: "the top 5, ranked by rating",
+        sub: top1 ? `Led by ${top1.name}.` : "The full ranking is on the site.",
+        link: `${base}/genre/${genre.toLowerCase()}`,
+        tags: ["Top5", `${g}Shows`, ...(top1 ? [top1.name] : []), "TVShow"],
+      });
+    } else if (cat.id === "gems") {
+      const gem1 = await c.env.DB.prepare(
+        "SELECT name FROM shows WHERE rating >= 8.0 AND weight BETWEEN 28 AND 60 AND genres IS NOT NULL ORDER BY rating DESC, weight ASC LIMIT 1",
+      ).first<{ name: string }>();
+      caps = buildCaptions({
+        emoji: "💎",
+        title: "Hidden gems",
+        hook: "9/10 and barely watched — your next obsession",
+        sub: gem1 ? `Starting with ${gem1.name}.` : "Highly rated shows flying under the radar.",
+        link: `${base}/lists`,
+        tags: ["HiddenGems", ...(gem1 ? [gem1.name] : []), "TVShow"],
+      });
+    }
   }
 
+  // composer + ratings cards offer 1:1 and 9:16 (square|story); promo also has wide
+  const sq = fmt === "square";
   // the preview source + aspect class
   let src = "";
   let aspect: "square" | "story" | "wide" = "story";
@@ -215,104 +316,156 @@ app.get("/admin/studio", async (c) => {
     aspect = fmt as "square" | "story" | "wide";
     dlName = `tvnightly-${active.id}-${fmt}.png`;
   } else if (cat.engine === "classic") {
-    src = `/admin/studio/card.svg?format=${cat.id}`;
+    src = `/admin/studio/card.svg?format=${cat.id}&fmt=${sq ? "square" : "story"}`;
     if (cat.id === "liked" || cat.id === "status") src += `&slug=${enc(slug)}&kind=${kind}`;
     if (cat.id === "top") src += `&genre=${enc(genre)}`;
     if (cat.id === "vs") src += `&a=${enc(vsA)}&ka=${vsKa}&b=${enc(vsB)}&kb=${vsKb}`;
+    aspect = sq ? "square" : "story";
   } else if (cat.engine === "ratings") {
-    src = `/show/${enc(slug)}/ratings.svg`;
+    src = `/admin/studio/card.svg?format=ratings&slug=${enc(slug)}&fmt=${sq ? "square" : "story"}`;
+    aspect = sq ? "square" : "story";
   }
 
   const catHref = (id: string) => `/admin/studio?cat=${id}`;
   const groups: StudioCat["group"][] = ["Moments", "Composer", "Graphs"];
+  const FMT_DIMS: Record<string, string> = {
+    square: "1080 × 1080 · 1:1",
+    story: "1080 × 1920 · 9:16",
+    wide: "1920 × 1080 · 16:9",
+  };
+  const dims = cat.engine === "promo" ? FMT_DIMS[fmt] ?? FMT_DIMS.story : sq ? FMT_DIMS.square : FMT_DIMS.story;
+  // a composer/ratings format link that preserves the category's current inputs
+  const classicHref = (f: "square" | "story") => {
+    let u = `/admin/studio?cat=${cat.id}&fmt=${f}`;
+    if (cat.id === "liked" || cat.id === "status" || cat.engine === "ratings") u += `&slug=${enc(slug)}&kind=${kind}`;
+    if (cat.id === "top") u += `&genre=${enc(genre)}`;
+    if (cat.id === "vs") u += `&a=${enc(vsA)}&ka=${vsKa}&b=${enc(vsB)}&kb=${vsKb}`;
+    return u;
+  };
+  // a category has its own input tray (search / vs / genre / moment picker)?
+  const hasTray =
+    cat.engine === "ratings" ||
+    (cat.engine === "classic" && (cat.needs === "title" || cat.id === "vs" || cat.id === "top")) ||
+    (cat.engine === "promo" && moments.length > 0);
 
   return c.html(
-    <Layout title="Studio — admin" noindex scripts={["/js/studio.js"]}>
+    <Layout title="Studio — admin" noindex bare scripts={["/js/mp4-muxer.js", "/js/studio.js"]}>
       <div class="studio">
-        <aside class="studio-rail">
-          <a class="studio-back" href="/admin/feedback">← Feedback inbox</a>
-          <h1 class="studio-h1">Studio</h1>
-          {groups.map((g) => (
-            <div class="studio-group">
-              <h2 class="studio-group-h">{g}</h2>
-              {STUDIO_CATS.filter((x) => x.group === g).map((x) => (
-                <a class={`studio-cat${x.id === cat.id ? " on" : ""}`} href={catHref(x.id)}>
-                  {x.label}
-                </a>
-              ))}
-            </div>
-          ))}
-        </aside>
+        <header class="studio-top">
+          <div class="studio-brand">
+            <svg class="studio-mark" viewBox="0 0 36 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="1.25" y="1.25" width="33.5" height="21.5" rx="5.5" fill="none" stroke="#F2F5FA" stroke-width="2.5" />
+              <circle cx="26.5" cy="16.5" r="3.4" fill="#FFA94D" opacity="0.22" />
+              <circle cx="26.5" cy="16.5" r="2.2" fill="#FFA94D" />
+            </svg>
+            <span class="studio-lockup">
+              <span class="studio-kicker">TV Nightly</span>
+              <span class="studio-wordmark">
+                Studio<span class="dot" aria-hidden="true"></span>
+              </span>
+            </span>
+          </div>
+          <a class="studio-top-link" href="/admin/feedback">
+            Feedback inbox →
+          </a>
+        </header>
 
-        <main class="studio-main">
+        <div class="studio-body">
+          <aside class="studio-rail">
+            {groups.map((g) => (
+              <div class="studio-group">
+                <h2 class="studio-group-h">{g}</h2>
+                {STUDIO_CATS.filter((x) => x.group === g).map((x) => (
+                  <a class={`studio-cat${x.id === cat.id ? " on" : ""}`} href={catHref(x.id)}>
+                    {x.label}
+                  </a>
+                ))}
+              </div>
+            ))}
+          </aside>
+
+          <main class="studio-main">
           <header class="studio-bar">
             <div>
               <h2 class="studio-title">{cat.label}</h2>
               {cat.blurb ? <p class="muted studio-sub">{cat.blurb}</p> : null}
             </div>
-            {cat.engine === "promo" && active ? (
+            {cat.engine === "promo" ? (
+              active ? (
+                <div class="studio-fmts" role="group" aria-label="Format">
+                  {(["square", "story", "wide"] as const).map((f) => (
+                    <a
+                      class={`studio-fmt${f === fmt ? " on" : ""}`}
+                      href={`/admin/studio?cat=${cat.id}&pick=${enc(active!.id)}&fmt=${f}`}
+                    >
+                      {FMT_LABEL[f]}
+                    </a>
+                  ))}
+                </div>
+              ) : null
+            ) : (
               <div class="studio-fmts" role="group" aria-label="Format">
-                {(["square", "story", "wide"] as const).map((f) => (
-                  <a
-                    class={`studio-fmt${f === fmt ? " on" : ""}`}
-                    href={`/admin/studio?cat=${cat.id}&pick=${enc(active!.id)}&fmt=${f}`}
-                  >
+                {(["square", "story"] as const).map((f) => (
+                  <a class={`studio-fmt${(sq ? "square" : "story") === f ? " on" : ""}`} href={classicHref(f)}>
                     {FMT_LABEL[f]}
                   </a>
                 ))}
               </div>
-            ) : (
-              <span class="studio-fmt-static">9:16 vertical</span>
             )}
           </header>
 
-          {/* controls per category */}
-          {cat.engine === "classic" && (cat.id === "liked" || cat.id === "status") ? (
-            <div class="studio-search" data-format={cat.id}>
-              <input id="studio-q" type="search" placeholder="Search a show or movie…" autocomplete="off" />
-              <div id="studio-ta" class="studio-ta" hidden></div>
-            </div>
-          ) : null}
-          {cat.engine === "ratings" ? (
-            <div class="studio-search" data-format="ratings">
-              <input id="studio-q" type="search" placeholder="Search a show for its ratings graph…" autocomplete="off" />
-              <div id="studio-ta" class="studio-ta" hidden></div>
-            </div>
-          ) : null}
-          {cat.id === "vs" ? (
-            <div class="studio-vs">
-              <div class="studio-search">
-                <input id="studio-qa" type="search" placeholder="First title…" autocomplete="off" />
-                <div id="studio-taa" class="studio-ta" hidden></div>
-              </div>
-              <div class="studio-search">
-                <input id="studio-qb" type="search" placeholder="Second title…" autocomplete="off" />
-                <div id="studio-tab" class="studio-ta" hidden></div>
-              </div>
-              <button type="button" id="studio-gen" class="studio-dl-btn">Generate</button>
-            </div>
-          ) : null}
-          {cat.id === "top" ? (
-            <form method="get" action="/admin/studio" class="studio-genre">
-              <input type="hidden" name="cat" value="top" />
-              <select name="genre">
-                {STUDIO_GENRES.map((g) => (
-                  <option value={g} selected={g === genre}>{g === "Science-Fiction" ? "Sci-Fi" : g}</option>
-                ))}
-              </select>
-              <button type="submit">Preview</button>
-            </form>
-          ) : null}
-          {cat.engine === "promo" && moments.length ? (
-            <div class="studio-picker">
-              {moments.map((m) => (
-                <a
-                  class={`studio-pick${m.id === active?.id ? " on" : ""}`}
-                  href={`/admin/studio?cat=${cat.id}&pick=${enc(m.id)}&fmt=${fmt}`}
-                >
-                  {m.title}
-                </a>
-              ))}
+          {/* controls per category — the input tray */}
+          {hasTray ? (
+            <div class="studio-tray">
+              {cat.engine === "classic" && (cat.id === "liked" || cat.id === "status") ? (
+                <div class="studio-search" data-format={cat.id}>
+                  <input id="studio-q" type="search" placeholder="Search a show or movie…" autocomplete="off" />
+                  <div id="studio-ta" class="studio-ta" hidden></div>
+                </div>
+              ) : null}
+              {cat.engine === "ratings" ? (
+                <div class="studio-search" data-format="ratings">
+                  <input id="studio-q" type="search" placeholder="Search a show for its ratings graph…" autocomplete="off" />
+                  <div id="studio-ta" class="studio-ta" hidden></div>
+                </div>
+              ) : null}
+              {cat.id === "vs" ? (
+                <div class="studio-vs">
+                  <div class="studio-search">
+                    <input id="studio-qa" type="search" placeholder="First title…" autocomplete="off" />
+                    <div id="studio-taa" class="studio-ta" hidden></div>
+                  </div>
+                  <div class="studio-search">
+                    <input id="studio-qb" type="search" placeholder="Second title…" autocomplete="off" />
+                    <div id="studio-tab" class="studio-ta" hidden></div>
+                  </div>
+                  <button type="button" id="studio-gen" class="studio-dl-btn">Generate</button>
+                </div>
+              ) : null}
+              {cat.id === "top" ? (
+                <form method="get" action="/admin/studio" class="studio-genre">
+                  <input type="hidden" name="cat" value="top" />
+                  <input type="hidden" name="fmt" value={sq ? "square" : "story"} />
+                  <select name="genre">
+                    {STUDIO_GENRES.map((g) => (
+                      <option value={g} selected={g === genre}>{g === "Science-Fiction" ? "Sci-Fi" : g}</option>
+                    ))}
+                  </select>
+                  <button type="submit">Preview</button>
+                </form>
+              ) : null}
+              {cat.engine === "promo" && moments.length ? (
+                <div class="studio-picker">
+                  {moments.map((m) => (
+                    <a
+                      class={`studio-pick${m.id === active?.id ? " on" : ""}`}
+                      href={`/admin/studio?cat=${cat.id}&pick=${enc(m.id)}&fmt=${fmt}`}
+                    >
+                      {m.title}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -324,23 +477,45 @@ app.get("/admin/studio", async (c) => {
                   On tonight, which are always live.
                 </p>
               ) : (
-                <div class="studio-frame">
-                  <img id="studio-card" src={src} alt="Card preview" />
-                  {aspect === "story" ? <div class="studio-safe" aria-hidden="true" title="TikTok / Shorts safe zone"></div> : null}
-                </div>
+                <>
+                  <div class="studio-frame">
+                    <img id="studio-card" src={src} alt="Card preview" />
+                    {aspect === "story" ? <div class="studio-safe" aria-hidden="true" title="TikTok / Shorts safe zone"></div> : null}
+                  </div>
+                  <span class="studio-dims">{dims}</span>
+                </>
               )}
             </div>
 
             <div class="studio-side">
               {src ? (
-                <p class="studio-actions">
-                  {cat.engine === "promo" ? (
-                    <a id="studio-dl-link" class="studio-dl-btn" href={src} download={dlName}>↓ Download PNG</a>
-                  ) : (
-                    <button type="button" id="studio-dl" class="studio-dl-btn">↓ Download PNG</button>
-                  )}
-                  <a href={src} target="_blank" rel="noopener" class="studio-open">Open ↗</a>
-                </p>
+                <>
+                  <p class="studio-actions">
+                    {cat.engine === "promo" ? (
+                      <a id="studio-dl-link" class="studio-dl-btn" href={src} download={dlName}>↓ PNG</a>
+                    ) : (
+                      <button type="button" id="studio-dl" class="studio-dl-btn">↓ PNG</button>
+                    )}
+                    {aspect === "story" || aspect === "square" ? (
+                      <button
+                        type="button"
+                        id="studio-vid"
+                        class="studio-vid-btn"
+                        data-w="1080"
+                        data-h={aspect === "square" ? "1080" : "1920"}
+                      >
+                        🎬 MP4
+                      </button>
+                    ) : null}
+                    <a href={src} target="_blank" rel="noopener" class="studio-open">Open ↗</a>
+                  </p>
+                  {aspect === "story" || aspect === "square" ? (
+                    <p class="studio-vid-note muted">
+                      A cinematic ~7s clip{aspect === "square" ? " (1:1 for feed)" : " for Reels / TikTok / Shorts"} — rendered
+                      frame-by-frame to MP4.
+                    </p>
+                  ) : null}
+                </>
               ) : null}
               {caps ? (
                 <div class="studio-caps">
@@ -366,7 +541,8 @@ app.get("/admin/studio", async (c) => {
               ) : null}
             </div>
           </div>
-        </main>
+          </main>
+        </div>
       </div>
     </Layout>,
   );
@@ -386,10 +562,27 @@ app.get("/admin/studio/card.svg", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const format = c.req.query("format") ?? "liked";
+  const square = c.req.query("fmt") === "square"; // 1:1 feed vs 9:16 story (default)
   const key = c.env.TMDB_API_KEY;
   const fontCss = await archivoFontCss(c.env.ASSETS);
   c.header("Content-Type", "image/svg+xml; charset=utf-8");
   c.header("Cache-Control", "no-store");
+
+  // ---- episode-ratings heatmap (fixed 9:16, always fits) ----
+  if (format === "ratings") {
+    const slug = (c.req.query("slug") ?? "").trim();
+    const show = await getShow(c.env.DB, slug);
+    if (!show) return c.text(`No show with slug “${slug}”.`, 404);
+    const { results } = await c.env.DB.prepare(
+      "SELECT season, number, rating FROM episodes WHERE show_id = ? ORDER BY season, number",
+    )
+      .bind(show.id)
+      .all<RatingsEp>();
+    const bd = show.tmdb_id && key ? await tmdbBackdrop(key, show.tmdb_id) : null;
+    const backdropUri = bd ? await posterDataUri(bd.x2 ?? bd.x1) : null;
+    const posterUri = await posterDataUri((show.poster_url ?? show.image_url)?.replace("/w342/", "/w500/") ?? null);
+    return c.body(buildRatingsCard({ name: show.name, episodes: results, fontCss, backdropUri, posterUri, square }));
+  }
 
   // ---- ranked-list formats ----
   if (format === "gems") {
@@ -405,6 +598,7 @@ app.get("/admin/studio/card.svg", async (c) => {
         entries,
         footerLine: "Find your next obsession at",
         fontCss,
+        square,
       }),
     );
   }
@@ -423,6 +617,7 @@ app.get("/admin/studio/card.svg", async (c) => {
         entries,
         footerLine: "The full ranking at",
         fontCss,
+        square,
       }),
     );
   }
@@ -448,7 +643,7 @@ app.get("/admin/studio/card.svg", async (c) => {
       title = "The week's best";
     }
     const entries = await Promise.all(rows.map((s) => toCardEntry(s)));
-    return c.body(buildListCard({ eyebrow, title, entries, footerLine: "Tonight's full schedule at", fontCss }));
+    return c.body(buildListCard({ eyebrow, title, entries, footerLine: "Tonight's full schedule at", fontCss, square }));
   }
 
   if (format === "status") {
@@ -504,7 +699,7 @@ app.get("/admin/studio/card.svg", async (c) => {
     const genres: string[] = show.genres ? JSON.parse(show.genres) : [];
     const meta = [genres.slice(0, 2).join(" · "), show.premiered?.slice(0, 4)].filter(Boolean).join(" · ");
     return c.body(
-      buildStatusCard({ name: show.name, meta, verdict, verdictColor, subLine, backdropUri, posterUri, fontCss }),
+      buildStatusCard({ name: show.name, meta, verdict, verdictColor, subLine, backdropUri, posterUri, fontCss, square }),
     );
   }
 
@@ -544,7 +739,7 @@ app.get("/admin/studio/card.svg", async (c) => {
           ? `Dead heat — ${A.rating.toFixed(1)} each`
           : `${(A.rating > B.rating ? A : B).name} wins · ${A.rating.toFixed(1)} vs ${B.rating.toFixed(1)}`;
     }
-    return c.body(buildVsCard(A, B, verdict, fontCss));
+    return c.body(buildVsCard(A, B, verdict, fontCss, square));
   }
 
   // ---- default: "If you liked X" ----
@@ -579,7 +774,7 @@ app.get("/admin/studio/card.svg", async (c) => {
 
   c.header("Content-Type", "image/svg+xml; charset=utf-8");
   c.header("Cache-Control", "no-store");
-  return c.body(buildLikedCard(hero, pickEntries, fontCss, backdropUri));
+  return c.body(buildLikedCard(hero, pickEntries, fontCss, backdropUri, square));
 });
 
 // ---- Promo Studio: ready-to-post marketing cards for social ----

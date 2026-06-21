@@ -11,6 +11,7 @@ import type { SyncEnv } from "./sync";
 export type Bindings = SyncEnv & {
   ASSETS: Fetcher;
   CF_BEACON_TOKEN?: string;
+  GTM_ID?: string; // Google Tag Manager container (public); when set, Layout injects GTM
   AMAZON_ASSOC_TAG?: string;
   APPLE_AFFILIATE_TOKEN?: string;
   // where /feedback submissions are emailed; falls back to EMAIL_FROM. Unset = D1 only.

@@ -25,6 +25,13 @@ export const setBeaconToken = (token?: string) => {
   cfBeaconToken = token;
 };
 
+// Google Tag Manager container id (public). Set from env in the request middleware
+// (src/index.tsx); unset = GTM not injected (e.g. local dev).
+let gtmId: string | undefined;
+export const setGtmId = (id?: string) => {
+  gtmId = id;
+};
+
 // Off-screen decoy field for the subscribe forms. Real visitors never see or fill
 // it; bots auto-fill every input, so a non-empty value on POST /subscribe is a
 // reliable bot tell. Zero UI, zero friction — and the double opt-in confirmation
@@ -201,6 +208,12 @@ export const Layout: FC<
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
+      {/* Google Tag Manager — as high in <head> as possible */}
+      {gtmId
+        ? raw(
+            `<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${gtmId}');</script>`,
+          )
+        : null}
       {/* mark JS early so the poster-skeleton shimmer is scoped on before first paint */}
       {raw('<script>document.documentElement.classList.add("js")</script>')}
       <title>{props.title}</title>
@@ -262,6 +275,12 @@ export const Layout: FC<
         : null}
     </head>
     <body>
+      {/* Google Tag Manager (noscript) — immediately after <body> */}
+      {gtmId
+        ? raw(
+            `<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=${gtmId}" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>`,
+          )
+        : null}
       <div class="nprogress" aria-hidden="true"><span class="nprogress-bar"></span><span class="nprogress-spin"></span></div>
       {props.bare ? null : (
       <header class="site-header">

@@ -2,7 +2,7 @@
 // page family; shared pieces in src/lib/ and src/components/.
 import { Hono } from "hono";
 import { ErrorPage, NotFoundPage } from "./components/notfound";
-import { setBeaconToken } from "./components/Layout";
+import { setBeaconToken, setGtmId } from "./components/Layout";
 import { setAffiliate } from "./lib/affiliate";
 import { providerPatrol, runSync, sendDailyDigest, notifyOwnerSignups } from "./sync";
 import { submitIndexNow } from "./lib/indexnow";
@@ -48,6 +48,7 @@ const app = new Hono<{ Bindings: Bindings }>();
 // This also threads the public Web Analytics beacon token into the Layout module.
 app.use("*", async (c, next) => {
   setBeaconToken(c.env.CF_BEACON_TOKEN);
+  setGtmId(c.env.GTM_ID);
   setAffiliate(c.env);
   c.header("X-Content-Type-Options", "nosniff");
   c.header("X-Frame-Options", "SAMEORIGIN");

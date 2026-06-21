@@ -304,8 +304,10 @@ app.get("/admin/studio", async (c) => {
           emoji: "🍿",
           title: `If you liked ${name}`,
           hook: "here's what to watch next",
-          sub: "Matched by taste, genre & era — no account needed.",
-          link: `${base}/recommend`,
+          sub: "The closest matches, ranked — with ratings & where to stream.",
+          // land on THIS title's similar page (not the generic recommender) so
+          // the click goes straight to "more like X"
+          link: `${base}/${kind === "movie" ? "movie" : "show"}/${slug}/similar`,
           tags: ["IfYouLiked", name, kind === "movie" ? "Movies" : "TVShow"],
         });
     } else if (cat.id === "status") {

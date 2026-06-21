@@ -356,6 +356,11 @@ main:has(.studio) {
   width: auto;
   height: 500px;
 }
+/* the Pinterest pin is a 2:3 PNG — size it by height like the portrait formats */
+.is-pin #studio-card {
+  width: auto;
+  height: 640px;
+}
 .is-wide #studio-card {
   width: 100%;
   height: auto;

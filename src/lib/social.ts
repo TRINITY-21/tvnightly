@@ -892,6 +892,148 @@ export function buildOgCard(d: OgCardData): string {
   return p.join("");
 }
 
+// ============================================================================
+// Pinterest pin — 1000×1500 (2:3) PORTRAIT PNG for a show's "Shows like X" page.
+// Pinterest is a visual search engine that ranks tall 2:3 pins, and "shows like
+// {X}" is one of its most-saved query shapes — so this is the branded, evergreen
+// artifact a pinner saves. Same resvg-safe dialect as the OG cards above (txtR /
+// static Archivo families, no @font-face or variation axes) so it rasterizes
+// server-side via src/lib/render.ts at width=1000.
+// ============================================================================
+
+const PIN_W = 1000;
+const PIN_H = 1500;
+const PIN_M = 64;
+const PIN_CW = PIN_W - PIN_M * 2; // usable content width (872)
+
+export interface SimilarPinEntry {
+  name: string;
+  posterUri: string | null; // inlined data-URI; null falls back to an initial tile
+  rating: number | null;
+}
+export interface SimilarPinData {
+  sourceTitle: string; // the show the pin is "more like"
+  totalCount: number; // how many matches the page ranks (drives the footer count)
+  backdropUri: string | null; // ambient hero art (source show backdrop)
+  featured: SimilarPinEntry[]; // up to 3, shown as posters in the hero row
+  rest: { name: string; rating: number | null }[]; // positions 4..8, text rows
+}
+
+// a gold "★ 9.3" pill seated in a poster's bottom-left corner
+const pinRatingChip = (px: number, py: number, ph: number, rating: number): string => {
+  const w = 78;
+  const h = 32;
+  const x = px + 10;
+  const y = py + ph - h - 10;
+  return (
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${h / 2}" fill="rgba(0,0,0,0.8)"/>` +
+    ratingMark(x + w / 2, y + h * 0.68, 20, rating, GOLD, "middle")
+  );
+};
+
+// the amber rank chip ("01"/"02") on a poster's top-left — reinforces "ranked"
+const pinRankChip = (px: number, py: number, rank: number): string => {
+  const w = 44;
+  const h = 34;
+  const x = px + 10;
+  const y = py + 10;
+  return (
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${AMBER}"/>` +
+    txtR(x + w / 2, y + 24, String(rank).padStart(2, "0"), { size: 20, w: "black", fill: PLATE, anchor: "middle" })
+  );
+};
+
+/** The "Shows like {X}" Pinterest pin: source backdrop + brand lockup up top, a
+ *  three-poster hero row of the closest matches, then a ranked text list of the
+ *  rest, capped by the wordmark + match count. */
+export function buildSimilarPin(d: SimilarPinData): string {
+  const p: string[] = [];
+  p.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${PIN_W}" height="${PIN_H}" viewBox="0 0 ${PIN_W} ${PIN_H}" font-family="Archivo, ${SYS}">`,
+  );
+  p.push(
+    `<defs>` +
+      `<linearGradient id="pinbg" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#17171c"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+      `<linearGradient id="pinscrim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.15"/><stop offset="0.5" stop-color="${PLATE}" stop-opacity="0.22"/><stop offset="0.84" stop-color="${PLATE}" stop-opacity="0.86"/><stop offset="1" stop-color="${PLATE}" stop-opacity="1"/></linearGradient>` +
+      `<filter id="pshadow" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="10" stdDeviation="22" flood-color="#000" flood-opacity="0.62"/></filter>` +
+      `<filter id="ksh" x="-20%" y="-60%" width="140%" height="220%"><feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="#000" flood-opacity="0.6"/></filter>` +
+      `</defs>`,
+  );
+  p.push(`<rect width="${PIN_W}" height="${PIN_H}" fill="url(#pinbg)"/>`);
+
+  // ---- hero band: ambient source backdrop scrimmed down into the plate ----
+  const HERO = 560;
+  if (d.backdropUri) {
+    p.push(
+      `<image href="${d.backdropUri}" x="0" y="0" width="${PIN_W}" height="${HERO}" preserveAspectRatio="xMidYMid slice" opacity="0.9"/>`,
+    );
+    p.push(`<rect width="${PIN_W}" height="${HERO}" fill="${PLATE}" opacity="0.32"/>`);
+  }
+  p.push(`<rect width="${PIN_W}" height="${HERO}" fill="url(#pinscrim)"/>`);
+
+  // brand lockup + the editorial kicker
+  p.push(ogBrand(PIN_M, 96));
+  p.push(kickerBlock("More like this", PIN_M, 292, 34, 26));
+
+  // ---- title: "SHOWS LIKE" eyebrow + the source name, sized to fit ----
+  const CHARW = 0.62; // Archivo Black runs wide (~0.62–0.65 em/char) — size to fit
+  const cap = 72;
+  // wrap loosely (≈22 ch/line) so the font shrinks to fit the whole title rather
+  // than truncating a long line; nSize then sizes to the longest resulting line
+  const nameLines = wrap(d.sourceTitle.toUpperCase(), 22, 2);
+  const longest = Math.max(1, ...nameLines.map((l) => l.length));
+  const nSize = Math.min(cap, Math.floor(PIN_CW / (longest * CHARW)));
+  const eyeSize = Math.max(30, Math.round(nSize * 0.4));
+  p.push(txtR(PIN_M, 360, "SHOWS LIKE", { size: eyeSize, w: "black", fill: AMBER, ls: 2 }));
+  let ty = 360 + 24 + nSize;
+  for (const ln of nameLines) {
+    p.push(txtR(PIN_M, ty, ln, { size: nSize, w: "black", fill: TEXT }));
+    ty += Math.round(nSize * 1.02);
+  }
+
+  // ---- featured poster row (up to 3 closest matches) ----
+  const cols = Math.min(3, d.featured.length) || 1;
+  const gap = 28;
+  const pw = Math.floor((PIN_CW - gap * (cols - 1)) / cols);
+  const ph = Math.round(pw * 1.5);
+  const rowY = 600;
+  d.featured.slice(0, cols).forEach((e, i) => {
+    const px = PIN_M + i * (pw + gap);
+    p.push(posterHero(e.posterUri, e.name, px, rowY, pw, ph, `pin-p${i}`));
+    p.push(pinRankChip(px, rowY, i + 1));
+    if (e.rating != null) p.push(pinRatingChip(px, rowY, ph, e.rating));
+    p.push(
+      txtR(px + pw / 2, rowY + ph + 36, trunc(e.name, 16), { size: 24, w: "bold", fill: TEXT, anchor: "middle" }),
+    );
+  });
+
+  // ---- ranked text list of the remaining matches ----
+  let ly = rowY + ph + 96;
+  d.rest.slice(0, 5).forEach((e, i) => {
+    const rank = cols + i + 1;
+    p.push(txtR(PIN_M, ly, String(rank).padStart(2, "0"), { size: 30, w: "black", fill: AMBER }));
+    p.push(txtR(PIN_M + 66, ly, trunc(e.name, 26), { size: 30, w: "semi", fill: TEXT }));
+    if (e.rating != null) p.push(ratingMark(PIN_W - PIN_M, ly, 24, e.rating, GOLD, "end"));
+    p.push(`<line x1="${PIN_M}" y1="${ly + 20}" x2="${PIN_W - PIN_M}" y2="${ly + 20}" stroke="${LINE}"/>`);
+    ly += 58;
+  });
+
+  // ---- footer: rule + wordmark + match count ----
+  p.push(`<line x1="${PIN_M}" y1="${PIN_H - 92}" x2="${PIN_W - PIN_M}" y2="${PIN_H - 92}" stroke="${LINE}"/>`);
+  p.push(txtR(PIN_M, PIN_H - 48, "tvnightly.com", { size: 30, w: "black", fill: AMBER, ls: 0.5 }));
+  if (d.totalCount > cols)
+    p.push(
+      txtR(PIN_W - PIN_M, PIN_H - 48, `All ${d.totalCount} matches ranked`, {
+        size: 22,
+        w: "semi",
+        fill: MUTED,
+        anchor: "end",
+      }),
+    );
+  p.push(`</svg>`);
+  return p.join("");
+}
+
 /** The default share card used as a sitewide og:image fallback for pages with
  *  no subject image of their own (home, listings, hubs). Brand lockup + the
  *  house tagline on the plate gradient — no poster. */

@@ -7,6 +7,7 @@ import {
   buildListCard,
   buildPromoCard,
   buildRatingsCard,
+  buildSimilarPin,
   buildStatusCard,
   buildVsCard,
   toCardEntry,
@@ -214,8 +215,8 @@ app.get("/admin/subscribers", async (c) => {
 type StudioCat = {
   id: string;
   label: string;
-  group: "Moments" | "Composer" | "Graphs";
-  engine: "promo" | "classic" | "ratings";
+  group: "Moments" | "Composer" | "Graphs" | "Pinterest";
+  engine: "promo" | "classic" | "ratings" | "pin";
   themes?: PromoTheme[];
   needs?: "title" | "genre" | "vs";
   blurb?: string;
@@ -231,6 +232,7 @@ const STUDIO_CATS: StudioCat[] = [
   { id: "gems", label: "Hidden gems", group: "Composer", engine: "classic", blurb: "Highly rated, under-watched — auto-picked." },
   { id: "status", label: "Renewed?", group: "Composer", engine: "classic", needs: "title" },
   { id: "ratings", label: "Episode ratings graph", group: "Graphs", engine: "ratings", needs: "title" },
+  { id: "pin", label: "Shows like X", group: "Pinterest", engine: "pin", needs: "title", blurb: "A 2:3 pin of a show's closest matches — download & post to Pinterest." },
 ];
 const FMT_LABEL: Record<string, string> = { square: "1:1 Feed", story: "9:16 Story", wide: "16:9 Wide" };
 
@@ -346,6 +348,17 @@ app.get("/admin/studio", async (c) => {
         link: `${base}/genre/${genre.toLowerCase()}`,
         tags: ["Top5", `${g}Shows`, ...(top1 ? [top1.name] : []), "TVShow"],
       });
+    } else if (cat.id === "pin") {
+      const name = await nameOf(slug, "tv");
+      if (name)
+        caps = buildCaptions({
+          emoji: "📌",
+          title: `Shows like ${name}`,
+          hook: "the closest matches, ranked",
+          sub: "Ratings + where to stream for every pick — no account needed.",
+          link: `${base}/show/${slug}/similar`,
+          tags: ["ShowsLike", name, "WhatToWatch", "TVShows"],
+        });
     } else if (cat.id === "gems") {
       const gem1 = await c.env.DB.prepare(
         "SELECT name FROM shows WHERE rating >= 8.0 AND weight BETWEEN 28 AND 60 AND genres IS NOT NULL ORDER BY rating DESC, weight ASC LIMIT 1",
@@ -365,12 +378,16 @@ app.get("/admin/studio", async (c) => {
   const sq = fmt === "square";
   // the preview source + aspect class
   let src = "";
-  let aspect: "square" | "story" | "wide" = "story";
+  let aspect: "square" | "story" | "wide" | "pin" = "story";
   let dlName = `tvnightly-${cat.id}.png`;
   if (cat.engine === "promo" && active) {
     src = promoCardUrl(active, fmt);
     aspect = fmt as "square" | "story" | "wide";
     dlName = `tvnightly-${active.id}-${fmt}.png`;
+  } else if (cat.engine === "pin") {
+    src = `/admin/studio/pin.png?slug=${enc(slug)}`;
+    aspect = "pin";
+    dlName = `tvnightly-shows-like-${slug}.png`;
   } else if (cat.engine === "classic") {
     src = `/admin/studio/card.svg?format=${cat.id}&fmt=${sq ? "square" : "story"}`;
     if (cat.id === "liked" || cat.id === "status") src += `&slug=${enc(slug)}&kind=${kind}`;
@@ -383,13 +400,20 @@ app.get("/admin/studio", async (c) => {
   }
 
   const catHref = (id: string) => `/admin/studio?cat=${id}`;
-  const groups: StudioCat["group"][] = ["Moments", "Composer", "Graphs"];
+  const groups: StudioCat["group"][] = ["Moments", "Composer", "Graphs", "Pinterest"];
   const FMT_DIMS: Record<string, string> = {
     square: "1080 × 1080 · 1:1",
     story: "1080 × 1920 · 9:16",
     wide: "1920 × 1080 · 16:9",
   };
-  const dims = cat.engine === "promo" ? FMT_DIMS[fmt] ?? FMT_DIMS.story : sq ? FMT_DIMS.square : FMT_DIMS.story;
+  const dims =
+    cat.engine === "pin"
+      ? "1000 × 1500 · 2:3"
+      : cat.engine === "promo"
+        ? FMT_DIMS[fmt] ?? FMT_DIMS.story
+        : sq
+          ? FMT_DIMS.square
+          : FMT_DIMS.story;
   // a composer/ratings format link that preserves the category's current inputs
   const classicHref = (f: "square" | "story") => {
     let u = `/admin/studio?cat=${cat.id}&fmt=${f}`;
@@ -401,6 +425,7 @@ app.get("/admin/studio", async (c) => {
   // a category has its own input tray (search / vs / genre / moment picker)?
   const hasTray =
     cat.engine === "ratings" ||
+    cat.engine === "pin" ||
     (cat.engine === "classic" && (cat.needs === "title" || cat.id === "vs" || cat.id === "top")) ||
     (cat.engine === "promo" && moments.length > 0);
 
@@ -446,7 +471,7 @@ app.get("/admin/studio", async (c) => {
               <h2 class="studio-title">{cat.label}</h2>
               {cat.blurb ? <p class="muted studio-sub">{cat.blurb}</p> : null}
             </div>
-            {cat.engine === "promo" ? (
+            {cat.engine === "pin" ? null : cat.engine === "promo" ? (
               active ? (
                 <div class="studio-fmts" role="group" aria-label="Format">
                   {(["square", "story", "wide"] as const).map((f) => (
@@ -482,6 +507,12 @@ app.get("/admin/studio", async (c) => {
               {cat.engine === "ratings" ? (
                 <div class="studio-search" data-format="ratings">
                   <input id="studio-q" type="search" placeholder="Search a show for its ratings graph…" autocomplete="off" />
+                  <div id="studio-ta" class="studio-ta" hidden></div>
+                </div>
+              ) : null}
+              {cat.engine === "pin" ? (
+                <div class="studio-search" data-format="pin">
+                  <input id="studio-q" type="search" placeholder="Search a show for its Pinterest pin…" autocomplete="off" />
                   <div id="studio-ta" class="studio-ta" hidden></div>
                 </div>
               ) : null}
@@ -547,7 +578,7 @@ app.get("/admin/studio", async (c) => {
               {src ? (
                 <>
                   <p class="studio-actions">
-                    {cat.engine === "promo" ? (
+                    {cat.engine === "promo" || cat.engine === "pin" ? (
                       <a id="studio-dl-link" class="studio-dl-btn" href={src} download={dlName}>↓ PNG</a>
                     ) : (
                       <button type="button" id="studio-dl" class="studio-dl-btn">↓ PNG</button>
@@ -874,6 +905,39 @@ app.get("/admin/studio/promo.png", async (c) => {
   );
   const fonts = await loadOgFonts(c.env.ASSETS);
   const png = await svgToPng(svg, fonts, W);
+  return new Response(png, {
+    headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store" },
+  });
+});
+
+// 1000×1500 (2:3) Pinterest pin for a show's "Shows like X" page — the tall,
+// branded asset to download and post to TV Nightly's Pinterest. Admin-only;
+// posters/backdrop inlined as data-URIs so the saved PNG is standalone.
+app.get("/admin/studio/pin.png", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+  const slug = (c.req.query("slug") ?? "").trim();
+  const show = await getShow(c.env.DB, slug);
+  if (!show) return c.text(`No show with slug “${slug}”.`, 404);
+  const key = c.env.TMDB_API_KEY;
+  // same depth as the public /similar page so the footer count is truthful
+  const similar = await similarShows(c.env.DB, show, 18);
+  if (!similar.length) return c.text(`No similar shows for “${show.name}” yet.`, 404);
+  const featured = similar.slice(0, 3);
+  const bd = show.tmdb_id && key ? await tmdbBackdrop(key, show.tmdb_id) : null;
+  const [backdropUri, ...posterUris] = await Promise.all([
+    posterDataUri(bd?.x1 ?? show.poster_url ?? show.image_url ?? null),
+    ...featured.map((s) => posterDataUri((s.poster_url ?? s.image_url)?.replace("/w342/", "/w500/") ?? null)),
+  ]);
+  const svg = buildSimilarPin({
+    sourceTitle: show.name,
+    totalCount: similar.length,
+    backdropUri,
+    featured: featured.map((s, i) => ({ name: s.name, posterUri: posterUris[i], rating: s.rating })),
+    rest: similar.slice(3, 8).map((s) => ({ name: s.name, rating: s.rating })),
+  });
+  const fonts = await loadOgFonts(c.env.ASSETS);
+  const png = await svgToPng(svg, fonts, 1000);
   return new Response(png, {
     headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store" },
   });

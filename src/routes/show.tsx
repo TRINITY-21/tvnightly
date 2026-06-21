@@ -982,6 +982,7 @@ app.get("/show/:slug/similar", async (c) => {
       canonical={`${site}${base}`}
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={ld}
+      scripts={["/js/share.js"]}
     >
       <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
         <header class="detail-hero frame-hero">
@@ -995,7 +996,10 @@ app.get("/show/:slug/similar", async (c) => {
                 <a href={`/show/${show.slug}`}>{show.name}</a>
                 <span class="sep">·</span> More like this
               </p>
-              <h1>Shows like {show.name}</h1>
+              <div class="detail-title-row">
+                <h1>Shows like {show.name}</h1>
+                <ShareBar url={`${site}${base}`} title={`Shows like ${show.name}`} />
+              </div>
               <p class="summary">
                 The {similar.length} closest matches on shared genres, ranked by match strength
                 and popularity — each with its evidence: shared cast, networks, and where it's

@@ -8,6 +8,7 @@ export interface SyncEnv extends EmailEnv {
   SITE_ORIGIN?: string;
   SECRET?: string;
   TMDB_API_KEY?: string; // provider patrol (set via wrangler secret / .dev.vars)
+  FEEDBACK_TO?: string; // owner inbox for the daily new-subscriber summary
 }
 
 // Free Workers allow 50 subrequests per invocation, and D1 calls count as
@@ -728,6 +729,56 @@ export async function sendDailyDigest(env: SyncEnv): Promise<{ queued: number }>
   }
   await db.batch(stmts);
   return { queued: stmts.length };
+}
+
+/**
+ * Daily owner heads-up: how many people joined the email list in the last 24h
+ * (confirmed + still-pending) and the running total, sent straight to the owner
+ * inbox (FEEDBACK_TO / EMAIL_FROM). No-ops when nobody joined.
+ */
+export async function notifyOwnerSignups(env: SyncEnv): Promise<{ sent: boolean }> {
+  const to = env.FEEDBACK_TO ?? env.EMAIL_FROM;
+  if (!to) return { sent: false };
+  const db = env.DB;
+  const day = await db
+    .prepare(
+      `SELECT
+         COALESCE(SUM(CASE WHEN confirmed = 1 THEN 1 ELSE 0 END), 0) AS confirmed,
+         COALESCE(SUM(CASE WHEN confirmed = 0 THEN 1 ELSE 0 END), 0) AS pending,
+         COALESCE(SUM(CASE WHEN confirmed = 1 AND show_id IS NULL AND kind = 'daily' THEN 1 ELSE 0 END), 0) AS daily,
+         COALESCE(SUM(CASE WHEN confirmed = 1 AND show_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS pershow
+       FROM subscriptions WHERE created_at > unixepoch() - 86400`,
+    )
+    .first<{ confirmed: number; pending: number; daily: number; pershow: number }>();
+  const newConfirmed = day?.confirmed ?? 0;
+  const newPending = day?.pending ?? 0;
+  if (newConfirmed === 0 && newPending === 0) return { sent: false };
+
+  const totals = await db
+    .prepare("SELECT COUNT(*) AS total, COALESCE(SUM(confirmed), 0) AS confirmed FROM subscriptions")
+    .first<{ total: number; confirmed: number }>();
+  const origin = env.SITE_ORIGIN ?? "https://tvnightly.com";
+  const stat = (n: number, label: string) =>
+    `<p style="margin:0 0 6px;color:${EMAIL.soft}"><strong style="color:${EMAIL.text}">${n}</strong> ${label}</p>`;
+  const html = emailShell({
+    title: "New subscribers",
+    heading: `${newConfirmed} new subscriber${newConfirmed === 1 ? "" : "s"} today`,
+    preheader: `${newConfirmed} confirmed · ${newPending} pending — TV Nightly`,
+    contentHtml:
+      `<p style="margin:0 0 12px;color:${EMAIL.muted};font-size:12px;letter-spacing:.03em">${new Date().toISOString().slice(0, 10)} · last 24h</p>` +
+      stat(newConfirmed, "confirmed (clicked the link)") +
+      (newPending ? stat(newPending, "still pending (entered, not yet confirmed)") : "") +
+      (newConfirmed
+        ? `<p style="margin:14px 0 0;color:${EMAIL.muted};font-size:13px">of confirmed today: ${day?.daily ?? 0} daily list · ${day?.pershow ?? 0} per-show alerts</p>`
+        : "") +
+      `<p style="margin:18px 0 0;color:${EMAIL.soft}">Running total: <strong style="color:${EMAIL.text}">${totals?.confirmed ?? 0}</strong> confirmed (${totals?.total ?? 0} incl. pending).</p>` +
+      `<div style="margin:22px 0 0">${emailButton("See all subscribers", `${origin}/admin/subscribers`)}</div>`,
+    footerNote: "Daily owner summary from TV Nightly.",
+  });
+  const [ok] = await sendEmails(env, [
+    { to, subject: `📈 ${newConfirmed} new subscriber${newConfirmed === 1 ? "" : "s"} today — TV Nightly`, html },
+  ]);
+  return { sent: ok };
 }
 
 /**

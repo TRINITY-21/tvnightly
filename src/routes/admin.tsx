@@ -119,6 +119,7 @@ app.get("/admin/feedback", async (c) => {
   return c.html(
     <Layout title="Feedback — admin" noindex>
       <p class="adm-nav">
+        <a href="/admin/subscribers">Subscribers</a> ·{" "}
         <a href="/admin/studio">Social studio <span class="chev-icon chev-icon-sm" aria-hidden="true"></span></a>
       </p>
       <h1>
@@ -140,6 +141,61 @@ app.get("/admin/feedback", async (c) => {
                 {r.page ? <span class="adm-page">{pagePath(r.page)}</span> : null}
               </div>
               <div class="adm-msg">{r.message}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Layout>,
+  );
+});
+
+// ---- subscribers (read-only) ----
+app.get("/admin/subscribers", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  const totals = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS total,
+            COALESCE(SUM(confirmed), 0) AS confirmed,
+            COALESCE(SUM(CASE WHEN confirmed = 1 AND show_id IS NULL AND kind = 'daily' THEN 1 ELSE 0 END), 0) AS daily,
+            COALESCE(SUM(CASE WHEN confirmed = 1 AND show_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS pershow,
+            COALESCE(SUM(CASE WHEN created_at > unixepoch() - 86400 THEN 1 ELSE 0 END), 0) AS today
+     FROM subscriptions`,
+  ).first<{ total: number; confirmed: number; daily: number; pershow: number; today: number }>();
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT su.email, su.kind, su.confirmed, su.created_at, s.name AS show_name
+     FROM subscriptions su LEFT JOIN shows s ON s.id = su.show_id
+     ORDER BY su.created_at DESC LIMIT 300`,
+  ).all<{ email: string; kind: string; confirmed: number; created_at: number; show_name: string | null }>();
+
+  const pending = (totals?.total ?? 0) - (totals?.confirmed ?? 0);
+
+  return c.html(
+    <Layout title="Subscribers — admin" noindex>
+      <p class="adm-nav">
+        <a href="/admin/feedback">Feedback</a> ·{" "}
+        <a href="/admin/studio">Social studio <span class="chev-icon chev-icon-sm" aria-hidden="true"></span></a>
+      </p>
+      <h1>
+        Subscribers <span class="adm-count">{totals?.confirmed ?? 0}</span>
+      </h1>
+      <p class="muted">
+        {totals?.confirmed ?? 0} confirmed · {pending} pending · {totals?.daily ?? 0} daily list ·{" "}
+        {totals?.pershow ?? 0} per-show · {totals?.today ?? 0} joined in the last 24h
+      </p>
+      {results.length === 0 ? (
+        <p class="muted">No subscribers yet.</p>
+      ) : (
+        <ul class="adm-list">
+          {results.map((r) => (
+            <li class="adm-item">
+              <div class="adm-meta">
+                <span>{fmtTs(r.created_at)}</span>
+                <a href={`mailto:${r.email}`}>{r.email}</a>
+                <span class="adm-page">{r.show_name ? `${r.kind} · ${r.show_name}` : r.kind}</span>
+                <span class={r.confirmed ? undefined : "muted"}>{r.confirmed ? "✓ confirmed" : "pending"}</span>
+              </div>
             </li>
           ))}
         </ul>

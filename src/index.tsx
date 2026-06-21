@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { ErrorPage, NotFoundPage } from "./components/notfound";
 import { setBeaconToken } from "./components/Layout";
 import { setAffiliate } from "./lib/affiliate";
-import { providerPatrol, runSync, sendDailyDigest } from "./sync";
+import { providerPatrol, runSync, sendDailyDigest, notifyOwnerSignups } from "./sync";
 import { submitIndexNow } from "./lib/indexnow";
 import type { Bindings } from "./types";
 
@@ -127,7 +127,7 @@ export default {
       event.cron === "30 * * * *"
         ? providerPatrol(env)
         : event.cron === "0 22 * * *"
-          ? sendDailyDigest(env)
+          ? Promise.all([sendDailyDigest(env), notifyOwnerSignups(env)])
           : runSync(env).then(() => submitIndexNow(env)),
     );
   },

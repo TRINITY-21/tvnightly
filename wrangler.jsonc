@@ -42,8 +42,8 @@
     // Public Cloudflare Web Analytics beacon token (not a secret); renders the
     // beacon (src/components/Layout.tsx) only when set.
     "CF_BEACON_TOKEN": "d2cc01d40f2e459eb7979de5211d1c38",
-    // Google Tag Manager container (public); injects GTM site-wide when set.
-    "GTM_ID": "GTM-PHNBQ2GX"
+    // Google Analytics 4 measurement id (public, gtag.js); injects GA site-wide when set.
+    "GA_ID": "G-HGBSW22LYB"
     // TURNSTILE_SITE_KEY — paste the Turnstile widget sitekey (public) after
     // creating the widget; /feedback renders the anti-spam widget only when set.
   },

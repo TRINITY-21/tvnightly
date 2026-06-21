@@ -25,11 +25,11 @@ export const setBeaconToken = (token?: string) => {
   cfBeaconToken = token;
 };
 
-// Google Tag Manager container id (public). Set from env in the request middleware
-// (src/index.tsx); unset = GTM not injected (e.g. local dev).
-let gtmId: string | undefined;
-export const setGtmId = (id?: string) => {
-  gtmId = id;
+// Google Analytics 4 measurement id (public, gtag.js). Set from env in the request
+// middleware (src/index.tsx); unset = GA not injected (e.g. local dev).
+let gaId: string | undefined;
+export const setGaId = (id?: string) => {
+  gaId = id;
 };
 
 // Off-screen decoy field for the subscribe forms. Real visitors never see or fill
@@ -208,10 +208,11 @@ export const Layout: FC<
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      {/* Google Tag Manager — as high in <head> as possible */}
-      {gtmId
+      {/* Google Analytics 4 (gtag.js) — as high in <head> as possible */}
+      {gaId
         ? raw(
-            `<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${gtmId}');</script>`,
+            `<script async src="https://www.googletagmanager.com/gtag/js?id=${gaId}"></script>` +
+              `<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${gaId}');</script>`,
           )
         : null}
       {/* mark JS early so the poster-skeleton shimmer is scoped on before first paint */}
@@ -275,12 +276,6 @@ export const Layout: FC<
         : null}
     </head>
     <body>
-      {/* Google Tag Manager (noscript) — immediately after <body> */}
-      {gtmId
-        ? raw(
-            `<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=${gtmId}" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>`,
-          )
-        : null}
       <div class="nprogress" aria-hidden="true"><span class="nprogress-bar"></span><span class="nprogress-spin"></span></div>
       {props.bare ? null : (
       <header class="site-header">

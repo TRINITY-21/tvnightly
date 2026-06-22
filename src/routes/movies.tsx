@@ -199,6 +199,7 @@ app.get("/movies", async (c) => {
                       <a href={`/movie/${m.slug}`}>{m.title}</a>
                       {m.year ? <span class="muted"> ({m.year})</span> : null}
                     </span>
+                    {m.overview ? <span class="wo-synopsis">{m.overview}</span> : null}
                     {provLinks.length ? (
                       <span class="wo-provs">
                         {provLinks.map((l, j) => (
@@ -393,6 +394,7 @@ app.get("/movies/best", async (c) => {
                   <a href={`/movie/${m.slug}`}>{m.title}</a>{" "}
                   {m.year ? <span class="muted">({m.year})</span> : null}
                 </span>
+                {m.overview ? <span class="wo-synopsis">{m.overview}</span> : null}
                 <span class="wo-provs">
                   {(provs.length ? provs.slice(0, 3) : gs.slice(0, 2)).join(" · ")}
                   {provs.length || gs.length ? <span class="wo-provs-sep"> · </span> : null}

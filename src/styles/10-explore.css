@@ -316,6 +316,20 @@
 .wo-list li:last-child.wo-row,
 .wo-list li:last-child .wo-row { border-bottom: 0; }
 .wo-row:hover { background: var(--surface); }
+/* one-line-ish synopsis under a chart title — fills the "quiet" gap between the
+   name and the rating. Body voice (sentence case), distinct from the uppercase
+   provs meta below it, and clamped to two lines so long rows stay scannable. */
+.wo-synopsis {
+  margin: 0.15rem 0 0.05rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.36;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .wo-num {
   color: var(--muted);
   font-family: var(--display);

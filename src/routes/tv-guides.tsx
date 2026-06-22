@@ -12,7 +12,7 @@ import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, ShowCard } from "../components/cards";
 import { FilterSelect } from "../components/forms";
-import { headshot, heroBg, hiRes, posterSrc, slugifyName } from "../lib/format";
+import { headshot, heroBg, hiRes, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { genreDirectory } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
@@ -79,6 +79,7 @@ const ShowRankList = ({
       const links = rowLinks(s, region);
       const p = posterSrc(s);
       const yr = showYears(s);
+      const synopsis = s.blurb || stripHtml(s.summary);
       return (
         <li class="wo-row">
           <span class="wo-num" aria-hidden="true">
@@ -103,6 +104,7 @@ const ShowRankList = ({
               <a href={`/show/${s.slug}`}>{s.name}</a>
               {yr ? <span class="muted"> ({yr})</span> : null}
             </span>
+            {synopsis ? <span class="wo-synopsis">{synopsis}</span> : null}
             <span class="wo-provs">
               {s.character ? (
                 <>

@@ -3,7 +3,7 @@ import { IconStar } from "../components/icons";
 import type { FC } from "hono/jsx";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
-import { heroBg, hiRes, posterSrc, slugifyName } from "../lib/format";
+import { heroBg, hiRes, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { FRANCHISE_BY_SLUG } from "../lib/franchises";
 import { networkLogo, networkLogoForBrand, providerBrand, visitorRegion } from "../lib/providers";
 import { genreDirectory, networkDirectory } from "../lib/queries";
@@ -889,6 +889,7 @@ app.get("/top/tv", async (c) => {
           {results.map((s, i) => {
             const art = posterSrc(s);
             const provLinks = showProvLinks(s);
+            const synopsis = s.blurb || stripHtml(s.summary);
             return (
               <li class="wo-row">
                 <span class="wo-num" aria-hidden="true">
@@ -913,6 +914,7 @@ app.get("/top/tv", async (c) => {
                     <a href={`/show/${s.slug}`}>{s.name}</a>
                     {showYear(s) ? <span class="muted"> ({showYear(s)})</span> : null}
                   </span>
+                  {synopsis ? <span class="wo-synopsis">{synopsis}</span> : null}
                   <span class="wo-provs">
                     {provLinks.map((l, j) => (
                       <>

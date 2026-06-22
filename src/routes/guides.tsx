@@ -105,6 +105,7 @@ const RankList = ({
               <a href={`/movie/${m.slug}`}>{m.title}</a>
               {m.year ? <span class="muted"> ({m.year})</span> : null}
             </span>
+            {m.overview ? <span class="wo-synopsis">{m.overview}</span> : null}
             <span class="wo-provs">
               {m.character ? (
                 <>

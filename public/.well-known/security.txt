@@ -1,0 +1,6 @@
+# TV Nightly — security contact (RFC 9116, https://securitytxt.org).
+# Found a vulnerability? Email the address below; responsible disclosure welcome.
+Contact: mailto:contact@tvnightly.com
+Expires: 2027-06-22T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://tvnightly.com/.well-known/security.txt

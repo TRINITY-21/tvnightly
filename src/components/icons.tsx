@@ -325,6 +325,14 @@ export const IconTikTok: FC<{ size?: number }> = ({ size = 18 }) => (
     />
   </svg>
 );
+export const IconFacebook: FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M13.5 21v-8h2.6l.4-3.1h-3V7.9c0-.9.25-1.5 1.55-1.5H16.6V3.65A21 21 0 0 0 14.3 3.5c-2.27 0-3.8 1.39-3.8 3.94v2.46H7.9V13h2.6v8h3z"
+      fill="currentColor"
+    />
+  </svg>
+);
 export const IconGlobe: FC<{ size?: number }> = ({ size = 20 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />

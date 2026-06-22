@@ -5,7 +5,7 @@ import { jsonLd } from "../lib/seo";
 import { VERTICALS } from "../lib/verticals";
 import { networkLogo } from "../lib/providers";
 import { slugifyName } from "../lib/format";
-import { IconTikTok, IconInstagram, IconX } from "./icons";
+import { IconTikTok, IconInstagram, IconX, IconFacebook } from "./icons";
 
 // Social handles — one place to update. Same @handle across platforms keeps the
 // brand findable and matches the tvnightly.com domain.
@@ -14,6 +14,8 @@ const SOCIALS: { label: string; url: string; Icon: FC<{ size?: number }> }[] = [
   { label: "TikTok", url: `https://www.tiktok.com/@${SOCIAL_HANDLE}`, Icon: IconTikTok },
   { label: "Instagram", url: `https://www.instagram.com/${SOCIAL_HANDLE}`, Icon: IconInstagram },
   { label: "X", url: `https://x.com/${SOCIAL_HANDLE}`, Icon: IconX },
+  // Facebook page uses a numeric profile id, not the @handle, so it's set explicitly
+  { label: "Facebook", url: "https://www.facebook.com/profile.php?id=61591022677323", Icon: IconFacebook },
 ];
 
 // Cloudflare Web Analytics beacon token. Request-invariant config: the token is

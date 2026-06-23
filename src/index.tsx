@@ -1,20 +1,23 @@
 // TV Nightly — app assembly. Routes live in src/routes/, one file per
 // page family; shared pieces in src/lib/ and src/components/.
 import { Hono } from "hono";
+import { setBeaconToken, setGaId, setSiteAnalytics } from "./components/Layout";
 import { ErrorPage, NotFoundPage } from "./components/notfound";
-import { setBeaconToken, setGaId } from "./components/Layout";
 import { setAffiliate } from "./lib/affiliate";
-import { providerPatrol, runSync, sendDailyDigest, notifyOwnerSignups } from "./sync";
 import { submitIndexNow } from "./lib/indexnow";
+import { notifyOwnerSignups, providerPatrol, runSync, sendDailyDigest } from "./sync";
 import type { Bindings } from "./types";
 
+import admin from "./routes/admin";
 import bestEpisodes from "./routes/best-episodes";
 import brand from "./routes/brand";
 import compare from "./routes/compare";
-import episode from "./routes/episode";
 import directory from "./routes/directory";
+import discovery from "./routes/discovery";
+import episode from "./routes/episode";
+import episodeGuides from "./routes/episode-guides";
+import feedback from "./routes/feedback";
 import guides from "./routes/guides";
-import tvGuides from "./routes/tv-guides";
 import home from "./routes/home";
 import hubs from "./routes/hubs";
 import legal from "./routes/legal";
@@ -24,12 +27,13 @@ import people from "./routes/people";
 import recommend from "./routes/recommend";
 import schedule from "./routes/schedule";
 import search from "./routes/search";
+import seasonal from "./routes/seasonal";
 import show from "./routes/show";
-import admin from "./routes/admin";
-import feedback from "./routes/feedback";
 import showSubpages from "./routes/show-subpages";
 import sitemaps from "./routes/sitemaps";
 import subscribe from "./routes/subscribe";
+import tvGuides from "./routes/tv-guides";
+import tvWatchOrders from "./routes/tv-watch-orders";
 import votes from "./routes/votes";
 import watchOrders from "./routes/watch-orders";
 import whatToWatch from "./routes/what-to-watch";
@@ -47,8 +51,10 @@ const app = new Hono<{ Bindings: Bindings }>();
 // inline JSON-LD + third-party poster CDNs, and an unsafe-inline CSP buys little.
 // This also threads the public Web Analytics beacon token into the Layout module.
 app.use("*", async (c, next) => {
+  const admin = new URL(c.req.url).pathname.startsWith("/admin");
   setBeaconToken(c.env.CF_BEACON_TOKEN);
   setGaId(c.env.GA_ID);
+  setSiteAnalytics(!admin);
   setAffiliate(c.env);
   c.header("X-Content-Type-Options", "nosniff");
   c.header("X-Frame-Options", "SAMEORIGIN");
@@ -59,12 +65,12 @@ app.use("*", async (c, next) => {
 });
 
 // SEO URL canonicalization: one address per page. Collapse www → apex (canonical
-// host is SITE_ORIGIN, the bare domain), lowercase the path, and drop trailing
-// slashes — 301ing variants to the canonical form so "www.tvnightly.com",
-// "/Show/The-Wire/" and "/show/the-wire" never split into duplicate URLs (and
-// uppercase typos resolve instead of 404ing). GET/HEAD only — never redirect a
-// form POST; skips %-encoded paths so escape sequences aren't mangled. Host +
-// path collapse in a single redirect to avoid a double 301.
+// host is SITE_ORIGIN, the bare domain), merge consecutive slashes in the path,
+// lowercase it, and drop trailing slashes — 301ing variants to the canonical
+// form so "www.tvnightly.com", "//about", "/Show/The-Wire/" and "/show/the-wire"
+// never split into duplicate URLs (and typos resolve instead of 404ing). GET/HEAD
+// only — never redirect a form POST; skips %-encoded paths so escape sequences
+// aren't mangled. Host + path collapse in a single redirect to avoid a double 301.
 app.use("*", async (c, next) => {
   if (c.req.method === "GET" || c.req.method === "HEAD") {
     const url = new URL(c.req.url);
@@ -72,7 +78,8 @@ app.use("*", async (c, next) => {
     const p = url.pathname;
     let norm = p;
     if (!p.includes("%")) {
-      norm = p.toLowerCase();
+      norm = p.replace(/\/{2,}/g, "/");
+      norm = norm.toLowerCase();
       if (norm.length > 1) norm = norm.replace(/\/+$/, "");
     }
     if (apex !== url.hostname || norm !== p) {
@@ -96,8 +103,12 @@ app.route("/", directory);
 app.route("/", compare);
 app.route("/", hubs);
 app.route("/", watchOrders);
+app.route("/", tvWatchOrders);
+app.route("/", episodeGuides);
 app.route("/", guides);
 app.route("/", tvGuides);
+app.route("/", discovery);
+app.route("/", seasonal);
 app.route("/", movies);
 app.route("/", whatToWatch);
 app.route("/", news);

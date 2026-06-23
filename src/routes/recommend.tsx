@@ -1,26 +1,61 @@
 import { Hono } from "hono";
 import { Child, FC } from "hono/jsx";
-import { Layout, Honeypot } from "../components/Layout";
+import { Honeypot, Layout } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
 import { IconStar, IconStarBadge } from "../components/icons";
 import { ShareBar } from "../components/share";
+import { TasteProfileShare } from "../components/taste-profile";
 import { ipHash } from "../lib/crypto";
 import { heroBg, hiRes, retinaSet } from "../lib/format";
-import { RatedEntry, VERDICTS, VERDICT_SCALE, fmtRated, getRatedTitle, parseRated } from "../lib/ratings";
 import { isTmdbRef, materializeTmdbTitle } from "../lib/materialize";
+import { RatedEntry, VERDICTS, VERDICT_SCALE, fmtRated, getRatedTitle, parseRated } from "../lib/ratings";
 import { DeckCard, Pick, WhySignal, buildRecommendation, enrichDeck, landingPicks } from "../lib/recommend";
 import { servePng } from "../lib/render";
 import { foldSql, foldText } from "../lib/search";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { posterDataUri } from "../lib/signal";
-import { buildOgCard } from "../lib/social";
+import { TasteProfileCardData, buildOgCard, buildTasteProfileCard, buildTasteProfileOgCard } from "../lib/social";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import type { AppContext } from "../types";
 import { Bindings } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
 // Ratings collected before we synthesize the match (rate card 1 + deck cards).
 const TARGET = 5;
+
+/** Shared loader for taste-profile PNG + public share page. */
+async function loadTasteShare(c: AppContext, rated: RatedEntry[]) {
+  if (rated.length < 2) return null;
+  const hash = await ipHash(c.env.SECRET ?? "anon-salt", "taste-share");
+  const rec = await buildRecommendation(c.env.DB, hash, rated);
+  if (!rec.primary || !rec.tasteProfile.slices.length) return null;
+  const primary = rec.primary;
+  let bd: { x1: string } | null = null;
+  if (c.env.TMDB_API_KEY) {
+    bd =
+      primary.kind === "tv" && primary.tmdbId
+        ? await tmdbBackdrop(c.env.TMDB_API_KEY, primary.tmdbId)
+        : primary.imdbId
+          ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, primary.imdbId)
+          : null;
+  }
+  const heroPoster = primary.poster ? (hiRes(primary.poster) ?? primary.poster) : null;
+  const [backdropUri, posterUri] = await Promise.all([
+    posterDataUri(bd?.x1 ?? heroPoster),
+    posterDataUri(heroPoster),
+  ]);
+  const cardData: TasteProfileCardData = {
+    slices: rec.tasteProfile.slices,
+    era: rec.tasteProfile.era,
+    nextName: primary.name,
+    nextMeta: [primary.genres.slice(0, 2).join(" · "), primary.year].filter(Boolean).join(" · ") || null,
+    nextRating: primary.rating,
+    posterUri,
+    backdropUri,
+  };
+  return { ...rec, cardData };
+}
 
 // Hi-res 1x/2x srcset for a poster — keeps the big rate/deck cards sharp on
 // retina phones (the bare w342 / medium_portrait source scaled up was blurry).
@@ -145,6 +180,60 @@ const WhyLedger: FC<{ why: WhySignal }> = ({ why }) => {
   );
 };
 
+const MatchHero: FC<{
+  primary: Pick;
+  heroFrame: string | null;
+  peek: boolean;
+  matchPct: number | null;
+  confidence: string;
+  ratedCount: number;
+  heroHref: string;
+}> = ({ primary, heroFrame, peek, matchPct, confidence, ratedCount, heroHref }) => (
+  <header class="detail-hero frame-hero rec-match">
+    {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
+    <div class="detail-head">
+      <div class="detail-side">
+        <div class="rec-poster-wrap">
+          {primary.poster ? (
+            <img class="poster" src={primary.poster} alt={primary.name} />
+          ) : (
+            <div class="poster card-fallback">{primary.name}</div>
+          )}
+          {!peek && matchPct ? (
+            <span class="rec-match-pct" style={`--pct:${matchPct}`} role="img" aria-label={`${matchPct} percent match`}>
+              <span class="rec-match-pct-num">
+                {matchPct}
+                <span class="rec-match-pct-sign">%</span>
+              </span>
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <div class="detail-info">
+        <p class="rec-match-tag">
+          <span class="rec-conf">{peek ? "Best guess so far" : confidence}</span>
+          {primary.rating != null ? <span class="rec-match-star"> · <IconStar class="rating-star" />{primary.rating.toFixed(1)}</span> : null}
+          {" · "}
+          {primary.kind === "tv" ? "TV series" : "Film"}
+          {!peek ? <span class="rec-from"> · from {ratedCount} ratings</span> : null}
+        </p>
+        <h1>
+          {primary.name}
+          {primary.year ? <span class="rec-match-year"> ({primary.year})</span> : null}
+        </h1>
+        {primary.why && (primary.why.anchor || primary.why.genres.length || primary.why.era || primary.why.prov || primary.why.cf >= 2) ? (
+          <WhyLedger why={primary.why} />
+        ) : (
+          <p class="rec-match-reason">{primary.reason}.</p>
+        )}
+        <p class="rec-match-cta">
+          <a class="verdict-btn" href={heroHref}>See {primary.kind === "tv" ? "the show" : "the film"}</a>
+        </p>
+      </div>
+    </div>
+  </header>
+);
+
 const RecDoors: FC = () => (
   <div class="rec-doors">
     <ExploreCard icon="Picker" title="Browse by mood" desc="Filter by genre, service and runtime — pick in seconds." href="/what-to-watch" />
@@ -239,6 +328,81 @@ app.get("/recommend/og.png", async (c) => {
   });
 });
 
+app.get("/recommend/taste/og.png", async (c) => {
+  const rated = parseRated(c.req.query("rated"));
+  if (rated.length < 2) return c.notFound();
+  return servePng(c, `taste-og/${encodeURIComponent(fmtRated(rated))}`, async () => {
+    const loaded = await loadTasteShare(c, rated);
+    if (!loaded) return null;
+    return buildTasteProfileOgCard(loaded.cardData);
+  });
+});
+
+app.get("/recommend/taste.png", async (c) => {
+  const rated = parseRated(c.req.query("rated"));
+  if (rated.length < 2) return c.notFound();
+  return servePng(
+    c,
+    `taste/${encodeURIComponent(fmtRated(rated))}`,
+    async () => {
+      const loaded = await loadTasteShare(c, rated);
+      if (!loaded) return null;
+      return buildTasteProfileCard(loaded.cardData);
+    },
+    1080,
+  );
+});
+
+app.get("/recommend/taste", async (c) => {
+  const rated = parseRated(c.req.query("rated"));
+  if (rated.length < 2) return c.redirect("/recommend", 302);
+  const loaded = await loadTasteShare(c, rated);
+  if (!loaded) return c.redirect("/recommend", 302);
+  const { primary, tasteProfile } = loaded;
+  const ratedStr = fmtRated(rated);
+  const site = origin(c);
+  const tasteUrl = `${site}/recommend/taste?rated=${encodeURIComponent(ratedStr)}`;
+  const cardUrl = `/recommend/taste.png?rated=${encodeURIComponent(ratedStr)}`;
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`My TV taste: ${tasteProfile.summary} | TV Nightly`}
+      description={`My TV taste profile — ${tasteProfile.summary}${primary ? ` → next watch: ${primary.name}` : ""}. Make yours at TV Nightly.`}
+      canonical={tasteUrl}
+      ogImage={`${site}/recommend/taste/og.png?rated=${encodeURIComponent(ratedStr)}`}
+      ogImageLarge
+      scripts={["/js/recommend.js", "/js/share.js"]}
+    >
+      <article class="rec-page rec-taste-page">
+        <header class="chart-head rec-center">
+          <p class="section-eyebrow">TV taste profile</p>
+          <h1 class="chart-h1">My TV taste</h1>
+        </header>
+        <TasteProfileShare
+          tasteProfile={tasteProfile}
+          primary={primary!}
+          tasteShareUrl={tasteUrl}
+          tasteCardUrl={cardUrl}
+        />
+        <section class="rec-profile-make">
+          <h2>What's your taste?</h2>
+          <p class="muted">
+            Rate a few shows and movies you've seen — we'll build your profile and pick your next watch. No account
+            needed.
+          </p>
+          <p class="rec-center">
+            <a class="verdict-btn verdict-btn-lg" href="/recommend">
+              Make your TV taste profile
+            </a>
+          </p>
+        </section>
+        <RecDoors />
+      </article>
+    </Layout>,
+  );
+});
+
 app.get("/recommend", async (c) => {
   const db = c.env.DB;
   const q = (c.req.query("q") ?? "").trim();
@@ -253,9 +417,13 @@ app.get("/recommend", async (c) => {
   if (step === "results" && rated.length) {
     const ip = c.req.header("cf-connecting-ip") ?? "0.0.0.0";
     const hash = await ipHash(c.env.SECRET ?? "anon-salt", ip);
-    const { primary, contenders, confidence, tasteRead, matchPct } = await buildRecommendation(db, hash, rated);
+    const { primary, contenders, confidence, tasteRead, tasteProfile, matchPct } = await buildRecommendation(db, hash, rated);
     // Under two ratings we're guessing, and we say so — honesty is the trust.
     const peek = rated.length < 2;
+    const site = origin(c);
+    const tasteShareUrl = `${site}/recommend/taste?rated=${encodeURIComponent(ratedStr)}`;
+    const tasteCardUrl = `/recommend/taste.png?rated=${encodeURIComponent(ratedStr)}`;
+    const showTasteProfile = !peek && primary && tasteProfile.slices.length >= 2;
 
     let art: { x1: string; x2?: string } | null = null;
     if (primary && c.env.TMDB_API_KEY) {
@@ -305,12 +473,12 @@ app.get("/recommend", async (c) => {
         ogImageLarge={!!primary}
         scripts={["/js/recommend.js", "/js/share.js"]}
       >
-        <article class="rec-page rec-results">
+        <article class={`rec-page rec-results${showTasteProfile && primary ? " rec-results-duo" : ""}`}>
           <header class="chart-head rec-result-head">
             <p class="section-eyebrow">{peek ? "Early read" : "Your match"}</p>
             {/* styled statement, not the page h1 — the matched title below is the
                 sole <h1> so the results view has exactly one top-level heading */}
-            <p class="chart-h1">{primary ? (peek ? `A starting point: ${primary.name}` : `Watch ${primary.name} next`) : "Your next watch"}</p>
+            <p class="rec-h1 rec-result-title">{primary ? (peek ? `A starting point: ${primary.name}` : `Watch ${primary.name} next`) : "Your next watch"}</p>
             {tasteRead.length ? (
               <p class="rec-taste">
                 <span class="rec-taste-label">Your taste</span>
@@ -324,49 +492,38 @@ app.get("/recommend", async (c) => {
           </header>
 
           {primary ? (
-            <header class="detail-hero frame-hero rec-match">
-              {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
-              <div class="detail-head">
-                <div class="detail-side">
-                  <div class="rec-poster-wrap">
-                    {primary.poster ? (
-                      <img class="poster" src={primary.poster} alt={primary.name} />
-                    ) : (
-                      <div class="poster card-fallback">{primary.name}</div>
-                    )}
-                    {!peek && matchPct ? (
-                      <span class="rec-match-pct" style={`--pct:${matchPct}`} role="img" aria-label={`${matchPct} percent match`}>
-                        <span class="rec-match-pct-num">
-                          {matchPct}
-                          <span class="rec-match-pct-sign">%</span>
-                        </span>
-                      </span>
-                    ) : null}
-                  </div>
+            showTasteProfile ? (
+              <div class="rec-duo">
+                <div class="rec-duo-match">
+                  <MatchHero
+                    primary={primary}
+                    heroFrame={heroFrame}
+                    peek={peek}
+                    matchPct={matchPct}
+                    confidence={confidence}
+                    ratedCount={rated.length}
+                    heroHref={heroHref}
+                  />
                 </div>
-                <div class="detail-info">
-                  <p class="rec-match-tag">
-                    <span class="rec-conf">{peek ? "Best guess so far" : confidence}</span>
-                    {primary.rating != null ? <span class="rec-match-star"> · <IconStar class="rating-star" />{primary.rating.toFixed(1)}</span> : null}
-                    {" · "}
-                    {primary.kind === "tv" ? "TV series" : "Film"}
-                    {!peek ? <span class="rec-from"> · from {rated.length} ratings</span> : null}
-                  </p>
-                  <h1>
-                    {primary.name}
-                    {primary.year ? <span class="rec-match-year"> ({primary.year})</span> : null}
-                  </h1>
-                  {primary.why && (primary.why.anchor || primary.why.genres.length || primary.why.era || primary.why.prov || primary.why.cf >= 2) ? (
-                    <WhyLedger why={primary.why} />
-                  ) : (
-                    <p class="rec-match-reason">{primary.reason}.</p>
-                  )}
-                  <p class="rec-match-cta">
-                    <a class="verdict-btn" href={heroHref}>See {primary.kind === "tv" ? "the show" : "the film"}</a>
-                  </p>
-                </div>
+                <TasteProfileShare
+                  sidecar
+                  tasteProfile={tasteProfile}
+                  primary={primary}
+                  tasteShareUrl={tasteShareUrl}
+                  tasteCardUrl={tasteCardUrl}
+                />
               </div>
-            </header>
+            ) : (
+              <MatchHero
+                primary={primary}
+                heroFrame={heroFrame}
+                peek={peek}
+                matchPct={matchPct}
+                confidence={confidence}
+                ratedCount={rated.length}
+                heroHref={heroHref}
+              />
+            )
           ) : (
             <p class="muted">We couldn't find a confident pick yet — <a href="/recommend">rate one more thing</a>.</p>
           )}
@@ -384,7 +541,7 @@ app.get("/recommend", async (c) => {
             <section class="rec-sec">
               <div class="rec-sec-head">
                 <h2>If not that, then</h2>
-                {primary ? (
+                {primary && !showTasteProfile ? (
                   <ShareBar
                     url={`${origin(c)}/recommend?step=results&rated=${encodeURIComponent(ratedStr)}`}
                     title={`TV Nightly says watch ${primary.name} next`}
@@ -400,9 +557,18 @@ app.get("/recommend", async (c) => {
           ) : null}
 
           <section class="rec-foot">
-            <div class="rec-foot-actions">
-              <button type="button" class="btn-ghost rec-copy" data-copied="Link copied">Copy your taste link</button>
-            </div>
+            {!showTasteProfile && primary ? (
+              <div class="rec-foot-actions">
+                <button
+                  type="button"
+                  class="btn-ghost rec-copy"
+                  data-copied="Link copied"
+                  data-url={`${origin(c)}/recommend?step=results&rated=${encodeURIComponent(ratedStr)}`}
+                >
+                  Copy link to this pick
+                </button>
+              </div>
+            ) : null}
             <RecDoors />
             <RecEmail />
           </section>

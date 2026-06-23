@@ -1,27 +1,28 @@
 import { Hono } from "hono";
-import { IconStar, IconPlay } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ClampSummary, ExploreCard } from "../components/cards";
 import { VsCard, VsSide } from "../components/compare";
 import { DossierRow } from "../components/dossier";
 import { FilterSelect, RateInline } from "../components/forms";
+import { IconPlay, IconStar } from "../components/icons";
+import { MovieConvertBand, loadMovieConvertCtx } from "../components/movie-convert";
 import { MovieTabs } from "../components/nav";
 import { ProviderLine } from "../components/providers";
 import { ShareBar } from "../components/share";
-import { tmdbMovieData, resolveMovie, TMDB_PERSON_OFFSET } from "../lib/tmdb-show";
 import { buildMovieDossier } from "../lib/dossier";
-import { MONTHS, heroBg, longDate, movieComparePathFor, premiereDateParts, slugifyName, stripHtml, fmtRuntime, isNewYear } from "../lib/format";
+import { fmtRuntime, heroBg, isNewYear, movieComparePathFor, slugifyName, stripHtml } from "../lib/format";
 import { franchiseOfMovie } from "../lib/franchises";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { crewLinkMap, similarMovies } from "../lib/queries";
-import { titleStat, aggregateRatingLd } from "../lib/ratings";
-import { foldSql, foldText } from "../lib/search";
-import { breadcrumbTrail, canonical, faqLd, itemListLd, origin } from "../lib/seo";
+import { aggregateRatingLd, titleRaterCount, titleStat } from "../lib/ratings";
 import { servePng } from "../lib/render";
+import { foldSql, foldText } from "../lib/search";
+import { breadcrumbTrail, canonical, faqLd, origin } from "../lib/seo";
 import { posterDataUri } from "../lib/signal";
-import { buildOgCard, buildCompareOgCard, type OgSide } from "../lib/social";
-import { tmdbMovieBackdrop, tmdbMovieCast, tmdbMovieCrew, tmdbMovieFacts, tmdbMovieMedia, tmdbUpcomingBackdrop, tmdbRecommendations, tmdbPopular, tmdbTopRated, tmdbDiscoverGenre, tmdbGenreId } from "../lib/tmdb";
+import { buildCompareOgCard, buildOgCard, type OgSide } from "../lib/social";
+import { tmdbDiscoverGenre, tmdbGenreId, tmdbMovieBackdrop, tmdbMovieCast, tmdbMovieCrew, tmdbMovieFacts, tmdbMovieMedia, tmdbPopular, tmdbRecommendations, tmdbTopRated } from "../lib/tmdb";
 import { toMovieRow } from "../lib/tmdb-rows";
+import { TMDB_PERSON_OFFSET, resolveMovie, tmdbMovieData } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
 import { AppContext, Bindings, MovieRow } from "../types";
 
@@ -506,11 +507,13 @@ app.get("/movie/:slug", async (c) => {
   }
   const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
   const region = visitorRegion(c);
-  const [stat, aggRating] = await Promise.all([
+  const [stat, aggRating, raterCount, simMovies] = await Promise.all([
     titleStat(c.env.DB, "movie", ratingRef),
     aggregateRatingLd(c.env.DB, "movie", ratingRef),
+    titleRaterCount(c.env.DB, "movie", ratingRef),
+    similarMovies(c.env.DB, movie),
   ]);
-  const simMovies = await similarMovies(c.env.DB, movie);
+  const movieFranchise = franchiseOfMovie(movie);
 
   // the movie's real designed backdrop + billed cast (TMDB takes the IMDb id
   // directly; both ride one edge-cached bundle). Blurred poster = fallback.
@@ -757,6 +760,14 @@ app.get("/movie/:slug", async (c) => {
           </div>
         </header>
         <MovieTabs slug={movie.slug} current="overview" />
+        <MovieConvertBand
+          movie={movie}
+          ratingRef={ratingRef}
+          stat={stat}
+          raterCount={raterCount}
+          similar={simMovies.slice(0, 3)}
+          franchiseSlug={movieFranchise?.slug ?? null}
+        />
         {cast.length ? (
           <section id="cast">
             <h2>
@@ -936,6 +947,8 @@ app.get("/movie/:slug/similar", async (c) => {
       .map(toMovieRow);
   }
   if (!simMovies.length) return c.redirect(`/movie/${movie.slug}`, 302);
+  const convert = await loadMovieConvertCtx(c.env.DB, movie, resolved.ratingRef);
+  const movieFranchise = franchiseOfMovie(movie);
   const region = visitorRegion(c);
   const site = origin(c);
   const base = `/movie/${movie.slug}/similar`;
@@ -1010,6 +1023,15 @@ app.get("/movie/:slug/similar", async (c) => {
           </div>
         </header>
         <MovieTabs slug={movie.slug} current="similar" />
+        <MovieConvertBand
+          movie={movie}
+          ratingRef={resolved.ratingRef}
+          stat={convert.stat}
+          raterCount={convert.raterCount}
+          similar={convert.similar}
+          franchiseSlug={movieFranchise?.slug ?? null}
+          hideSimilar
+        />
         <section>
           <h2>The closest matches</h2>
           <ol class="dossier-board">
@@ -1056,6 +1078,8 @@ app.get("/movie/:slug/media", async (c) => {
   const resolved = await resolveMovie(c, c.req.param("slug"));
   if (!resolved) return c.notFound();
   const movie = resolved.movie;
+  const convert = await loadMovieConvertCtx(c.env.DB, movie, resolved.ratingRef);
+  const movieFranchise = franchiseOfMovie(movie);
   const media = c.env.TMDB_API_KEY
     ? await tmdbMovieMedia(c.env.TMDB_API_KEY, movie.imdb_id)
     : null;
@@ -1141,6 +1165,14 @@ app.get("/movie/:slug/media", async (c) => {
           </div>
         </header>
         <MovieTabs slug={movie.slug} current="media" />
+        <MovieConvertBand
+          movie={movie}
+          ratingRef={resolved.ratingRef}
+          stat={convert.stat}
+          raterCount={convert.raterCount}
+          similar={convert.similar}
+          franchiseSlug={movieFranchise?.slug ?? null}
+        />
         {trailer ? (
           <section>
             <h2>Trailer</h2>
@@ -1274,6 +1306,8 @@ app.get("/movie/:slug/cast", async (c) => {
   const resolved = await resolveMovie(c, c.req.param("slug"));
   if (!resolved) return c.notFound();
   const movie = resolved.movie;
+  const convert = await loadMovieConvertCtx(c.env.DB, movie, resolved.ratingRef);
+  const movieFranchise = franchiseOfMovie(movie);
   // a live film without an IMDb id carries a synthetic "tmdb-<id>" — look it up
   // by tmdb id so the full cast doesn't come up empty
   const bundleId = /^tt\d+$/.test(movie.imdb_id)
@@ -1326,6 +1360,14 @@ app.get("/movie/:slug/cast", async (c) => {
         Cast of <a href={`/movie/${movie.slug}`}>{movie.title}</a>
       </h1>
       <MovieTabs slug={movie.slug} current="cast" />
+      <MovieConvertBand
+        movie={movie}
+        ratingRef={resolved.ratingRef}
+        stat={convert.stat}
+        raterCount={convert.raterCount}
+        similar={convert.similar}
+        franchiseSlug={movieFranchise?.slug ?? null}
+      />
       {cast.length ? (
         <>
           <p class="muted">{cast.length} credited, in billing order.</p>
@@ -1412,6 +1454,8 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
   const resolved = await resolveMovie(c, c.req.param("slug"));
   if (!resolved) return c.notFound();
   const movie = resolved.movie;
+  const convert = await loadMovieConvertCtx(c.env.DB, movie, resolved.ratingRef);
+  const movieFranchise = franchiseOfMovie(movie);
   const base = `/movie/${movie.slug}/where-to-watch`;
   const reqRegion = (c.req.query("region") ?? "").trim().toUpperCase();
   if (reqRegion && !REGIONS.includes(reqRegion)) return c.redirect(base, 301);
@@ -1490,6 +1534,15 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
           </div>
         </header>
         <MovieTabs slug={movie.slug} current="watch" />
+        <MovieConvertBand
+          movie={movie}
+          ratingRef={resolved.ratingRef}
+          stat={convert.stat}
+          raterCount={convert.raterCount}
+          similar={convert.similar}
+          franchiseSlug={movieFranchise?.slug ?? null}
+          hideWatchLink
+        />
         <section>
           <h2>Streaming in {region}</h2>
           {names.length ? (
@@ -1711,6 +1764,8 @@ app.get("/movie/:slug/compare", async (c) => {
   const movie = resolved.movie;
   const rivals = await similarMovies(c.env.DB, movie, 6);
   if (!rivals.length) return c.redirect(`/movie/${movie.slug}`, 302);
+  const convert = await loadMovieConvertCtx(c.env.DB, movie, resolved.ratingRef);
+  const movieFranchise = franchiseOfMovie(movie);
   const [backdrop, ...rivalBackdrops] = c.env.TMDB_API_KEY
     ? await Promise.all([
         tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id),
@@ -1742,6 +1797,15 @@ app.get("/movie/:slug/compare", async (c) => {
         Compare <a href={`/movie/${movie.slug}`}>{movie.title}</a>
       </h1>
       <MovieTabs slug={movie.slug} current="compare" />
+      <MovieConvertBand
+        movie={movie}
+        ratingRef={resolved.ratingRef}
+        stat={convert.stat}
+        raterCount={convert.raterCount}
+        similar={convert.similar}
+        franchiseSlug={movieFranchise?.slug ?? null}
+        hideCompareLink
+      />
       <p class="dossier-method">
         Pick a matchup — ratings, votes, runtime and where to stream, side by side.
       </p>

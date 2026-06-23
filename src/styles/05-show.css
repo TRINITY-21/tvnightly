@@ -125,6 +125,179 @@
   text-decoration: none;
 }
 
+/* above-the-fold conversion band on show landing pages */
+.show-convert {
+  margin: 0.75rem 0 1.15rem;
+  padding: 0.85rem 1rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: 0.85rem;
+}
+.show-convert-proof {
+  margin: 0;
+  padding-bottom: 0.15rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--line);
+}
+.show-convert-block { min-width: 0; }
+.show-convert-label {
+  margin: 0 0 0.45rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.show-convert-nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+.show-convert-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--plate);
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--text);
+  transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
+}
+.show-convert-link:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: var(--surface-2);
+  text-decoration: none;
+}
+.show-convert-link.chev-after::after {
+  flex-shrink: 0;
+  margin-left: 0.25rem;
+  opacity: 0.55;
+}
+.show-convert-similar-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.show-convert-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.32rem 0.62rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--plate);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: border-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+.show-convert-tag:hover {
+  border-color: rgba(255, 169, 77, 0.45);
+  color: var(--accent);
+  text-decoration: none;
+}
+.show-convert-tag-ghost {
+  color: var(--muted);
+  background: transparent;
+}
+.show-convert-tag-ghost:hover {
+  color: var(--accent);
+}
+.show-convert-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 0.85rem 1.25rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+  align-items: start;
+}
+.show-convert .rate-inline {
+  margin: 0;
+  align-items: center;
+  gap: 0.35rem;
+}
+.show-convert .rate-inline-label {
+  flex-basis: auto;
+  margin-right: 0.15rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.show-convert .rate-inline .vote-btn {
+  padding: 0.38rem 0.55rem;
+  font-size: 0.95rem;
+}
+.show-convert .sub-form.sub-compact {
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+.show-convert .sub-compact-kicker {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.show-convert .sub-form.sub-compact .sub-controls {
+  flex: 1 1 auto;
+  margin: 0;
+}
+.show-convert .sub-form.sub-compact input[type="email"] {
+  min-width: 0;
+  font-size: 0.84rem;
+  padding: 0.48rem 0.65rem;
+}
+.show-convert .sub-form.sub-compact button[type="submit"] {
+  font-size: 0.84rem;
+  padding: 0.48rem 0.85rem;
+}
+@media (max-width: 720px) {
+  .show-convert-nav {
+    grid-template-columns: 1fr;
+  }
+  .show-convert-foot {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  .show-convert .rate-inline {
+    flex-wrap: wrap;
+  }
+}
+.fresh-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px;
+}
+
 /* aspect-ratio reserves the poster's height before the image loads, so the hero
    never reflows when it arrives (CLS). Posters are a uniform 2:3; object-fit
    guards the rare off-ratio source. Applies to every .poster image site-wide. */

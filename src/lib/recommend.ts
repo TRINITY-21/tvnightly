@@ -61,7 +61,32 @@ export interface Recommendation {
   anchorName: string | null;
   matchPct: number; // a "feel" match strength for the hero ring
   tasteRead: string[]; // genres + era we inferred — the "we see you" panel
+  tasteProfile: TasteProfile; // percentage breakdown for the share card
 }
+
+export interface TasteSlice {
+  label: string;
+  pct: number;
+}
+
+export interface TasteProfile {
+  slices: TasteSlice[];
+  era: string | null;
+  summary: string;
+}
+
+const buildTasteProfile = (taste: Map<string, number>, eraCenter: number | null): TasteProfile => {
+  const positives = [...taste.entries()].filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]);
+  const top = positives.slice(0, 3);
+  if (!top.length) return { slices: [], era: null, summary: "" };
+  const total = top.reduce((s, [, w]) => s + w, 0);
+  const slices = top.map(([label, w]) => ({ label, pct: Math.round((w / total) * 100) }));
+  const drift = 100 - slices.reduce((s, x) => s + x.pct, 0);
+  if (drift && slices[0]) slices[0].pct += drift;
+  const era = eraCenter != null ? `${Math.floor(eraCenter / 10) * 10}s` : null;
+  const summary = slices.map((s) => `${s.pct}% ${s.label.toLowerCase()}`).join(" · ");
+  return { slices, era, summary };
+};
 
 const parseGenres = (json: string | null): string[] => {
   if (!json) return [];
@@ -342,7 +367,9 @@ export async function buildRecommendation(
     .map(([g]) => g);
   if (eraCenter) tasteRead.push(`${Math.floor(eraCenter / 10) * 10}s`);
 
-  return { primary, contenders, confidence, anchorName, matchPct, tasteRead };
+  const tasteProfile = buildTasteProfile(taste, eraCenter);
+
+  return { primary, contenders, confidence, anchorName, matchPct, tasteRead, tasteProfile };
 }
 
 /**

@@ -5,15 +5,20 @@ import { COUNTDOWN_JS, Layout } from "../components/Layout";
 import { StatusBadge } from "../components/cards";
 import { DossierRow } from "../components/dossier";
 import { SubscribeForm } from "../components/forms";
+import { ShowBlurb } from "../components/editorial";
+import { ShowConvertBand, loadShowConvertCtx } from "../components/show-convert";
+import { FreshBadge } from "../components/freshness";
 import { SeasonTabs, ShowTabs } from "../components/nav";
 import { ShareBar } from "../components/share";
 import { buildDossier } from "../lib/dossier";
 import { epCode, epHref, heroBg, largeStill, longDate, posterSrc, stripHtml, fmtRuntime } from "../lib/format";
 import { providersFor, visitorRegion } from "../lib/providers";
 import { similarShows } from "../lib/queries";
+import { titleStat, titleRaterCount } from "../lib/ratings";
 import { resolveShow, buildTmdbShow } from "../lib/tmdb-show";
 import { servePng } from "../lib/render";
-import { breadcrumbLd, canonical, faqLd, origin } from "../lib/seo";
+import { breadcrumbLd, canonical, eventLd, faqLd, origin } from "../lib/seo";
+import { freshEpoch } from "../lib/freshness";
 import { archivoFontCss, buildSignalSvg, posterDataUri } from "../lib/signal";
 import { buildOgCard, buildRatingsOgCard, type OgCardData, type RatingsEp } from "../lib/social";
 import { tmdbBackdrop } from "../lib/tmdb";
@@ -301,7 +306,7 @@ async function ratingsScope(c: Context<{ Bindings: Bindings }, "/show/:slug">, r
     if (!Number.isInteger(n) || !seasons.includes(n)) redirect = true;
     else season = n;
   }
-  return { show, allEps, seasons, season, redirect, redirectTo };
+  return { show, allEps, seasons, season, redirect, redirectTo, ratingRef: r.ratingRef };
 }
 
 /** Season scope filter — specials (0) include null-season rows. */
@@ -411,10 +416,15 @@ app.get("/show/:slug/ratings/og.png", async (c) => {
 app.get("/show/:slug/ratings", async (c) => {
   const scope = await ratingsScope(c, "");
   if (!scope) return c.notFound();
-  const { show, allEps, seasons, season } = scope;
+  const { show, allEps, seasons, season, ratingRef } = scope;
   const base = `/show/${show.slug}/ratings`;
   if (scope.redirect) return c.redirect(base, 301);
   const eps = season != null ? allEps.filter((e) => inSeason(e, season)) : allEps;
+  const [stat, raterCount, similarTop] = await Promise.all([
+    titleStat(c.env.DB, "tv", ratingRef),
+    titleRaterCount(c.env.DB, "tv", ratingRef),
+    similarShows(c.env.DB, show, 3),
+  ]);
   // the page chart wears the same band as the saved card — what you see is
   // what you download (inline SVG may reference URLs directly)
   const pageBd =
@@ -452,6 +462,16 @@ app.get("/show/:slug/ratings", async (c) => {
         <a href={`/show/${show.slug}`}>{show.name}</a>
         {seasonLabel}: episode ratings graph
       </h1>
+      <ShowConvertBand
+        show={show}
+        ratingRef={ratingRef}
+        stat={stat}
+        raterCount={raterCount}
+        episodes={allEps}
+        similar={similarTop}
+        seasonQuery={q}
+        hideRatingsLink
+      />
       {season != null ? (
         <SeasonTabs slug={show.slug} season={season} current="ratings" latest={season === Math.max(...seasons)} />
       ) : (
@@ -609,6 +629,7 @@ const rankedPage =
     const q = season != null ? `?season=${season}` : "";
 
     const similar = await similarShows(c.env.DB, show);
+    const convert = await loadShowConvertCtx(c.env.DB, show, resolved.ratingRef, similar);
     const region = visitorRegion(c);
     const site = origin(c);
     const path = new URL(c.req.url).pathname;
@@ -664,6 +685,17 @@ const rankedPage =
             <a href={`/show/${show.slug}`}>{show.name}</a>
             {seasonLabel}
           </h1>
+          {kind === "best" && show.blurb ? <ShowBlurb text={show.blurb} /> : null}
+          <ShowConvertBand
+            show={show}
+            ratingRef={resolved.ratingRef}
+            stat={convert.stat}
+            raterCount={convert.raterCount}
+            episodes={resolved.episodes}
+            similar={convert.similar}
+            seasonQuery={q}
+            hideRatingsLink={false}
+          />
           {season != null ? (
             <SeasonTabs slug={show.slug} season={season} current={kind === "best" ? "best" : "worst"} latest={season === Math.max(...seasons)} />
           ) : (
@@ -885,6 +917,7 @@ app.get("/show/:slug/next-episode", async (c) => {
     recent = recentRes.results;
   }
   const similar = await similarShows(c.env.DB, show);
+  const convert = await loadShowConvertCtx(c.env.DB, show, r.ratingRef, similar);
   const lastAired = recent[0] ?? null;
   const region = visitorRegion(c);
 
@@ -908,6 +941,19 @@ app.get("/show/:slug/next-episode", async (c) => {
 
   const site = origin(c);
   const path = new URL(c.req.url).pathname;
+  const pageUrl = `${site}${path}`;
+  const nextEvent =
+    next?.airstamp
+      ? eventLd({
+          site,
+          name: `${show.name} ${epCode(next)}${next.name ? `: ${next.name}` : ""}`,
+          startDate: new Date(next.airstamp).toISOString(),
+          url: pageUrl,
+          description: `${show.name} ${epCode(next)} airs ${next.airdate ? longDate(next.airdate) : "soon"}${
+            show.network ? ` on ${show.network}` : ""
+          }.`,
+        })
+      : null;
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
     <Layout
@@ -921,6 +967,7 @@ app.get("/show/:slug/next-episode", async (c) => {
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[
         breadcrumbLd(site, show, "Next episode", path),
+        ...(nextEvent ? [nextEvent] : []),
         // only when there's a real next episode, so the answer matches the
         // visible "Airs <date> on <network>" slate (Google's FAQ visibility rule)
         ...(next
@@ -940,6 +987,14 @@ app.get("/show/:slug/next-episode", async (c) => {
       <h1>
         Next episode of <a href={`/show/${show.slug}`}>{show.name}</a>
       </h1>
+      <ShowConvertBand
+        show={show}
+        ratingRef={r.ratingRef}
+        stat={convert.stat}
+        raterCount={convert.raterCount}
+        episodes={r.episodes}
+        similar={convert.similar}
+      />
       <ShowTabs slug={show.slug} current="next" />
       <section class={media ? `slate slate-hero${media.ambient ? " slate-ambient" : ""}` : "slate"}>
         {media ? (
@@ -1076,11 +1131,13 @@ app.get("/show/:slug/release-date", async (c) => {
   if (!r) return c.notFound();
   const show = r.show;
   const db = c.env.DB;
+  const convert = await loadShowConvertCtx(db, show, r.ratingRef);
 
   let next: EpisodeRow | null;
   let lastAired: EpisodeRow | null;
   let history: Omit<EventRow, "name" | "slug">[];
   let firsts: SeasonFirst[];
+  let latestEventAt: number | null = null;
   if (r.isTmdb) {
     const now = Date.now();
     const dated = r.episodes.filter((e) => e.airstamp);
@@ -1132,6 +1189,11 @@ app.get("/show/:slug/release-date", async (c) => {
       .all<Omit<EventRow, "name" | "slug">>();
     history = histRes.results;
     firsts = await seasonPremieres(db, show.id);
+    latestEventAt =
+      (await db
+        .prepare("SELECT MAX(detected_at) AS latest FROM show_events WHERE show_id = ?")
+        .bind(show.id)
+        .first<{ latest: number | null }>())?.latest ?? null;
   }
   const pattern = premierePattern(firsts);
 
@@ -1203,6 +1265,21 @@ app.get("/show/:slug/release-date", async (c) => {
 
   const site = origin(c);
   const path = new URL(c.req.url).pathname;
+  const pageUrl = `${site}${path}`;
+  const freshAt = freshEpoch(show.updated_at, latestEventAt);
+  const premiereEvent =
+    showCountdown && next?.airstamp
+      ? eventLd({
+          site,
+          name:
+            next && (next.season ?? 0) > maxAired
+              ? `${show.name} Season ${next.season} premiere`
+              : `${show.name} ${epCode(next)}`,
+          startDate: new Date(next.airstamp).toISOString(),
+          url: pageUrl,
+          description: statusLine,
+        })
+      : null;
   // status-aware title: match the query people actually type for each state
   // ("is X renewed", "is X coming back", "X season N release date")
   const generalTitle =
@@ -1231,6 +1308,7 @@ app.get("/show/:slug/release-date", async (c) => {
       ogImageLarge
       ld={[
         breadcrumbLd(site, show, "Release date", path),
+        ...(premiereEvent ? [premiereEvent] : []),
         faqLd([
           {
             q: targetSeason
@@ -1250,8 +1328,17 @@ app.get("/show/:slug/release-date", async (c) => {
           <>
             <a href={`/show/${show.slug}`}>{show.name}</a>: release date & renewal status
           </>
-        )}
+        )}{" "}
+        <FreshBadge epoch={freshAt} />
       </h1>
+      <ShowConvertBand
+        show={show}
+        ratingRef={r.ratingRef}
+        stat={convert.stat}
+        raterCount={convert.raterCount}
+        episodes={r.episodes}
+        similar={convert.similar}
+      />
       <ShowTabs slug={show.slug} current="release" />
       <section class={media ? `slate slate-hero${media.ambient ? " slate-ambient" : ""}` : "slate"}>
         {media ? (

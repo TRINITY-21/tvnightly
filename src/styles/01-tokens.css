@@ -125,7 +125,8 @@ main h2::after {
 /* the tick is a section voice — never under card titles or panel heads */
 .evening-head h2::after,
 .shortlist-card h2::after,
-.pick-card h2::after {
+.pick-card h2::after,
+.rec-taste-share h2::after {
   content: none;
 }
 h3 {

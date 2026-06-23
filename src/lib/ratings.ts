@@ -101,6 +101,44 @@ export async function titleStat(db: D1Database, kind: string, ref: string): Prom
   return `${pct}% of ${total} raters loved or liked this`;
 }
 
+/** Site-wide verdict total for homepage social proof. */
+export async function communityVerdictTotal(db: D1Database): Promise<number> {
+  const r = await db
+    .prepare("SELECT COALESCE(SUM(loved + liked + meh + awful), 0) AS n FROM title_ratings")
+    .first<{ n: number }>();
+  return r?.n ?? 0;
+}
+
+/** Both the verdict blurb and the rater count from ONE title_ratings read — the
+ *  convert band needs both, so this saves a duplicate query per band render. */
+export async function titleStatAndCount(
+  db: D1Database,
+  kind: string,
+  ref: string,
+): Promise<{ stat: string | null; raterCount: number }> {
+  const c = await db
+    .prepare("SELECT loved, liked, meh, awful FROM title_ratings WHERE kind = ? AND ref = ?")
+    .bind(kind, ref)
+    .first<{ loved: number; liked: number; meh: number; awful: number }>();
+  if (!c) return { stat: null, raterCount: 0 };
+  const raterCount = c.loved + c.liked + c.meh + c.awful;
+  // stat mirrors titleStat: loved+liked+meh denominator (excludes "awful"), min 2
+  const total = c.loved + c.liked + c.meh;
+  const stat =
+    total < 2 ? null : `${Math.round(((c.loved + c.liked) / total) * 100)}% of ${total} raters loved or liked this`;
+  return { stat, raterCount };
+}
+
+/** Total on-site verdict count for social proof ("X people rated this"). */
+export async function titleRaterCount(db: D1Database, kind: string, ref: string): Promise<number> {
+  const c = await db
+    .prepare("SELECT loved, liked, meh, awful FROM title_ratings WHERE kind = ? AND ref = ?")
+    .bind(kind, ref)
+    .first<{ loved: number; liked: number; meh: number; awful: number }>();
+  if (!c) return 0;
+  return c.loved + c.liked + c.meh + c.awful;
+}
+
 // Below this many on-site verdicts the average is too noisy (and too gameable)
 // to expose as a star snippet; the agreement line still renders via titleStat.
 const MIN_RATERS_FOR_SCHEMA = 5;

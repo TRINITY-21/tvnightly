@@ -1,22 +1,22 @@
 import { Hono } from "hono";
-import { IconStar } from "../components/icons";
 import type { FC } from "hono/jsx";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
+import { IconStar } from "../components/icons";
 import { heroBg, hiRes, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { FRANCHISE_BY_SLUG } from "../lib/franchises";
 import { networkLogo, networkLogoForBrand, providerBrand, visitorRegion } from "../lib/providers";
 import { genreDirectory, networkDirectory } from "../lib/queries";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import {
-  tmdbBackdrop,
-  tmdbMovieBackdrop,
-  tmdbTopRated,
-  tmdbDiscoverGenre,
-  tmdbDiscoverProvider,
-  tmdbGenreId,
+    tmdbBackdrop,
+    tmdbDiscoverGenre,
+    tmdbDiscoverProvider,
+    tmdbGenreId,
+    tmdbMovieBackdrop,
+    tmdbTopRated,
 } from "../lib/tmdb";
-import { toShowRow, toMovieRow } from "../lib/tmdb-rows";
+import { toMovieRow, toShowRow } from "../lib/tmdb-rows";
 import { VERTICALS, Vertical, genreBinds, genreOr, hubForGenres } from "../lib/verticals";
 import { Bindings, MovieRow, ShowRow } from "../types";
 
@@ -559,6 +559,15 @@ app.get("/lists", async (c) => {
     ["Top movies", "/movies/best"],
     ["Top TV seasons", "/top/seasons"],
     ["All-time top episodes", "/best-episodes"],
+    ["Best TV of the 2010s", "/tv/best/2010s"],
+    ["Upcoming TV shows", "/upcoming"],
+    [`Emmy Awards ${year}`, `/awards/emmys/${year}`],
+    [`Golden Globe Awards ${year}`, `/awards/golden-globes/${year}`],
+    ["Actors", "/actors"],
+    ["Directors", "/directors"],
+    ["Halloween horror TV", "/halloween"],
+    ["Christmas TV", "/christmas-tv"],
+    ["Thanksgiving episodes", "/best-thanksgiving-episodes"],
     ["Most loved (community)", "/loved"],
     ["Compare two shows", "/compare"],
     ["Compare two movies", "/movies/compare"],
@@ -572,6 +581,7 @@ app.get("/lists", async (c) => {
   const GUIDES: [string, string][] = [
     [`Best TV shows of ${year}`, `/tv/best/${year}`],
     [`Best movies of ${year}`, `/movies/best/${year}`],
+    ["Best TV of the 2010s", "/tv/best/2010s"],
     ["Underrated TV shows", "/tv/underrated"],
     ["Underrated movies", "/movies/underrated"],
   ];
@@ -844,8 +854,8 @@ app.get("/top/tv", async (c) => {
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title="The 100 top-rated TV shows | TV Nightly"
-      description={`The best TV shows ranked by viewer rating${results[0] ? `, starting with ${results[0].name}` : ""}.`}
+      title="Best TV Shows of All Time — Top 100 Ranked | TV Nightly"
+      description={`The best TV shows of all time, ranked by viewer rating${results[0] ? ` — led by ${results[0].name}` : ""}. At most one entry per series in our all-time chart.`}
       canonical={canonical(c)}
       noindex={!results.length}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
@@ -853,7 +863,7 @@ app.get("/top/tv", async (c) => {
         {
           "@context": "https://schema.org",
           "@type": "ItemList",
-          name: "The top-rated TV shows",
+          name: "Best TV shows of all time",
           itemListElement: results.slice(0, 25).map((s, i) => ({
             "@type": "ListItem",
             position: i + 1,
@@ -866,10 +876,11 @@ app.get("/top/tv", async (c) => {
       <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
         {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
         <div class="wo-hero-body">
-          <p class="section-eyebrow">The all-time 100</p>
-          <h1>The top-rated TV shows</h1>
+          <p class="section-eyebrow">All-time top 100</p>
+          <h1>Best TV shows of all time</h1>
           <p class="wo-intro">
-            Ranked by viewer rating — weighted so a fluke never outranks the classics.
+            The greatest series ever ranked by viewer rating — weighted so a fluke never outranks the
+            classics.
           </p>
           <p class="hub-actions">
             <a class="verdict-btn" href="/what-to-watch?type=tv">

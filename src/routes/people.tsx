@@ -1,14 +1,13 @@
-import { Hono } from "hono";
-import { IconStar, IconInstagram, IconX, IconGlobe } from "../components/icons";
-import { Context } from "hono";
-import { Bindings, ShowRow, PersonRow } from "../types";
-import { stripHtml, slugifyName, headshot, longDate, ageOf } from "../lib/format";
-import { TMDB_PERSON_OFFSET, resolveShow, resolvePersonProfile, tmdbShowCast } from "../lib/tmdb-show";
-import { origin, canonical, breadcrumbLd, breadcrumbTrail } from "../lib/seo";
-import { crewLinkMap } from "../lib/queries";
+import { Context, Hono } from "hono";
 import { Layout } from "../components/Layout";
-import { ShowTabs, SeasonTabs } from "../components/nav";
 import { ClampSummary, ExploreCard } from "../components/cards";
+import { IconGlobe, IconInstagram, IconStar, IconX } from "../components/icons";
+import { SeasonTabs, ShowTabs } from "../components/nav";
+import { ageOf, headshot, longDate, slugifyName, stripHtml } from "../lib/format";
+import { crewLinkMap } from "../lib/queries";
+import { breadcrumbLd, breadcrumbTrail, canonical, origin } from "../lib/seo";
+import { TMDB_PERSON_OFFSET, resolvePersonProfile, resolveShow, tmdbShowCast } from "../lib/tmdb-show";
+import { Bindings, PersonRow, ShowRow } from "../types";
 
 /** genres are stored as a JSON string array on shows & movies */
 const parseGenres = (j: string | null): string[] => {
@@ -512,20 +511,6 @@ app.get("/person/:slug", async (c) => {
           : person.known_dept === "Production"
             ? "Producer"
             : person.known_dept;
-  const ld = {
-    "@context": "https://schema.org",
-    "@type": "Person",
-    name: person.name,
-    url: `${site}/person/${canonicalSlug}`,
-    ...(person.image_url ? { image: person.image_url } : {}),
-    ...(person.birthday ? { birthDate: person.birthday } : {}),
-    ...(person.deathday ? { deathDate: person.deathday } : {}),
-    ...(person.country ? { nationality: person.country } : {}),
-    ...(occupation
-      ? { jobTitle: occupation, hasOccupation: { "@type": "Occupation", name: occupation } }
-      : {}),
-    ...(sameAs.length ? { sameAs } : {}),
-  };
 
   // "known for" line: real TV roles, else film credits, else a generic fallback —
   // never the empty "known for ." that an actorless/credit-thin person produced.
@@ -535,6 +520,38 @@ app.get("/person/:slug", async (c) => {
   const personDescription = knownFor.length
     ? `${person.name}${age != null && !years ? `, ${age},` : ""} — known for ${knownFor.join(", ")}. Every show, every role, where to stream them.`
     : `${person.name}${age != null && !years ? `, ${age},` : ""} — full filmography, credits and where to stream their work, on TV Nightly.`;
+
+  const ld = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: person.name,
+    url: `${site}/person/${canonicalSlug}`,
+    description: personDescription,
+    ...(person.image_url ? { image: person.image_url } : {}),
+    ...(person.birthday ? { birthDate: person.birthday } : {}),
+    ...(person.deathday ? { deathDate: person.deathday } : {}),
+    ...(person.country ? { nationality: person.country } : {}),
+    ...(occupation
+      ? { jobTitle: occupation, hasOccupation: { "@type": "Occupation", name: occupation } }
+      : {}),
+    ...(sameAs.length ? { sameAs } : {}),
+    ...(roles.length || films.length
+      ? {
+          performerIn: [
+            ...roles.slice(0, 15).map((r) => ({
+              "@type": "TVSeries",
+              name: r.name,
+              url: `${site}/show/${r.slug}`,
+            })),
+            ...films.slice(0, 15).map((m) => ({
+              "@type": "Movie",
+              name: m.title,
+              url: `${site}/movie/${m.slug}`,
+            })),
+          ],
+        }
+      : {}),
+  };
 
   const personCrumbs = bestTitle
     ? [
@@ -841,5 +858,129 @@ app.get("/person/:slug", async (c) => {
     </Layout>,
   );
 });
+
+type PersonHubRow = PersonRow & { credit_count: number; peak_weight: number };
+
+async function personHubPage(
+  c: Context<{ Bindings: Bindings }>,
+  dept: "Acting" | "Directing",
+) {
+  const isActor = dept === "Acting";
+  const { results } = isActor
+    ? await c.env.DB
+        .prepare(
+          `SELECT p.*, COUNT(DISTINCT cr.show_id) AS credit_count, MAX(s.weight) AS peak_weight
+           FROM people p
+           JOIN credits cr ON cr.person_id = p.id AND cr.guest = 0
+           JOIN shows s ON s.id = cr.show_id AND s.weight >= 45
+           WHERE p.known_dept = 'Acting'
+              OR (p.known_dept IS NULL AND cr.character IS NOT NULL AND cr.character != '')
+           GROUP BY p.id
+           ORDER BY peak_weight DESC, credit_count DESC, p.name
+           LIMIT 60`,
+        )
+        .all<PersonHubRow>()
+    : await c.env.DB
+        .prepare(
+          `SELECT p.*, COUNT(DISTINCT mc.movie_id) AS credit_count, MAX(m.popularity) AS peak_weight
+           FROM people p
+           JOIN movie_credits mc ON mc.person_id = p.id
+           JOIN movies m ON m.imdb_id = mc.movie_id
+           WHERE p.known_dept = 'Directing'
+           GROUP BY p.id
+           ORDER BY peak_weight DESC, credit_count DESC, p.name
+           LIMIT 60`,
+        )
+        .all<PersonHubRow>();
+
+  const site = origin(c);
+  const path = isActor ? "/actors" : "/directors";
+  const title = isActor ? "Actors" : "Directors";
+  const lead = results[0];
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`${title} — TV & film credits, ranked by catalogue weight | TV Nightly`}
+      description={
+        isActor
+          ? "Browse actors we track — ranked by the popularity of their shows, with links to every credit and episode guide."
+          : "Browse directors we track — ranked by the films in our catalogue, with links to every credit."
+      }
+      canonical={`${site}${path}`}
+      ld={[
+        breadcrumbTrail([
+          { name: "TV Nightly", url: site },
+          { name: title, url: `${site}${path}` },
+        ]),
+        {
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          name: title,
+          itemListElement: results.slice(0, 25).map((p, i) => ({
+            "@type": "ListItem",
+            position: i + 1,
+            name: p.name,
+            url: `${site}/person/${slugifyName(p.name)}-${p.id}`,
+          })),
+        },
+      ]}
+    >
+      <header class="chart-head">
+        <p class="section-eyebrow">{isActor ? "Cast & credits" : "Filmography"}</p>
+        <h1 class="chart-h1">{title}</h1>
+        <p class="section-lead">
+          {isActor
+            ? "The actors behind the shows we track — ranked by the weight of their series, not tabloid fame."
+            : "The directors behind the films we mirror — ranked by catalogue prominence."}
+        </p>
+      </header>
+
+      {!results.length ? (
+        <p class="muted">Credits are still loading — check back soon.</p>
+      ) : (
+        <div class="cast-grid person-hub-grid">
+          {results.map((p) => {
+            const href = `/person/${slugifyName(p.name)}-${p.id}`;
+            const h = headshot(p.image_url);
+            return (
+              <a class="cast-tile" href={href}>
+                {h ? (
+                  <img src={h.src} srcset={h.srcset} alt={p.name} loading="lazy" />
+                ) : (
+                  <div class="cast-fallback">{p.name.slice(0, 1)}</div>
+                )}
+                <div class="cast-tile-body">
+                  <strong>{p.name}</strong>
+                  <span class="cast-char">
+                    {p.credit_count} {isActor ? "show" : "film"}
+                    {p.credit_count === 1 ? "" : "s"}
+                  </span>
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      )}
+
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="Directory"
+            title={isActor ? "Directors" : "Actors"}
+            desc={isActor ? "Film directors in our catalogue." : "TV actors in our catalogue."}
+            href={isActor ? "/directors" : "/actors"}
+          />
+          <ExploreCard icon="Charts" title="Top TV shows" desc="The highest-rated series we track." href="/top/tv" />
+          <ExploreCard icon="Shortcut" title="Browse everything" desc="Charts, genres, and networks." href="/lists" />
+        </div>
+      </section>
+    </Layout>,
+  );
+}
+
+app.get("/actors", (c) => personHubPage(c, "Acting"));
+app.get("/directors", (c) => personHubPage(c, "Directing"));
 
 export default app;

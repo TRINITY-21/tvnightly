@@ -183,6 +183,9 @@ app.get("/watch-orders", async (c) => {
           />
         </div>
       </section>
+      <p class="wo-foot">
+        <a class="chev-after" href="/tv-watch-orders">TV universe watch orders</a>
+      </p>
     </Layout>,
   );
 });

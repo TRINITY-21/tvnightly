@@ -1,10 +1,13 @@
 import { Hono } from "hono";
-import { Bindings } from "../types";
-import { FRANCHISES } from "../lib/franchises";
+import { TV_DECADES } from "../lib/decades";
+import { EPISODE_GUIDES } from "../lib/episode-guides";
 import { slugifyName } from "../lib/format";
-import { origin, xmlRes, sitemapUrl, epochDay } from "../lib/seo";
-import { networkDirectory, genreDirectory } from "../lib/queries";
+import { FRANCHISES } from "../lib/franchises";
+import { genreDirectory, networkDirectory } from "../lib/queries";
+import { epochDay, origin, sitemapUrl, xmlRes } from "../lib/seo";
+import { TV_UNIVERSES } from "../lib/tv-universes";
 import { VERTICALS } from "../lib/verticals";
+import { Bindings } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -80,13 +83,24 @@ app.get("/sitemaps/:file", async (c) => {
       `/movies/best/${year}`,
       "/tv/underrated",
       `/tv/best/${year}`,
+      ...TV_DECADES.map((d) => `/tv/best/${d}`),
       "/best-episodes",
+      "/upcoming",
+      `/awards/emmys/${year}`,
+      `/awards/golden-globes/${year}`,
+      "/halloween",
+      "/christmas-tv",
+      "/best-thanksgiving-episodes",
+      "/actors",
+      "/directors",
       "/premieres",
       "/whats-new",
       "/tonight",
       "/calendar",
       "/renewals",
       "/watch-orders",
+      "/tv-watch-orders",
+      "/guides",
       "/lists",
       "/top/tv",
       "/top/seasons",
@@ -94,6 +108,8 @@ app.get("/sitemaps/:file", async (c) => {
       "/compare",
       "/movies/compare",
       ...FRANCHISES.map((f) => `/watch-order/${f.slug}`),
+      ...TV_UNIVERSES.map((u) => `/tv-watch-order/${u.slug}`),
+      ...EPISODE_GUIDES.map((g) => `/guide/${g.slug}`),
       ...VERTICALS.map((v) => `/${v.slug}`),
       ...networks.map((n) => `/network/${n.slug}`),
       // per-medium top pages: every directory network holds shows by

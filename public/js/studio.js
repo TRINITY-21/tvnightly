@@ -103,6 +103,7 @@
     var holder = single.closest("[data-format]");
     var fmt = holder ? holder.getAttribute("data-format") : "liked";
     attachSearch(single, document.getElementById("studio-ta"), function (it) {
+      if (fmt === "best-eps" && it.kind !== "tv") return;
       window.location.href =
         "/admin/studio?cat=" +
         encodeURIComponent(fmt) +
@@ -132,6 +133,23 @@
       gen.addEventListener("click", function () {
         if (!pick.a || !pick.b) {
           alert("Pick two titles first.");
+          return;
+        }
+        var target = gen.getAttribute("data-cat") || "vs";
+        if (target === "showcase") {
+          // dual-poster 4:5 card — shows only, plus optional copy/art overrides
+          var hl = document.getElementById("studio-headline");
+          var kc = document.getElementById("studio-kicker");
+          var art = document.getElementById("studio-art");
+          var u =
+            "/admin/studio?cat=showcase&a=" +
+            encodeURIComponent(pick.a.slug) +
+            "&b=" +
+            encodeURIComponent(pick.b.slug);
+          if (art && art.value) u += "&art=" + encodeURIComponent(art.value);
+          if (hl && hl.value.trim()) u += "&headline=" + encodeURIComponent(hl.value.trim());
+          if (kc && kc.value.trim()) u += "&kicker=" + encodeURIComponent(kc.value.trim());
+          window.location.href = u;
           return;
         }
         window.location.href =
@@ -648,13 +666,10 @@
     });
   }
 
-  // copy a caption to the clipboard
+  // copy a caption or hook template to the clipboard
   document.addEventListener("click", function (e) {
     var btn = e.target.closest && e.target.closest(".studio-copy");
     if (!btn) return;
-    var box = btn.closest(".studio-cap");
-    var ta = box && box.querySelector(".studio-cap-text");
-    if (!ta) return;
     var done = function () {
       var prev = btn.textContent;
       btn.textContent = "Copied ✓";
@@ -664,6 +679,20 @@
         btn.classList.remove("is-done");
       }, 1400);
     };
+    var hookText = btn.getAttribute("data-copy");
+    if (hookText) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(hookText).then(done).catch(function () {
+          done();
+        });
+      } else {
+        done();
+      }
+      return;
+    }
+    var box = btn.closest(".studio-cap");
+    var ta = box && box.querySelector(".studio-cap-text");
+    if (!ta) return;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(ta.value).then(done).catch(function () {
         ta.select();

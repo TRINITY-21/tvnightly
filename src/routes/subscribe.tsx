@@ -5,7 +5,7 @@ import { MessagePage } from "../components/Layout";
 import { signToken, verifyToken } from "../tokens";
 import { materializeShow } from "../lib/tmdb-show";
 import { sendEmails } from "../email";
-import { EMAIL, emailButton, emailShell } from "../lib/email-template";
+import { EMAIL, emailButton, emailHighlight, emailLinkFallback, emailShell } from "../lib/email-template";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -87,11 +87,15 @@ app.post("/subscribe", async (c) => {
         subject: `Confirm: ${what}`,
         html: emailShell({
           title: "Confirm your subscription",
+          kicker: "One more step",
+          heading: "Confirm your subscription",
           preheader: `One click to start ${what}.`,
           contentHtml:
-            `<p style="margin:0 0 22px;color:${EMAIL.soft}">You're one tap away from <strong style="color:${EMAIL.text}">${what}</strong>. Confirm below and you're in.</p>` +
+            emailHighlight(
+              `You're one tap away from <strong style="color:${EMAIL.text}">${what}</strong>. Confirm below and you're in.`,
+            ) +
             emailButton("Confirm subscription", confirmUrl) +
-            `<p style="margin:20px 0 0;font-size:13px;color:${EMAIL.muted}">Button not working? Paste this into your browser:<br><a href="${confirmUrl}" style="color:${EMAIL.accent};word-break:break-all">${confirmUrl}</a></p>`,
+            emailLinkFallback(confirmUrl),
           footerNote:
             "You got this because someone entered this address on tvnightly.com. If that wasn't you, just ignore it — nothing is subscribed until you confirm.",
         }),

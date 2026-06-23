@@ -395,6 +395,123 @@
    and swap the flat veil for a left->right scrim that darkens toward the info
    column (poster sits on the light left; title/ledger sit on the dark right). */
 .rec-result-head { margin-bottom: 1.1rem; }
+.rec-result-head .section-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  margin-bottom: 0.4rem;
+}
+.rec-result-head .rec-result-title {
+  font-size: clamp(1.85rem, 4.8vw, 2.65rem);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.85rem;
+}
+
+/* match + taste profile side by side on results */
+.rec-results-duo.rec-page { max-width: 1080px; }
+.rec-duo {
+  display: grid;
+  grid-template-columns: minmax(0, 1.32fr) minmax(280px, 0.78fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+.rec-duo-match {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rec-duo .rec-match {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0;
+  min-height: 100%;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+}
+.rec-duo .rec-match .detail-head {
+  flex: 1 1 auto;
+  align-items: flex-start;
+  padding: 0.15rem 0 0;
+}
+.rec-duo .rec-match .detail-side .poster,
+.rec-duo .rec-match .detail-side .card-fallback,
+.rec-duo .rec-match .detail-side .rec-poster-wrap {
+  width: 148px;
+}
+.rec-duo .rec-match .detail-side {
+  flex: 0 0 auto;
+  width: auto;
+}
+.rec-duo .rec-match .detail-info h1 {
+  font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+}
+.rec-duo .rec-match .rec-why-ledger {
+  max-width: none;
+}
+.rec-duo .rec-match .rec-match-reason {
+  font-size: 0.96rem;
+}
+.rec-taste-sidecar {
+  margin: 0;
+  max-width: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 1.3rem 1.35rem 1.35rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+.rec-taste-sidecar .rec-taste-head {
+  margin-bottom: 0;
+}
+.rec-taste-sidecar .section-eyebrow {
+  margin-bottom: 0.35rem;
+}
+.rec-taste-sidecar .rec-taste-title {
+  font-size: 1.12rem;
+}
+.rec-taste-sidecar .rec-taste-era-line {
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+}
+.rec-taste-sidecar .rec-taste-rows {
+  flex: 1 1 auto;
+  margin-top: 1rem;
+}
+.rec-taste-sidecar .rec-taste-row-pct {
+  font-size: 0.88rem;
+}
+.rec-taste-sidecar .rec-taste-foot {
+  margin-top: auto;
+  padding-top: 1.1rem;
+  border-top: 0;
+}
+.rec-taste-sidecar .rec-profile-share,
+.rec-taste-sidecar .rec-taste-secondary .btn-ghost {
+  width: 100%;
+  text-align: center;
+}
+.rec-taste-sidecar .rec-taste-share-note {
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+@media (max-width: 880px) {
+  .rec-duo {
+    grid-template-columns: 1fr;
+  }
+  .rec-duo .rec-match .detail-side .poster,
+  .rec-duo .rec-match .detail-side .card-fallback,
+  .rec-duo .rec-match .detail-side .rec-poster-wrap {
+    width: 150px;
+  }
+}
+
 .rec-match { position: relative; }
 /* sharp still, just darkened — same treatment as the show/episode frame-heroes
    (filter:none, prominent opacity); a left->right scrim keeps the info column
@@ -451,25 +568,37 @@
   }
 }
 
-/* match-% ring — the amber arc IS the score (fills to --pct); seated cleanly
-   inside the poster's top-right corner, not floating in the gutter */
-.rec-poster-wrap { position: relative; display: inline-block; }
+/* match-% ring — anchored to the poster box, not the wider detail-side column */
+.rec-poster-wrap {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  line-height: 0;
+}
+.rec-poster-wrap .poster,
+.rec-poster-wrap .card-fallback {
+  display: block;
+  width: 100%;
+}
 .rec-match-pct {
   position: absolute;
-  top: 0.6rem;
-  right: 0.6rem;
-  width: 3.4rem;
-  height: 3.4rem;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 1;
+  width: 2.45rem;
+  height: 2.45rem;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: conic-gradient(var(--accent) calc(var(--pct, 74) * 1%), var(--surface-2) 0);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
 }
 .rec-match-pct::before {
   content: "";
   position: absolute;
-  inset: 0.26rem;
+  inset: 0.2rem;
   border-radius: 50%;
   background: var(--plate);
 }
@@ -480,11 +609,27 @@
   font-family: var(--display);
   font-stretch: 84%;
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 0.92rem;
   line-height: 1;
   color: var(--text);
 }
-.rec-match-pct-sign { font-size: 0.6rem; color: var(--accent); margin-left: 1px; }
+.rec-match-pct-sign { font-size: 0.52rem; color: var(--accent); margin-left: 1px; }
+.rec-duo .rec-match .rec-match-pct {
+  top: 0.32rem;
+  right: 0.32rem;
+  width: 2.1rem;
+  height: 2.1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.42);
+}
+.rec-duo .rec-match .rec-match-pct::before {
+  inset: 0.16rem;
+}
+.rec-duo .rec-match .rec-match-pct-num {
+  font-size: 0.76rem;
+}
+.rec-duo .rec-match .rec-match-pct-sign {
+  font-size: 0.44rem;
+}
 
 /* ---- "Why this matches" ledger: the heart of the page ---- */
 .rec-why-ledger { margin: 0 0 0.4rem; max-width: 32rem; }
@@ -684,8 +829,221 @@
 /* ---- footer: actions + explore doors + email ---- */
 .rec-foot { margin-top: 2.6rem; }
 .rec-foot-actions { display: flex; flex-wrap: wrap; gap: 0.7rem; justify-content: center; margin-bottom: 1.8rem; }
-.rec-copy.is-copied { color: var(--ok); border-color: rgba(60, 223, 142, 0.45); }
+.rec-copy.is-copied,
+.rec-copy-taste.is-copied { color: var(--ok); border-color: rgba(60, 223, 142, 0.45); }
 .rec-doors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1.8rem; }
+
+/* ---- taste profile share (compact inline — PNG is for social only) ---- */
+.rec-taste-share {
+  margin: 1.75rem auto 0;
+  max-width: 38rem;
+  padding: 1.35rem 1.45rem 1.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.rec-taste-head { margin: 0 0 0.15rem; }
+.rec-taste-title {
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 92%;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.rec-taste-era-line {
+  margin: 0.4rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+.rec-taste-rows {
+  list-style: none;
+  margin: 1.15rem 0 0;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.rec-taste-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.7rem 0.75rem;
+  align-items: center;
+  padding: 0.62rem 0;
+  border-top: 1px solid var(--line);
+}
+.rec-taste-row:first-child {
+  border-top: 0;
+}
+.rec-taste-row-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--plate);
+  color: var(--muted);
+}
+.rec-taste-row-top .rec-taste-row-icon {
+  color: var(--accent);
+  border-color: rgba(255, 169, 77, 0.28);
+  background: rgba(255, 169, 77, 0.08);
+  box-shadow: 0 0 18px rgba(255, 169, 77, 0.12);
+}
+.rec-taste-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  min-width: 0;
+}
+.rec-taste-row-label {
+  font-family: var(--display);
+  font-stretch: 88%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rec-taste-row-bar {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.rec-taste-row-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 999px;
+  background: var(--muted);
+  opacity: 0.42;
+}
+.rec-taste-row-top .rec-taste-row-fill {
+  background: var(--accent);
+  opacity: 0.95;
+}
+.rec-taste-row-pct {
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.genre-icon {
+  display: block;
+}
+.rec-taste-pick {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+.rec-taste-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--plate);
+  color: var(--text);
+  transition: border-color var(--speed) var(--ease);
+}
+.rec-taste-pick-row:hover {
+  border-color: color-mix(in srgb, var(--text) 18%, var(--line));
+  text-decoration: none;
+}
+.rec-taste-pick-poster {
+  flex-shrink: 0;
+  width: 52px;
+  height: 78px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.rec-taste-pick-blank {
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--muted);
+}
+.rec-taste-pick-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.14rem;
+  min-width: 0;
+}
+.rec-taste-pick-name {
+  font-weight: 700;
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+.rec-taste-pick-meta {
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+.rec-taste-pick-rating {
+  font-size: 0.84rem;
+}
+.rec-taste-foot {
+  margin-top: 1.15rem;
+}
+.rec-taste-secondary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.55rem;
+}
+.rec-taste-secondary .btn-ghost {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 0.62rem 0.75rem;
+  font-size: 0.88rem;
+}
+.rec-taste-secondary .btn-ghost:only-child {
+  grid-column: 1 / -1;
+}
+.rec-taste-share-note {
+  margin: 0.7rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.rec-taste-page .rec-taste-share { margin-top: 0.5rem; }
+.rec-taste-page .rec-profile-make {
+  margin: 2rem auto 1.6rem;
+  max-width: 32rem;
+  text-align: center;
+}
+.rec-taste-page .rec-profile-make h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+}
+.verdict-btn-lg {
+  padding: 0.85rem 1.6rem;
+  font-size: 1.02rem;
+}
+@media (max-width: 560px) {
+  .rec-taste-row {
+    gap: 0.55rem 0.65rem;
+  }
+  .rec-taste-row-icon {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+
 .rec-foot .sub-form.inline { margin-top: 0; }
 
 /* ---- disambiguation rows ---- */

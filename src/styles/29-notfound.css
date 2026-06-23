@@ -239,7 +239,21 @@
   text-transform: uppercase;
   color: var(--muted);
 }
-.nf-home::before { content: "\2190  "; } /* ← */
+/* left-pointing chevron from the shared system (mirrors .chev-after, rotated) */
+.nf-home::before {
+  content: "";
+  display: inline-block;
+  width: 0.38em;
+  height: 0.38em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(135deg);
+  margin-right: 0.5em;
+  vertical-align: 0.12em;
+  opacity: 0.9;
+  transition: transform var(--speed) var(--ease);
+}
+.nf-home:hover::before { transform: rotate(135deg) translate(1px, 1px); }
 .nf-home:hover { color: var(--accent); text-decoration: none; }
 
 @media (max-width: 600px) {

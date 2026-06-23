@@ -55,6 +55,7 @@ export async function submitIndexNow(env: Bindings): Promise<void> {
   // the hubs those changes feed are now stale too
   changed.add(`${origin}/`);
   changed.add(`${origin}/premieres`);
+  changed.add(`${origin}/upcoming`);
   changed.add(`${origin}/whats-new`);
   await ping(origin, [...changed]);
 }

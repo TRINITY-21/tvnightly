@@ -11,6 +11,7 @@ type RawBundle = {
   images?: {
     posters?: { file_path: string; iso_639_1: string | null; vote_count: number }[];
     backdrops?: { file_path: string; iso_639_1: string | null; vote_count: number }[];
+    logos?: { file_path: string; iso_639_1: string | null; vote_count: number }[];
   };
   videos?: {
     results?: {
@@ -189,6 +190,23 @@ export async function tmdbBackdrop(
 ): Promise<{ x1: string; x2: string } | null> {
   const data = await showBundle(key, tmdbId);
   return data ? pickBackdrop(data) : null;
+}
+
+// The show's transparent title logo (PNG) for overlaying on art — prefer the
+// English logo, then a language-neutral one, then whatever's top-voted. w500
+// keeps the alpha channel and is sharp enough for a 540px column.
+const pickLogo = (data: RawBundle): string | null => {
+  const ranked = byVotes(data.images?.logos);
+  const pick =
+    ranked.find((i) => i.iso_639_1 === "en")?.file_path ??
+    ranked.find((i) => i.iso_639_1 === null)?.file_path ??
+    ranked[0]?.file_path;
+  return pick ? `https://image.tmdb.org/t/p/w500${pick}` : null;
+};
+
+export async function tmdbLogo(key: string, tmdbId: number): Promise<string | null> {
+  const data = await showBundle(key, tmdbId);
+  return data ? pickLogo(data) : null;
 }
 
 export type TmdbCastEntry = {

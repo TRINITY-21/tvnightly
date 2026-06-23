@@ -30,10 +30,10 @@ app.get("/best-episodes", async (c) => {
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title="The 100 highest-rated TV episodes of all time | TV Nightly"
-      description={`The best single episodes of television ever made, ranked by viewer rating${
-        results[0] ? `, starting with ${results[0].show_name}'s "${results[0].name}"` : ""
-      }.`}
+      title="Best TV Episodes of All Time — Top 100 Ranked | TV Nightly"
+      description={`The best TV episodes of all time, ranked by viewer rating across every tracked show${
+        results[0] ? ` — led by ${results[0].show_name}'s "${results[0].name ?? epCode(results[0])}"` : ""
+      }. At most three episodes per series.`}
       canonical={canonical(c)}
       ogImage={results[0]?.image_url ? largeStill(results[0].image_url) : undefined}
       ogImageLarge={!!results[0]?.image_url}
@@ -55,9 +55,10 @@ app.get("/best-episodes", async (c) => {
       <article class="chart-page">
         <header class="chart-head">
           <p class="section-eyebrow">The all-time 100</p>
-          <h1 class="chart-h1">The highest-rated TV episodes of all time</h1>
+          <h1 class="chart-h1">Best TV episodes of all time</h1>
           <p class="section-lead">
-            Ranked by viewer rating, weighted against flukes — at most three episodes per show.
+            The 100 highest-rated single episodes across television — ranked by viewer rating, weighted
+            against one-vote flukes, with at most three entries per show.
           </p>
           {results.length ? (
             <p class="chart-statline">
@@ -65,6 +66,9 @@ app.get("/best-episodes", async (c) => {
                 <strong>{results.length}</strong> episodes
               </span>
               <span class="chart-statline-links">
+                <a class="chev-after" href="/tv/best/2010s">
+                  Best of the 2010s
+                </a>
                 <a class="chev-after" href="/top/tv">
                   Top TV shows
                 </a>
@@ -142,21 +146,21 @@ app.get("/best-episodes", async (c) => {
               <div class="explore-grid">
                 <ExploreCard
                   icon="Charts"
-                  title="Top TV shows"
-                  desc="The highest-rated series we track — weight and popularity gate the board."
-                  href="/top/tv"
+                  title="Best TV of the 2010s"
+                  desc="The highest-rated series that premiered during peak-TV decade."
+                  href="/tv/best/2010s"
                 />
                 <ExploreCard
-                  icon="Compare"
-                  title="Compare two shows"
-                  desc="Episode ratings head-to-head on one chart — settle the argument."
-                  href="/compare"
+                  icon="Premieres"
+                  title="Upcoming TV"
+                  desc="In-development series and dated premieres for the year ahead."
+                  href="/upcoming"
                 />
                 <ExploreCard
-                  icon="Directory"
-                  title="Browse everything"
-                  desc="Networks, genres, hubs, and every chart in one directory."
-                  href="/lists"
+                  icon="Shortcut"
+                  title="Emmy Awards"
+                  desc="Frontrunners by category with episode ratings and streaming links."
+                  href={`/awards/emmys/${new Date().getFullYear()}`}
                 />
               </div>
             </section>

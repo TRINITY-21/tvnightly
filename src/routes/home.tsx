@@ -1,17 +1,18 @@
 import { Hono } from "hono";
-import { IconStar, IconReel, IconDial, IconClapper, IconHearts, IconTvPlay, IconVs, IconCal, IconSparkle, IconRoute } from "../components/icons";
 import { FC, PropsWithChildren } from "hono/jsx";
-import { Bindings, ShowRow, TonightRow, MovieRow } from "../types";
-import { visitorRegion, PROVIDER_LOGOS } from "../lib/providers";
-import { epCode, airTime, premiereDateParts, homeDateline, posterSrc, hiRes, heroBg, longDate, stripHtml, slugifyName, isNewYear } from "../lib/format";
-import { tmdbBackdrop, tmdbMovieBackdrop, tmdbPopular, tmdbTrendingList, tmdbUpcomingMovies } from "../lib/tmdb";
-import { toShowRow, toMovieRow } from "../lib/tmdb-rows";
-import { tmdbHeroShow } from "../lib/tmdb-show";
+import { Honeypot, Layout } from "../components/Layout";
+import { MovieCard, ShowCard, StatusBadge } from "../components/cards";
+import { IconCal, IconClapper, IconDial, IconHearts, IconReel, IconRoute, IconSparkle, IconStar, IconTvPlay, IconVs } from "../components/icons";
+import { ProviderLine } from "../components/providers";
+import { airTime, epCode, heroBg, hiRes, homeDateline, isNewYear, longDate, posterSrc, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
+import { PROVIDER_LOGOS, visitorRegion } from "../lib/providers";
+import { communityVerdictTotal } from "../lib/ratings";
 import { liveTonight } from "../lib/schedule-live";
 import { canonical, origin, siteIdentityLd } from "../lib/seo";
-import { Layout } from "../components/Layout";
-import { StatusBadge, ShowCard, MovieCard } from "../components/cards";
-import { ProviderLine } from "../components/providers";
+import { tmdbBackdrop, tmdbMovieBackdrop, tmdbPopular, tmdbTrendingList, tmdbUpcomingMovies } from "../lib/tmdb";
+import { toMovieRow, toShowRow } from "../lib/tmdb-rows";
+import { tmdbHeroShow } from "../lib/tmdb-show";
+import { Bindings, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -203,7 +204,16 @@ app.get("/", async (c) => {
     ep_airdate: string | null;
     ep_airstamp: string | null;
   };
-  const [top, topMovies, tonight, comingMovies, spotTonight, spotPremiere, topStill, heroTop, trendMovies, trendTvRail, arts, heroFallback] = await Promise.all([
+  type BackRow = {
+    slug: string;
+    name: string;
+    image_url: string | null;
+    poster_url: string | null;
+    next_air: string;
+    season: number | null;
+    number: number | null;
+  };
+  const [top, topMovies, tonight, comingMovies, spotTonight, spotPremiere, topStill, heroTop, trendMovies, trendTvRail, arts, heroFallback, verdictTotal, backThisWeek] = await Promise.all([
     // "Popular" rails — live TMDB (always current), card-shaped; D1 fallback inside
     popularShowRail(c),
     popularMovieRail(c),
@@ -212,8 +222,17 @@ app.get("/", async (c) => {
     // stale D1 snapshot that skewed to daytime soaps.
     // most-popular subset (liveTonight is weight-ordered), then back into
     // air-time order so the rail's times read top-to-bottom as they air
-    liveTonight(c).then((r) =>
-      r.slice(0, 12).sort((a, b) => (a.airstamp ?? "").localeCompare(b.airstamp ?? "")),
+    liveTonight(c, undefined, { backfill: true }).then((r) =>
+      // genuine airings ascend by time; curated backfill (no airstamp) sinks last
+      r.slice(0, 12).sort((a, b) =>
+        a.airstamp && b.airstamp
+          ? a.airstamp.localeCompare(b.airstamp)
+          : a.airstamp
+            ? -1
+            : b.airstamp
+              ? 1
+              : 0,
+      ),
     ),
     // Coming up (movie half of the marquee): upcoming releases, popularity-ranked
     upcomingMovieRail(c),
@@ -258,6 +277,29 @@ app.get("/", async (c) => {
          AND weight >= 40 AND status IN ('Running', 'To Be Determined')
        ORDER BY rating DESC, weight DESC LIMIT 1`,
     ).first<ShowRow>(),
+    communityVerdictTotal(c.env.DB),
+    c.env.DB
+      .prepare(
+        `WITH next_premiere AS (
+           SELECT show_id, MIN(airstamp) AS next_air
+           FROM episodes
+           WHERE number = 1
+             AND airstamp > datetime('now', 'start of day', '+1 day')
+             AND airstamp < datetime('now', '+7 days')
+           GROUP BY show_id
+         )
+         SELECT s.slug, s.name, s.image_url, s.poster_url, n.next_air, e.season, e.number
+         FROM next_premiere n
+         JOIN shows s ON s.id = n.show_id
+         JOIN episodes e ON e.show_id = n.show_id AND e.airstamp = n.next_air AND e.number = 1
+         WHERE s.type IN (${MARQUEE_TYPES})
+           AND s.tmdb_id IS NOT NULL
+           AND s.weight >= 55
+           AND s.rating >= 6.5
+         ORDER BY n.next_air ASC, s.weight DESC
+         LIMIT 12`,
+      )
+      .all<BackRow>(),
   ]);
 
   // wrap a plain show row as a hero row (no specific episode attached)
@@ -279,8 +321,9 @@ app.get("/", async (c) => {
   // only the genuine on-tonight hero carries a live dot + air time and de-dupes
   // itself from the schedule rail below
   const heroIsTonight = spot != null && spot === spotTonight;
-  const spotEyebrow = trendingHero
-    ? "Trending now"
+  const heroIsTrending = !!trendingHero;
+  const spotEyebrow = heroIsTrending
+    ? "Trending this week"
     : spotTonight
       ? "On tonight"
       : spotPremiere
@@ -298,6 +341,9 @@ app.get("/", async (c) => {
   // a trending rail needs enough matched titles to read as a rail at all
   const hasTrendTv = trendTvRail.length >= 4;
   const hasTrendMovies = trendMovies.length >= 4;
+  const tonightSlugs = new Set(tonight.map((e) => e.show_slug));
+  const returning = backThisWeek.results.filter((r) => !tonightSlugs.has(r.slug)).slice(0, 8);
+  const showProof = verdictTotal >= 50;
 
   // the sign-on frame: the spotlight show's real designed backdrop (one
   // edge-cached call); falls back to its poster blurred into ambient light
@@ -332,6 +378,13 @@ app.get("/", async (c) => {
             aria-labelledby="spot-title"
           >
             {spotFrame ? <div class="hero-backdrop" style={spotFrame}></div> : null}
+            {showProof ? (
+              <div class="home-proof">
+                <span class="home-proof-chip">
+                  {verdictTotal.toLocaleString()} community ratings
+                </span>
+              </div>
+            ) : null}
             <div class="spot-head">
               {(() => {
                 const p = posterSrc(spot);
@@ -352,8 +405,12 @@ app.get("/", async (c) => {
                 <p class="eyebrow">
                   {heroIsTonight ? <span class="live-dot"></span> : null}
                   {homeDateline()}
-                  <span class="eyebrow-sep">·</span>
-                  {spotEyebrow}
+                  {spotEyebrow ? (
+                    <>
+                      <span class="eyebrow-sep">·</span>
+                      {spotEyebrow}
+                    </>
+                  ) : null}
                   {spotAirTime ? (
                     <span class="eyebrow-time">
                       <span class="eyebrow-sep">·</span>
@@ -415,11 +472,17 @@ app.get("/", async (c) => {
                   </p>
                 ) : null}
                 <ProviderLine row={spot} region={visitorRegion(c)} title={spot.name} pickerType="tv" />
-                <p class="spot-actions">
+                <div class="spot-actions">
+                  <a class="verdict-btn chev-after" href="/recommend">
+                    Rate my taste
+                  </a>
                   <a class="btn-ghost chev-after" href={`/show/${spot.slug}`}>
                     Episode guide & ratings
                   </a>
-                </p>
+                  <a class="spot-action-tertiary" href="/what-to-watch">
+                    Find something tonight
+                  </a>
+                </div>
               </div>
             </div>
           </section>
@@ -451,13 +514,17 @@ app.get("/", async (c) => {
               </div>
               {alsoTonight.length ? (
                 <ShelfRail label="also on tonight" ordered>
-                  {alsoTonight.map((e) => (
+                  {alsoTonight.map((e) => {
+                    // curated backfill rows have no episode (null season) — don't
+                    // stamp them "S00E00" in the tooltip/label
+                    const ep = e.season != null ? ` ${epCode(e)}` : "";
+                    return (
                     <li>
                       <a
                         class="shelf-tile"
                         href={`/show/${e.show_slug}`}
-                        title={`${e.show_name} ${epCode(e)}${e.name ? ` — ${e.name}` : ""}${e.network ? ` · ${e.network}` : ""}`}
-                        aria-label={`${e.show_name} ${epCode(e)}, ${airTime(e.airstamp) ?? "tonight"}`}
+                        title={`${e.show_name}${ep}${e.name ? ` — ${e.name}` : ""}${e.network ? ` · ${e.network}` : ""}`}
+                        aria-label={`${e.show_name}${ep}, ${airTime(e.airstamp) ?? "tonight"}`}
                       >
                         {(e.show_poster ?? e.show_image) ? (
                           <img
@@ -483,7 +550,8 @@ app.get("/", async (c) => {
                       </a>
                       <span class="shelf-name">{e.show_name}</span>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ShelfRail>
               ) : (
                 <p class="muted">
@@ -545,15 +613,99 @@ app.get("/", async (c) => {
               )}
             </div>
           </div>
-          <div class="evening-cta">
-            <a class="verdict-btn" href="/what-to-watch">
-              Find something to watch tonight
+          <div class="evening-cta evening-cta-co">
+            <a class="verdict-btn chev-after" href="/recommend">
+              Rate my taste
             </a>
-            <a class="btn-ghost" href="/recommend">
-              Rate your taste, get a personal pick
+            <a class="verdict-btn verdict-btn-outline" href="/what-to-watch">
+              Find something tonight
             </a>
           </div>
         </section>
+
+        <section class="home-email-strip" aria-labelledby="home-email-title">
+          <form action="/subscribe" method="post" class="home-sub">
+            <input type="hidden" name="kind" value="daily" />
+            <div class="home-sub-copy">
+              <p class="home-sub-title" id="home-email-title">
+                One email when your shows return
+              </p>
+              <p class="home-sub-note muted">
+                Tonight's TV, renewals and premieres — confirm once, unsubscribe anytime.
+              </p>
+            </div>
+            <div class="home-sub-controls">
+              <input
+                type="email"
+                name="email"
+                placeholder="you@email.com"
+                aria-label="Email address"
+                required
+                autocomplete="email"
+              />
+              <Honeypot />
+              <button type="submit">Subscribe</button>
+            </div>
+          </form>
+        </section>
+
+        {returning.length ? (
+          <section class="home-returning">
+            <div class="home-returning-card">
+              <div class="home-returning-head">
+                <h2>Premieres this week</h2>
+                <a class="more" href="/premieres">
+                  all premieres
+                </a>
+              </div>
+              <p class="section-lead muted">New seasons starting in the next seven days — not what's on tonight.</p>
+              <ShelfRail label="premieres this week" ordered>
+                {returning.map((r) => {
+                  const poster = posterSrc(r);
+                  const season =
+                    r.season != null ? `S${String(r.season).padStart(2, "0")}` : null;
+                  const weekday = new Date(r.next_air).toLocaleString("en-US", { weekday: "short" });
+                  const premiereLabel =
+                    r.season != null && r.season > 1 ? `${season} premiere` : "Series premiere";
+                  return (
+                    <li>
+                      <a
+                        class="shelf-tile"
+                        href={`/show/${r.slug}/release-date`}
+                        title={`${r.name}${season ? ` · ${premiereLabel}` : ""}`}
+                        aria-label={`${r.name}, ${premiereLabel}, ${weekday} ${airTime(r.next_air) ?? ""}`}
+                      >
+                        {poster ? (
+                          <img
+                            src={poster.src}
+                            srcset={poster.srcset}
+                            alt={`${r.name} poster`}
+                            width="92"
+                            height="138"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : (
+                          <span class="shelf-fallback">{r.name}</span>
+                        )}
+                        <span class="shelf-chip shelf-chip-date">
+                          <span class="chip-soon">{weekday}</span>
+                          <time data-localtime="compact" datetime={new Date(r.next_air).toISOString()}>
+                            {airTime(r.next_air) ?? longDate(r.next_air.slice(0, 10))}
+                          </time>
+                        </span>
+                      </a>
+                      <span class="shelf-name">
+                        {r.name}
+                        {season ? <span class="home-returning-ep"> · {premiereLabel}</span> : null}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ShelfRail>
+            </div>
+          </section>
+        ) : null}
 
         <section class="home-discover">
           <div class="discover-tabs">

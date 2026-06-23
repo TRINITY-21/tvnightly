@@ -1,22 +1,46 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
+import { EPISODE_GUIDE_BY_SHOW } from "../lib/episode-guides";
+import { buildCaptions, getPromoMoments, promoBase, promoCaptions, type PromoMoment, type PromoTheme } from "../lib/promo";
+import { pad2 } from "../lib/format";
 import { getShow, similarMovies, similarShows } from "../lib/queries";
+import { loadOgFonts, svgToPng } from "../lib/render";
 import { archivoFontCss, posterDataUri } from "../lib/signal";
 import {
-  buildLikedCard,
-  buildListCard,
-  buildPromoCard,
-  buildRatingsCard,
-  buildSimilarPin,
-  buildStatusCard,
-  buildVsCard,
-  toCardEntry,
-  VsSide,
-  type RatingsEp,
+    VsSide,
+    buildLikedCard,
+    buildListCard,
+    buildPromoCard,
+    buildRatingsCard,
+    buildShowcaseCard,
+    buildSimilarPin,
+    buildStatusCard,
+    buildTasteProfileCard,
+    buildVsCard,
+    toCardEntry,
+    type CardEntry,
+    type RatingsEp,
 } from "../lib/social";
-import { loadOgFonts, svgToPng } from "../lib/render";
-import { getPromoMoments, promoCaptions, buildCaptions, promoBase, type PromoMoment, type PromoTheme } from "../lib/promo";
-import { tmdbBackdrop, tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
+import {
+    STUDIO_HOOK_TEMPLATES,
+    bestEpisodesHook,
+    episodeGuideHook,
+    gemsHook,
+    likedHook,
+    peakCode,
+    ratingsHook,
+    showcaseHook,
+    similarHook,
+    statusHook,
+    tasteHook,
+    topHook,
+    vsHook,
+    watchOrderHook,
+} from "../lib/studio-hooks";
+import { tmdbBackdrop, tmdbLogo, tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
+import { resolveShow } from "../lib/tmdb-show";
+import { TV_UNIVERSES, TV_UNIVERSE_BY_SLUG } from "../lib/tv-universes";
+import { socialTrackingLinks } from "../lib/utm";
 import { AppContext, Bindings, MovieRow, ShowRow } from "../types";
 
 const STUDIO_GENRES = [
@@ -216,9 +240,9 @@ type StudioCat = {
   id: string;
   label: string;
   group: "Moments" | "Composer" | "Graphs" | "Pinterest";
-  engine: "promo" | "classic" | "ratings" | "pin";
+  engine: "promo" | "classic" | "ratings" | "pin" | "showcase";
   themes?: PromoTheme[];
-  needs?: "title" | "genre" | "vs";
+  needs?: "title" | "genre" | "vs" | "universe";
   blurb?: string;
 };
 const STUDIO_CATS: StudioCat[] = [
@@ -228,13 +252,37 @@ const STUDIO_CATS: StudioCat[] = [
   { id: "classic", label: "Instant classics", group: "Moments", engine: "promo", themes: ["classic"], blurb: "Episodes that just hit must-watch." },
   { id: "liked", label: "If you liked X", group: "Composer", engine: "classic", needs: "title" },
   { id: "vs", label: "X vs Y", group: "Composer", engine: "classic", needs: "vs" },
+  { id: "showcase", label: "Showcase (4:5)", group: "Composer", engine: "showcase", needs: "vs", blurb: "Dual-poster scroll-stopper for the feed — pick two shows." },
   { id: "top", label: "Top 5 by genre", group: "Composer", engine: "classic", needs: "genre" },
+  { id: "best-eps", label: "Every episode ranked", group: "Composer", engine: "classic", needs: "title", blurb: "Viral ranking hook — lands on /guide or best-episodes." },
+  { id: "taste", label: "TV taste profile", group: "Composer", engine: "classic", blurb: "Spotify Wrapped loop — send people to /recommend." },
+  { id: "watch-order", label: "TV watch order", group: "Composer", engine: "classic", needs: "universe", blurb: "Franchise / spin-off watch order guide." },
   { id: "gems", label: "Hidden gems", group: "Composer", engine: "classic", blurb: "Highly rated, under-watched — auto-picked." },
   { id: "status", label: "Renewed?", group: "Composer", engine: "classic", needs: "title" },
   { id: "ratings", label: "Episode ratings graph", group: "Graphs", engine: "ratings", needs: "title" },
   { id: "pin", label: "Shows like X", group: "Pinterest", engine: "pin", needs: "title", blurb: "A 2:3 pin of a show's closest matches — download & post to Pinterest." },
 ];
 const FMT_LABEL: Record<string, string> = { square: "1:1 Feed", story: "9:16 Story", wide: "16:9 Wide" };
+
+type EpStat = { season: number | null; number: number | null; name: string | null; rating: number | null };
+
+async function loadShowEpisodeStats(db: D1Database, slug: string) {
+  const show = await getShow(db, slug);
+  if (!show) return null;
+  const { results } = await db
+    .prepare(
+      "SELECT season, number, name, rating FROM episodes WHERE show_id = ? AND rating IS NOT NULL ORDER BY rating DESC",
+    )
+    .bind(show.id)
+    .all<EpStat>();
+  const ratedN = results.length;
+  const avg = ratedN ? results.reduce((s, e) => s + (e.rating as number), 0) / ratedN : null;
+  const peak = results[0] ?? null;
+  const worst = ratedN ? results[results.length - 1] : null;
+  const seasons = new Set(results.map((e) => e.season ?? 0)).size;
+  const peakStr = peak?.rating != null ? peakCode(peak.season, peak.number, peak.rating) : null;
+  return { show, results, ratedN, avg, peak, worst, worstRating: worst?.rating ?? null, seasons, peakStr };
+}
 
 app.get("/admin/studio", async (c) => {
   const denied = await requireAdmin(c);
@@ -254,6 +302,11 @@ app.get("/admin/studio", async (c) => {
   const vsKa = c.req.query("ka") === "movie" ? "movie" : "tv";
   const vsB = (c.req.query("b") ?? "").trim();
   const vsKb = c.req.query("kb") === "movie" ? "movie" : "tv";
+  const universeSlug = (c.req.query("universe") ?? TV_UNIVERSES[0]?.slug ?? "").trim();
+  // showcase (dual-poster 4:5) inputs — reuses the vs a/b slugs, plus copy overrides
+  const scHeadline = (c.req.query("headline") ?? "").trim();
+  const scKicker = (c.req.query("kicker") ?? "").trim();
+  const scArt = c.req.query("art") === "backdrop" ? "backdrop" : "poster";
 
   // promo-engine: the moments for this category
   let moments: PromoMoment[] = [];
@@ -275,26 +328,71 @@ app.get("/admin/studio", async (c) => {
       return (await getShow(c.env.DB, sl))?.name ?? null;
     };
     if (cat.engine === "ratings") {
-      const show = await getShow(c.env.DB, slug);
-      if (show) {
-        const { results } = await c.env.DB.prepare(
-          "SELECT season, number, rating FROM episodes WHERE show_id = ? AND rating IS NOT NULL ORDER BY rating DESC",
-        )
-          .bind(show.id)
-          .all<{ season: number | null; number: number | null; rating: number | null }>();
-        const ratedN = results.length;
-        const avg = ratedN ? results.reduce((s, e) => s + (e.rating as number), 0) / ratedN : null;
-        const peak = results[0];
-        const seasons = new Set(results.map((e) => e.season ?? 0)).size;
-        const pk = (n: number | null) => String(n ?? 0).padStart(2, "0");
-        const peakStr = peak ? `S${pk(peak.season)}E${pk(peak.number)} (${(peak.rating as number).toFixed(1)})` : null;
+      const stats = await loadShowEpisodeStats(c.env.DB, slug);
+      if (stats) {
+        const { show, ratedN, avg, seasons, peak, peakStr, worstRating } = stats;
         caps = buildCaptions({
           emoji: "📺",
           title: show.name,
-          hook: `every episode rated${avg != null ? ` — series avg ★${avg.toFixed(1)}` : ""}`,
-          sub: peak ? `${seasons} seasons, ${ratedN} episodes — peaks at ${peakStr}.` : `${seasons} seasons, ${ratedN} episodes.`,
+          hook: ratingsHook(avg, peakStr, worstRating),
+          sub: peak
+            ? `${seasons} seasons, ${ratedN} episodes — peaks at ${peakStr}.`
+            : `${seasons} seasons, ${ratedN} episodes.`,
           link: `${base}/show/${slug}/ratings`,
+          campaign: `${slug}-ratings`,
           tags: ["EpisodeRatings", show.name, "TVShow"],
+        });
+      }
+    } else if (cat.id === "best-eps") {
+      const stats = await loadShowEpisodeStats(c.env.DB, slug);
+      if (stats) {
+        const guide = EPISODE_GUIDE_BY_SHOW.get(slug);
+        const { show, peakStr } = stats;
+        const link = guide ? `${base}/guide/${guide.slug}` : `${base}/show/${slug}/best-episodes`;
+        caps = buildCaptions({
+          emoji: "📊",
+          title: guide?.h1 ?? `Every ${show.name} episode ranked`,
+          hook: guide ? episodeGuideHook(show.name, peakStr) : bestEpisodesHook(peakStr),
+          sub: peakStr ? `Peak is ${peakStr} — full list on the site.` : "Best to worst — every episode scored.",
+          link,
+          campaign: guide ? `${guide.slug}-guide` : `${slug}-best-eps`,
+          tags: ["EpisodeRankings", show.name, "TVShow"],
+        });
+      }
+    } else if (cat.id === "taste") {
+      caps = buildCaptions({
+        emoji: "🎬",
+        title: "What's your TV taste?",
+        hook: tasteHook(),
+        sub: "Share your taste card — friends make their own.",
+        link: `${base}/recommend`,
+        campaign: "taste-profile",
+        tags: ["TVTaste", "WhatToWatch", "TVShow"],
+      });
+    } else if (cat.id === "watch-order") {
+      const u = TV_UNIVERSE_BY_SLUG.get(universeSlug) ?? TV_UNIVERSES[0];
+      if (u) {
+        caps = buildCaptions({
+          emoji: "📺",
+          title: `${u.name} watch order`,
+          hook: watchOrderHook(),
+          sub: `${u.entries.length} series in the right sequence.`,
+          link: `${base}/tv-watch-order/${u.slug}`,
+          campaign: `${u.slug}-watch-order`,
+          tags: ["WatchOrder", u.name, "BingeWatch"],
+        });
+      }
+    } else if (cat.id === "showcase") {
+      const [an, bn] = await Promise.all([nameOf(vsA, "tv"), nameOf(vsB, "tv")]);
+      if (an && bn) {
+        caps = buildCaptions({
+          emoji: "🍿",
+          title: scHeadline || `${an} or ${bn}?`,
+          hook: showcaseHook(),
+          sub: "Episode rankings · where to stream · what's on tonight.",
+          link: `${base}/what-to-watch`,
+          campaign: "showcase",
+          tags: ["WhatToWatch", an, bn, "TVShow"],
         });
       }
     } else if (cat.id === "liked") {
@@ -303,7 +401,7 @@ app.get("/admin/studio", async (c) => {
         caps = buildCaptions({
           emoji: "🍿",
           title: `If you liked ${name}`,
-          hook: "here's what to watch next",
+          hook: likedHook(),
           sub: "The closest matches, ranked — with ratings & where to stream.",
           // land on THIS title's similar page (not the generic recommender) so
           // the click goes straight to "more like X"
@@ -316,7 +414,7 @@ app.get("/admin/studio", async (c) => {
         caps = buildCaptions({
           emoji: "🔔",
           title: name,
-          hook: "renewed or cancelled?",
+          hook: statusHook(),
           sub: "Track every renewal, cancellation & premiere date.",
           link: `${base}/show/${slug}/release-date`,
           tags: ["Renewed", name, "TVShow"],
@@ -329,7 +427,7 @@ app.get("/admin/studio", async (c) => {
         caps = buildCaptions({
           emoji: "⚔️",
           title: `${a} vs ${b}`,
-          hook: "which is better? The episode ratings settle it",
+          hook: vsHook(),
           sub: "Head-to-head, season by season.",
           link: `${base}/${path}`,
           tags: ["Versus", a, b],
@@ -345,7 +443,7 @@ app.get("/admin/studio", async (c) => {
       caps = buildCaptions({
         emoji: "🏆",
         title: `The best ${g} shows`,
-        hook: "the top 5, ranked by rating",
+        hook: topHook(),
         sub: top1 ? `Led by ${top1.name}.` : "The full ranking is on the site.",
         link: `${base}/genre/${genre.toLowerCase()}`,
         tags: ["Top5", `${g}Shows`, ...(top1 ? [top1.name] : []), "TVShow"],
@@ -356,7 +454,7 @@ app.get("/admin/studio", async (c) => {
         caps = buildCaptions({
           emoji: "📌",
           title: `Shows like ${name}`,
-          hook: "the closest matches, ranked",
+          hook: similarHook(),
           sub: "Ratings + where to stream for every pick — no account needed.",
           link: `${base}/show/${slug}/similar`,
           tags: ["ShowsLike", name, "WhatToWatch", "TVShows"],
@@ -368,7 +466,7 @@ app.get("/admin/studio", async (c) => {
       caps = buildCaptions({
         emoji: "💎",
         title: "Hidden gems",
-        hook: "9/10 and barely watched — your next obsession",
+        hook: gemsHook(),
         sub: gem1 ? `Starting with ${gem1.name}.` : "Highly rated shows flying under the radar.",
         link: `${base}/lists`,
         tags: ["HiddenGems", ...(gem1 ? [gem1.name] : []), "TVShow"],
@@ -380,7 +478,7 @@ app.get("/admin/studio", async (c) => {
   const sq = fmt === "square";
   // the preview source + aspect class
   let src = "";
-  let aspect: "square" | "story" | "wide" | "pin" = "story";
+  let aspect: "square" | "story" | "wide" | "pin" | "showcase" = "story";
   let dlName = `tvnightly-${cat.id}.png`;
   if (cat.engine === "promo" && active) {
     src = promoCardUrl(active, fmt);
@@ -390,9 +488,17 @@ app.get("/admin/studio", async (c) => {
     src = `/admin/studio/pin.png?slug=${enc(slug)}`;
     aspect = "pin";
     dlName = `tvnightly-shows-like-${slug}.png`;
+  } else if (cat.engine === "showcase") {
+    src =
+      `/admin/studio/showcase.png?a=${enc(vsA)}&b=${enc(vsB)}&art=${scArt}` +
+      (scHeadline ? `&headline=${enc(scHeadline)}` : "") +
+      (scKicker ? `&kicker=${enc(scKicker)}` : "");
+    aspect = "showcase";
+    dlName = `tvnightly-showcase-${vsA || "a"}-${vsB || "b"}.png`;
   } else if (cat.engine === "classic") {
     src = `/admin/studio/card.svg?format=${cat.id}&fmt=${sq ? "square" : "story"}`;
-    if (cat.id === "liked" || cat.id === "status") src += `&slug=${enc(slug)}&kind=${kind}`;
+    if (cat.id === "liked" || cat.id === "status" || cat.id === "best-eps") src += `&slug=${enc(slug)}&kind=${kind}`;
+    if (cat.id === "watch-order") src += `&universe=${enc(universeSlug)}`;
     if (cat.id === "top") src += `&genre=${enc(genre)}`;
     if (cat.id === "vs") src += `&a=${enc(vsA)}&ka=${vsKa}&b=${enc(vsB)}&kb=${vsKb}`;
     aspect = sq ? "square" : "story";
@@ -411,6 +517,8 @@ app.get("/admin/studio", async (c) => {
   const dims =
     cat.engine === "pin"
       ? "1000 × 1500 · 2:3"
+      : cat.engine === "showcase"
+        ? "1080 × 1350 · 4:5"
       : cat.engine === "promo"
         ? FMT_DIMS[fmt] ?? FMT_DIMS.story
         : sq
@@ -419,7 +527,9 @@ app.get("/admin/studio", async (c) => {
   // a composer/ratings format link that preserves the category's current inputs
   const classicHref = (f: "square" | "story") => {
     let u = `/admin/studio?cat=${cat.id}&fmt=${f}`;
-    if (cat.id === "liked" || cat.id === "status" || cat.engine === "ratings") u += `&slug=${enc(slug)}&kind=${kind}`;
+    if (cat.id === "liked" || cat.id === "status" || cat.id === "best-eps" || cat.engine === "ratings")
+      u += `&slug=${enc(slug)}&kind=${kind}`;
+    if (cat.id === "watch-order") u += `&universe=${enc(universeSlug)}`;
     if (cat.id === "top") u += `&genre=${enc(genre)}`;
     if (cat.id === "vs") u += `&a=${enc(vsA)}&ka=${vsKa}&b=${enc(vsB)}&kb=${vsKb}`;
     return u;
@@ -428,7 +538,9 @@ app.get("/admin/studio", async (c) => {
   const hasTray =
     cat.engine === "ratings" ||
     cat.engine === "pin" ||
-    (cat.engine === "classic" && (cat.needs === "title" || cat.id === "vs" || cat.id === "top")) ||
+    cat.engine === "showcase" ||
+    (cat.engine === "classic" &&
+      (cat.needs === "title" || cat.id === "vs" || cat.id === "top" || cat.needs === "universe")) ||
     (cat.engine === "promo" && moments.length > 0);
 
   return c.html(
@@ -448,8 +560,8 @@ app.get("/admin/studio", async (c) => {
               </span>
             </span>
           </div>
-          <a class="studio-top-link" href="/admin/feedback">
-            Feedback inbox →
+          <a class="studio-top-link chev-after" href="/admin/feedback">
+            Feedback inbox
           </a>
         </header>
 
@@ -465,6 +577,20 @@ app.get("/admin/studio", async (c) => {
                 ))}
               </div>
             ))}
+            <div class="studio-group studio-hooks-group">
+              <h2 class="studio-group-h">Hook templates</h2>
+              <p class="studio-hooks-note muted">Copy a line, swap placeholders, pair with any card.</p>
+              <ul class="studio-hooks">
+                {STUDIO_HOOK_TEMPLATES.map((t) => (
+                  <li class="studio-hook">
+                    <button type="button" class="studio-copy studio-hook-copy" data-copy={t.hook}>
+                      {t.hook}
+                    </button>
+                    <span class="studio-hook-for muted">{t.for}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </aside>
 
           <main class="studio-main">
@@ -473,7 +599,7 @@ app.get("/admin/studio", async (c) => {
               <h2 class="studio-title">{cat.label}</h2>
               {cat.blurb ? <p class="muted studio-sub">{cat.blurb}</p> : null}
             </div>
-            {cat.engine === "pin" ? null : cat.engine === "promo" ? (
+            {cat.engine === "pin" || cat.engine === "showcase" ? null : cat.engine === "promo" ? (
               active ? (
                 <div class="studio-fmts" role="group" aria-label="Format">
                   {(["square", "story", "wide"] as const).map((f) => (
@@ -500,9 +626,14 @@ app.get("/admin/studio", async (c) => {
           {/* controls per category — the input tray */}
           {hasTray ? (
             <div class="studio-tray">
-              {cat.engine === "classic" && (cat.id === "liked" || cat.id === "status") ? (
+              {cat.engine === "classic" && (cat.id === "liked" || cat.id === "status" || cat.id === "best-eps") ? (
                 <div class="studio-search" data-format={cat.id}>
-                  <input id="studio-q" type="search" placeholder="Search a show or movie…" autocomplete="off" />
+                  <input
+                    id="studio-q"
+                    type="search"
+                    placeholder={cat.id === "best-eps" ? "Search a show to rank every episode…" : "Search a show or movie…"}
+                    autocomplete="off"
+                  />
                   <div id="studio-ta" class="studio-ta" hidden></div>
                 </div>
               ) : null}
@@ -528,7 +659,26 @@ app.get("/admin/studio", async (c) => {
                     <input id="studio-qb" type="search" placeholder="Second title…" autocomplete="off" />
                     <div id="studio-tab" class="studio-ta" hidden></div>
                   </div>
-                  <button type="button" id="studio-gen" class="studio-dl-btn">Generate</button>
+                  <button type="button" id="studio-gen" class="studio-dl-btn" data-cat="vs">Generate</button>
+                </div>
+              ) : null}
+              {cat.engine === "showcase" ? (
+                <div class="studio-vs studio-showcase-tray">
+                  <div class="studio-search">
+                    <input id="studio-qa" type="search" placeholder="First show…" autocomplete="off" />
+                    <div id="studio-taa" class="studio-ta" hidden></div>
+                  </div>
+                  <div class="studio-search">
+                    <input id="studio-qb" type="search" placeholder="Second show…" autocomplete="off" />
+                    <div id="studio-tab" class="studio-ta" hidden></div>
+                  </div>
+                  <input id="studio-headline" class="studio-text-in" type="text" placeholder="Headline (optional)" value={scHeadline} />
+                  <input id="studio-kicker" class="studio-text-in" type="text" placeholder="Kicker (optional)" value={scKicker} />
+                  <select id="studio-art" class="studio-text-in">
+                    <option value="poster" selected={scArt === "poster"}>Poster art</option>
+                    <option value="backdrop" selected={scArt === "backdrop"}>Backdrop + logo</option>
+                  </select>
+                  <button type="button" id="studio-gen" class="studio-dl-btn" data-cat="showcase">Generate</button>
                 </div>
               ) : null}
               {cat.id === "top" ? (
@@ -538,6 +688,18 @@ app.get("/admin/studio", async (c) => {
                   <select name="genre">
                     {STUDIO_GENRES.map((g) => (
                       <option value={g} selected={g === genre}>{g === "Science-Fiction" ? "Sci-Fi" : g}</option>
+                    ))}
+                  </select>
+                  <button type="submit">Preview</button>
+                </form>
+              ) : null}
+              {cat.id === "watch-order" ? (
+                <form method="get" action="/admin/studio" class="studio-genre">
+                  <input type="hidden" name="cat" value="watch-order" />
+                  <input type="hidden" name="fmt" value={sq ? "square" : "story"} />
+                  <select name="universe">
+                    {TV_UNIVERSES.map((u) => (
+                      <option value={u.slug} selected={u.slug === universeSlug}>{u.name}</option>
                     ))}
                   </select>
                   <button type="submit">Preview</button>
@@ -580,7 +742,7 @@ app.get("/admin/studio", async (c) => {
               {src ? (
                 <>
                   <p class="studio-actions">
-                    {cat.engine === "promo" || cat.engine === "pin" ? (
+                    {cat.engine === "promo" || cat.engine === "pin" || cat.engine === "showcase" ? (
                       <a id="studio-dl-link" class="studio-dl-btn" href={src} download={dlName}>↓ PNG</a>
                     ) : (
                       <button type="button" id="studio-dl" class="studio-dl-btn">↓ PNG</button>
@@ -620,6 +782,21 @@ app.get("/admin/studio", async (c) => {
                         <button type="button" class="studio-copy">Copy</button>
                       </div>
                       <textarea class="studio-cap-text" readonly rows={5}>{pl.text}</textarea>
+                    </div>
+                  ))}
+                  <h3 class="studio-caps-h">Tracking links</h3>
+                  <p class="muted studio-sub">
+                    UTMs baked in — paste into bio / link tools, or use the matching caption above.
+                  </p>
+                  {socialTrackingLinks(base, caps.path, {
+                    prefix: cat.engine === "promo" && active ? active.theme : cat.id,
+                  }).map((pl) => (
+                    <div class="studio-cap">
+                      <div class="studio-cap-head">
+                        <span>{pl.label}</span>
+                        <button type="button" class="studio-copy">Copy</button>
+                      </div>
+                      <textarea class="studio-cap-text" readonly rows={2}>{pl.url}</textarea>
                     </div>
                   ))}
                 </div>
@@ -671,6 +848,82 @@ app.get("/admin/studio/card.svg", async (c) => {
     const backdropUri = bd ? await posterDataUri(bd.x2 ?? bd.x1) : null;
     const posterUri = await posterDataUri((show.poster_url ?? show.image_url)?.replace("/w342/", "/w500/") ?? null);
     return c.body(buildRatingsCard({ name: show.name, episodes: results, fontCss, backdropUri, posterUri, square }));
+  }
+
+  if (format === "best-eps") {
+    const slug = (c.req.query("slug") ?? "breaking-bad").trim();
+    const stats = await loadShowEpisodeStats(c.env.DB, slug);
+    if (!stats) return c.text(`No show with slug “${slug}”.`, 404);
+    const { show, results } = stats;
+    const posterUri = await posterDataUri((show.poster_url ?? show.image_url)?.replace("/w342/", "/w500/") ?? null);
+    const entries: CardEntry[] = results.slice(0, 5).map((e) => ({
+      name: `S${pad2(e.season)}E${pad2(e.number)}${e.name ? ` · ${e.name}` : ""}`,
+      posterUri,
+      rating: e.rating,
+      genres: [],
+      year: null,
+    }));
+    const guide = EPISODE_GUIDE_BY_SHOW.get(slug);
+    return c.body(
+      buildListCard({
+        eyebrow: "EVERY EPISODE",
+        title: guide?.h1 ?? `${show.name} ranked`,
+        entries,
+        footerLine: "Full ranking at",
+        fontCss,
+        square,
+      }),
+    );
+  }
+
+  if (format === "taste") {
+    const demo = await c.env.DB.prepare("SELECT * FROM shows WHERE slug = 'severance' LIMIT 1").first<ShowRow>();
+    const key = c.env.TMDB_API_KEY;
+    const bd = demo?.tmdb_id && key ? await tmdbBackdrop(key, demo.tmdb_id) : null;
+    const backdropUri = bd ? await posterDataUri(bd.x2 ?? bd.x1) : null;
+    const posterUri = demo
+      ? await posterDataUri((demo.poster_url ?? demo.image_url)?.replace("/w342/", "/w500/") ?? null)
+      : null;
+    const genres: string[] = demo?.genres ? JSON.parse(demo.genres) : [];
+    return c.body(
+      buildTasteProfileCard(
+        {
+          slices: [
+            { label: "Drama", pct: 78 },
+            { label: "Sci-Fi", pct: 22 },
+            { label: "Thriller", pct: 15 },
+          ],
+          era: "2010s prestige",
+          nextName: demo?.name ?? "Severance",
+          nextMeta: genres.slice(0, 2).join(" · ") || null,
+          nextRating: demo?.rating ?? null,
+          posterUri,
+          backdropUri,
+        },
+        fontCss,
+      ),
+    );
+  }
+
+  if (format === "watch-order") {
+    const universeSlug = (c.req.query("universe") ?? TV_UNIVERSES[0]?.slug ?? "").trim();
+    const u = TV_UNIVERSE_BY_SLUG.get(universeSlug) ?? TV_UNIVERSES[0];
+    if (!u) return c.text("No watch order selected.", 400);
+    const ordered = [...u.entries].sort((a, b) => a.order - b.order).slice(0, 5);
+    const shows = (
+      await Promise.all(ordered.map((e) => getShow(c.env.DB, e.showSlug)))
+    ).filter((s): s is ShowRow => !!s);
+    const entries = await Promise.all(shows.map((s) => toCardEntry(s)));
+    return c.body(
+      buildListCard({
+        eyebrow: "WATCH ORDER",
+        title: u.name,
+        entries,
+        footerLine: "Full order at",
+        fontCss,
+        square,
+      }),
+    );
   }
 
   // ---- ranked-list formats ----
@@ -940,6 +1193,56 @@ app.get("/admin/studio/pin.png", async (c) => {
   });
   const fonts = await loadOgFonts(c.env.ASSETS);
   const png = await svgToPng(svg, fonts, 1000);
+  return new Response(png, {
+    headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store" },
+  });
+});
+
+// POC: 1080×1350 "scroll-stopper" showcase card (dual poster + chrome headline).
+// /admin/studio/showcase.png?a=slug&b=slug&headline=...&kicker=...
+app.get("/admin/studio/showcase.png", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+  const q = c.req.query();
+  // default to two top-weight shows with posters so the POC renders out of the box
+  const pick = async (slug: string | undefined, rank: number): Promise<ShowRow | null> => {
+    if (slug) return (await resolveShow(c, slug.trim()))?.show ?? null; // D1, then live TMDB
+    const { results } = await c.env.DB.prepare(
+      "SELECT * FROM shows WHERE poster_url IS NOT NULL AND rating IS NOT NULL ORDER BY rating DESC, weight DESC LIMIT 5",
+    ).all<ShowRow>();
+    return results[rank] ?? null;
+  };
+  const [a, b] = await Promise.all([pick(q.a, 0), pick(q.b, 1)]);
+  if (!a || !b) return c.text("Need two shows with posters.", 404);
+  // vertical key-art poster per half (like the reference). Posters already carry
+  // their own title art, so no logo overlay — that's reserved for textless
+  // backdrops (see ?art=backdrop below) to avoid doubling the title.
+  const key = c.env.TMDB_API_KEY;
+  const useBackdrop = q.art === "backdrop";
+  const side = async (s: ShowRow): Promise<{ imageUri: string | null; logoUri: string | null; name: string }> => {
+    if (useBackdrop) {
+      const [bd, logo] = await Promise.all([
+        s.tmdb_id && key ? tmdbBackdrop(key, s.tmdb_id) : null,
+        s.tmdb_id && key ? tmdbLogo(key, s.tmdb_id) : null,
+      ]);
+      const [imageUri, logoUri] = await Promise.all([posterDataUri(bd?.x2 ?? bd?.x1 ?? null), posterDataUri(logo)]);
+      return { imageUri, logoUri, name: s.name };
+    }
+    const img = (s.poster_url ?? s.image_url)?.replace("/w342/", "/w780/") ?? null;
+    return { imageUri: await posterDataUri(img), logoUri: null, name: s.name };
+  };
+  const [left, right] = await Promise.all([side(a), side(b)]);
+  const svg = buildShowcaseCard({
+    topStrip: q.strip ?? "TV Nightly · What to watch",
+    left,
+    right,
+    panelKicker: q.kicker ?? "Tonight's top picks",
+    headline: q.headline ?? "Tonight, decided",
+    subline: q.sub ?? "Episode rankings · where to stream · what's on tonight",
+    footer: q.footer ?? "Free. No account needed. Updated nightly. tvnightly.com",
+  });
+  const fonts = await loadOgFonts(c.env.ASSETS);
+  const png = await svgToPng(svg, fonts, 1080);
   return new Response(png, {
     headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store" },
   });

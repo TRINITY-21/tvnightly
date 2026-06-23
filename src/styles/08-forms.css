@@ -193,6 +193,22 @@ button, .verdict-btn {
   flex: 1;
   min-width: 0;
 }
+.sub-form.sub-compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+}
+.sub-compact-kicker {
+  flex: 1 1 100%;
+  font-weight: 650;
+  font-size: 0.92rem;
+  color: var(--text);
+}
+.sub-form.sub-compact .sub-controls {
+  flex: 1 1 280px;
+  margin: 0;
+}
 .sub-form input[type="email"] {
   background: var(--bg);
   border: 1px solid var(--line);

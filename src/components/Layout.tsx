@@ -34,6 +34,12 @@ export const setGaId = (id?: string) => {
   gaId = id;
 };
 
+// When false, skip GA + Cloudflare Web Analytics (e.g. /admin/* tooling pages).
+let siteAnalytics = true;
+export const setSiteAnalytics = (enabled: boolean) => {
+  siteAnalytics = enabled;
+};
+
 // Off-screen decoy field for the subscribe forms. Real visitors never see or fill
 // it; bots auto-fill every input, so a non-empty value on POST /subscribe is a
 // reliable bot tell. Zero UI, zero friction — and the double opt-in confirmation
@@ -72,6 +78,8 @@ const BROWSE_PATHS = [
   "/movies",
   "/tv",
   "/best-episodes",
+  "/upcoming",
+  "/awards",
   "/loved",
   "/watch-orders",
   "/watch-order",
@@ -100,6 +108,8 @@ const browseSections = (year: number): { kicker: string; links: [string, string]
     links: [
       [`Best shows of ${year}`, `/tv/best/${year}`],
       [`Best movies of ${year}`, `/movies/best/${year}`],
+      ["Best TV of the 2010s", "/tv/best/2010s"],
+      ["Best episodes ever", "/best-episodes"],
       ["Underrated shows", "/tv/underrated"],
       ["Underrated movies", "/movies/underrated"],
     ],
@@ -114,7 +124,8 @@ const browseSections = (year: number): { kicker: string; links: [string, string]
   {
     kicker: "Upcoming & new",
     links: [
-      ["Upcoming TV", "/premieres"],
+      ["Upcoming TV", "/upcoming"],
+      ["TV premieres", "/premieres"],
       ["Upcoming movies", "/movies/upcoming"],
       ["New on streaming", "/whats-new"],
       ["Renewals & dates", "/renewals"],
@@ -126,6 +137,8 @@ const browseSections = (year: number): { kicker: string; links: [string, string]
       ["What to watch", "/what-to-watch"],
       ["Get a recommendation", "/recommend"],
       ["Watch orders", "/watch-orders"],
+      ["TV watch orders", "/tv-watch-orders"],
+      ["Episode rankings", "/guides"],
     ],
   },
 ];
@@ -210,8 +223,8 @@ export const Layout: FC<
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      {/* Google Analytics 4 (gtag.js) — as high in <head> as possible */}
-      {gaId
+      {/* Google Analytics 4 (gtag.js) — skipped on /admin/* (see setSiteAnalytics). */}
+      {gaId && siteAnalytics
         ? raw(
             `<script async src="https://www.googletagmanager.com/gtag/js?id=${gaId}"></script>` +
               `<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${gaId}');</script>`,
@@ -270,8 +283,8 @@ export const Layout: FC<
       {ogImage ? <meta name="twitter:image:alt" content={ogImageAlt} /> : null}
       <link rel="stylesheet" href="/styles.css" />
       {(props.ld ?? []).map((d) => jsonLd(d))}
-      {/* Cloudflare Web Analytics — deferred, privacy-first, renders only when configured. */}
-      {cfBeaconToken
+      {/* Cloudflare Web Analytics — skipped on /admin/* alongside GA. */}
+      {cfBeaconToken && siteAnalytics
         ? raw(
             `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"${cfBeaconToken}"}'></script>`,
           )

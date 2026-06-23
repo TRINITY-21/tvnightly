@@ -262,25 +262,63 @@
     setTimeout(function () { window.location.href = href; }, 2700);
   })();
 
-  // ---- 2. copy your taste link ----------------------------------------
+  // ---- 2. copy + share taste profile links ---------------------------
   (function copyLink() {
-    var btn = document.querySelector(".rec-copy");
-    if (!btn) return;
-    var original = btn.textContent;
-    btn.addEventListener("click", function () {
-      var done = function () {
-        btn.textContent = btn.getAttribute("data-copied") || "Copied";
-        btn.classList.add("is-copied");
-        setTimeout(function () { btn.textContent = original; btn.classList.remove("is-copied"); }, 1800);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(window.location.href).then(done).catch(done);
-      } else {
-        var t = document.createElement("textarea");
-        t.value = window.location.href; document.body.appendChild(t); t.select();
-        try { document.execCommand("copy"); } catch (e) {}
-        document.body.removeChild(t); done();
-      }
+    function bindCopy(btn, getUrl) {
+      if (!btn) return;
+      var original = btn.textContent;
+      btn.addEventListener("click", function () {
+        var url = getUrl();
+        var done = function () {
+          btn.textContent = btn.getAttribute("data-copied") || "Copied";
+          btn.classList.add("is-copied");
+          setTimeout(function () {
+            btn.textContent = original;
+            btn.classList.remove("is-copied");
+          }, 1800);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done).catch(done);
+        } else {
+          var t = document.createElement("textarea");
+          t.value = url;
+          document.body.appendChild(t);
+          t.select();
+          try {
+            document.execCommand("copy");
+          } catch (e) {}
+          document.body.removeChild(t);
+          done();
+        }
+      });
+    }
+    document.querySelectorAll(".rec-copy-taste").forEach(function (btn) {
+      bindCopy(btn, function () {
+        return btn.getAttribute("data-url") || window.location.href;
+      });
+    });
+    bindCopy(document.querySelector(".rec-copy"), function () {
+      var btn = document.querySelector(".rec-copy");
+      return (btn && btn.getAttribute("data-url")) || window.location.href;
+    });
+  })();
+
+  (function shareProfile() {
+    document.querySelectorAll(".rec-profile-share").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var url = btn.getAttribute("data-share-url");
+        var title = btn.getAttribute("data-share-title") || "My TV taste profile";
+        if (!url) return;
+        if (navigator.share) {
+          navigator.share({ title: title, url: url }).catch(function () {});
+        } else if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url);
+          btn.textContent = "Link copied";
+          setTimeout(function () {
+            btn.textContent = "Share your profile";
+          }, 1800);
+        }
+      });
     });
   })();
 })();

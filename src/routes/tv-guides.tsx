@@ -14,6 +14,7 @@ import { ExploreCard, ShowCard } from "../components/cards";
 import { FilterSelect } from "../components/forms";
 import { headshot, heroBg, hiRes, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
+import { parseDecadeSlug, TV_DECADES } from "../lib/decades";
 import { genreDirectory } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
@@ -368,13 +369,210 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
   );
 }
 
-app.get("/tv/best/:year/:genre", (c) =>
-  bestYearPage(c, Number(c.req.param("year")), c.req.param("genre")),
-);
-app.get("/tv/best/:year", (c) => {
+// ------------------------------------------ Best [genre] TV shows of the {decade}
+
+async function bestDecadePage(c: AppContext, decadeSlug: string, genreSlug?: string) {
+  const decade = parseDecadeSlug(decadeSlug);
+  if (!decade) return c.notFound();
+  const db = c.env.DB;
+  const region = visitorRegion(c);
+  const dir = await genreDirectory(db);
+
+  let genre = "";
+  if (genreSlug) {
+    const match = dir.tv.find((g) => slugifyName(g) === genreSlug);
+    if (!match) return c.redirect(`/tv/best/${decade.label}`, 301);
+    genre = match;
+  }
+  const lower = genre.toLowerCase();
+  const premFrom = `${decade.start}-01-01`;
+  const premTo = `${decade.end}-12-31`;
+
+  const conds = ["rating IS NOT NULL", "weight >= ?", "premiered >= ?", "premiered <= ?"];
+  const binds: (string | number)[] = [SHOW_QUALITY_WEIGHT, premFrom, premTo];
+  if (genre) {
+    conds.push("genres LIKE ?");
+    binds.push(`%"${genre}"%`);
+  }
+  const { results: rows } = await db
+    .prepare(
+      `SELECT * FROM shows WHERE ${conds.join(" AND ")} ORDER BY rating DESC, weight DESC LIMIT 50`,
+    )
+    .bind(...binds)
+    .all<ShowRow>();
+
+  const { art, ambient } = await topArt(c, rows[0]);
+  const heading = genre
+    ? `The best ${lower} TV shows of the ${decade.label}`
+    : `The best TV shows of the ${decade.label}`;
+  const site = origin(c);
+  const siblings = dir.tv.filter((g) => g !== genre);
+
+  const faqs = [
+    {
+      q: genre
+        ? `What are the best ${lower} TV shows of the ${decade.label}?`
+        : `What are the best TV shows of the ${decade.label}?`,
+      a: rows.length
+        ? `Our top picks are ${nameList(rows, 3)} — ranked by viewer rating among series that premiered between ${decade.start} and ${decade.end}.`
+        : `We're still filling in rated ${genre ? `${lower} ` : ""}shows from the ${decade.label}.`,
+    },
+    {
+      q: `How is this ${decade.label} list ranked?`,
+      a: `By real viewer rating on TVmaze, gated to shows that premiered in the ${decade.label} (${decade.start}–${decade.end}).`,
+    },
+    {
+      q: `Where can I watch these ${genre ? `${lower} ` : ""}shows?`,
+      a: "Every series links to its page with live streaming availability for your country.",
+    },
+  ];
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.html(
+    <Layout
+      title={`Best ${genre ? `${genre} ` : ""}TV Shows of the ${decade.label} | TV Nightly`}
+      description={`The best ${genre ? `${lower} ` : ""}TV shows of the ${decade.label}, ranked by viewer rating${rows.length ? ` — ${nameList(rows, 3)} and more` : ""}.`}
+      canonical={canonical(c)}
+      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
+      scripts={["/js/dropdown.js"]}
+      ld={[
+        {
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          name: heading,
+          itemListElement: rows.slice(0, 25).map((s, i) => ({
+            "@type": "ListItem",
+            position: i + 1,
+            name: s.name,
+            url: `${site}/show/${s.slug}`,
+          })),
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "TV shows", item: `${site}/top/tv` },
+            { "@type": "ListItem", position: 2, name: heading, item: canonical(c) },
+          ],
+        },
+        faqLd(faqs),
+      ]}
+    >
+      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
+        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
+        <div class="wo-hero-body">
+          <p class="section-eyebrow">{decade.label} watch guide</p>
+          <h1>{heading}</h1>
+          <p class="wo-intro">
+            The defining {genre ? `${lower} ` : ""}series of the {decade.label} — ranked by real viewer
+            rating among shows that premiered from {decade.start} through {decade.end}.
+          </p>
+          <p class="hub-actions">
+            <a class="verdict-btn" href={`/what-to-watch${genre ? `?genre=${encodeURIComponent(genre)}` : ""}`}>
+              Pick me {genre ? `${aOrAn(lower)} ${lower}` : "a"} show
+            </a>
+            <a class="btn-ghost" href="/best-episodes">
+              Best episodes ever
+            </a>
+            <a class="btn-ghost" href="/upcoming">
+              Upcoming TV
+            </a>
+          </p>
+        </div>
+      </header>
+
+      <form method="get" action={`/tv/best/${decade.label}`} class="region-line watch-region" data-submit-on-change>
+        <FilterSelect
+          label="Genre"
+          name="genre"
+          current={genre ? slugifyName(genre) : ""}
+          options={[
+            { value: "", text: "All genres" },
+            ...dir.tv.map((g) => ({ value: slugifyName(g), text: g })),
+          ]}
+        />
+      </form>
+
+      <section class="hub-sec">
+        <h2>The {decade.label} ranking</h2>
+        {rows.length ? (
+          <ShowRankList rows={rows} region={region} />
+        ) : (
+          <p class="muted">No rated {lower || ""} shows for that filter yet.</p>
+        )}
+      </section>
+
+      <section class="hub-sec">
+        <h2>More decades</h2>
+        <div class="footer-picks">
+          {TV_DECADES.filter((d) => d !== decade.label).map((d) => (
+            <a class="footer-card" href={`/tv/best/${d}${genre ? `/${slugifyName(genre)}` : ""}`}>
+              Best of the {d}
+            </a>
+          ))}
+        </div>
+      </section>
+
+      {genre ? (
+        <section class="hub-sec">
+          <h2>Best {decade.label} by genre</h2>
+          <div class="footer-picks">
+            <a class="footer-card" href={`/tv/best/${decade.label}`}>
+              All genres
+            </a>
+            {siblings.map((g) => (
+              <a class="footer-card" href={`/tv/best/${decade.label}/${slugifyName(g)}`}>
+                {g}
+              </a>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <FaqSection items={faqs} />
+
+      <section class="wo-doors">
+        <h2>Keep exploring</h2>
+        <div class="explore-grid">
+          <ExploreCard
+            icon="The chart"
+            title="Top TV shows of all time"
+            desc="The all-time ranking by viewer rating."
+            href="/top/tv"
+          />
+          <ExploreCard
+            icon="Shortcut"
+            title="Best episodes ever"
+            desc="The single greatest hours of television."
+            href="/best-episodes"
+          />
+          <ExploreCard
+            icon="Premieres"
+            title={`Best TV of ${new Date().getFullYear()}`}
+            desc="What's worth watching this year."
+            href={`/tv/best/${new Date().getFullYear()}`}
+          />
+        </div>
+      </section>
+    </Layout>,
+  );
+}
+
+app.get("/tv/best/:yearOrDecade/:genre", (c) => {
+  const p = c.req.param("yearOrDecade");
+  if (parseDecadeSlug(p)) return bestDecadePage(c, p, c.req.param("genre"));
+  return bestYearPage(c, Number(p), c.req.param("genre"));
+});
+app.get("/tv/best/:yearOrDecade", (c) => {
+  const p = c.req.param("yearOrDecade");
+  if (parseDecadeSlug(p)) {
+    const g = (c.req.query("genre") ?? "").trim();
+    if (g) return c.redirect(`/tv/best/${p}/${slugifyName(g)}`, 301);
+    return bestDecadePage(c, p);
+  }
   const g = (c.req.query("genre") ?? "").trim();
-  if (g) return c.redirect(`/tv/best/${c.req.param("year")}/${slugifyName(g)}`, 301);
-  return bestYearPage(c, Number(c.req.param("year")));
+  if (g) return c.redirect(`/tv/best/${p}/${slugifyName(g)}`, 301);
+  return bestYearPage(c, Number(p));
 });
 
 // --------------------------------------------------- Underrated [genre] shows

@@ -183,7 +183,7 @@ const studioMark = (mx: number, my: number, h: number) => {
   );
 };
 
-const studioBrand = (y = 76) => {
+const studioBrand = (y = 76, showDot = true) => {
   const markH = 28;
   const markW = (markH * 36) / 24;
   const wordX = SM + markW + 12;
@@ -193,7 +193,7 @@ const studioBrand = (y = 76) => {
     `<g opacity="0.92" filter="url(#textGlow)">` +
     studioMark(SM, y - 24, markH) +
     txt(wordX, y, "TV NIGHTLY", { size: 26, fill: TEXT, wght: 800, wdth: 118, ls: 2 }) +
-    `<circle cx="${wordX + 218}" cy="${y - 7}" r="5" fill="${AMBER}"/>` +
+    (showDot ? `<circle cx="${wordX + 218}" cy="${y - 7}" r="5" fill="${AMBER}"/>` : "") +
     `</g>`
   );
 };
@@ -893,6 +893,155 @@ export function buildOgCard(d: OgCardData): string {
 }
 
 // ============================================================================
+// Showcase card — 1080×1350 (4:5) "scroll-stopper" in the streaming-ad idiom:
+// a dual-poster hero up top, then a premium dark panel with a brushed-chrome
+// headline + the brand lockup. Resvg-safe (txtR + static Archivo, gradient fills
+// on text are supported). Modeled on the HBO Max promo language but on-brand.
+// ============================================================================
+
+const SHOWCASE_W = 1080;
+const SHOWCASE_H = 1350;
+
+export interface ShowcaseSide {
+  imageUri: string | null; // backdrop/poster, cover-cropped to fill the half
+  logoUri?: string | null; // transparent title logo (PNG) overlaid near the foot
+  name: string; // fallback title when no logo art exists
+}
+export interface ShowcaseCardData {
+  topStrip?: string | null; // thin top banner, e.g. "TV NIGHTLY · WHAT TO WATCH"
+  left: ShowcaseSide;
+  right: ShowcaseSide;
+  panelKicker: string; // amber tracked label above the headline
+  headline: string; // the big brushed-chrome line
+  subline?: string | null; // muted support line
+  footer?: string | null; // fine print at the very bottom
+}
+
+// a full-bleed cover image clipped to a rect (no rounded corners — edge-to-edge
+// like the reference). Falls back to an amber initial plate when art is missing.
+function coverImg(uri: string | null, name: string, x: number, y: number, w: number, h: number, id: string): string {
+  if (!uri)
+    return (
+      `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" fill="#17171c"/>` +
+      txtR(x + w / 2, y + h / 2, trunc(name, 12), { size: 56, w: "black", fill: AMBER, anchor: "middle" })
+    );
+  return (
+    `<clipPath id="${id}"><rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}"/></clipPath>` +
+    `<image href="${uri}" x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>`
+  );
+}
+
+export function buildShowcaseCard(d: ShowcaseCardData): string {
+  const W = SHOWCASE_W;
+  const H = SHOWCASE_H;
+  const stripH = d.topStrip ? 64 : 0;
+  const postersTop = stripH;
+  const panelTop = 858; // posters fill stripH..858, the dark panel runs to H
+  const colW = W / 2;
+  const p: string[] = [];
+  p.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`,
+  );
+  p.push(
+    `<defs>` +
+      // brushed chrome: bright top, dark mid band, bright again — the metal sheen
+      `<linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="0.4" stop-color="#d4d8dd"/><stop offset="0.5" stop-color="#8a8f96"/><stop offset="0.54" stop-color="#6e747b"/><stop offset="0.72" stop-color="#eef1f4"/><stop offset="1" stop-color="#a9adb3"/></linearGradient>` +
+      `<linearGradient id="panel" x1="0" y1="0" x2="0.25" y2="1"><stop offset="0" stop-color="#20242c"/><stop offset="1" stop-color="#0b0b0e"/></linearGradient>` +
+      // scrim that fades the bottom of the posters into the panel
+      `<linearGradient id="blend" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0"/><stop offset="1" stop-color="#15171c" stop-opacity="1"/></linearGradient>` +
+      // soft sheen sweeping across the panel for a touch of texture
+      `<linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0.3"><stop offset="0" stop-color="#ffffff" stop-opacity="0"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0.05"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>` +
+      // per-half scrim so an overlaid logo reads on bright art
+      `<linearGradient id="half" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.55" stop-color="#000" stop-opacity="0.05"/><stop offset="1" stop-color="#000" stop-opacity="0.78"/></linearGradient>` +
+      `<filter id="csh" x="-20%" y="-30%" width="140%" height="160%"><feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#000" flood-opacity="0.6"/></filter>` +
+      `<filter id="lsh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#000" flood-opacity="0.7"/></filter>` +
+      `</defs>`,
+  );
+  p.push(`<rect width="${W}" height="${H}" fill="${PLATE}"/>`);
+
+  // ---- dual hero: a cover image per half + the show's logo overlaid near its foot ----
+  const ph = panelTop - postersTop;
+  const half = (s: ShowcaseSide, x: number, id: string) => {
+    p.push(coverImg(s.imageUri, s.name, x, postersTop, colW, ph, `${id}-img`));
+    // darken the lower half so the logo/title pops
+    p.push(`<rect x="${r2(x)}" y="${postersTop}" width="${colW}" height="${ph}" fill="url(#half)"/>`);
+    // overlay the transparent logo only in backdrop mode; a poster carries its
+    // own title art, and coverImg() names the true no-art fallback plate.
+    if (s.logoUri) {
+      const boxW = colW * 0.74;
+      const boxH = 132;
+      const bx = x + (colW - boxW) / 2;
+      const by = panelTop - 52 - boxH;
+      p.push(
+        `<image href="${s.logoUri}" x="${r2(bx)}" y="${r2(by)}" width="${r2(boxW)}" height="${boxH}" preserveAspectRatio="xMidYMid meet" filter="url(#lsh)"/>`,
+      );
+    }
+  };
+  half(d.left, 0, "sc-a");
+  half(d.right, colW, "sc-b");
+  p.push(`<rect x="${r2(colW - 1.5)}" y="${postersTop}" width="3" height="${ph}" fill="#000" opacity="0.45"/>`);
+  // blend the hero feet into the panel
+  p.push(`<rect x="0" y="${panelTop - 140}" width="${W}" height="140" fill="url(#blend)"/>`);
+
+  // ---- top strip ----
+  if (d.topStrip) {
+    p.push(`<rect width="${W}" height="${stripH}" fill="#0a0a0c"/>`);
+    p.push(txtR(W / 2, stripH * 0.65, d.topStrip.toUpperCase(), { size: 24, w: "black", fill: TEXT, ls: 4, anchor: "middle" }));
+  }
+
+  // ---- premium panel ----
+  p.push(`<rect x="0" y="${panelTop}" width="${W}" height="${H - panelTop}" fill="url(#panel)"/>`);
+  p.push(`<rect x="0" y="${panelTop}" width="${W}" height="${H - panelTop}" fill="url(#sheen)"/>`);
+  p.push(`<rect x="0" y="${panelTop}" width="${W}" height="2" fill="#ffffff" opacity="0.06"/>`);
+
+  // panel kicker (amber, tracked)
+  let y = panelTop + 78;
+  p.push(txtR(W / 2, y, d.panelKicker.toUpperCase(), { size: 27, w: "bold", fill: AMBER, ls: 4, anchor: "middle" }));
+
+  // big brushed-chrome headline — sized to fit one or two lines
+  const CHARW = 0.6;
+  const cap = 132;
+  const hLines = wrap(d.headline.toUpperCase(), 16, 2);
+  const longest = Math.max(1, ...hLines.map((l) => l.length));
+  const hSize = Math.min(cap, Math.floor((W - 120) / (longest * CHARW)));
+  y += 34;
+  for (const ln of hLines) {
+    y += hSize;
+    p.push(
+      `<text x="${r2(W / 2)}" y="${r2(y)}" font-size="${hSize}" font-family="${FAM.black}" fill="url(#chrome)" text-anchor="middle" filter="url(#csh)">${esc(ln)}</text>`,
+    );
+    y += Math.round(hSize * 0.04);
+  }
+
+  // subline
+  if (d.subline) {
+    y += 50;
+    p.push(txtR(W / 2, y, d.subline, { size: 30, w: "semi", fill: MUTED, anchor: "middle" }));
+  }
+
+  // ---- brand lockup, centered near the bottom (mark + wordmark + dot) ----
+  const lockY = H - (d.footer ? 116 : 84);
+  const markH = 40;
+  const markW = (markH * 36) / 24;
+  const word = "TV NIGHTLY";
+  const wordSize = 40;
+  const wordW = word.length * wordSize * 0.62;
+  const groupW = markW + 18 + wordW + 26;
+  const gx = (W - groupW) / 2;
+  p.push(ogMark(gx, lockY - markH + 6, markH));
+  p.push(txtR(gx + markW + 18, lockY, word, { size: wordSize, w: "black", fill: TEXT, ls: 1.5 }));
+  p.push(`<circle cx="${r2(gx + markW + 18 + wordW + 12)}" cy="${r2(lockY - 11)}" r="8" fill="${AMBER}"/>`);
+
+  // fine print
+  if (d.footer) {
+    p.push(txtR(W / 2, H - 46, d.footer, { size: 20, w: "semi", fill: "#7c7d82", anchor: "middle" }));
+  }
+
+  p.push(`</svg>`);
+  return p.join("");
+}
+
+// ============================================================================
 // Pinterest pin — 1000×1500 (2:3) PORTRAIT PNG for a show's "Shows like X" page.
 // Pinterest is a visual search engine that ranks tall 2:3 pins, and "shows like
 // {X}" is one of its most-saved query shapes — so this is the branded, evergreen
@@ -1368,6 +1517,232 @@ export function buildLikedOgCard(hero: CardEntry, picks: CardEntry[], backdropUr
   });
 
   p.push(txtR(OG_W - OG_M, OG_H - 36, "tvnightly.com", { size: 25, w: "black", fill: AMBER, anchor: "end", ls: 0.5 }));
+  p.push(`</svg>`);
+  return p.join("");
+}
+
+export interface TasteProfileCardData {
+  slices: { label: string; pct: number }[];
+  era: string | null;
+  nextName: string;
+  nextMeta: string | null;
+  nextRating: number | null;
+  posterUri: string | null;
+  backdropUri: string | null;
+}
+
+const TASTE_LABEL = "#f5f1e8"; // section heads — bright enough after PNG raster
+const TASTE_META = "#e2dcd0"; // secondary lines, louder than site muted on image cards
+const TASTE_PAD = 36;
+
+const tasteCardDefs = () =>
+  `<linearGradient id="tastePanel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1b20"/><stop offset="1" stop-color="#131316"/></linearGradient>` +
+  `<linearGradient id="tasteBar0" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff8f2e"/><stop offset="1" stop-color="#ffb86a"/></linearGradient>` +
+  `<linearGradient id="tasteBar1" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${GOLD}"/><stop offset="1" stop-color="#f5d87a"/></linearGradient>` +
+  `<linearGradient id="tasteBar2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#cdb24a"/><stop offset="1" stop-color="#e7c76a"/></linearGradient>` +
+  `<filter id="tasteCardShadow" x="-6%" y="-3%" width="112%" height="108%"><feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#000" flood-opacity="0.42"/></filter>`;
+
+const tasteSectionTick = (x: number, y: number, w = 64) =>
+  `<rect x="${x}" y="${y}" width="${w}" height="4" rx="2" fill="${AMBER}"/>`;
+
+const tasteCardHeader = (x: number, y: number, pad: number, title: string, titleFill: string) =>
+  tasteSectionTick(x + pad, y + 28) + txt(x + pad, y + 64, title, { size: 26, fill: titleFill, wght: 900, wdth: 82, ls: 5.5 });
+
+function tasteDonut(cx: number, cy: number, r: number, strokeW: number, slices: { label: string; pct: number }[]): string {
+  const circ = 2 * Math.PI * r;
+  const gap = 6;
+  let offset = 0;
+  const out: string[] = [];
+  out.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${PANEL_HI}" stroke-width="${strokeW}"/>`);
+  slices.slice(0, 3).forEach((s, i) => {
+    const dash = (s.pct / 100) * circ;
+    const seg = Math.max(1, dash - gap);
+    out.push(
+      `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="url(#tasteBar${i})" stroke-width="${strokeW}"` +
+        ` stroke-linecap="butt" stroke-dasharray="${r2(seg)} ${r2(circ - seg)}" stroke-dashoffset="${r2(-offset)}"` +
+        ` transform="rotate(-90 ${cx} ${cy})"/>`,
+    );
+    offset += dash;
+  });
+  const top = slices[0];
+  if (top) {
+    out.push(txt(cx, cy - 8, `${top.pct}%`, { size: 54, fill: TEXT, anchor: "middle", wght: 900, wdth: 104 }));
+    out.push(
+      txt(cx, cy + 36, trunc(top.label.toUpperCase(), 11), {
+        size: 20,
+        fill: TASTE_LABEL,
+        anchor: "middle",
+        wght: 800,
+        ls: 2.5,
+        wdth: 88,
+      }),
+    );
+  }
+  return out.join("");
+}
+
+function tasteLegendRow(x: number, y: number, w: number, label: string, pct: number, i: number): string {
+  const barH = 14;
+  const fillW = Math.max(barH, Math.round((pct / 100) * w));
+  const pctFill = i === 0 ? AMBER : TEXT;
+  return (
+    `<g filter="url(#textGlow)">` +
+    `<circle cx="${x + 8}" cy="${y - 4}" r="7" fill="url(#tasteBar${i})"/>` +
+    txt(x + 28, y, label.toUpperCase(), { size: 28, fill: TEXT, wght: 900, ls: 1.1, wdth: 90 }) +
+    txt(x + w, y, `${pct}%`, { size: 34, fill: pctFill, wght: 900, anchor: "end", wdth: 92 }) +
+    `<rect x="${x}" y="${y + 20}" width="${w}" height="${barH}" rx="${barH / 2}" fill="#050506"/>` +
+    `<rect x="${x}" y="${y + 20}" width="${fillW}" height="${barH}" rx="${barH / 2}" fill="url(#tasteBar${i})"/>` +
+    `</g>`
+  );
+}
+
+function tasteBreakdownCard(x: number, y: number, w: number, h: number, d: TasteProfileCardData): string {
+  const pad = TASTE_PAD;
+  const out: string[] = [];
+  out.push(
+    `<g filter="url(#tasteCardShadow)">` +
+      `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="24" fill="url(#tastePanel)" stroke="#34343c"/>` +
+      `<rect x="${x + 1}" y="${y + 1}" width="${w - 2}" height="${h - 2}" rx="23" fill="none" stroke="rgba(255,255,255,0.035)"/>` +
+      `</g>`,
+  );
+  out.push(tasteCardHeader(x, y, pad, "WHAT YOU WATCH", TASTE_LABEL));
+
+  const contentY = y + 112;
+  const donutCol = 272;
+  const colGap = 34;
+  const legendX = x + pad + donutCol + colGap;
+  const legendW = w - pad * 2 - donutCol - colGap;
+  const rowPitch = 92;
+  const rowsTop = contentY + 24;
+  const blockH = rowPitch * Math.min(d.slices.length, 3);
+  const donutCx = x + pad + donutCol / 2;
+  const donutCy = rowsTop + blockH / 2;
+  out.push(tasteDonut(donutCx, donutCy, 112, 28, d.slices));
+
+  d.slices.slice(0, 3).forEach((s, i) => {
+    out.push(tasteLegendRow(legendX, rowsTop + 28 + i * rowPitch, legendW, s.label, s.pct, i));
+  });
+
+  if (d.era) {
+    const sy = y + h - pad;
+    out.push(
+      `<line x1="${x + pad}" y1="${sy - 34}" x2="${x + w - pad}" y2="${sy - 34}" stroke="#303037"/>` +
+        txt(x + pad, sy, "SWEET SPOT", { size: 24, fill: TASTE_LABEL, wght: 900, ls: 4, wdth: 80 }) +
+        txt(x + w - pad, sy, d.era.toUpperCase(), { size: 24, fill: AMBER, wght: 900, ls: 2, anchor: "end", wdth: 90 }),
+    );
+  }
+  return out.join("");
+}
+
+function tasteNextWatchCard(x: number, y: number, w: number, h: number, d: TasteProfileCardData): string {
+  const pad = TASTE_PAD;
+  const out: string[] = [];
+  out.push(
+    `<g filter="url(#tasteCardShadow)">` +
+      `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="24" fill="url(#tastePanel)" stroke="#34343c"/>` +
+      `<rect x="${x + 1}" y="${y + 1}" width="${w - 2}" height="${h - 2}" rx="23" fill="none" stroke="rgba(255,255,255,0.035)"/>` +
+      `</g>`,
+  );
+  out.push(tasteCardHeader(x, y, pad, "NEXT WATCH", AMBER));
+
+  const contentY = y + 94;
+  const pw = 116;
+  const ph = 174;
+  const px = x + pad;
+  const py = contentY;
+  out.push(poster(d.posterUri, d.nextName, px, py, pw, ph, "tp-next"));
+  const tx = px + pw + 32;
+  const textTop = py + 8;
+  const nameLines = wrap(d.nextName.toUpperCase(), 14, 2);
+  const ns = nameLines.length > 1 ? 44 : 54;
+  nameLines.forEach((ln, i) => {
+    out.push(txt(tx, textTop + 36 + i * (ns + 8), ln, { size: ns, fill: TEXT, wght: 900, wdth: 106 }));
+  });
+  const metaY = textTop + 36 + nameLines.length * (ns + 8) + 14;
+  if (d.nextMeta) out.push(txt(tx, metaY, trunc(d.nextMeta, 28), { size: 26, fill: TASTE_META, wght: 800 }));
+  if (d.nextRating != null) {
+    const chipY = metaY + 32;
+    out.push(
+      `<rect x="${tx - 2}" y="${chipY}" width="104" height="44" rx="12" fill="${PANEL_HI}" stroke="${LINE}"/>` +
+        studioRatingMark(tx + 18, chipY + 31, 26, d.nextRating, GOLD, "start"),
+    );
+  }
+  return out.join("");
+}
+
+/** Portrait taste story card — wrapped-style share frame. */
+export function buildTasteProfileCard(d: TasteProfileCardData, fontCss: string | null = null): string {
+  const f = frame(false);
+  const heroH = 520;
+  const cardX = 64;
+  const cardW = SW - cardX * 2;
+  const card1Y = heroH + 36;
+  const card1H = 560;
+  const card2Y = card1Y + card1H + 40;
+  const card2H = 286;
+  const p: string[] = [];
+
+  p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SW} ${f.H}" font-family="Archivo, ${SYS}">`);
+  p.push(studioDefs(fontCss).replace("</defs>", tasteCardDefs() + "</defs>"));
+  p.push(`<rect width="${SW}" height="${f.H}" fill="url(#bg)"/>`);
+  p.push(heroBackdrop(d.backdropUri, d.posterUri, d.nextName, heroH, "tp-hero"));
+  p.push(studioBrand(76, false));
+
+  p.push(
+    `<g filter="url(#textGlow)">` +
+      txt(SM, heroH - 96, "MY TV TASTE", { size: 30, fill: AMBER, wght: 900, wdth: 112, ls: 8 }) +
+      txt(SM, heroH - 18, "PROFILE", { size: 110, fill: TEXT, wght: 900, wdth: 108, ls: 1 }) +
+      `</g>`,
+  );
+
+  p.push(tasteBreakdownCard(cardX, card1Y, cardW, card1H, d));
+  p.push(tasteNextWatchCard(cardX, card2Y, cardW, card2H, d));
+  p.push(studioFooter("Rate a few shows · get yours at", f.fy, f.H));
+  p.push(`</svg>`);
+  return p.join("");
+}
+
+/** Landscape unfurl for /recommend/taste share links. */
+export function buildTasteProfileOgCard(d: TasteProfileCardData): string {
+  const p: string[] = [];
+  p.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_W}" height="${OG_H}" viewBox="0 0 ${OG_W} ${OG_H}" font-family="Archivo, ${SYS}">`,
+  );
+  p.push(ogDefs());
+  p.push(`<rect width="${OG_W}" height="${OG_H}" fill="url(#bg)"/>`);
+  if (d.backdropUri) {
+    p.push(
+      `<image href="${d.backdropUri}" x="0" y="0" width="${OG_W}" height="${OG_H}" preserveAspectRatio="xMidYMid slice" opacity="0.55"/>`,
+    );
+    p.push(`<rect width="${OG_W}" height="${OG_H}" fill="url(#vscrim)"/>`);
+  }
+  p.push(ogBrand());
+  p.push(txtR(OG_M, 176, "MY TV TASTE", { size: 22, w: "bold", fill: AMBER, ls: 6 }));
+  p.push(txtR(OG_M, 228, "PROFILE", { size: 56, w: "black", fill: TEXT, ls: 1 }));
+
+  const summary = d.slices.map((s) => `${s.pct}% ${s.label}`).join(" · ");
+  p.push(txtR(OG_M, 296, trunc(summary, 48), { size: 32, w: "black", fill: TEXT }));
+  if (d.era) p.push(txtR(OG_M, 340, `Sweet spot · ${d.era}`, { size: 22, w: "semi", fill: MUTED }));
+
+  p.push(txtR(OG_M, 396, "NEXT WATCH", { size: 20, w: "bold", fill: AMBER, ls: 3 }));
+  const titleLines = wrap(d.nextName.toUpperCase(), 18, 2);
+  const ts = titleLines.length > 1 ? 44 : 52;
+  let ty = 432;
+  titleLines.forEach((ln) => {
+    ty += ts;
+    p.push(txtR(OG_M, ty, ln, { size: ts, w: "black", fill: TEXT }));
+    ty += 6;
+  });
+  if (d.nextMeta) p.push(txtR(OG_M, ty + 16, trunc(d.nextMeta, 36), { size: 22, w: "semi", fill: MUTED }));
+  if (d.nextRating != null) p.push(ratingMark(OG_M, ty + 50, 28, d.nextRating, GOLD, "start"));
+
+  const pw = 200;
+  const ph = 300;
+  const px = OG_W - OG_M - pw;
+  const py = Math.round((OG_H - ph) / 2);
+  p.push(`<g filter="url(#ds)">${poster(d.posterUri ?? null, d.nextName, px, py, pw, ph, "tp-og")}</g>`);
+
+  p.push(ogFooter(px - 48));
   p.push(`</svg>`);
   return p.join("");
 }

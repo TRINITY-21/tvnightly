@@ -762,5 +762,146 @@
         "note": "Ignores everything after T2"
       }
     ]
+  },
+  {
+    "slug": "dc-extended-universe",
+    "name": "DC Extended Universe",
+    "aka": "DCEU",
+    "intro": "Release order — the Snyder-era films were built for theatrical drops, and the character introductions land that way. Shazam and Birds of Prey slot in cleanly without a strict timeline.",
+    "entries": [
+      { "title": "Man of Steel", "year": 2013, "chrono": 1 },
+      { "title": "Batman v Superman: Dawn of Justice", "year": 2016, "chrono": 2 },
+      { "title": "Suicide Squad", "year": 2016, "chrono": 4 },
+      { "title": "Wonder Woman", "year": 2017, "chrono": 3, "note": "Mostly WWI — flashback slot" },
+      { "title": "Justice League", "year": 2017, "chrono": 5 },
+      { "title": "Aquaman", "year": 2018, "chrono": 6 },
+      { "title": "Shazam!", "year": 2019, "chrono": 7 },
+      { "title": "Birds of Prey", "year": 2020, "chrono": 8 },
+      { "title": "Wonder Woman 1984", "year": 2020, "chrono": 9 },
+      { "title": "Zack Snyder's Justice League", "year": 2021, "chrono": 5, "note": "Alternate cut — replaces theatrical JL" },
+      { "title": "The Suicide Squad", "year": 2021, "chrono": 10 },
+      { "title": "Black Adam", "year": 2022, "chrono": 11 },
+      { "title": "Shazam! Fury of the Gods", "year": 2023, "chrono": 12 },
+      { "title": "The Flash", "year": 2023, "chrono": 13 },
+      { "title": "Blue Beetle", "year": 2023, "chrono": 14 },
+      { "title": "Aquaman and the Lost Kingdom", "year": 2023, "chrono": 15 }
+    ]
+  },
+  {
+    "slug": "james-bond",
+    "name": "James Bond",
+    "intro": "Strict release order for a first watch — each Bond is mostly standalone, but the series evolves with its era and the callbacks accumulate.",
+    "entries": [
+      { "title": "Dr. No", "year": 1962, "chrono": 1 },
+      { "title": "From Russia with Love", "year": 1963, "chrono": 2 },
+      { "title": "Goldfinger", "year": 1964, "chrono": 3 },
+      { "title": "Thunderball", "year": 1965, "chrono": 4 },
+      { "title": "You Only Live Twice", "year": 1967, "chrono": 5 },
+      { "title": "On Her Majesty's Secret Service", "year": 1969, "chrono": 6 },
+      { "title": "Diamonds Are Forever", "year": 1971, "chrono": 7 },
+      { "title": "Live and Let Die", "year": 1973, "chrono": 8 },
+      { "title": "The Man with the Golden Gun", "year": 1974, "chrono": 9 },
+      { "title": "The Spy Who Loved Me", "year": 1977, "chrono": 10 },
+      { "title": "Moonraker", "year": 1979, "chrono": 11 },
+      { "title": "For Your Eyes Only", "year": 1981, "chrono": 12 },
+      { "title": "Octopussy", "year": 1983, "chrono": 13 },
+      { "title": "A View to a Kill", "year": 1985, "chrono": 14 },
+      { "title": "The Living Daylights", "year": 1987, "chrono": 15 },
+      { "title": "Licence to Kill", "year": 1989, "chrono": 16 },
+      { "title": "GoldenEye", "year": 1995, "chrono": 17 },
+      { "title": "Tomorrow Never Dies", "year": 1997, "chrono": 18 },
+      { "title": "The World Is Not Enough", "year": 1999, "chrono": 19 },
+      { "title": "Die Another Day", "year": 2002, "chrono": 20 },
+      { "title": "Casino Royale", "year": 2006, "chrono": 21, "note": "Hard reboot — Craig era starts" },
+      { "title": "Quantum of Solace", "year": 2008, "chrono": 22 },
+      { "title": "Skyfall", "year": 2012, "chrono": 23 },
+      { "title": "Spectre", "year": 2015, "chrono": 24 },
+      { "title": "No Time to Die", "year": 2021, "chrono": 25 }
+    ]
+  },
+  {
+    "slug": "rocky",
+    "name": "Rocky & Creed",
+    "intro": "Rocky I–VI in order, then the Creed spin-offs — Adonis's arc assumes you've seen at least the original Rocky and Rocky Balboa.",
+    "entries": [
+      { "title": "Rocky", "year": 1976, "chrono": 1 },
+      { "title": "Rocky II", "year": 1979, "chrono": 2 },
+      { "title": "Rocky III", "year": 1982, "chrono": 3 },
+      { "title": "Rocky IV", "year": 1985, "chrono": 4 },
+      { "title": "Rocky V", "year": 1990, "chrono": 5 },
+      { "title": "Rocky Balboa", "year": 2006, "chrono": 6 },
+      { "title": "Creed", "year": 2015, "chrono": 7 },
+      { "title": "Creed II", "year": 2018, "chrono": 8 },
+      { "title": "Creed III", "year": 2023, "chrono": 9 }
+    ]
+  },
+  {
+    "slug": "alien",
+    "name": "Alien",
+    "intro": "Release order is the classic path. Chronological (Prometheus first) is for rewatchers who already know what a xenomorph is.",
+    "chronoNote": "Prometheus and Covenant are prequels set before the original Alien.",
+    "entries": [
+      { "title": "Alien", "year": 1979, "chrono": 3 },
+      { "title": "Aliens", "year": 1986, "chrono": 4 },
+      { "title": "Alien 3", "year": 1992, "chrono": 5 },
+      { "title": "Alien Resurrection", "year": 1997, "chrono": 6 },
+      { "title": "Prometheus", "year": 2012, "chrono": 1, "note": "Prequel — chronologically first" },
+      { "title": "Alien: Covenant", "year": 2017, "chrono": 2, "note": "Prequel — between Prometheus and Alien" },
+      { "title": "Alien: Romulus", "year": 2024, "chrono": 7, "note": "Set between Alien and Aliens" }
+    ]
+  },
+  {
+    "slug": "planet-of-the-apes",
+    "name": "Planet of the Apes",
+    "intro": "Two canons: the original 1968–1973 pentalogy (plus Tim Burton's 2001 one-off), and the modern Caesar trilogy. Pick one line and stay in release order within it.",
+    "entries": [
+      { "title": "Planet of the Apes", "year": 1968, "chrono": 1, "note": "Original series" },
+      { "title": "Beneath the Planet of the Apes", "year": 1970, "chrono": 2 },
+      { "title": "Escape from the Planet of the Apes", "year": 1971, "chrono": 3 },
+      { "title": "Conquest of the Planet of the Apes", "year": 1972, "chrono": 4 },
+      { "title": "Battle for the Planet of the Apes", "year": 1973, "chrono": 5 },
+      { "title": "Rise of the Planet of the Apes", "year": 2011, "chrono": 6, "note": "Caesar trilogy — reboot" },
+      { "title": "Dawn of the Planet of the Apes", "year": 2014, "chrono": 7 },
+      { "title": "War for the Planet of the Apes", "year": 2017, "chrono": 8 },
+      { "title": "Kingdom of the Planet of the Apes", "year": 2024, "chrono": 9 }
+    ]
+  },
+  {
+    "slug": "pirates-of-the-caribbean",
+    "name": "Pirates of the Caribbean",
+    "intro": "Release order — the first three are a complete arc; four and five are optional epilogues.",
+    "entries": [
+      { "title": "Pirates of the Caribbean: The Curse of the Black Pearl", "year": 2003, "chrono": 1 },
+      { "title": "Pirates of the Caribbean: Dead Man's Chest", "year": 2006, "chrono": 2 },
+      { "title": "Pirates of the Caribbean: At World's End", "year": 2007, "chrono": 3 },
+      { "title": "Pirates of the Caribbean: On Stranger Tides", "year": 2011, "chrono": 4 },
+      { "title": "Pirates of the Caribbean: Dead Men Tell No Tales", "year": 2017, "chrono": 5 }
+    ]
+  },
+  {
+    "slug": "transformers",
+    "name": "Transformers",
+    "intro": "Bayhem in release order — the first film still holds up; everything after is increasingly optional. Rise of the Beasts soft-reboots the timeline.",
+    "entries": [
+      { "title": "Transformers", "year": 2007, "chrono": 1 },
+      { "title": "Transformers: Revenge of the Fallen", "year": 2009, "chrono": 2 },
+      { "title": "Transformers: Dark of the Moon", "year": 2011, "chrono": 3 },
+      { "title": "Transformers: Age of Extinction", "year": 2014, "chrono": 4 },
+      { "title": "Transformers: The Last Knight", "year": 2017, "chrono": 5 },
+      { "title": "Bumblebee", "year": 2018, "chrono": 6, "note": "Soft prequel/reboot" },
+      { "title": "Transformers: Rise of the Beasts", "year": 2023, "chrono": 7 }
+    ]
+  },
+  {
+    "slug": "halloween",
+    "name": "Halloween",
+    "intro": "Pick your timeline: the original 1978 + 2018 trilogy is the cleanest modern path. The Thorn trilogy (4–6) and H20 timeline are for completists only.",
+    "entries": [
+      { "title": "Halloween", "year": 1978, "chrono": 1, "note": "Start here" },
+      { "title": "Halloween II", "year": 1981, "chrono": 2 },
+      { "title": "Halloween", "year": 2018, "chrono": 3, "note": "Direct sequel — ignores 3–6, H20, Rob Zombie" },
+      { "title": "Halloween Kills", "year": 2021, "chrono": 4 },
+      { "title": "Halloween Ends", "year": 2022, "chrono": 5 }
+    ]
   }
 ]

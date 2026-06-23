@@ -1,23 +1,25 @@
 import { Hono } from "hono";
-import { IconStar, IconPlay } from "../components/icons";
 import { raw } from "hono/html";
 import { Layout } from "../components/Layout";
 import { ClampSummary, ExploreCard } from "../components/cards";
 import { VsCard } from "../components/compare";
 import { DossierRow } from "../components/dossier";
+import { ShowBlurb } from "../components/editorial";
 import { FilterSelect, RateInline, SubscribeForm } from "../components/forms";
+import { IconPlay, IconStar } from "../components/icons";
 import { SeasonTabs, ShowTabs } from "../components/nav";
 import { ProviderLine } from "../components/providers";
 import { ShareBar } from "../components/share";
-import { tmdbShowData, resolveShow, tmdbShowCast } from "../lib/tmdb-show";
+import { ShowConvertBand } from "../components/show-convert";
 import { buildDossier } from "../lib/dossier";
-import { comparePathFor, epCode, epHref, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml, fmtRuntime, isNewYear } from "../lib/format";
+import { comparePathFor, epCode, epHref, fmtRuntime, heroBg, hiRes, isNewYear, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, visitorRegion } from "../lib/providers";
-import { getShow, similarShows, crewLinkMap } from "../lib/queries";
-import { titleStat, aggregateRatingLd } from "../lib/ratings";
+import { crewLinkMap, getShow, similarShows } from "../lib/queries";
+import { aggregateRatingLd, titleRaterCount, titleStat } from "../lib/ratings";
 import { breadcrumbLd, breadcrumbTrail, canonical, faqLd, origin } from "../lib/seo";
-import { tmdbBackdrop, tmdbMedia, tmdbShowCreators, tmdbRecommendations } from "../lib/tmdb";
+import { tmdbBackdrop, tmdbMedia, tmdbRecommendations, tmdbShowCreators } from "../lib/tmdb";
 import { toShowRow } from "../lib/tmdb-rows";
+import { resolveShow, tmdbShowCast, tmdbShowData } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
 import { Bindings, EpisodeRow, ShowRow } from "../types";
 
@@ -104,7 +106,7 @@ app.get("/show/:slug", async (c) => {
       ? tmdbShowCast(c.env.TMDB_API_KEY, show.tmdb_id)
       : Promise.resolve([] as CastTile[]);
   // one bound COUNT instead of the full network GROUP-BY scan per pageview
-  const [similar, stat, aggRating, netCount, cast] = await Promise.all([
+  const [similar, stat, aggRating, netCount, cast, raterCount] = await Promise.all([
     similarShows(c.env.DB, show),
     titleStat(c.env.DB, "tv", ratingRef),
     aggregateRatingLd(c.env.DB, "tv", ratingRef),
@@ -116,6 +118,7 @@ app.get("/show/:slug", async (c) => {
           .first<{ c: number }>()
       : Promise.resolve(null),
     castFetch,
+    titleRaterCount(c.env.DB, "tv", ratingRef),
   ]);
   const netEntry =
     netName && (netCount?.c ?? 0) >= 3 ? { name: netName, slug: slugifyName(netName) } : undefined;
@@ -334,15 +337,20 @@ app.get("/show/:slug", async (c) => {
                 )
               ) : null}
               {show.blurb ? (
-                <aside class="blurb">
-                  <span class="blurb-label">The TV Nightly take</span>
-                  <p>{show.blurb}</p>
-                </aside>
+                <ShowBlurb text={show.blurb} />
               ) : null}
             </div>
           </div>
         </header>
         <ShowTabs slug={show.slug} current="overview" />
+        <ShowConvertBand
+          show={show}
+          ratingRef={ratingRef}
+          stat={stat}
+          raterCount={raterCount}
+          episodes={episodes}
+          similar={similar.slice(0, 3)}
+        />
         {(() => {
           const nextEp = episodes.find((e) => e.airstamp && new Date(e.airstamp) > new Date());
           return nextEp ? (
@@ -944,6 +952,10 @@ app.get("/show/:slug/similar", async (c) => {
   if (!similar.length) return c.redirect(`/show/${show.slug}`, 302);
   const region = visitorRegion(c);
   const base = `/show/${show.slug}/similar`;
+  const [stat, raterCount] = await Promise.all([
+    titleStat(c.env.DB, "tv", r.ratingRef),
+    titleRaterCount(c.env.DB, "tv", r.ratingRef),
+  ]);
 
   const backdrop =
     show.tmdb_id && c.env.TMDB_API_KEY
@@ -1009,6 +1021,14 @@ app.get("/show/:slug/similar", async (c) => {
           </div>
         </header>
         <ShowTabs slug={show.slug} current="similar" />
+        <ShowConvertBand
+          show={show}
+          ratingRef={r.ratingRef}
+          stat={stat}
+          raterCount={raterCount}
+          episodes={r.episodes}
+          hideSimilar
+        />
         <section>
           <h2>The closest matches</h2>
           <ol class="dossier-board">
@@ -1042,7 +1062,6 @@ app.get("/show/:slug/similar", async (c) => {
             </a>
           </div>
         </section>
-        <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
       </article>
     </Layout>,
   );

@@ -66,6 +66,12 @@
 }
 .blurb p { margin: 0; }
 
+/* editorial blurb under epreg ranking titles */
+.epreg-h1 + .blurb {
+  margin-top: 0.2rem;
+  margin-bottom: 0.85rem;
+}
+
 .ep-list { list-style: none; padding: 0; }
 .ep-list li { padding: 0.32rem 0; border-bottom: 1px solid var(--line); }
 /* episode cue sheet: production codes, dot leaders, one shared gold rail */

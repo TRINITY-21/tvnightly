@@ -59,6 +59,7 @@ export interface ShowRow {
   providers_intl: string | null; // JSON object: country code -> service names
   tmdb_id: number | null; // bridged from TVmaze external ids (provider patrol)
   type: string | null; // TVmaze classification: Scripted, Animation, Reality, Talk Show, News, …
+  updated_at?: number; // TVmaze "updated" epoch (seconds) — sync freshness signal
 }
 
 export interface EpisodeRow {

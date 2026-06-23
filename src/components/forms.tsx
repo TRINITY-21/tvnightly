@@ -1,11 +1,15 @@
 // Interactive fragments: verdict buttons, alert signup, filter dropdowns.
 import { FC } from "hono/jsx";
-import { FaceLove, FaceLike, FaceMeh, FaceAwful } from "./icons";
 import { Honeypot } from "./Layout";
+import { FaceAwful, FaceLike, FaceLove, FaceMeh } from "./icons";
 
 /** One-tap verdict buttons + community stat — every title page collects data.
  *  rate.js intercepts the submit and records the verdict in place (no nav). */
-export const RateInline: FC<{ kind: string; refId: string; stat: string | null }> = ({ kind, refId, stat }) => (
+export const RateInline: FC<{ kind: string; refId: string; stat?: string | null }> = ({
+  kind,
+  refId,
+  stat = null,
+}) => (
   <div class="rate-inline">
     <span class="rate-inline-label muted">{stat ?? "Seen it?"}</span>
     {(
@@ -45,6 +49,24 @@ export const SubscribeForm: FC<{ showId: number; label: string }> = ({ showId, l
     </div>
     <div class="sub-controls">
       <input id="sub-email" type="email" name="email" placeholder="you@example.com" required />
+      <button type="submit">Notify me</button>
+    </div>
+    <Honeypot />
+  </form>
+);
+
+/** Compact alert capture for above-the-fold conversion bands on show pages. */
+export const SubscribeCompact: FC<{ showId: number; showName: string; kicker?: string }> = ({
+  showId,
+  showName,
+  kicker,
+}) => (
+  <form action="/subscribe" method="post" class="sub-form sub-compact">
+    <input type="hidden" name="kind" value="renewal" />
+    <input type="hidden" name="show_id" value={String(showId)} />
+    <span class="sub-compact-kicker">{kicker ?? `Email me when ${showName} returns`}</span>
+    <div class="sub-controls">
+      <input type="email" name="email" placeholder="you@example.com" required autocomplete="email" />
       <button type="submit">Notify me</button>
     </div>
     <Honeypot />

@@ -1,0 +1,132 @@
+[
+  {
+    "slug": "game-of-thrones",
+    "name": "Game of Thrones universe",
+    "aka": "Westeros & Essos",
+    "intro": "Watch Game of Thrones first — it's the spine of the franchise. House of the Dragon is a prequel set ~200 years earlier; you can start there, but the original series pays off more if you've seen the main saga.",
+    "entries": [
+      { "showSlug": "game-of-thrones", "order": 1, "note": "Start here — 8 seasons" },
+      { "showSlug": "house-of-the-dragon", "order": 2, "note": "Prequel — Targaryen civil war" }
+    ]
+  },
+  {
+    "slug": "breaking-bad",
+    "name": "Breaking Bad universe",
+    "aka": "Albuquerque crime saga",
+    "intro": "Breaking Bad first, then Better Call Saul — Saul is a prequel but written to reward viewers who already know where everyone ends up. El Camino (the movie) goes last.",
+    "entries": [
+      { "showSlug": "breaking-bad", "order": 1 },
+      { "showSlug": "better-call-saul", "order": 2, "note": "Prequel — watch after BB for maximum payoff" }
+    ]
+  },
+  {
+    "slug": "the-walking-dead",
+    "name": "The Walking Dead universe",
+    "intro": "The flagship series first, then the spin-offs in release order — each assumes you know the world rules even when the timeline jumps.",
+    "entries": [
+      { "showSlug": "the-walking-dead", "order": 1 },
+      { "showSlug": "fear-the-walking-dead", "order": 2, "note": "Companion prequel/sequel hybrid" },
+      { "showSlug": "the-walking-dead-dead-city", "order": 3 },
+      { "showSlug": "the-walking-dead-daryl-dixon", "order": 4 }
+    ]
+  },
+  {
+    "slug": "yellowstone",
+    "name": "Yellowstone & Taylor Sheridan universe",
+    "intro": "Yellowstone is the anchor. The prequels 1883 and 1923 fill in the Dutton origin story — watch Yellowstone through at least Season 1 before the prequels for context.",
+    "entries": [
+      { "showSlug": "yellowstone", "order": 1 },
+      { "showSlug": "1883", "order": 2, "note": "Origin prequel" },
+      { "showSlug": "1923", "order": 3, "note": "Next-generation prequel" },
+      { "showSlug": "mayor-of-kingstown", "order": 4, "note": "Same creator — optional side door" }
+    ]
+  },
+  {
+    "slug": "star-trek",
+    "name": "Star Trek (modern era)",
+    "intro": "No single \"correct\" order across 60 years of Trek — this is the modern streaming-era path: Discovery as a soft entry, then Strange New Worlds and the rest in release order.",
+    "entries": [
+      { "showSlug": "star-trek-discovery", "order": 1, "note": "Soft modern entry point" },
+      { "showSlug": "star-trek-strange-new-worlds", "order": 2 },
+      { "showSlug": "star-trek-picard", "order": 3, "note": "Next Generation sequel" },
+      { "showSlug": "star-trek-lower-decks", "order": 4, "note": "Animated comedy — optional" }
+    ]
+  },
+  {
+    "slug": "marvel-tv-netflix",
+    "name": "Marvel Netflix / street-level MCU",
+    "intro": "The Defenders saga in release order — Daredevil is the crown jewel, but Jessica Jones and Luke Cage interleave cleanly if you watch as they originally dropped.",
+    "entries": [
+      { "showSlug": "daredevil", "order": 1 },
+      { "showSlug": "jessica-jones", "order": 2 },
+      { "showSlug": "luke-cage", "order": 3 },
+      { "showSlug": "iron-fist", "order": 4, "note": "Weakest link — still skippable" },
+      { "showSlug": "the-defenders", "order": 5, "note": "Crossover miniseries" },
+      { "showSlug": "the-punisher", "order": 6, "note": "Spin-off — after DD S2" }
+    ]
+  },
+  {
+    "slug": "marvel-disney-plus",
+    "name": "Marvel Disney+ phase",
+    "intro": "Phase 4 TV in release order — WandaVision kicks off the multiverse thread; Loki and What If? branch from there. No strict episode-level interleaving required.",
+    "entries": [
+      { "showSlug": "wandavision", "order": 1 },
+      { "showSlug": "the-falcon-and-the-winter-soldier", "order": 2 },
+      { "showSlug": "loki", "order": 3 },
+      { "showSlug": "what-if", "order": 4, "note": "Anthology — optional" },
+      { "showSlug": "hawkeye", "order": 5 },
+      { "showSlug": "moon-knight", "order": 6 },
+      { "showSlug": "ms-marvel", "order": 7 },
+      { "showSlug": "she-hulk-attorney-at-law", "order": 8 }
+    ]
+  },
+  {
+    "slug": "star-wars-tv",
+    "name": "Star Wars live-action TV",
+    "intro": "The Mandalorian first — it defined the tone. Book of Boba Fett and Ahsoka extend the same era; Andor is a standalone prequel you can slot in anytime after Mando S1.",
+    "entries": [
+      { "showSlug": "the-mandalorian", "order": 1 },
+      { "showSlug": "the-book-of-boba-fett", "order": 2 },
+      { "showSlug": "ahsoka", "order": 3, "note": "Rebels sequel — more rewarding if you know Clone Wars" },
+      { "showSlug": "andor", "order": 4, "note": "Prequel — standalone tone piece" },
+      { "showSlug": "obi-wan-kenobi", "order": 5, "note": "Optional — between PT and OT" }
+    ]
+  },
+  {
+    "slug": "doctor-who-modern",
+    "name": "Doctor Who (2005 revival)",
+    "intro": "Start with Series 1 (2005) — the Russell T Davies era. New Who is designed for newcomers; you don't need Classic Who first, though it rewards deep cuts.",
+    "entries": [
+      { "showSlug": "doctor-who", "order": 1, "note": "2005 revival — Series 1 onward" }
+    ]
+  },
+  {
+    "slug": "arrowverse",
+    "name": "Arrowverse (CW DC)",
+    "intro": "Arrow first, then the spin-offs in release order. The big crossovers (Crisis on Infinite Earths) land harder if you've followed the main shows through their early seasons.",
+    "entries": [
+      { "showSlug": "arrow", "order": 1 },
+      { "showSlug": "the-flash", "order": 2 },
+      { "showSlug": "legends-of-tomorrow", "order": 3 },
+      { "showSlug": "supergirl", "order": 4 },
+      { "showSlug": "batwoman", "order": 5, "note": "Optional late entry" }
+    ]
+  },
+  {
+    "slug": "the-office",
+    "name": "The Office (US) & mockumentary cousins",
+    "intro": "The US Office stands alone — watch straight through. Parks and Rec shares DNA but no plot dependency; slot it in whenever you finish Scranton.",
+    "entries": [
+      { "showSlug": "the-office", "order": 1 },
+      { "showSlug": "parks-and-recreation", "order": 2, "note": "Same mockumentary DNA — no plot tie-in" }
+    ]
+  },
+  {
+    "slug": "lord-of-the-rings-tv",
+    "name": "Middle-earth on screen",
+    "intro": "Peter Jackson's films first if you haven't seen them — Rings of Power is a prequel set in the Second Age and assumes you know what a Ring is.",
+    "entries": [
+      { "showSlug": "the-lord-of-the-rings-the-rings-of-power", "order": 1, "note": "Amazon prequel series" }
+    ]
+  }
+]

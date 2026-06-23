@@ -4,14 +4,13 @@
 // — a branded card (see buildPromoCard) + platform captions.
 import type { AppContext } from "../types";
 import { origin } from "./seo";
-import { slugifyName } from "./format";
+import { pad2, slugifyName } from "./format";
 import { tmdbTrendingList } from "./tmdb";
 import { liveTonight } from "./schedule-live";
+import { utmCampaignFromPath, withUtm } from "./utm";
 
 const tmdbImg = (path: string | null | undefined, size = "w342") =>
   path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
-
-const pad2 = (n: number | null) => String(n ?? 0).padStart(2, "0");
 
 export type PromoTheme =
   | "trending"
@@ -275,12 +274,16 @@ const HASH_BASE = ["TVNightly", "WhatToWatch"];
 const camel = (s: string) => s.replace(/[^a-zA-Z0-9]+/g, "");
 
 /** Platform-flavored captions for a moment: a hook + the link + hashtags. The
- *  founder copies one and posts it. */
+ *  founder copies one and posts it. Links include UTMs per platform. */
 export function promoCaptions(
   m: PromoMoment,
   base: string,
-): { x: string; instagram: string; tiktok: string } {
-  const link = `${base}${m.path}`;
+): { x: string; instagram: string; tiktok: string; path: string } {
+  const path = m.path;
+  const campaign = utmCampaignFromPath(path, m.theme);
+  const link = `${base.replace(/\/+$/, "")}${path}`;
+  const xLink = withUtm(link, "x", campaign);
+  const tiktokLink = withUtm(link, "tiktok", campaign);
   const titleTag = camel(m.title).slice(0, 28);
   const themeTag: Record<PromoTheme, string> = {
     trending: "Trending",
@@ -308,17 +311,18 @@ export function promoCaptions(
   const hook = m.note ?? m.kicker;
 
   // X / Twitter — punchy, link inline, fewer tags
-  const x = `${e} ${m.title}${rating} — ${hook}.\n\n${link}\n\n${tags.slice(0, 3).join(" ")}`;
+  const x = `${e} ${m.title}${rating} — ${hook}.\n\n${xLink}\n\n${tags.slice(0, 3).join(" ")}`;
   // Instagram — caption-style, "link in bio", full tag block
   const instagram = `${e} ${m.kicker.toUpperCase()}: ${m.title}${rating}\n\n${hook}. Full episode ratings, renewals & where to stream at TV Nightly — link in bio.\n\n${tags.join(" ")} #StreamingTV #BingeWatch`;
   // TikTok — hook-first, short
-  const tiktok = `${m.title}${rating} ${e}\n${hook} 👀\n${link}\n\n${tags.join(" ")} #fyp #TVTok`;
-  return { x, instagram, tiktok };
+  const tiktok = `${m.title}${rating} ${e}\n${hook} 👀\n${tiktokLink}\n\n${tags.join(" ")} #fyp #TVTok`;
+  return { x, instagram, tiktok, path };
 }
 
 /** Generic platform captions for any studio card (composer + graphs). Same voice
  *  as promoCaptions: a hook + link + hashtags, flavored per platform. The caller
- *  supplies the subject (emoji, title, hook, optional IG sub-line, link, tags). */
+ *  supplies the subject (emoji, title, hook, optional IG sub-line, link, tags).
+ *  Links include UTMs per platform. */
 export function buildCaptions(o: {
   emoji: string;
   title: string;
@@ -326,21 +330,32 @@ export function buildCaptions(o: {
   sub?: string;
   link: string;
   tags: string[];
-}): { x: string; instagram: string; tiktok: string } {
+  campaign?: string;
+}): { x: string; instagram: string; tiktok: string; path: string } {
+  const path = (() => {
+    try {
+      return new URL(o.link).pathname;
+    } catch {
+      return "/";
+    }
+  })();
+  const campaign = o.campaign ?? utmCampaignFromPath(path);
+  const xLink = withUtm(o.link, "x", campaign);
+  const tiktokLink = withUtm(o.link, "tiktok", campaign);
   const tg = [...HASH_BASE, ...o.tags]
     .map((t) => camel(t).slice(0, 28))
     .filter(Boolean)
     .map((t) => `#${t}`);
   const dot = /[.?!]$/.test(o.hook) ? "" : "."; // don't double-punctuate a "?" hook
   // X / Twitter — punchy, link inline, fewer tags
-  const x = `${o.emoji} ${o.title} — ${o.hook}${dot}\n\n${o.link}\n\n${tg.slice(0, 3).join(" ")}`;
+  const x = `${o.emoji} ${o.title} — ${o.hook}${dot}\n\n${xLink}\n\n${tg.slice(0, 3).join(" ")}`;
   // Instagram — caption-style, "link in bio", full tag block
   const instagram =
     `${o.emoji} ${o.title}\n\n${o.hook}${dot}${o.sub ? " " + o.sub : ""}\n\n` +
     `More at TV Nightly — link in bio.\n\n${tg.join(" ")} #StreamingTV #BingeWatch`;
   // TikTok — hook-first, short
-  const tiktok = `${o.title} ${o.emoji}\n${o.hook} 👀\n${o.link}\n\n${tg.join(" ")} #fyp #TVTok`;
-  return { x, instagram, tiktok };
+  const tiktok = `${o.title} ${o.emoji}\n${o.hook} 👀\n${tiktokLink}\n\n${tg.join(" ")} #fyp #TVTok`;
+  return { x, instagram, tiktok, path };
 }
 
 export const promoBase = (c: AppContext) => origin(c);

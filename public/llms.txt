@@ -11,8 +11,14 @@ TV Nightly helps people decide what to watch tonight and find when a show airs o
 - [What's new on streaming](https://tvnightly.com/whats-new): Recently added titles by service.
 
 ## Rankings and guides
-- [Best episodes](https://tvnightly.com/best-episodes): Top-rated episodes across every tracked show.
-- [Top TV shows](https://tvnightly.com/top/tv): Highest-rated series.
+- [Best episodes of all time](https://tvnightly.com/best-episodes): Top-rated episodes across every tracked show.
+- [Best TV shows of all time](https://tvnightly.com/top/tv): The top 100 highest-rated series.
+- [Best TV shows of the 2010s](https://tvnightly.com/tv/best/2010s): Highest-rated series from the 2010–2019 premiere decade.
+- [Upcoming TV shows](https://tvnightly.com/upcoming): In-development series and newly announced seasons.
+- [Emmy Awards 2026](https://tvnightly.com/awards/emmys/2026): Frontrunners by category with streaming links.
+- [Golden Globe Awards 2026](https://tvnightly.com/awards/golden-globes/2026): TV frontrunners by category.
+- [Actors](https://tvnightly.com/actors) and [directors](https://tvnightly.com/directors): Browse cast and crew we track.
+- [Halloween horror TV](https://tvnightly.com/halloween), [Christmas TV](https://tvnightly.com/christmas-tv), [Thanksgiving episodes](https://tvnightly.com/best-thanksgiving-episodes): Seasonal guides.
 - [Top movies](https://tvnightly.com/movies/best): Best-reviewed films.
 - [Watch orders](https://tvnightly.com/watch-orders): Chronological and release-order guides for franchises.
 - [Compare shows](https://tvnightly.com/compare) and [compare movies](https://tvnightly.com/movies/compare): Head-to-head on ratings, length and reception.

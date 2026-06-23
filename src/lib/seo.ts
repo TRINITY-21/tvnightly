@@ -138,6 +138,26 @@ export const epochDay = (epochSeconds?: number | null): string | undefined =>
     ? new Date(epochSeconds * 1000).toISOString().slice(0, 10)
     : undefined;
 
+/** Event schema for premiere / next-episode countdown pages ("when is X back"). */
+export const eventLd = (opts: {
+  site: string;
+  name: string;
+  startDate: string;
+  url: string;
+  description?: string;
+}) => ({
+  "@context": "https://schema.org",
+  "@type": "Event",
+  name: opts.name,
+  startDate: opts.startDate,
+  url: opts.url,
+  ...(opts.description ? { description: opts.description } : {}),
+  eventStatus: "https://schema.org/EventScheduled",
+  eventAttendanceMode: "https://schema.org/OnlineEventAttendanceMode",
+  location: { "@type": "VirtualLocation", url: opts.url },
+  organizer: { "@id": `${opts.site}/#organization` },
+});
+
 export const xmlRes = (c: AppContext, xml: string) => {
   c.header("Content-Type", "application/xml");
   c.header("Cache-Control", "public, max-age=86400");

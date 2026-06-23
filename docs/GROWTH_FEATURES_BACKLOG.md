@@ -9,7 +9,7 @@
 
 ## A. Viral / share loops (highest growth leverage)
 
-- [ ] **"My TV Taste Profile" shareable card** — after `/recommend`, generate a
+- [x] **"My TV Taste Profile" shareable card** — after `/recommend`, generate a
       personalized, beautiful card ("My taste: 78% prestige drama, 22% sci-fi →
       next watch: Severance") with one-tap share + "make your own" CTA. Reuses the
       resvg card pipeline (`src/lib/social.ts`, `src/lib/render.ts`). This is the
@@ -22,15 +22,15 @@
 
 ## B. Missing SEO / discovery pages (programmatic-ish, data already exists)
 
-- [ ] `/tv/best/:decade` (e.g. `/tv/best/2010s`) — "best tv shows of the 2010s"
-- [ ] All-time TV chart positioned for "best tv shows of all time" (extend `/top/tv`)
-- [ ] `/best-episodes` cross-show index → "best tv episodes of all time"
-- [ ] `/awards/emmys/:year`, `/awards/golden-globes/:year` — seasonal + evergreen
-- [ ] `/actors`, `/directors` hubs + **add Person schema to `/person/:slug`**
-- [ ] Seasonal: `/halloween`, `/christmas-tv`, `/best-thanksgiving-episodes`
+- [x] `/tv/best/:decade` (e.g. `/tv/best/2010s`) — "best tv shows of the 2010s"
+- [x] All-time TV chart positioned for "best tv shows of all time" (extend `/top/tv`)
+- [x] `/best-episodes` cross-show index → "best tv episodes of all time"
+- [x] `/awards/emmys/:year`, `/awards/golden-globes/:year` — seasonal + evergreen
+- [x] `/actors`, `/directors` hubs + **add Person schema to `/person/:slug`**
+- [x] Seasonal: `/halloween`, `/christmas-tv`, `/best-thanksgiving-episodes`
       (build once, rank every year)
-- [ ] `/upcoming` — in-development shows ("upcoming tv shows 2026")
-- [ ] Confirm/ship `/llms.txt` for AI-crawler citations (ChatGPT/Perplexity/AI Overviews)
+- [x] `/upcoming` — in-development shows ("upcoming tv shows 2026")
+- [x] Confirm/ship `/llms.txt` for AI-crawler citations (ChatGPT/Perplexity/AI Overviews)
 
 ## C. Trust / conversion (new-domain credibility)
 
@@ -60,3 +60,4 @@
 - Source: full growth audit conversation, 2026-06-20.
 - Card/share features depend on `src/lib/social.ts` + `src/lib/render.ts` (resvg).
 - Email infra already exists (double opt-in, HMAC, per-show alerts, RFC 8058).
+- Section B completed 2026-06-23 (Golden Globes, actor/director hubs, seasonal pages, `/top/tv` SEO copy).

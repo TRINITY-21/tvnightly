@@ -15,6 +15,7 @@ import { visitorRegion } from "../lib/providers";
 import { Layout } from "../components/Layout";
 import { ProviderLine } from "../components/providers";
 import { ShareBar } from "../components/share";
+import { ShowConvertBand, loadShowConvertCtx } from "../components/show-convert";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -187,6 +188,11 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
   const seriesRank = rankIn(episodes);
   const vsAvg = ep.rating != null && seasonAvg != null ? ep.rating - seasonAvg : null;
 
+  // kick the convert-band data off here so its queries overlap the credits +
+  // people lookups below, instead of adding a serial round-trip on the
+  // cache-warm episode hot path (these are the search-landing pages).
+  const convertP = loadShowConvertCtx(c.env.DB, show, r.ratingRef);
+
   const credits =
     r.isTmdb && show.tmdb_id && c.env.TMDB_API_KEY
       ? await tmdbEpisodeCredits(c.env.TMDB_API_KEY, show.tmdb_id, seasonNo, epNo)
@@ -219,6 +225,10 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
   const site = origin(c);
   const code = epCode(ep);
   const pitch = stripHtml(ep.summary);
+  // the above-the-fold "keep going" band — episode pages are where search lands
+  // (watch-intent "[show] full episode"), so give them the strongest internal
+  // links + renewal capture before they bounce. (kicked off above to overlap.)
+  const convert = await convertP;
   const ld = [
     {
       "@context": "https://schema.org",
@@ -246,7 +256,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
   // Keep the meta description within the ~160-char SERP limit, trimming the plot
   // pitch on a word boundary rather than letting the whole line overflow.
   const epDesc = (() => {
-    const head = `${show.name} ${code}${ep.name ? ` "${ep.name}"` : ""}${ep.rating != null ? ` — rated ★ ${ep.rating.toFixed(1)}` : ""}${ep.airdate ? `, aired ${longDate(ep.airdate)}` : ""}.`;
+    const head = `${show.name} ${code}${ep.name ? ` "${ep.name}"` : ""}: recap, cast${ep.rating != null ? `, ★${ep.rating.toFixed(1)} rating` : ""} and where to stream${ep.airdate ? `. Aired ${longDate(ep.airdate)}` : ""}.`;
     const full = pitch ? `${head} ${pitch}` : head;
     if (full.length <= 160) return full;
     const cut = full.slice(0, 157);
@@ -273,7 +283,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
-      title={`${show.name} ${code}: ${ep.name ?? "episode"} | TV Nightly`}
+      title={`${show.name} ${code}: ${ep.name ?? "episode"} — recap, rating & where to watch`}
       description={epDesc}
       canonical={canonical(c)}
       ld={ld}
@@ -362,6 +372,14 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             </div>
           </div>
         </header>
+        <ShowConvertBand
+          show={show}
+          ratingRef={r.ratingRef}
+          stat={convert.stat}
+          raterCount={convert.raterCount}
+          episodes={episodes}
+          similar={convert.similar}
+        />
         {ep.rating != null && (seasonRank || seriesRank) ? (
           <section class="stat-band">
             {seasonRank ? (
@@ -503,11 +521,11 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             <a class="footer-card" href={`/show/${show.slug}/season/${seasonNo}`}>
               Season {seasonNo} ranked & reviewed
             </a>
-            <a class="footer-card" href={`/show/${show.slug}/best-episodes`}>
-              Best of {show.name}
+            <a class="footer-card" href={`/show/${show.slug}/where-to-watch`}>
+              Where to watch {show.name}
             </a>
-            <a class="footer-card" href={`/show/${show.slug}/ratings`}>
-              Ratings graph
+            <a class="footer-card" href={`/show/${show.slug}/similar`}>
+              Shows like {show.name}
             </a>
           </div>
         </section>

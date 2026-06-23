@@ -1,6 +1,6 @@
 import { castJson, fetchShowWithEpisodes, fetchUpdates, topCast, type TvmShow } from "./tvmaze";
 import { sendEmails, type EmailEnv } from "./email";
-import { EMAIL, emailButton, emailShell } from "./lib/email-template";
+import { EMAIL, emailButton, emailHighlight, emailInlineLink, emailRow, emailSection, emailShell } from "./lib/email-template";
 import { signToken } from "./tokens";
 
 export interface SyncEnv extends EmailEnv {
@@ -271,29 +271,35 @@ function eventEmail(
 ): { subject: string; html: string } {
   let subject: string;
   let line: string;
+  let kicker: string;
   switch (ev.type) {
     case "season_announced":
       subject = `${ev.name} is coming back — Season ${ev.season} confirmed 🎉`;
-      line = `<strong>${ev.name}</strong> has been renewed: <strong>Season ${ev.season}</strong> is officially happening.`;
+      kicker = "Renewal confirmed";
+      line = `<strong style="color:${EMAIL.text}">Season ${ev.season}</strong> is officially happening — ${ev.name} has been renewed.`;
       break;
     case "premiere_set":
       subject = `${ev.name} Season ${ev.season} premieres ${ev.newValue}`;
-      line = `<strong>${ev.name}</strong> Season ${ev.season} now has a premiere date: <strong>${ev.newValue}</strong>.`;
+      kicker = "Premiere date set";
+      line = `${ev.name} Season ${ev.season} now has a premiere date: <strong style="color:${EMAIL.text}">${ev.newValue}</strong>.`;
       break;
     case "premiere_moved":
       subject = `${ev.name} premiere moved to ${ev.newValue}`;
-      line = `<strong>${ev.name}</strong> Season ${ev.season}'s premiere moved from ${ev.oldValue} to <strong>${ev.newValue}</strong>.`;
+      kicker = "Premiere moved";
+      line = `${ev.name} Season ${ev.season} moved from ${ev.oldValue ?? "?"} to <strong style="color:${EMAIL.text}">${ev.newValue}</strong>.`;
       break;
     default:
       subject = `${ev.name}: ${ev.oldValue ?? "?"} → ${ev.newValue ?? "?"}`;
-      line = `<strong>${ev.name}</strong> just changed status: <strong>${ev.oldValue ?? "unknown"}</strong> → <strong>${ev.newValue ?? "unknown"}</strong>.`;
+      kicker = "Status update";
+      line = `${ev.name} changed: <strong style="color:${EMAIL.text}">${ev.oldValue ?? "unknown"}</strong> → <strong style="color:${EMAIL.text}">${ev.newValue ?? "unknown"}</strong>.`;
   }
   const html = emailShell({
     title: subject,
+    kicker,
     heading: ev.name,
+    preheader: subject,
     contentHtml:
-      `<p style="margin:0 0 20px;color:${EMAIL.soft}">${line}</p>` +
-      emailButton("See the latest", `${origin}/show/${ev.slug}/release-date`),
+      emailHighlight(line) + emailButton("See the latest", `${origin}/show/${ev.slug}/release-date`),
     footerNote: "You asked TV Nightly to notify you about this show.",
     unsubscribeHref: `${origin}/unsubscribe?token=${unsubToken}`,
   });
@@ -364,11 +370,13 @@ async function enqueueTopEpisodeAlerts(env: SyncEnv, tops: TopEpisode[]): Promis
     );
     const html = emailShell({
       title: `${t.showName}: "${t.epName}" is an instant classic`,
-      heading: "An instant classic",
+      kicker: "Instant classic",
+      heading: t.showName,
+      preheader: `${t.epName} (${t.code}) rated ★${t.rating.toFixed(1)} — one of the best episodes ever.`,
       contentHtml:
-        `<p style="margin:0 0 20px;color:${EMAIL.soft}"><strong style="color:${EMAIL.text}">${t.showName}</strong> just aired one of its best episodes ever: ` +
-        `<strong style="color:${EMAIL.text}">&ldquo;${t.epName}&rdquo;</strong> (${t.code}) — rated ★${t.rating.toFixed(1)}.</p>` +
-        emailButton("See where it ranks", `${origin}/show/${t.slug}/best-episodes`),
+        emailHighlight(
+          `Just aired one of the best episodes ever: <strong style="color:${EMAIL.text}">&ldquo;${t.epName}&rdquo;</strong> (${t.code}) — rated <strong style="color:${EMAIL.text}">★${t.rating.toFixed(1)}</strong>.`,
+        ) + emailButton("See where it ranks", `${origin}/show/${t.slug}/best-episodes`),
       footerNote: "You asked TV Nightly to notify you about this show.",
       unsubscribeHref: `${origin}/unsubscribe?token=${unsubToken}`,
     });
@@ -558,10 +566,15 @@ export async function providerPatrol(env: SyncEnv): Promise<{ checked: number; e
             : `${ev.title} just left ${ev.service}`;
         const html = emailShell({
           title: subject,
-          heading: ev.change === "added" ? "Now streaming" : "Left streaming",
+          kicker: ev.change === "added" ? "Now streaming" : "Left streaming",
+          heading: ev.title,
+          preheader: subject,
           contentHtml:
-            `<p style="margin:0 0 20px;color:${EMAIL.soft}"><strong style="color:${EMAIL.text}">${ev.title}</strong> ${ev.change === "added" ? "is now streaming on" : "just left"} <strong style="color:${EMAIL.text}">${ev.service}</strong> (US).</p>` +
-            emailButton(ev.change === "added" ? "Where to watch" : "See details", `${origin}/show/${ev.slug}`),
+            emailHighlight(
+              ev.change === "added"
+                ? `Now streaming on <strong style="color:${EMAIL.text}">${ev.service}</strong> in the US.`
+                : `Just left <strong style="color:${EMAIL.text}">${ev.service}</strong> in the US.`,
+            ) + emailButton(ev.change === "added" ? "Where to watch" : "See details", `${origin}/show/${ev.slug}`),
           footerNote: "You asked TV Nightly to notify you about this show.",
           unsubscribeHref: `${origin}/unsubscribe?token=${unsubToken}`,
         });
@@ -649,14 +662,9 @@ export async function sendDailyDigest(env: SyncEnv): Promise<{ queued: number }>
 
   const code = (s: number | null, n: number | null) =>
     `S${String(s ?? 0).padStart(2, "0")}E${String(n ?? 0).padStart(2, "0")}`;
-  const li = (s: string) => `<li style="margin:7px 0;color:${EMAIL.soft}">${s}</li>`;
-  const section = (title: string, items: string[]) =>
-    items.length
-      ? `<h3 style="margin:22px 0 8px;font-size:14px;font-weight:800;letter-spacing:.04em;color:${EMAIL.text}">${title}</h3><ul style="padding-left:20px;margin:0;color:${EMAIL.soft}">${items.join("")}</ul>`
-      : "";
 
   const eventLine = (ev: (typeof events)[number]) => {
-    const link = `<a href="${origin}/show/${ev.slug}/release-date">${ev.name}</a>`;
+    const link = emailInlineLink(`${origin}/show/${ev.slug}/release-date`, ev.name);
     switch (ev.type) {
       case "season_announced":
         return `${link} renewed — Season ${ev.season} confirmed 🎉`;
@@ -669,35 +677,41 @@ export async function sendDailyDigest(env: SyncEnv): Promise<{ queued: number }>
     }
   };
 
+  const tonightRows = tonight.map((t, i) =>
+    emailRow(
+      `${emailInlineLink(`${origin}/show/${t.slug}`, t.name)} ${code(t.season, t.number)}${t.ep ? ` — ${t.ep}` : ""}${
+        t.network ?? t.web_channel ? ` · ${t.network ?? t.web_channel}` : ""
+      }`,
+      i === tonight.length - 1,
+    ),
+  );
+  const eventRows = events.map((ev, i) => emailRow(eventLine(ev), i === events.length - 1));
+  const arrivalRows = arrivals.map((a, i) =>
+    emailRow(
+      `${emailInlineLink(`${origin}/${a.kind === "movie" ? "movie" : "show"}/${a.slug}`, a.title)} → ${a.service}`,
+      i === arrivals.length - 1,
+    ),
+  );
+  const premiereRows = premieres.map((p, i) =>
+    emailRow(
+      `${p.airdate} — ${emailInlineLink(`${origin}/show/${p.slug}/release-date`, p.name)} Season ${p.season}`,
+      i === premieres.length - 1,
+    ),
+  );
+
   const bodyCore =
-    section(
-      "On tonight",
-      tonight.map((t) =>
-        li(
-          `<a href="${origin}/show/${t.slug}">${t.name}</a> ${code(t.season, t.number)}${t.ep ? ` — ${t.ep}` : ""}${
-            t.network ?? t.web_channel ? ` · ${t.network ?? t.web_channel}` : ""
-          }`,
-        ),
-      ),
-    ) +
-    section(
-      "📰 Renewal & schedule news",
-      events.map((ev) => li(eventLine(ev))),
-    ) +
-    section(
-      "🆕 Just hit streaming (US)",
-      arrivals.map((a) =>
-        li(`<a href="${origin}/${a.kind === "movie" ? "movie" : "show"}/${a.slug}">${a.title}</a> → ${a.service}`),
-      ),
-    ) +
-    section(
-      "🗓 Premiering this week",
-      premieres.map((p) =>
-        li(`${p.airdate} — <a href="${origin}/show/${p.slug}/release-date">${p.name}</a> Season ${p.season}`),
-      ),
-    ) +
+    emailSection("On tonight", tonightRows.join("")) +
+    emailSection("Renewal & schedule", eventRows.join("")) +
+    emailSection("Just hit streaming (US)", arrivalRows.join("")) +
+    emailSection("Premiering this week", premiereRows.join("")) +
     (pick
-      ? `<h3 style="margin:22px 0 8px;font-size:14px;font-weight:800;letter-spacing:.04em;color:${EMAIL.text}">Tonight's pick</h3><p style="margin:0;color:${EMAIL.soft}"><a href="${origin}/show/${pick.slug}">${pick.name}</a> (★${pick.rating.toFixed(1)}) — <a href="${origin}/show/${pick.slug}/essential">start with the essentials</a>.</p>`
+      ? emailSection(
+          "Tonight's pick",
+          emailRow(
+            `${emailInlineLink(`${origin}/show/${pick.slug}`, pick.name)} (★${pick.rating.toFixed(1)}) — ${emailInlineLink(`${origin}/show/${pick.slug}/essential`, "start with the essentials")}`,
+            true,
+          ),
+        )
       : "");
 
   const today = new Date().toISOString().slice(0, 10);
@@ -712,12 +726,14 @@ export async function sendDailyDigest(env: SyncEnv): Promise<{ queued: number }>
     );
     const html = emailShell({
       title: "Tonight on TV",
+      kicker: "Daily digest",
       heading: "Tonight on TV",
       preheader: `${topName}${tonight.length > 1 ? ` + ${tonight.length - 1} more` : ""} — what's on and what's new.`,
       contentHtml:
-        `<p style="margin:0 0 4px;color:${EMAIL.muted};font-size:12px;letter-spacing:.03em">${today}</p>` +
-        // brand every link amber inline (reliable even where <style> is stripped)
-        bodyCore.replace(/<a /g, `<a style="color:${EMAIL.accent};text-decoration:none" `),
+        `<p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${EMAIL.muted}">${today}</p>` +
+        `<p style="margin:0 0 4px;font-size:15px;line-height:1.55;color:${EMAIL.soft}">Your nightly briefing — what's airing, what's new, and what to watch.</p>` +
+        bodyCore +
+        emailButton("Open TV Nightly", origin),
       footerNote: "You asked for the TV Nightly daily email.",
       unsubscribeHref: `${origin}/unsubscribe?token=${unsubToken}`,
     });
@@ -758,21 +774,26 @@ export async function notifyOwnerSignups(env: SyncEnv): Promise<{ sent: boolean 
     .prepare("SELECT COUNT(*) AS total, COALESCE(SUM(confirmed), 0) AS confirmed FROM subscriptions")
     .first<{ total: number; confirmed: number }>();
   const origin = env.SITE_ORIGIN ?? "https://tvnightly.com";
-  const stat = (n: number, label: string) =>
-    `<p style="margin:0 0 6px;color:${EMAIL.soft}"><strong style="color:${EMAIL.text}">${n}</strong> ${label}</p>`;
+  const stat = (n: number, label: string) => emailRow(`<strong style="color:${EMAIL.text}">${n}</strong> ${label}`);
   const html = emailShell({
     title: "New subscribers",
+    kicker: "Daily summary",
     heading: `${newConfirmed} new subscriber${newConfirmed === 1 ? "" : "s"} today`,
     preheader: `${newConfirmed} confirmed · ${newPending} pending — TV Nightly`,
     contentHtml:
-      `<p style="margin:0 0 12px;color:${EMAIL.muted};font-size:12px;letter-spacing:.03em">${new Date().toISOString().slice(0, 10)} · last 24h</p>` +
-      stat(newConfirmed, "confirmed (clicked the link)") +
-      (newPending ? stat(newPending, "still pending (entered, not yet confirmed)") : "") +
-      (newConfirmed
-        ? `<p style="margin:14px 0 0;color:${EMAIL.muted};font-size:13px">of confirmed today: ${day?.daily ?? 0} daily list · ${day?.pershow ?? 0} per-show alerts</p>`
-        : "") +
+      emailHighlight(
+        `<span style="color:${EMAIL.muted};font-size:12px;letter-spacing:.08em;text-transform:uppercase">${new Date().toISOString().slice(0, 10)} · last 24h</span>`,
+      ) +
+      emailSection(
+        "Breakdown",
+        stat(newConfirmed, "confirmed (clicked the link)") +
+          (newPending ? stat(newPending, "still pending (entered, not yet confirmed)") : "") +
+          (newConfirmed
+            ? `<p style="margin:12px 0 0;font-size:13px;color:${EMAIL.muted}">Of confirmed today: ${day?.daily ?? 0} daily list · ${day?.pershow ?? 0} per-show alerts</p>`
+            : ""),
+      ) +
       `<p style="margin:18px 0 0;color:${EMAIL.soft}">Running total: <strong style="color:${EMAIL.text}">${totals?.confirmed ?? 0}</strong> confirmed (${totals?.total ?? 0} incl. pending).</p>` +
-      `<div style="margin:22px 0 0">${emailButton("See all subscribers", `${origin}/admin/subscribers`)}</div>`,
+      emailButton("See all subscribers", `${origin}/admin/subscribers`),
     footerNote: "Daily owner summary from TV Nightly.",
   });
   const [ok] = await sendEmails(env, [

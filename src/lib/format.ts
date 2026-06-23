@@ -3,8 +3,10 @@ import { EpisodeRow, CastEntry } from "../types";
 
 export const stripHtml = (s: string | null) => (s ?? "").replace(/<[^>]*>/g, "").trim();
 
-export const epCode = (e: EpisodeRow) =>
-  `S${String(e.season ?? 0).padStart(2, "0")}E${String(e.number ?? 0).padStart(2, "0")}`;
+/** Zero-pad a season/episode number to two digits (null → "00"). */
+export const pad2 = (n: number | null) => String(n ?? 0).padStart(2, "0");
+
+export const epCode = (e: EpisodeRow) => `S${pad2(e.season)}E${pad2(e.number)}`;
 export const airTime = (airstamp: string | null) =>
   airstamp ? new Date(airstamp).toISOString().slice(11, 16) : null;
 export const premiereDateParts = (airdate: string | null) => {

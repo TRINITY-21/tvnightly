@@ -1,6 +1,84 @@
 /* ---- homepage architecture ---- */
 .home > section + section { margin-top: 3rem; }
 
+/* cold-traffic value prop — sits just under the header, before the hero */
+.home-promise {
+  margin: 0 0 0.85rem;
+  font-family: var(--display);
+  font-stretch: 88%;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--muted);
+}
+.home-promise::before {
+  content: "";
+  display: block;
+  width: 2.5rem;
+  height: 3px;
+  margin: 0 auto 0.55rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--warn));
+}
+
+/* social proof chips — trending + community scale */
+.home-proof {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  max-width: 980px;
+  margin: 0 auto 0.65rem;
+  padding: 0 1rem;
+}
+.home-proof-chip {
+  display: inline-block;
+  padding: 0.22rem 0.55rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 169, 77, 0.28);
+  background: rgba(14, 14, 17, 0.72);
+  font-family: var(--display);
+  font-stretch: 88%;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.spotlight .home-proof { margin-bottom: 0.5rem; }
+
+/* hero trending badge — one voice, sits above the title chyron */
+.spot-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  margin: 0 0 0.55rem;
+  padding: 0.38rem 0.72rem 0.38rem 0.58rem;
+  border: 1px solid rgba(255, 169, 77, 0.62);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(255, 120, 40, 0.22), rgba(255, 169, 77, 0.1));
+  box-shadow:
+    0 0 0 1px rgba(255, 169, 77, 0.08) inset,
+    0 8px 28px rgba(255, 120, 40, 0.18);
+  font-family: var(--display);
+  font-stretch: 92%;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ffc285;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+}
+.spot-trend .icon {
+  flex: 0 0 auto;
+  opacity: 0.95;
+}
+
 /* eyebrow: the chyron voice introducing the spotlight */
 .eyebrow {
   font-family: var(--display);
@@ -148,7 +226,27 @@
   color: var(--accent);
 }
 .spot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.65rem;
   margin: 0.9rem 0 0;
+}
+.spot-actions .verdict-btn,
+.spot-actions .btn-ghost {
+  padding: 0.62rem 1rem;
+  font-size: 0.92rem;
+  border-radius: var(--radius);
+}
+.spot-action-tertiary {
+  flex: 1 1 100%;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.spot-action-tertiary:hover {
+  color: var(--accent);
+  text-decoration: none;
 }
 /* genres + their leading separator travel as one meta token: identical to the
    old two-child layout on desktop (inline-flex re-creates the parent's gap), but
@@ -164,14 +262,14 @@
 }
 @media (max-width: 600px) {
   .spotlight {
-    padding: 3.6rem 0 1.4rem;
+    padding: 2.2rem 0 1.2rem;
   }
   /* Backdrop-led hero on phones: one cinematic still carries it, the text rides
      the lower third. The floating poster fought the backdrop for the same narrow
      space, so it's dropped when a real backdrop exists — and kept only in the
      ambient (no-backdrop) fallback below, where it's the only crisp image. */
   .spotlight:not(.spot-ambient) {
-    padding-top: 8.5rem; /* clear image zone above the lower-third */
+    padding-top: 6.25rem; /* clear image zone above the lower-third */
   }
   .spotlight:not(.spot-ambient) .spot-poster {
     display: none;
@@ -229,12 +327,22 @@
   .spot-dek {
     -webkit-line-clamp: 3;
   }
-  /* primary hero action goes full-width as a comfortable thumb target */
+  /* primary hero actions: stack full-width on phones */
+  .spot-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+  .spot-actions .verdict-btn,
   .spot-actions .btn-ghost {
     display: block;
     text-align: center;
     padding-top: 0.7rem;
     padding-bottom: 0.7rem;
+  }
+  .spot-action-tertiary {
+    flex: none;
+    text-align: center;
   }
 }
 @media (max-width: 480px) {
@@ -564,6 +672,142 @@
 .evening-cta .verdict-btn {
   box-shadow: 0 3px 12px rgba(255, 169, 77, 0.14);
 }
+/* co-primary evening CTAs — taste profile + tonight picker side by side */
+.evening-cta-co {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  width: min(100%, 520px);
+  max-width: 100%;
+}
+.evening-cta-co .verdict-btn {
+  width: 100%;
+  padding: 0.78rem 0.85rem;
+  font-size: 0.94rem;
+}
+.verdict-btn-outline {
+  background: transparent;
+  color: var(--accent);
+  border: 2px solid rgba(255, 169, 77, 0.55);
+  box-shadow: none;
+}
+.verdict-btn-outline:hover {
+  background: rgba(255, 169, 77, 0.08);
+  filter: none;
+}
+@media (max-width: 520px) {
+  .evening-cta-co {
+    grid-template-columns: 1fr;
+    width: 100%;
+    max-width: 88%;
+  }
+}
+
+/* mid-page email capture — after evening, before discover */
+.home-email-strip {
+  margin-top: 2.25rem;
+}
+.home-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem 1.4rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid rgba(255, 169, 77, 0.22);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(ellipse 70% 80% at 100% 0%, rgba(255, 169, 77, 0.07), transparent 55%),
+    var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.home-sub-copy {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.home-sub-title {
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 95%;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.home-sub-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+.home-sub-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 1 1 280px;
+  align-items: center;
+}
+.home-sub-controls input[type="email"] {
+  flex: 1 1 180px;
+  min-width: 0;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 0.62rem 0.85rem;
+  font: inherit;
+}
+.home-sub-controls input[type="email"]:focus-visible {
+  outline: none;
+  border-color: rgba(255, 169, 77, 0.5);
+}
+.home-sub-controls button {
+  flex: 0 0 auto;
+  padding: 0.62rem 1.1rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--plate);
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.home-sub-controls button:hover {
+  filter: brightness(1.08);
+}
+
+/* returning shows this week — poster shelf in a card, same voice as evening */
+.home-returning {
+  margin: 0.5rem 0 0;
+}
+.home-returning-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  padding: 1.35rem 1.5rem 1.5rem;
+  min-width: 0;
+}
+.home-returning-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.15rem;
+}
+.home-returning-head h2 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 800;
+}
+.home-returning .poster-shelf {
+  margin-top: 0.85rem;
+}
+.home-returning-ep {
+  color: var(--muted);
+  font-weight: 500;
+  opacity: 0.85;
+}
+
 /* keep a one-line lead from wrapping on roomy viewports */
 .nowrap-wide {
   white-space: nowrap;

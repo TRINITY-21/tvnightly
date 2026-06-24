@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { Bindings } from "../types";
 import { origin } from "../lib/seo";
 import { MessagePage } from "../components/Layout";
+import { SubscribePending } from "../components/subscribe-pending";
 import { signToken, verifyToken } from "../tokens";
 import { materializeShow } from "../lib/tmdb-show";
 import { sendEmails } from "../email";
@@ -76,10 +77,17 @@ app.post("/subscribe", async (c) => {
     .bind(email, realId, kind, confirmed)
     .run();
 
+  // shared by the confirm email subject and the "check your inbox" page so the
+  // visitor sees the exact subject line to look for
+  const what =
+    kind === "daily" ? "the TV Nightly daily email" : `${show!.name} renewal & schedule alerts`;
+  const getsLine =
+    kind === "daily"
+      ? "what's on tonight, ranked — fresh every evening."
+      : `we'll email the moment ${show!.name} has renewal or schedule news.`;
+
   if (c.env.SECRET) {
     const token = await signToken({ email, showId: realId, kind, action: "confirm" }, c.env.SECRET);
-    const what =
-      kind === "daily" ? "the TV Nightly daily email" : `${show!.name} renewal & schedule alerts`;
     const confirmUrl = `${origin(c)}/confirm?token=${token}`;
     const [sent] = await sendEmails(c.env, [
       {
@@ -115,16 +123,9 @@ app.post("/subscribe", async (c) => {
     }
   }
 
-  return c.html(
-    <MessagePage
-      title="Almost there"
-      body={
-        c.env.SECRET
-          ? "Check your inbox and click the confirmation link to activate your alerts."
-          : "Subscribed (dev mode: auto-confirmed)."
-      }
-    />,
-  );
+  return c.env.SECRET
+    ? c.html(<SubscribePending email={email} what={what} getsLine={getsLine} />)
+    : c.html(<MessagePage title="You're in" body="Subscribed (dev mode: auto-confirmed)." />);
 });
 
 app.get("/confirm", async (c) => {

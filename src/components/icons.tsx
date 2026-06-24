@@ -21,6 +21,21 @@ export const IconCal: FC<{ size?: number }> = ({ size = 15 }) => (
   </svg>
 );
 
+/* envelope — confirmation / email-capture moments */
+export const IconMail: FC<{ size?: number }> = ({ size = 40 }) => (
+  <svg class="icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="2.5" y="5" width="19" height="14" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.8" />
+    <path
+      d="M3.4 6.6 12 12.8l8.6-6.2"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+);
+
 /* two-spark glyph for "what's new / just added" */
 export const IconSparkle: FC<{ size?: number }> = ({ size = 48 }) => (
   <svg class="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">

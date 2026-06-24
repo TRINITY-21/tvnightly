@@ -425,3 +425,69 @@
    to match the accent link (not the default muted chevron) */
 .msg-back { display: inline-flex; align-items: center; gap: 0.3rem; }
 .msg-back .chev-icon { color: inherit; }
+
+/* post-signup "check your inbox" confirmation page */
+.confirm-pending {
+  max-width: 32rem;
+  margin: 0.5rem 0 2.5rem;
+}
+.confirm-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  border-radius: 50%;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  margin-bottom: 1.1rem;
+}
+.confirm-h1 {
+  margin: 0 0 0.5rem;
+}
+.confirm-lead {
+  font-size: 1.05rem;
+  line-height: 1.55;
+  margin: 0 0 1.6rem;
+}
+.confirm-email {
+  color: var(--accent);
+  word-break: break-word;
+}
+.confirm-steps {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+.confirm-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  line-height: 1.45;
+}
+.confirm-step-n {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  margin-top: 0.05rem;
+  border-radius: 50%;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--bg);
+  background: var(--accent);
+}
+.confirm-note {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  padding: 0.9rem 1.05rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  margin: 0 0 1.6rem;
+}

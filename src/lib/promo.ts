@@ -7,7 +7,7 @@ import { origin } from "./seo";
 import { pad2, slugifyName } from "./format";
 import { tmdbTrendingList } from "./tmdb";
 import { liveTonight } from "./schedule-live";
-import { utmCampaignFromPath, withUtm } from "./utm";
+import { shortLink, utmCampaignFromPath } from "./utm";
 
 const tmdbImg = (path: string | null | undefined, size = "w342") =>
   path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
@@ -281,9 +281,8 @@ export function promoCaptions(
 ): { x: string; instagram: string; tiktok: string; path: string } {
   const path = m.path;
   const campaign = utmCampaignFromPath(path, m.theme);
-  const link = `${base.replace(/\/+$/, "")}${path}`;
-  const xLink = withUtm(link, "x", campaign);
-  const tiktokLink = withUtm(link, "tiktok", campaign);
+  const xLink = shortLink(base, path, "x", campaign);
+  const tiktokLink = shortLink(base, path, "tiktok", campaign);
   const titleTag = camel(m.title).slice(0, 28);
   const themeTag: Record<PromoTheme, string> = {
     trending: "Trending",
@@ -340,8 +339,15 @@ export function buildCaptions(o: {
     }
   })();
   const campaign = o.campaign ?? utmCampaignFromPath(path);
-  const xLink = withUtm(o.link, "x", campaign);
-  const tiktokLink = withUtm(o.link, "tiktok", campaign);
+  const origin = (() => {
+    try {
+      return new URL(o.link).origin;
+    } catch {
+      return "";
+    }
+  })();
+  const xLink = shortLink(origin, path, "x", campaign);
+  const tiktokLink = shortLink(origin, path, "tiktok", campaign);
   const tg = [...HASH_BASE, ...o.tags]
     .map((t) => camel(t).slice(0, 28))
     .filter(Boolean)

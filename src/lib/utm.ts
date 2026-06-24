@@ -21,6 +21,33 @@ export function withUtm(url: string, source: UtmSource, campaign: string): strin
   return u.toString();
 }
 
+// Short source codes for the shareable /r/<src>/<path> links (no utm_ soup).
+const SRC_CODE: Record<UtmSource, string> = {
+  facebook: "fb",
+  instagram: "ig",
+  tiktok: "tt",
+  x: "x",
+  pinterest: "pin",
+};
+export const SRC_FROM_CODE: Record<string, UtmSource> = {
+  fb: "facebook",
+  ig: "instagram",
+  tt: "tiktok",
+  x: "x",
+  pin: "pinterest",
+};
+
+/** A clean, shareable redirect link — /r/<src>/<path> — that re-attaches the
+ *  utm_* params at click time (see routes/go). The shared URL stays tidy and
+ *  GA4 attribution is identical. The campaign rides along only when it differs
+ *  from the path-derived default, so most links carry no query at all. */
+export function shortLink(base: string, path: string, source: UtmSource, campaign: string): string {
+  const origin = base.replace(/\/+$/, "");
+  const clean = path.startsWith("/") ? path : `/${path}`;
+  const c = campaign === utmCampaignFromPath(clean) ? "" : `?c=${encodeURIComponent(campaign)}`;
+  return `${origin}/r/${SRC_CODE[source]}${clean}${c}`;
+}
+
 /** Per-platform links for the studio “Tracking links” panel and bio/link tools. */
 export function socialTrackingLinks(
   base: string,
@@ -29,12 +56,11 @@ export function socialTrackingLinks(
 ): { label: string; source: UtmSource; url: string }[] {
   const campaign = opts?.campaign ?? utmCampaignFromPath(path, opts?.prefix);
   const origin = base.replace(/\/+$/, "");
-  const bare = origin + (path.startsWith("/") ? path : `/${path}`);
   return [
-    { label: "TikTok", source: "tiktok", url: withUtm(bare, "tiktok", campaign) },
-    { label: "Instagram (bio)", source: "instagram", url: withUtm(bare, "instagram", campaign) },
-    { label: "X / Twitter", source: "x", url: withUtm(bare, "x", campaign) },
-    { label: "Facebook", source: "facebook", url: withUtm(bare, "facebook", campaign) },
-    { label: "Pinterest", source: "pinterest", url: withUtm(bare, "pinterest", campaign) },
+    { label: "TikTok", source: "tiktok", url: shortLink(origin, path, "tiktok", campaign) },
+    { label: "Instagram (bio)", source: "instagram", url: shortLink(origin, path, "instagram", campaign) },
+    { label: "X / Twitter", source: "x", url: shortLink(origin, path, "x", campaign) },
+    { label: "Facebook", source: "facebook", url: shortLink(origin, path, "facebook", campaign) },
+    { label: "Pinterest", source: "pinterest", url: shortLink(origin, path, "pinterest", campaign) },
   ];
 }

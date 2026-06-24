@@ -40,7 +40,6 @@ import {
 import { tmdbBackdrop, tmdbLogo, tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
 import { resolveShow } from "../lib/tmdb-show";
 import { TV_UNIVERSES, TV_UNIVERSE_BY_SLUG } from "../lib/tv-universes";
-import { socialTrackingLinks } from "../lib/utm";
 import { AppContext, Bindings, MovieRow, ShowRow } from "../types";
 
 const STUDIO_GENRES = [
@@ -775,6 +774,8 @@ app.get("/admin/studio", async (c) => {
                     { label: "X / Twitter", text: caps.x },
                     { label: "Instagram", text: caps.instagram },
                     { label: "TikTok", text: caps.tiktok },
+                    { label: "Facebook", text: caps.facebook },
+                    { label: "Pinterest", text: caps.pinterest },
                   ].map((pl) => (
                     <div class="studio-cap">
                       <div class="studio-cap-head">
@@ -782,21 +783,6 @@ app.get("/admin/studio", async (c) => {
                         <button type="button" class="studio-copy">Copy</button>
                       </div>
                       <textarea class="studio-cap-text" readonly rows={5}>{pl.text}</textarea>
-                    </div>
-                  ))}
-                  <h3 class="studio-caps-h">Tracking links</h3>
-                  <p class="muted studio-sub">
-                    UTMs baked in — paste into bio / link tools, or use the matching caption above.
-                  </p>
-                  {socialTrackingLinks(base, caps.path, {
-                    prefix: cat.engine === "promo" && active ? active.theme : cat.id,
-                  }).map((pl) => (
-                    <div class="studio-cap">
-                      <div class="studio-cap-head">
-                        <span>{pl.label}</span>
-                        <button type="button" class="studio-copy">Copy</button>
-                      </div>
-                      <textarea class="studio-cap-text" readonly rows={2}>{pl.url}</textarea>
                     </div>
                   ))}
                 </div>

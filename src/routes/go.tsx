@@ -7,7 +7,7 @@
 // the studio used a custom campaign (e.g. ratings, showcase, promo themes).
 import { Hono } from "hono";
 import { Bindings } from "../types";
-import { SRC_FROM_CODE, utmCampaignFromPath } from "../lib/utm";
+import { SRC_FROM_CODE, UTM_MEDIUM, utmCampaignFromPath } from "../lib/utm";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -20,7 +20,7 @@ app.get("/r/:src/:path{.+}", (c) => {
   const campaign = c.req.query("c") || utmCampaignFromPath(path);
   const q = new URLSearchParams({
     utm_source: source,
-    utm_medium: "social",
+    utm_medium: UTM_MEDIUM,
     utm_campaign: campaign,
   });
   c.header("Cache-Control", "private, no-store");

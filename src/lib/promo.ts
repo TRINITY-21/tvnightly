@@ -7,7 +7,7 @@ import { origin } from "./seo";
 import { pad2, slugifyName } from "./format";
 import { tmdbTrendingList } from "./tmdb";
 import { liveTonight } from "./schedule-live";
-import { shortLink, utmCampaignFromPath } from "./utm";
+import { shortLink, utmCampaignFromPath, type UtmSource } from "./utm";
 
 const tmdbImg = (path: string | null | undefined, size = "w342") =>
   path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
@@ -275,14 +275,53 @@ const camel = (s: string) => s.replace(/[^a-zA-Z0-9]+/g, "");
 
 /** Platform-flavored captions for a moment: a hook + the link + hashtags. The
  *  founder copies one and posts it. Links include UTMs per platform. */
-export function promoCaptions(
-  m: PromoMoment,
-  base: string,
-): { x: string; instagram: string; tiktok: string; path: string } {
+export interface CaptionSet {
+  x: string;
+  instagram: string;
+  tiktok: string;
+  facebook: string;
+  pinterest: string;
+  path: string;
+}
+
+// One per-platform caption composer — both builders feed it the resolved pieces.
+// Every caption carries the clean short link inline (see shortLink / routes/go).
+function composeCaptions(o: {
+  emoji: string;
+  title: string;
+  hook: string;
+  origin: string;
+  path: string;
+  campaign: string;
+  tags: string[]; // hashtag strings, already prefixed with "#"
+  sub?: string; // optional support line (FB / Pinterest)
+  igTitle?: string; // IG headline override (promo uses "KICKER: Title")
+  igLead?: string; // IG lead sentence after the hook
+}): CaptionSet {
+  const link = (src: UtmSource) => shortLink(o.origin, o.path, src, o.campaign);
+  const dot = /[.?!]$/.test(o.hook) ? "" : ".";
+  const all = o.tags.join(" ");
+  const three = o.tags.slice(0, 3).join(" ");
+  const sub = o.sub ? ` ${o.sub}` : "";
+  const igBody = o.igLead ? ` ${o.igLead}` : sub;
+  return {
+    // X / Twitter — punchy, link inline, fewer tags
+    x: `${o.emoji} ${o.title} — ${o.hook}${dot}\n\n${link("x")}\n\n${three}`,
+    // Instagram — caption-style, full tag block (link not tappable, but copy-ready)
+    instagram: `${o.emoji} ${o.igTitle ?? o.title}\n\n${o.hook}${dot}${igBody}\n\n${link("instagram")}\n\n${all} #StreamingTV #BingeWatch`,
+    // TikTok — hook-first, short
+    tiktok: `${o.title} ${o.emoji}\n${o.hook} 👀\n${link("tiktok")}\n\n${all} #fyp #TVTok`,
+    // Facebook — link auto-builds a preview card; light tags
+    facebook: `${o.emoji} ${o.title} — ${o.hook}${dot}${sub}\n\n${link("facebook")}\n\n${three}`,
+    // Pinterest — keyword-rich description for pin search + the link
+    pinterest: `${o.title} — ${o.hook}${dot}${sub}\n\n${link("pinterest")}\n\n${all}`,
+    path: o.path,
+  };
+}
+
+export function promoCaptions(m: PromoMoment, base: string): CaptionSet {
   const path = m.path;
   const campaign = utmCampaignFromPath(path, m.theme);
-  const xLink = shortLink(base, path, "x", campaign);
-  const tiktokLink = shortLink(base, path, "tiktok", campaign);
   const titleTag = camel(m.title).slice(0, 28);
   const themeTag: Record<PromoTheme, string> = {
     trending: "Trending",
@@ -305,17 +344,18 @@ export function promoCaptions(
     streaming: "🍿",
     top: "🏆",
   };
-  const e = emoji[m.theme];
   const rating = m.rating != null ? ` (★ ${m.rating.toFixed(1)})` : "";
-  const hook = m.note ?? m.kicker;
-
-  // X / Twitter — punchy, link inline, fewer tags
-  const x = `${e} ${m.title}${rating} — ${hook}.\n\n${xLink}\n\n${tags.slice(0, 3).join(" ")}`;
-  // Instagram — caption-style, "link in bio", full tag block
-  const instagram = `${e} ${m.kicker.toUpperCase()}: ${m.title}${rating}\n\n${hook}. Full episode ratings, renewals & where to stream at TV Nightly — link in bio.\n\n${tags.join(" ")} #StreamingTV #BingeWatch`;
-  // TikTok — hook-first, short
-  const tiktok = `${m.title}${rating} ${e}\n${hook} 👀\n${tiktokLink}\n\n${tags.join(" ")} #fyp #TVTok`;
-  return { x, instagram, tiktok, path };
+  return composeCaptions({
+    emoji: emoji[m.theme],
+    title: `${m.title}${rating}`,
+    hook: m.note ?? m.kicker,
+    origin: base,
+    path,
+    campaign,
+    tags,
+    igTitle: `${m.kicker.toUpperCase()}: ${m.title}${rating}`,
+    igLead: "Full episode ratings, renewals & where to stream at TV Nightly.",
+  });
 }
 
 /** Generic platform captions for any studio card (composer + graphs). Same voice
@@ -330,38 +370,29 @@ export function buildCaptions(o: {
   link: string;
   tags: string[];
   campaign?: string;
-}): { x: string; instagram: string; tiktok: string; path: string } {
-  const path = (() => {
+}): CaptionSet {
+  const url = (() => {
     try {
-      return new URL(o.link).pathname;
+      return new URL(o.link);
     } catch {
-      return "/";
+      return null;
     }
   })();
-  const campaign = o.campaign ?? utmCampaignFromPath(path);
-  const origin = (() => {
-    try {
-      return new URL(o.link).origin;
-    } catch {
-      return "";
-    }
-  })();
-  const xLink = shortLink(origin, path, "x", campaign);
-  const tiktokLink = shortLink(origin, path, "tiktok", campaign);
-  const tg = [...HASH_BASE, ...o.tags]
+  const path = url?.pathname ?? "/";
+  const tags = [...HASH_BASE, ...o.tags]
     .map((t) => camel(t).slice(0, 28))
     .filter(Boolean)
     .map((t) => `#${t}`);
-  const dot = /[.?!]$/.test(o.hook) ? "" : "."; // don't double-punctuate a "?" hook
-  // X / Twitter — punchy, link inline, fewer tags
-  const x = `${o.emoji} ${o.title} — ${o.hook}${dot}\n\n${xLink}\n\n${tg.slice(0, 3).join(" ")}`;
-  // Instagram — caption-style, "link in bio", full tag block
-  const instagram =
-    `${o.emoji} ${o.title}\n\n${o.hook}${dot}${o.sub ? " " + o.sub : ""}\n\n` +
-    `More at TV Nightly — link in bio.\n\n${tg.join(" ")} #StreamingTV #BingeWatch`;
-  // TikTok — hook-first, short
-  const tiktok = `${o.title} ${o.emoji}\n${o.hook} 👀\n${tiktokLink}\n\n${tg.join(" ")} #fyp #TVTok`;
-  return { x, instagram, tiktok, path };
+  return composeCaptions({
+    emoji: o.emoji,
+    title: o.title,
+    hook: o.hook,
+    sub: o.sub,
+    origin: url?.origin ?? "",
+    path,
+    campaign: o.campaign ?? utmCampaignFromPath(path),
+    tags,
+  });
 }
 
 export const promoBase = (c: AppContext) => origin(c);

@@ -92,6 +92,24 @@ app.use("*", async (c, next) => {
   return next();
 });
 
+// OG-scraper interceptor for the /r/<src>/<path> short links. Link-preview
+// crawlers (Facebook especially) don't reliably follow the 302 when scraping
+// Open Graph tags, so they'd land on no card. For crawlers we dispatch the
+// destination page INTERNALLY (same app, no network — a public self-fetch loops
+// to a 522 at the edge) so they read its real OG; humans fall through to the
+// clean 302 in routes/go. The dest path is never "/r/…", so this can't recurse.
+const OG_CRAWLER =
+  /facebookexternalhit|facebookcatalog|Facebot|Twitterbot|LinkedInBot|Slackbot|Slack-ImgProxy|WhatsApp|Discordbot|TelegramBot|Pinterest|redditbot|Embedly|SkypeUriPreview|Applebot|Googlebot|bingbot|vkShare|W3C_Validator/i;
+app.use("/r/*", async (c, next) => {
+  if (!OG_CRAWLER.test(c.req.header("user-agent") ?? "")) return next();
+  const m = new URL(c.req.url).pathname.match(/^\/r\/[^/]+\/(.+)$/);
+  if (!m) return next();
+  const url = new URL(c.req.url);
+  url.pathname = "/" + m[1].replace(/^\/+/, "");
+  url.search = "";
+  return app.fetch(new Request(url.toString(), { headers: c.req.raw.headers }), c.env, c.executionCtx);
+});
+
 app.route("/", home);
 app.route("/", bestEpisodes);
 app.route("/", show);

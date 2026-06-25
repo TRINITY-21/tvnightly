@@ -19,7 +19,7 @@ import { aggregateRatingLd, titleRaterCount, titleStat } from "../lib/ratings";
 import { breadcrumbLd, breadcrumbTrail, canonical, faqLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMedia, tmdbRecommendations, tmdbShowCreators } from "../lib/tmdb";
 import { toShowRow } from "../lib/tmdb-rows";
-import { resolveShow, tmdbShowCast, tmdbShowData } from "../lib/tmdb-show";
+import { d1OrLiveEpisodes, resolveShow, tmdbShowCast, tmdbShowData } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
 import { Bindings, EpisodeRow, ShowRow } from "../types";
 
@@ -73,11 +73,7 @@ app.get("/show/:slug", async (c) => {
   let episodes: EpisodeRow[];
   let ratingRef: string;
   if (show) {
-    episodes = (
-      await c.env.DB.prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
-        .bind(show.id)
-        .all<EpisodeRow>()
-    ).results;
+    episodes = await d1OrLiveEpisodes(c, show);
     ratingRef = String(show.id);
   } else {
     // hybrid: build the SAME page live from TMDB for a title not in the mirror

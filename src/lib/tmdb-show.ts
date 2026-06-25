@@ -336,6 +336,26 @@ export async function tmdbMovieData(
   return { movie, tmdbId };
 }
 
+/** D1 episodes for a mirrored show, falling back to live TMDB when the row exists
+ *  but its episodes were never synced. Thousands of bulk-imported / engagement-
+ *  materialized shows have a show row (genres, rating, poster) but no episodes —
+ *  without this they render with no seasons, empty best-episodes and a blank
+ *  ratings graph (e.g. The Boys). The live episodes ride the same edge cache as
+ *  the rest of the hybrid catalogue. */
+export async function d1OrLiveEpisodes(
+  c: Context<{ Bindings: Bindings }>,
+  show: ShowRow,
+): Promise<EpisodeRow[]> {
+  const d1 = (
+    await c.env.DB.prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
+      .bind(show.id)
+      .all<EpisodeRow>()
+  ).results;
+  if (d1.length || !show.tmdb_id || !c.env.TMDB_API_KEY) return d1;
+  const built = await buildTmdbShow(c, show.tmdb_id, show.slug);
+  return built?.episodes.length ? built.episodes : d1;
+}
+
 // Shared resolvers used by EVERY /show/:slug* and /movie/:slug* route, so all of
 // them render the same whether the title is in D1 or built live from TMDB.
 export async function resolveShow(
@@ -344,11 +364,7 @@ export async function resolveShow(
 ): Promise<{ show: ShowRow; episodes: EpisodeRow[]; ratingRef: string; isTmdb: boolean } | null> {
   const d1 = await getShow(c.env.DB, slug);
   if (d1) {
-    const episodes = (
-      await c.env.DB.prepare("SELECT * FROM episodes WHERE show_id = ? ORDER BY season, number")
-        .bind(d1.id)
-        .all<EpisodeRow>()
-    ).results;
+    const episodes = await d1OrLiveEpisodes(c, d1);
     return { show: d1, episodes, ratingRef: String(d1.id), isTmdb: false };
   }
   const built = await tmdbShowData(c, slug);

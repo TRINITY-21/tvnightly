@@ -594,7 +594,24 @@ const rankedPage =
     }
 
     let eps: (EpisodeRow & { up: number | null; down: number | null })[];
-    if (resolved.isTmdb) {
+    // D1 votes-joined ranking when the show's episodes are mirrored; skip the
+    // query for live shows (and D1 shows whose episodes were never synced).
+    const d1eps = resolved.isTmdb
+      ? []
+      : (
+          await c.env.DB.prepare(
+            `SELECT e.*, v.up, v.down FROM episodes e
+             LEFT JOIN episode_votes v ON v.episode_id = e.id
+             WHERE e.show_id = ? AND e.rating IS NOT NULL${season != null ? " AND e.season = ?" : ""}
+             ORDER BY e.rating ${order}, e.season, e.number LIMIT 25`,
+          )
+            .bind(...(season != null ? [show.id, season] : [show.id]))
+            .all<EpisodeRow & { up: number | null; down: number | null }>()
+        ).results;
+    if (d1eps.length) {
+      eps = d1eps;
+    } else {
+      // live episodes (resolveShow's TMDB fallback) — rank in memory, no votes yet
       const dir = order === "DESC" ? -1 : 1;
       eps = resolved.episodes
         .filter((e) => e.rating != null && (season == null || e.season === season))
@@ -606,16 +623,6 @@ const rankedPage =
             (a.number ?? 0) - (b.number ?? 0),
         )
         .slice(0, 25);
-    } else {
-      const res = await c.env.DB.prepare(
-        `SELECT e.*, v.up, v.down FROM episodes e
-         LEFT JOIN episode_votes v ON v.episode_id = e.id
-         WHERE e.show_id = ? AND e.rating IS NOT NULL${season != null ? " AND e.season = ?" : ""}
-         ORDER BY e.rating ${order}, e.season, e.number LIMIT 25`,
-      )
-        .bind(...(season != null ? [show.id, season] : [show.id]))
-        .all<EpisodeRow & { up: number | null; down: number | null }>();
-      eps = res.results;
     }
 
     // the run spectrum: one cell per episode slot, the listed 25 lit —

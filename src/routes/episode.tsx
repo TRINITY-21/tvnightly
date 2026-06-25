@@ -151,7 +151,7 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
   const seasonNo = Number(m[1]);
   const epNo = Number(m[2]);
 
-  const episodes: (EpisodeRow & { up: number | null; down: number | null })[] = r.isTmdb
+  let episodes: (EpisodeRow & { up: number | null; down: number | null })[] = r.isTmdb
     ? r.episodes.map((e) => ({ ...e, up: null, down: null }))
     : (
         await c.env.DB.prepare(
@@ -162,6 +162,9 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
           .bind(show.id)
           .all<EpisodeRow & { up: number | null; down: number | null }>()
       ).results;
+  // D1 show whose episodes were never synced: resolveShow already backfilled them
+  // live from TMDB, so use those (no votes yet) instead of 404ing the episode.
+  if (!episodes.length) episodes = r.episodes.map((e) => ({ ...e, up: null, down: null }));
 
   const idx = episodes.findIndex((e) => e.season === seasonNo && e.number === epNo);
   if (idx === -1) return c.notFound();

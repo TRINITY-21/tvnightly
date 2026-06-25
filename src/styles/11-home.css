@@ -1470,3 +1470,91 @@
   .evening-cta .verdict-btn,
   .evening-cta .btn-ghost { padding: 0.65rem 0.9rem; font-size: 0.92rem; }
 }
+
+/* homepage newsletter band — daily "what's on tonight" email capture */
+.news-band {
+  margin: 2.25rem 0;
+}
+.news-band-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.4rem 2rem;
+  padding: 1.7rem 1.9rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+  background:
+    radial-gradient(130% 150% at 100% 0%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 58%),
+    linear-gradient(180deg, var(--surface), var(--bg));
+  box-shadow: var(--shadow-1);
+}
+.news-band-copy {
+  flex: 1 1 19rem;
+}
+.news-band-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  margin: 0 0 0.45rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.news-band-kicker svg {
+  flex-shrink: 0;
+}
+.news-band-title {
+  margin: 0 0 0.4rem;
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+.news-band-sub {
+  margin: 0;
+  max-width: 34rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+.news-band-form {
+  display: flex;
+  gap: 0.6rem;
+  flex: 1 1 19rem;
+  max-width: 30rem;
+}
+.news-band-form input[type="email"] {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.72rem 0.95rem;
+  color: var(--text);
+  font: inherit;
+}
+.news-band-form input[type="email"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.news-band-form button {
+  flex: 0 0 auto;
+  padding: 0.72rem 1.35rem;
+  border-radius: var(--radius);
+  border: none;
+  background: var(--accent);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter var(--speed) var(--ease);
+}
+.news-band-form button:hover {
+  filter: brightness(1.06);
+}
+@media (max-width: 640px) {
+  .news-band-form {
+    max-width: none;
+  }
+}

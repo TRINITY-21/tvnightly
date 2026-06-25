@@ -397,43 +397,6 @@ app.get("/show/:slug", async (c) => {
             </section>
           ) : null;
         })()}
-        {(() => {
-          return cast.length ? (
-            <section id="cast">
-              <h2>
-                <span class="h2-label">Cast</span>
-                {cast.length > 8 ? (
-                  <a class="more" href={`/show/${show.slug}/cast`}>
-                    full cast & details
-                  </a>
-                ) : null}
-              </h2>
-              <div class="cast-row">
-                {cast.slice(0, 8).map((p) => {
-                  const href = personHref(p);
-                  const inner = (
-                    <>
-                      {p.img ? (
-                        <img src={p.img} alt={p.n} loading="lazy" />
-                      ) : (
-                        <div class="cast-fallback">{p.n}</div>
-                      )}
-                      <span class="cast-name">{p.n}</span>
-                      {p.c ? <span class="cast-char muted">{p.c}</span> : null}
-                    </>
-                  );
-                  return href ? (
-                    <a class="cast-card" href={href}>
-                      {inner}
-                    </a>
-                  ) : (
-                    <div class="cast-card">{inner}</div>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null;
-        })()}
         {seasons.size ? (
           <section>
             <h2>Episodes by season</h2>
@@ -607,6 +570,43 @@ app.get("/show/:slug", async (c) => {
             </div>
           </section>
         ) : null}
+        {(() => {
+          return cast.length ? (
+            <section id="cast">
+              <h2>
+                <span class="h2-label">Cast</span>
+                {cast.length > 8 ? (
+                  <a class="more" href={`/show/${show.slug}/cast`}>
+                    full cast & details
+                  </a>
+                ) : null}
+              </h2>
+              <div class="cast-row">
+                {cast.slice(0, 8).map((p) => {
+                  const href = personHref(p);
+                  const inner = (
+                    <>
+                      {p.img ? (
+                        <img src={p.img} alt={p.n} loading="lazy" />
+                      ) : (
+                        <div class="cast-fallback">{p.n}</div>
+                      )}
+                      <span class="cast-name">{p.n}</span>
+                      {p.c ? <span class="cast-char muted">{p.c}</span> : null}
+                    </>
+                  );
+                  return href ? (
+                    <a class="cast-card" href={href}>
+                      {inner}
+                    </a>
+                  ) : (
+                    <div class="cast-card">{inner}</div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null;
+        })()}
         {similar.length ? (
           <section id="similar">
             <h2>

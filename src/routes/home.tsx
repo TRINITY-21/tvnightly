@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { FC, PropsWithChildren } from "hono/jsx";
 import { Honeypot, Layout } from "../components/Layout";
 import { MovieCard, ShowCard, StatusBadge } from "../components/cards";
+import { NewsletterBand } from "../components/newsletter";
 import { IconCal, IconClapper, IconDial, IconHearts, IconReel, IconRoute, IconSparkle, IconStar, IconTvPlay, IconVs } from "../components/icons";
 import { ProviderLine } from "../components/providers";
 import { airTime, epCode, heroBg, hiRes, homeDateline, isNewYear, longDate, posterSrc, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
@@ -789,6 +790,8 @@ app.get("/", async (c) => {
             </div>
           ) : null}
         </section>
+
+        <NewsletterBand />
 
         {/* the doors out — hub and genre lanes wearing their pages' own art */}
         <section class="home-lanes">

@@ -1476,6 +1476,54 @@ export function buildCompareOgCard(a: OgSide, b: OgSide): string {
   return p.join("");
 }
 
+/** "What to watch" landscape OG — two show backdrops side by side (no VS
+ *  framing), for generic discovery pages (what-to-watch, …) so shared links
+ *  unfurl with a dual-show "tonight's picks" card, not the brand default. */
+export function buildShowcaseOgCard(a: OgSide, b: OgSide, label = "WHAT TO WATCH TONIGHT"): string {
+  const mid = OG_W / 2;
+  const p: string[] = [];
+  p.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_W}" height="${OG_H}" viewBox="0 0 ${OG_W} ${OG_H}" font-family="Archivo, ${SYS}">`,
+  );
+  p.push(
+    `<defs>` +
+      `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#17171c"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+      `<linearGradient id="vscrim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.78"/><stop offset="0.28" stop-color="${PLATE}" stop-opacity="0.04"/><stop offset="0.62" stop-color="${PLATE}" stop-opacity="0.04"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.94"/></linearGradient>` +
+      `</defs>`,
+  );
+  p.push(`<rect width="${OG_W}" height="${OG_H}" fill="url(#bg)"/>`);
+  const side = (s: OgSide, ox: number) => {
+    const art = s.backdropUri ?? s.posterUri;
+    if (art)
+      p.push(
+        `<image href="${art}" x="${ox}" y="0" width="${mid}" height="${OG_H}" preserveAspectRatio="xMidYMid slice"/>`,
+      );
+  };
+  side(a, 0);
+  side(b, mid);
+  p.push(`<rect width="${OG_W}" height="${OG_H}" fill="url(#vscrim)"/>`);
+  p.push(`<rect x="${mid - 1.5}" y="0" width="3" height="${OG_H}" fill="${PLATE}" opacity="0.55"/>`);
+
+  const nameBlock = (s: OgSide, anchor: "start" | "end", edgeX: number) => {
+    const lines = wrap(s.name.toUpperCase(), 13, 2);
+    const sz = lines.length > 1 ? 42 : 50;
+    let yy = OG_H - 150 - (lines.length - 1) * (sz + 4);
+    lines.forEach((ln) => {
+      p.push(txtR(edgeX, yy, ln, { size: sz, w: "black", fill: TEXT, anchor }));
+      yy += sz + 4;
+    });
+    if (s.rating != null) p.push(ratingMark(edgeX, yy + 18, 30, s.rating, GOLD, anchor));
+  };
+  nameBlock(a, "start", OG_M);
+  nameBlock(b, "end", OG_W - OG_M);
+
+  p.push(ogBrand(OG_M, 92));
+  p.push(txtR(OG_W - OG_M, 92, label, { size: 20, w: "bold", fill: MUTED, anchor: "end", ls: 2.5 }));
+  p.push(txtR(OG_W / 2, OG_H - 36, "tvnightly.com", { size: 25, w: "black", fill: AMBER, anchor: "middle", ls: 0.5 }));
+  p.push(`</svg>`);
+  return p.join("");
+}
+
 /** "If you liked X" landscape card: the hook + hero name up top, a row of the
  *  top picks across the bottom. For the /recommend share + unfurl. */
 export function buildLikedOgCard(hero: CardEntry, picks: CardEntry[], backdropUri: string | null): string {

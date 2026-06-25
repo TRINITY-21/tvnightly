@@ -776,6 +776,7 @@ app.get("/admin/studio", async (c) => {
                     { label: "TikTok", text: caps.tiktok },
                     { label: "Facebook", text: caps.facebook },
                     { label: "Pinterest", text: caps.pinterest },
+                    { label: "WhatsApp", text: caps.whatsapp },
                   ].map((pl) => (
                     <div class="studio-cap">
                       <div class="studio-cap-head">

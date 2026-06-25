@@ -3,6 +3,9 @@ import { Bindings, ShowRow, MovieRow } from "../types";
 import { visitorRegion } from "../lib/providers";
 import { stripHtml, posterSrc, heroBg, fmtRuntime, slugifyName } from "../lib/format";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import { servePng } from "../lib/render";
+import { posterDataUri } from "../lib/signal";
+import { buildShowcaseOgCard, type OgSide } from "../lib/social";
 import { origin, canonical } from "../lib/seo";
 import { PICKER_MIN_WEIGHT } from "../lib/queries";
 import { Layout } from "../components/Layout";
@@ -251,6 +254,8 @@ app.get("/what-to-watch", async (c) => {
       title="What should I watch tonight? — TV show picker | TV Nightly"
       description="Can't decide what to watch? Spin the picker: a great TV show matching your genre, rating, and episode-length filters."
       canonical={origin(c) + "/what-to-watch"}
+      ogImage={origin(c) + "/what-to-watch/og.png"}
+      ogImageLarge
       scripts={["/js/dropdown.js", "/js/watch-scroll.js"]}
     >
       <div class="watch-page">
@@ -510,6 +515,33 @@ app.get("/what-to-watch", async (c) => {
       </div>
     </Layout>,
   );
+});
+
+// 1200×630 dual-show "what to watch tonight" OG card so shared /what-to-watch
+// links unfurl with a showcase-style preview instead of the brand default.
+app.get("/what-to-watch/og.png", async (c) => {
+  return servePng(c, "what-to-watch", async () => {
+    const { results } = await c.env.DB.prepare(
+      `SELECT * FROM shows
+         WHERE type IN ('Scripted', 'Animation', 'Documentary')
+           AND poster_url IS NOT NULL AND rating IS NOT NULL AND tmdb_id IS NOT NULL
+         ORDER BY weight DESC, rating DESC
+         LIMIT 2`,
+    ).all<ShowRow>();
+    if (results.length < 2) return null;
+    const key = c.env.TMDB_API_KEY;
+    const sides = await Promise.all(
+      results.map(async (s): Promise<OgSide> => {
+        const bd = s.tmdb_id && key ? await tmdbBackdrop(key, s.tmdb_id) : null;
+        const [posterUri, backdropUri] = await Promise.all([
+          posterDataUri(posterSrc(s)?.src ?? null),
+          posterDataUri(bd?.x1 ?? null),
+        ]);
+        return { name: s.name, posterUri, backdropUri, rating: s.rating };
+      }),
+    );
+    return buildShowcaseOgCard(sides[0], sides[1]);
+  });
 });
 
 export default app;

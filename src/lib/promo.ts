@@ -281,6 +281,7 @@ export interface CaptionSet {
   tiktok: string;
   facebook: string;
   pinterest: string;
+  whatsapp: string;
   path: string;
 }
 
@@ -315,6 +316,8 @@ function composeCaptions(o: {
     facebook: `${o.emoji} ${o.title} — ${o.hook}${dot}${sub}\n\n${link("facebook")}\n\n${three}`,
     // Pinterest — keyword-rich description for pin search + the link
     pinterest: `${o.title} — ${o.hook}${dot}${sub}\n\n${link("pinterest")}\n\n${all}`,
+    // WhatsApp — conversational, link unfurls to the OG card, no hashtags
+    whatsapp: `${o.emoji} ${o.title} — ${o.hook}${dot}${sub}\n\n${link("whatsapp")}`,
     path: o.path,
   };
 }

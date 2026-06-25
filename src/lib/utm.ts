@@ -2,7 +2,7 @@
 // source / medium / campaign so GA4 can attribute traffic to the post.
 import { slugifyName } from "./format";
 
-export type UtmSource = "tiktok" | "instagram" | "facebook" | "x" | "pinterest";
+export type UtmSource = "tiktok" | "instagram" | "facebook" | "x" | "pinterest" | "whatsapp";
 
 export const UTM_MEDIUM = "social";
 
@@ -20,6 +20,7 @@ const SRC_CODE: Record<UtmSource, string> = {
   tiktok: "tt",
   x: "x",
   pinterest: "pin",
+  whatsapp: "wa",
 };
 export const SRC_FROM_CODE: Record<string, UtmSource> = {
   fb: "facebook",
@@ -27,6 +28,7 @@ export const SRC_FROM_CODE: Record<string, UtmSource> = {
   tt: "tiktok",
   x: "x",
   pin: "pinterest",
+  wa: "whatsapp",
 };
 
 /** A clean, shareable redirect link — /r/<src>/<path> — that re-attaches the

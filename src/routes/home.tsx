@@ -2,20 +2,39 @@ import { Hono } from "hono";
 import { FC, PropsWithChildren } from "hono/jsx";
 import { Honeypot, Layout } from "../components/Layout";
 import { MovieCard, ShowCard, StatusBadge } from "../components/cards";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import { IconCal, IconClapper, IconDial, IconHearts, IconMail, IconReel, IconRoute, IconSparkle, IconStar, IconTvPlay, IconVs } from "../components/icons";
 import { NewsletterBand } from "../components/newsletter";
-import { IconCal, IconClapper, IconDial, IconHearts, IconReel, IconRoute, IconSparkle, IconStar, IconTvPlay, IconVs } from "../components/icons";
 import { ProviderLine } from "../components/providers";
-import { airTime, epCode, heroBg, hiRes, homeDateline, isNewYear, longDate, posterSrc, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
+import { airTime, epCode, heroBg, hiRes, homeDateline, isNewYear, longDate, personHref, posterSrc, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
 import { PROVIDER_LOGOS, visitorRegion } from "../lib/providers";
 import { communityVerdictTotal } from "../lib/ratings";
 import { liveTonight } from "../lib/schedule-live";
 import { canonical, origin, siteIdentityLd } from "../lib/seo";
-import { tmdbBackdrop, tmdbMovieBackdrop, tmdbPopular, tmdbTrendingList, tmdbUpcomingMovies } from "../lib/tmdb";
+import { latestTrailers, trailerSeedsFromRails } from "../lib/latest-trailers";
+import { tmdbBackdrop, tmdbMovieBackdrop, tmdbPopular, tmdbTrailer, tmdbTrendingList, tmdbUpcomingMovies } from "../lib/tmdb";
 import { toMovieRow, toShowRow } from "../lib/tmdb-rows";
-import { tmdbHeroShow } from "../lib/tmdb-show";
-import { Bindings, MovieRow, ShowRow } from "../types";
+import { tmdbHeroShow, tmdbShowCast } from "../lib/tmdb-show";
+import { Bindings, HonoEnv, MovieRow, ShowRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
+
+// Lazy trailer lookup for the poster-card play buttons. A card carries only the
+// title's tmdb id + media type; the YouTube key is fetched here on click, so
+// nothing is paid for trailers nobody plays. Rides the 7-day edge cache, and the
+// JSON response is itself cacheable for a week.
+app.get("/api/trailer", async (c) => {
+  const type = c.req.query("type");
+  const id = c.req.query("id");
+  if ((type !== "tv" && type !== "movie") || !id || !/^\d+$/.test(id)) {
+    return c.json({ key: null }, 400);
+  }
+  const key = c.env.TMDB_API_KEY;
+  if (!key) return c.json({ key: null }, 503);
+  const t = await tmdbTrailer(key, type, Number(id));
+  c.header("Cache-Control", "public, max-age=604800");
+  return c.json(t ?? { key: null });
+});
 
 // The browse lanes: doors into the hubs and genre charts. Each lane wears
 // its own page's current #1 title art — never stock, never stale by more
@@ -347,11 +366,19 @@ app.get("/", async (c) => {
   const showProof = verdictTotal >= 50;
 
   // the sign-on frame: the spotlight show's real designed backdrop (one
-  // edge-cached call); falls back to its poster blurred into ambient light
-  const backdrop =
+  // edge-cached call); falls back to its poster blurred into ambient light.
+  // Fetched alongside the hero's trailer (the autoplay panel on the right) —
+  // both ride the same cached bundle, so this is one burst of cache hits.
+  const [backdrop, heroTrailer, heroCastRaw] =
     spot?.tmdb_id && c.env.TMDB_API_KEY
-      ? await tmdbBackdrop(c.env.TMDB_API_KEY, spot.tmdb_id)
-      : null;
+      ? await Promise.all([
+          tmdbBackdrop(c.env.TMDB_API_KEY, spot.tmdb_id),
+          tmdbTrailer(c.env.TMDB_API_KEY, "tv", spot.tmdb_id),
+          tmdbShowCast(c.env.TMDB_API_KEY, spot.tmdb_id, 12),
+        ])
+      : [null, null, [] as Awaited<ReturnType<typeof tmdbShowCast>>];
+  // the billed cast that actually has a headshot — the faces under the trailer
+  const heroCast = (heroCastRaw ?? []).filter((p) => p.img).slice(0, 7);
   const spotPosterBg = spot ? hiRes(spot.image_url) : null;
   const spotFrame = backdrop
     ? heroBg(backdrop.x1, backdrop.x2)
@@ -359,9 +386,17 @@ app.get("/", async (c) => {
       ? heroBg(spotPosterBg)
       : null;
 
+  const sidebarTops = c.get("siteSidebar");
+  const sidebarTrailers = await latestTrailers(
+    c.env.TMDB_API_KEY,
+    trailerSeedsFromRails(trendTvRail, trendMovies, top, topMovies),
+  );
+
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
     <Layout
+      c={c}
+      sidebarInline
       title="TV Nightly — best episodes, release dates & TV tonight"
       description="Track the best episodes of every TV show, season release dates, renewal status, and what's airing tonight."
       canonical={canonical(c)}
@@ -370,12 +405,41 @@ app.get("/", async (c) => {
       preloadImage={backdrop ?? undefined}
     >
       <div class="home">
+        {/* Newsletter bar: pinned just under the header so it's the first thing
+            a visitor meets — subscribe without scrolling. Full-bleed glass, the
+            amber CTA the only pop. */}
+        <section class="home-newsbar" aria-labelledby="home-email-title">
+          <div class="home-newsbar-inner">
+            <div class="home-newsbar-copy">
+              <span class="home-newsbar-kicker" aria-hidden="true">
+                <IconMail size={15} />
+              </span>
+              <p class="home-newsbar-title" id="home-email-title">
+                <span class="home-newsbar-title-main">Tonight's best TV</span>
+                <span class="home-newsbar-title-sub">in your inbox</span>
+              </p>
+            </div>
+            <form action="/subscribe" method="post" class="home-newsbar-form">
+              <input type="hidden" name="kind" value="daily" />
+              <input
+                type="email"
+                name="email"
+                placeholder="you@email.com"
+                aria-label="Email address"
+                required
+                autocomplete="email"
+              />
+              <Honeypot />
+              <button type="submit">Subscribe</button>
+            </form>
+          </div>
+        </section>
         {/* Sign-on: tonight's headline in the house frame treatment. The
             section has no chrome — the scrim resolves to --bg, so it melts
             into the page. Data-driven, never a marketing banner. */}
         {spot ? (
           <section
-            class={backdrop ? "spotlight" : "spotlight spot-ambient"}
+            class={`spotlight${backdrop ? "" : " spot-ambient"}${heroTrailer ? " spot-cinema" : ""}`}
             aria-labelledby="spot-title"
           >
             {spotFrame ? <div class="hero-backdrop" style={spotFrame}></div> : null}
@@ -386,7 +450,7 @@ app.get("/", async (c) => {
                 </span>
               </div>
             ) : null}
-            <div class="spot-head">
+            <div class={heroTrailer ? "spot-head spot-head-video" : "spot-head"}>
               {(() => {
                 const p = posterSrc(spot);
                 return p ? (
@@ -480,11 +544,62 @@ app.get("/", async (c) => {
                   <a class="btn-ghost chev-after" href={`/show/${spot.slug}`}>
                     Episode guide & ratings
                   </a>
-                  <a class="spot-action-tertiary" href="/what-to-watch">
-                    Find something tonight
-                  </a>
                 </div>
               </div>
+              {/* RIGHT column: the autoplaying trailer up top, the cast faces
+                  beneath it. The left column keeps the backdrop + meta to itself,
+                  so the video never covers the art. loading=lazy means a hidden
+                  frame never loads. */}
+              {heroTrailer ? (
+                <div class="spot-aside">
+                  <div
+                    class="spot-trailer"
+                    style={backdrop ? heroBg(backdrop.x1, backdrop.x2) : undefined}
+                  >
+                    <iframe
+                      class="spot-trailer-frame"
+                      src={`https://www.youtube-nocookie.com/embed/${heroTrailer.key}?autoplay=1&mute=1&loop=1&playlist=${heroTrailer.key}&controls=1&rel=0&modestbranding=1&playsinline=1`}
+                      title={`${spot.name} — trailer`}
+                      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                      loading="lazy"
+                      referrerpolicy="strict-origin-when-cross-origin"
+                      allowfullscreen
+                    ></iframe>
+                  </div>
+                  {heroCast.length ? (
+                    <div class="spot-cast" aria-label={`${spot.name} cast`}>
+                      {heroCast.map((p) => {
+                        const href = personHref(p);
+                        const face = (
+                          <>
+                            <span class="spot-cast-face">
+                              <img
+                                src={p.img!}
+                                alt={p.n}
+                                width="60"
+                                height="60"
+                                loading="lazy"
+                                decoding="async"
+                              />
+                            </span>
+                            <span class="spot-cast-name">{p.n}</span>
+                          </>
+                        );
+                        const label = p.c ? `${p.n} — ${p.c}` : p.n;
+                        return href ? (
+                          <a class="spot-cast-member" href={href} title={label}>
+                            {face}
+                          </a>
+                        ) : (
+                          <span class="spot-cast-member" title={label}>
+                            {face}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -624,32 +739,10 @@ app.get("/", async (c) => {
           </div>
         </section>
 
-        <section class="home-email-strip" aria-labelledby="home-email-title">
-          <form action="/subscribe" method="post" class="home-sub">
-            <input type="hidden" name="kind" value="daily" />
-            <div class="home-sub-copy">
-              <p class="home-sub-title" id="home-email-title">
-                One email when your shows return
-              </p>
-              <p class="home-sub-note muted">
-                Tonight's TV, renewals and premieres — confirm once, unsubscribe anytime.
-              </p>
-            </div>
-            <div class="home-sub-controls">
-              <input
-                type="email"
-                name="email"
-                placeholder="you@email.com"
-                aria-label="Email address"
-                required
-                autocomplete="email"
-              />
-              <Honeypot />
-              <button type="submit">Subscribe</button>
-            </div>
-          </form>
-        </section>
-
+        {/* Moviefone-style two-column band: the content rails on the left, a
+            sticky right rail with Latest Trailers + Follow alongside. */}
+        <section class="home-main-grid">
+          <div class="home-col">
         {returning.length ? (
           <section class="home-returning">
             <div class="home-returning-card">
@@ -955,6 +1048,13 @@ app.get("/", async (c) => {
               </a>
             </div>
           </div>
+        </section>
+          </div>
+          <HomeSidebarRail
+            trailers={sidebarTrailers}
+            topSeries={sidebarTops?.topSeries ?? []}
+            topMovies={sidebarTops?.topMovies ?? []}
+          />
         </section>
 
       </div>

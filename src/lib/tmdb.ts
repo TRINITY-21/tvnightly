@@ -8,6 +8,7 @@ type RawBundle = {
   original_language?: string;
   production_companies?: { id: number; name: string }[];
   created_by?: { id: number; name: string }[];
+  tagline?: string | null;
   images?: {
     posters?: { file_path: string; iso_639_1: string | null; vote_count: number }[];
     backdrops?: { file_path: string; iso_639_1: string | null; vote_count: number }[];
@@ -137,6 +138,27 @@ export async function tmdbMovieFacts(
     studio: data.production_companies?.[0]?.name ?? null,
     trailer,
   };
+}
+
+/** The single best YouTube trailer for a title — TV by tmdb id, movie by tmdb
+ *  id or IMDb tt-id (TMDB accepts either in the path). Rides the same 7-day
+ *  edge-cached bundle as the media pages, so the homepage card play buttons
+ *  (lazy, on click) and the Latest Trailers rail cost nothing on a cache hit.
+ *  Prefers an official Trailer, then a Teaser, then any clip. */
+export async function tmdbTrailer(
+  key: string,
+  kind: "tv" | "movie",
+  id: number | string,
+): Promise<{ key: string; name: string } | null> {
+  const data = await bundle(key, kind, id);
+  if (!data) return null;
+  const videos = mapMedia(data).videos;
+  const v =
+    videos.find((x) => x.type === "Trailer") ??
+    videos.find((x) => x.type === "Teaser") ??
+    videos[0] ??
+    null;
+  return v ? { key: v.key, name: v.name } : null;
 }
 
 /** The hero backdrop. NOT TMDB's designated backdrop_path — that's often a
@@ -296,6 +318,46 @@ export async function tmdbShowCreators(
 ): Promise<{ id: number; name: string }[]> {
   const data = await bundle(key, "tv", tmdbId);
   return (data?.created_by ?? []).map((p) => ({ id: p.id, name: p.name })).slice(0, 3);
+}
+
+/** Key crew for a series — directors and writers from the same cached bundle. */
+export async function tmdbShowCrew(
+  key: string,
+  tmdbId: number,
+  limit = 12,
+): Promise<TmdbCrewEntry[]> {
+  const data = await bundle(key, "tv", tmdbId);
+  const merged = new Map<
+    number,
+    { name: string; profile_path: string | null; jobs: string[]; rank: number }
+  >();
+  for (const p of data?.credits?.crew ?? []) {
+    const rank = CREW_RANK.indexOf(p.job ?? "");
+    if (rank === -1) continue;
+    const cur = merged.get(p.id);
+    if (cur) {
+      if (!cur.jobs.includes(p.job!)) cur.jobs.push(p.job!);
+      cur.rank = Math.min(cur.rank, rank);
+      cur.profile_path = cur.profile_path ?? p.profile_path;
+    } else {
+      merged.set(p.id, { name: p.name, profile_path: p.profile_path, jobs: [p.job!], rank });
+    }
+  }
+  return [...merged.entries()]
+    .sort(([, a], [, b]) => a.rank - b.rank || a.name.localeCompare(b.name))
+    .slice(0, limit)
+    .map(([id, p]) => ({ id, name: p.name, profile_path: p.profile_path, jobs: p.jobs.join(" · ") }));
+}
+
+/** One-line tagline from the cached TMDB bundle. */
+export async function tmdbTagline(
+  key: string,
+  kind: "tv" | "movie",
+  id: number | string,
+): Promise<string | null> {
+  const data = await bundle(key, kind, id);
+  const t = data?.tagline?.trim();
+  return t || null;
 }
 
 /** Movie hero backdrop, same selection rules, keyed on the IMDb id. */
@@ -469,6 +531,92 @@ export async function tmdbSearchPeople(key: string, query: string): Promise<Tmdb
         name: p.name as string,
         profilePath: (p.profile_path as string) ?? null,
       }));
+  } catch {
+    return [];
+  }
+}
+
+export type TmdbTaggedStill = {
+  filePath: string;
+  mediaType: "tv" | "movie";
+  mediaId: number;
+  mediaTitle: string;
+  voteCount: number;
+  imageType: string;
+};
+
+/** Stills where TMDB has tagged this person in-frame — the IMDb highlights row. */
+export async function tmdbPersonTaggedStills(
+  key: string,
+  personId: number,
+): Promise<TmdbTaggedStill[]> {
+  const cacheKey = new Request(`https://edge-cache.tvnightly.com/person-tagged/v2/${personId}`);
+  const cache = caches.default;
+  try {
+    let res = await cache.match(cacheKey);
+    if (!res) {
+      const live = await fetch(
+        `https://api.themoviedb.org/3/person/${personId}/tagged_images?api_key=${key}&page=1`,
+        { headers: { accept: "application/json" } },
+      );
+      if (!live.ok) return [];
+      res = new Response(live.body, live);
+      res.headers.set("Cache-Control", "public, max-age=604800");
+      await cache.put(cacheKey, res.clone());
+    }
+    const data = (await res.json()) as { results?: Record<string, unknown>[] };
+    return (data.results ?? [])
+      .map((row) => {
+        const media = row.media as Record<string, unknown> | undefined;
+        const filePath = row.file_path as string | undefined;
+        if (!filePath || !media) return null;
+
+        const rowType = row.media_type as string | undefined;
+        const nestedType = media.media_type as string | undefined;
+        let mediaType: "tv" | "movie" | null = null;
+        let mediaId: number | undefined;
+
+        // Episode stills tag the parent series — row.media_type is "episode".
+        if (rowType === "episode" || nestedType === "tv_episode") {
+          mediaType = "tv";
+          mediaId = (media.show_id as number) ?? (media.id as number);
+        } else {
+          const raw =
+            rowType === "tv" || rowType === "movie"
+              ? rowType
+              : nestedType === "tv" || nestedType === "movie"
+                ? nestedType
+                : media.name && !media.title
+                  ? "tv"
+                  : media.title
+                    ? "movie"
+                    : null;
+          if (raw === "tv" || raw === "movie") {
+            mediaType = raw;
+            mediaId = media.id as number;
+          }
+        }
+
+        if (!mediaType || !mediaId) return null;
+        const mediaTitle = String(
+          mediaType === "tv" ? media.name ?? media.title : media.title ?? media.name ?? "",
+        ).trim();
+        if (!mediaTitle) return null;
+        return {
+          filePath,
+          mediaType,
+          mediaId,
+          mediaTitle,
+          voteCount: Number(row.vote_count) || 0,
+          imageType: (row.image_type as string) ?? "still",
+        } satisfies TmdbTaggedStill;
+      })
+      .filter((x): x is TmdbTaggedStill => x != null)
+      .sort((a, b) => {
+        const stillRank = (x: TmdbTaggedStill) => (x.imageType === "still" ? 1 : 0);
+        const byKind = stillRank(b) - stillRank(a);
+        return byKind || b.voteCount - a.voteCount;
+      });
   } catch {
     return [];
   }

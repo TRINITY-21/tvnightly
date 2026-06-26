@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { Bindings } from "../types";
+import { Bindings, HonoEnv } from "../types";
 import { origin } from "../lib/seo";
 import { MessagePage } from "../components/Layout";
 import { SubscribePending } from "../components/subscribe-pending";
@@ -8,7 +8,7 @@ import { materializeShow } from "../lib/tmdb-show";
 import { sendEmails } from "../email";
 import { EMAIL, emailButton, emailHighlight, emailLinkFallback, emailShell } from "../lib/email-template";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // ------------------------------------------------- subscribe / confirm
 
@@ -150,7 +150,7 @@ app.get("/confirm", async (c) => {
 // Verify an unsubscribe token and remove the matching subscription. Returns true
 // if a valid token was processed. Shared by the human GET page and the RFC-8058
 // one-click POST.
-async function applyUnsubscribe(c: Context<{ Bindings: Bindings }>): Promise<boolean> {
+async function applyUnsubscribe(c: Context<HonoEnv>): Promise<boolean> {
   const token = c.req.query("token") ?? "";
   const payload = c.env.SECRET ? await verifyToken(token, c.env.SECRET) : null;
   if (!payload || payload.action !== "unsub") return false;

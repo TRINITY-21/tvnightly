@@ -1,0 +1,606 @@
+/* ====================================================================
+   Detail hero — full Trakt-style page header: title, chips, stage,
+   highlights, facts, social actions, plot.
+   ==================================================================== */
+.hub-hero {
+  margin: -1rem calc(50% - 50vw) 0;
+  width: 100vw;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.hub-hero-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.1rem 1.25rem 1.75rem;
+}
+
+/* ---- title row ---- */
+.hub-hero-head {
+  margin-bottom: 0.65rem;
+}
+.hub-hero-title {
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 96%;
+  font-weight: 800;
+  font-size: clamp(1.65rem, 3.2vw, 2.15rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  min-width: 0;
+}
+.hub-hero-years {
+  font-weight: 650;
+  color: var(--muted);
+}
+
+/* ---- intro block: chips + facts under title ---- */
+.hub-hero-intro {
+  padding-bottom: 1rem;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--line);
+}
+.hub-hero-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.45rem 0.7rem;
+  padding-bottom: 0;
+  border-bottom: 0;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--muted);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.hub-hero-chips::-webkit-scrollbar { display: none; }
+.hub-hero-chips > .hub-hero-type,
+.hub-hero-chips > .hub-hero-badge,
+.hub-hero-chips > .hub-hero-chip,
+.hub-hero-chips > .hub-hero-chip-logo {
+  flex-shrink: 0;
+}
+.hub-hero-chips > .hub-hero-fact {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.hub-hero-chips > .hub-hero-fact + .hub-hero-fact::before {
+  content: "·";
+  margin-right: 0.65rem;
+  color: var(--line);
+}
+.hub-hero-chips > .hub-hero-fact:first-of-type::before {
+  content: "·";
+  margin-right: 0.65rem;
+  color: var(--line);
+}
+.hub-hero-type {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.24rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-family: var(--display);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+.hub-hero-type:hover {
+  text-decoration: none;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.hub-hero-chip {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+a.hub-hero-chip:hover { color: var(--accent); text-decoration: none; }
+.hub-hero-chip-muted { color: var(--muted); font-weight: 500; }
+.hub-hero-chip-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.hub-hero-chip-logo img { border-radius: 3px; display: block; }
+.hub-hero-tagline {
+  font-size: 0.86rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* facts row — sits under chips in the title intro */
+.hub-hero-facts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem 0;
+  margin-top: 0.65rem;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.hub-hero-facts > * {
+  display: inline-flex;
+  align-items: center;
+}
+.hub-hero-facts > * + *::before {
+  content: "·";
+  margin: 0 0.65rem;
+  color: var(--line);
+}
+.hub-hero-badge {
+  display: inline-flex;
+  padding: 0.18rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.hub-hero-fact { gap: 0.35rem; }
+.hub-hero-fact a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.hub-hero-fact a:hover { color: var(--accent); }
+
+/* ---- main stage: poster | player | credits ---- */
+.hub-hero-stage {
+  display: grid;
+  grid-template-columns: clamp(220px, 13vw, 260px) minmax(0, 1fr) clamp(200px, 18vw, 235px);
+  gap: 1rem;
+  padding: 1.15rem 0 1.2rem;
+  align-items: stretch;
+}
+/* poster fills the video row height; wider column keeps cover crop near 2:3 */
+.hub-hero-poster {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-2);
+  background: var(--surface);
+}
+/* diagonal score ribbon — tucked into the poster's top-right corner */
+.hub-poster-rating {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 3;
+  width: 4.75rem;
+  height: 4.75rem;
+  overflow: hidden;
+  pointer-events: none;
+}
+.hub-poster-rating-ribbon {
+  position: absolute;
+  top: 1.05rem;
+  right: -1.85rem;
+  width: 7.75rem;
+  padding: 0.34rem 0;
+  text-align: center;
+  transform: rotate(45deg);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.38);
+}
+.hub-poster-rating-val {
+  display: block;
+  font-family: var(--display);
+  font-stretch: 95%;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #fff;
+}
+.hub-poster-rating-high .hub-poster-rating-ribbon {
+  background: linear-gradient(135deg, #45e89a, #2ec97a);
+}
+.hub-poster-rating-mid .hub-poster-rating-ribbon {
+  background: linear-gradient(135deg, #ffb347, var(--rating));
+}
+.hub-poster-rating-low .hub-poster-rating-ribbon {
+  background: linear-gradient(135deg, #8a8f98, #5f646d);
+}
+.hub-hero-poster .poster,
+.hub-hero-poster .card-fallback {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  aspect-ratio: unset;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.hub-hero-player {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+.hub-hero-video {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+}
+.hub-hero-video-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+/* mini player — docks bottom-right when the hero scrolls off screen */
+.hub-hero-player.has-pip::after {
+  content: "";
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  background: #0a0a0c;
+  border: 1px solid var(--line);
+}
+.hub-hero-video.is-pip {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  width: min(22rem, 44vw);
+  z-index: 55;
+  overflow: hidden;
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  animation: hub-pip-in 0.28s var(--ease);
+}
+@keyframes hub-pip-in {
+  from { opacity: 0; transform: translateY(0.65rem) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-hero-video.is-pip { animation: none; }
+}
+@media (max-width: 560px) {
+  .hub-hero-video.is-pip {
+    right: 0.65rem;
+    bottom: 0.65rem;
+    width: min(11.5rem, 46vw);
+  }
+}
+.hub-hero-video-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+.hub-hero-video-empty:hover {
+  text-decoration: none;
+  color: var(--accent);
+  border-color: rgba(255, 169, 77, 0.35);
+}
+.hub-hero-video-backdrop img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* credits sidebar — matches video row height */
+.hub-hero-credits {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 0.65rem;
+  min-height: 0;
+  height: 100%;
+  padding: 0.85rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+.hub-hero-credits-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.hub-credit-block h3 {
+  margin: 0 0 0.28rem;
+  font-family: var(--display);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hub-credit-block p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hub-credit-block a {
+  color: var(--text);
+  text-decoration: none;
+}
+.hub-credit-block a:hover { color: var(--accent); }
+
+.hub-hero-credits-foot {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+}
+.hub-hero-watch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.58rem 0.68rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: border-color var(--speed) var(--ease), background var(--speed) var(--ease);
+}
+.hub-hero-watch img { flex: none; border-radius: 3px; display: block; }
+.hub-hero-watch strong { font-weight: 800; }
+.hub-hero-watch:hover {
+  text-decoration: none;
+  border-color: rgba(255, 169, 77, 0.4);
+  background: rgba(255, 169, 77, 0.08);
+}
+
+/* share — same ShareBar used site-wide */
+.hub-hero-credits-foot .share-bar {
+  margin: 0;
+  width: 100%;
+}
+.hub-hero-credits-foot .share-btn {
+  width: 100%;
+  justify-content: center;
+  background: var(--surface-2);
+}
+.hub-hero-credits .rate-inline {
+  margin: 0;
+  gap: 0.35rem;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+.hub-hero-credits .rate-inline-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: left;
+}
+.hub-hero-credits .rate-inline .vote-btn { font-size: 0.95rem; }
+.hub-hero-credits .verdict-form { flex: 0 0 auto; }
+
+/* ---- highlights rail ---- */
+.hub-hero-highlights {
+  padding: 1.1rem 0 1rem;
+  border-top: 1px solid var(--line);
+}
+.hub-hero-section-label {
+  margin: 0 0 0.75rem;
+  font-family: var(--display);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hub-hero-section-label span { color: var(--text); }
+.hub-hero-vidrow {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 2px 2px 0.4rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-2) transparent;
+}
+.hub-hero-vid {
+  flex: 0 0 136px;
+  text-decoration: none;
+}
+.hub-hero-vid-thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #000;
+  transition: border-color var(--speed) var(--ease);
+}
+.hub-hero-vid-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: filter var(--speed) var(--ease);
+}
+.hub-hero-vid-thumb svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.hub-hero-vid:hover .hub-hero-vid-thumb {
+  border-color: rgba(255, 169, 77, 0.45);
+}
+.hub-hero-vid:hover img { filter: brightness(0.65); }
+
+/* ---- plot ---- */
+.hub-hero-plot {
+  padding: 1.35rem 0 0.35rem;
+  border-top: 1px solid var(--line);
+}
+.hub-hero-plot-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  font-family: var(--display);
+  font-stretch: 80%;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hub-hero-plot-label::before {
+  content: "";
+  flex: none;
+  width: 1.35rem;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+.hub-hero-plot-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line), transparent 85%);
+}
+.hub-hero-plot-body {
+  max-width: 72ch;
+  padding-left: 2.1rem;
+}
+.hub-hero-plot-text {
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.72;
+  color: var(--text);
+  text-wrap: pretty;
+}
+.hub-hero-blurb {
+  margin: 1rem 0 0;
+  padding: 0.85rem 0 0 0.9rem;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.hub-hero + .subnav,
+.hub-hero + .subnav-scroll {
+  margin-top: 0.25rem;
+}
+
+/* ---- responsive ---- */
+@media (max-width: 900px) {
+  .hub-hero-stage {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .hub-hero-credits {
+    grid-column: 1 / -1;
+    height: auto;
+  }
+  .hub-hero-credits-body {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+  }
+  .hub-credit-block { flex: 1 1 10rem; }
+  .hub-hero-credits-foot {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    width: 100%;
+  }
+  .hub-hero-watch { flex: 1 1 100%; }
+  .hub-hero-credits .rate-inline { flex: 1 1 12rem; }
+}
+@media (max-width: 560px) {
+  .hub-hero-inner { padding: 0.85rem 1rem 1.35rem; }
+  .hub-hero-chips {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+  .hub-hero-chips > .hub-hero-fact {
+    white-space: normal;
+  }
+  .hub-hero-stage {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    align-items: start;
+  }
+  .hub-hero-poster {
+    width: min(260px, 52vw);
+    height: auto;
+    align-self: auto;
+  }
+  .hub-hero-poster .poster,
+  .hub-hero-poster .card-fallback {
+    height: auto;
+    min-height: unset;
+    aspect-ratio: 2 / 3;
+  }
+  .hub-hero-player,
+  .hub-hero-credits {
+    height: auto;
+  }
+  .hub-hero-video {
+    height: auto;
+    aspect-ratio: 16 / 9;
+  }
+  .hub-hero-tagline {
+    flex-basis: 100%;
+  }
+  .hub-hero-credits-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .hub-hero-plot-body {
+    padding-left: 0;
+  }
+  .hub-hero-plot-text {
+    font-size: 0.98rem;
+    line-height: 1.68;
+  }
+}

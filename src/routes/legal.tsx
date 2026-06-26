@@ -1,15 +1,15 @@
 import { Hono } from "hono";
-import { Bindings } from "../types";
+import { Bindings, HonoEnv } from "../types";
 import { aboutPageLd, canonical, origin } from "../lib/seo";
 import { Layout } from "../components/Layout";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // ----------------------------------------------------------------- legal
 
 app.get("/terms", (c) =>
   c.html(
-    <Layout
+    <Layout c={c}
       title="Terms of Service | TV Nightly"
       description="The terms for using TV Nightly: what we provide, acceptable use, email alerts, data sourcing and attribution, and liability."
       canonical={canonical(c)}
@@ -52,7 +52,7 @@ app.get("/terms", (c) =>
 
 app.get("/privacy", (c) =>
   c.html(
-    <Layout
+    <Layout c={c}
       title="Privacy Policy | TV Nightly"
       description="How TV Nightly handles your data: what we collect, anonymous community ratings, email subscriptions, cookies and analytics, and your choices."
       canonical={canonical(c)}
@@ -91,7 +91,7 @@ app.get("/privacy", (c) =>
 
 app.get("/about", (c) =>
   c.html(
-    <Layout
+    <Layout c={c}
       title="About TV Nightly — independent TV & movie guide"
       description="TV Nightly is an independent guide to what's worth watching tonight: episode rankings, release dates, renewal status and where to stream."
       canonical={canonical(c)}
@@ -142,7 +142,7 @@ app.get("/about", (c) =>
 
 app.get("/how-we-pick", (c) =>
   c.html(
-    <Layout
+    <Layout c={c}
       title="How we pick & rank — TV Nightly methodology"
       description="How TV Nightly ranks episodes, builds recommendations, and tracks where to stream — using episode-level ratings, anonymous community verdicts, and continuously refreshed data."
       canonical={canonical(c)}
@@ -201,7 +201,7 @@ app.get("/how-we-pick", (c) =>
 
 app.get("/editorial-policy", (c) =>
   c.html(
-    <Layout
+    <Layout c={c}
       title="Editorial & independence policy | TV Nightly"
       description="TV Nightly's editorial standards: no paid placement, transparent affiliate disclosure, algorithmic and community-driven rankings, and how we handle accuracy and corrections."
       canonical={canonical(c)}

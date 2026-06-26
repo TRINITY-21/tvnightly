@@ -81,6 +81,17 @@ export const retinaSet = (_url: string | null): string | undefined => undefined;
 export const largeStill = (url: string): string =>
   url.replace("/medium_landscape/", "/large_landscape/");
 
+/** Episode still for slate-scale slots (~300–400w). TMDB mirrors store w300;
+ *  upgrade to w500/w780 so the next-episode hero stays sharp on retina. */
+export const stillSrc = (url: string): { src: string; srcset: string } => {
+  if (/\/t\/p\/w\d+\//.test(url)) {
+    const at = (s: string) => url.replace(/\/t\/p\/w\d+\//, `/t/p/${s}/`);
+    return { src: at("w500"), srcset: `${at("w500")} 1x, ${at("w780")} 2x` };
+  }
+  const large = largeStill(url);
+  return { src: url, srcset: `${url} 1x, ${large} 2x` };
+};
+
 /** A person headshot at the right resolution for its slot. Both sources cap low
  *  (TVmaze `medium` ~210px, TMDB `w185`), so large slots upscale to mush. We
  *  derive the sharp sibling instead of re-seeding: TMDB resizes cleanly

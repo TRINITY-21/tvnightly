@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import { KeepExploring, loadTvChartDoorArts } from "../components/keep-going";
 import { IconStar } from "../components/icons";
 import { heroBg, hiRes, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { FRANCHISE_BY_SLUG } from "../lib/franchises";
@@ -18,12 +20,12 @@ import {
 } from "../lib/tmdb";
 import { toMovieRow, toShowRow } from "../lib/tmdb-rows";
 import { VERTICALS, Vertical, genreBinds, genreOr, hubForGenres } from "../lib/verticals";
-import { Bindings, MovieRow, ShowRow } from "../types";
+import { Bindings, HonoEnv, MovieRow, ShowRow } from "../types";
 
 // minimal context shape the live-blend helpers need (DB + TMDB key)
 type Ctx = { env: Bindings };
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // "Pick me an action show" vs "a drama" — genre names decide the article
 const aOrAn = (word: string) => (/^[aeiou]/i.test(word) ? "an" : "a");
@@ -593,7 +595,7 @@ app.get("/lists", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="Browse — every chart, network & genre | TV Nightly"
       description="All of TV Nightly in one place: top charts, networks, genres, fandom hubs, and tools to pick your next watch."
       canonical={canonical(c)}
@@ -851,9 +853,18 @@ app.get("/top/tv", async (c) => {
     }
   }
 
+  const sidebar = c.get("siteSidebar");
+  const [yearArt, underratedArt, episodesArt, compareArt] = await loadTvChartDoorArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    champ,
+    results[1] ?? null,
+  );
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title="Best TV Shows of All Time — Top 100 Ranked | TV Nightly"
       description={`The best TV shows of all time, ranked by viewer rating${results[0] ? ` — led by ${results[0].name}` : ""}. At most one entry per series in our all-time chart.`}
       canonical={canonical(c)}
@@ -893,6 +904,8 @@ app.get("/top/tv", async (c) => {
         </div>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       {!results.length ? (
         <p class="muted">Ratings are still loading — check back soon.</p>
       ) : (
@@ -949,35 +962,46 @@ app.get("/top/tv", async (c) => {
         </ol>
       )}
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Watch guide"
-            title={`Best shows of ${new Date().getFullYear()}`}
-            desc="The acclaimed series to watch this year, what's airing now first."
-            href={`/tv/best/${new Date().getFullYear()}`}
-          />
-          <ExploreCard
-            icon="Hidden gems"
-            title="Underrated TV shows"
-            desc="High ratings, low profile — the great series most people have missed."
-            href="/tv/underrated"
-          />
-          <ExploreCard
-            icon="Shortcut"
-            title="All-time best episodes"
-            desc="The single greatest hours of television, across every show."
-            href="/best-episodes"
-          />
-          <ExploreCard
-            icon="Compare"
-            title="Compare two shows"
-            desc="Episode ratings head-to-head on one chart — settle the argument."
-            href="/compare"
-          />
+      <KeepExploring
+        cards={[
+          {
+            icon: "Watch guide",
+            title: `Best shows of ${new Date().getFullYear()}`,
+            desc: "The acclaimed series to watch this year, what's airing now first.",
+            href: `/tv/best/${new Date().getFullYear()}`,
+            backdrop: yearArt,
+          },
+          {
+            icon: "Hidden gems",
+            title: "Underrated TV shows",
+            desc: "High ratings, low profile — the great series most people have missed.",
+            href: "/tv/underrated",
+            backdrop: underratedArt,
+          },
+          {
+            icon: "Shortcut",
+            title: "All-time best episodes",
+            desc: "The single greatest hours of television, across every show.",
+            href: "/best-episodes",
+            backdrop: episodesArt,
+          },
+          {
+            icon: "Compare",
+            title: "Compare two shows",
+            desc: "Episode ratings head-to-head on one chart — settle the argument.",
+            href: "/compare",
+            backdrop: compareArt,
+          },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 });
@@ -1029,7 +1053,7 @@ app.get("/top/seasons", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="The 50 best TV seasons of all time | TV Nightly"
       description="Whole seasons ranked by their average episode rating — the greatest single runs in TV history."
       canonical={canonical(c)}
@@ -1210,7 +1234,7 @@ app.get("/top/networks", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="Top TV networks & streamers | TV Nightly"
       description="Netflix, Hulu, HBO, Disney+, and every major network and streamer — browse the best shows on each."
       canonical={canonical(c)}
@@ -1493,7 +1517,7 @@ app.get("/network/:slug", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={
         films.length
           ? `The best ${entry.name} shows & movies — ranked | TV Nightly`
@@ -1648,7 +1672,7 @@ app.get("/network/:slug/shows", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`Top ${entry.name} shows — ranked | TV Nightly`}
       description={`The best TV shows on ${entry.name}, ranked by viewer rating.`}
       canonical={canonical(c)}
@@ -1726,7 +1750,7 @@ app.get("/network/:slug/movies", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`Top ${entry.name} movies — ranked | TV Nightly`}
       description={`The best movies on ${entry.name}, ranked by viewer rating.`}
       canonical={canonical(c)}
@@ -1836,7 +1860,7 @@ app.get("/network/:slug/:genre", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`Best ${lc} on ${entry.name} — ranked | TV Nightly`}
       description={`The best ${lc} ${kindWord} on ${entry.name}, ranked by viewer rating — with where to watch in your region.`}
       canonical={canonical(c)}
@@ -1999,7 +2023,7 @@ app.get("/genre/:slug", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`The best ${label.toLowerCase()} shows & movies | TV Nightly`}
       description={`Top-rated ${label.toLowerCase()} TV series and films, with streaming availability.`}
       canonical={canonical(c)}
@@ -2159,7 +2183,7 @@ app.get("/genre/:slug/shows", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`Top ${lower} shows — ranked | TV Nightly`}
       description={`The best ${lower} TV shows, ranked by viewer rating, with streaming availability.`}
       canonical={canonical(c)}
@@ -2305,7 +2329,7 @@ app.get("/genre/:slug/movies", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`${movieGenre} Movies - Best ${movieGenre} Films to Watch | TV Nightly`}
       description={`Discover the best ${lower} movies. Browse our curated collection of ${lower} films with viewer ratings, streaming availability, and personalized recommendations.`}
       canonical={canonical(c)}

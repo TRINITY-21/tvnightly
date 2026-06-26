@@ -1,15 +1,10 @@
 // Shared above-the-fold "keep going" band shell for show + movie pages:
-// community-proof line, an Explore link list, similar-title chips, and the
-// one-tap rate / renewal-alert foot. The show- and movie-specific wrappers
-// (ShowConvertBand / MovieConvertBand) compute the links and hand them here so
-// the markup, classes, and proof copy live in exactly one place.
+// community-proof line, similar-title chips, and the one-tap rate /
+// renewal-alert foot. The show- and movie-specific wrappers compute context
+// and hand it here so the markup and proof copy live in exactly one place.
 import { FC } from "hono/jsx";
 import { RateInline, SubscribeCompact } from "./forms";
 
-export interface ConvertLink {
-  label: string;
-  href: string;
-}
 export interface ConvertSimilar {
   label: string;
   items: { href: string; text: string }[];
@@ -20,14 +15,11 @@ export const ConvertBand: FC<{
   ariaName: string;
   stat: string | null;
   raterCount: number;
-  exploreLinks: ConvertLink[];
   similar?: ConvertSimilar | null;
   rate: { kind: "tv" | "movie"; refId: string };
   /** Renewal email capture in the foot (shows only — movies have no alerts). */
   subscribe?: { showId: number; showName: string; kicker: string } | null;
-}> = ({ ariaName, stat, raterCount, exploreLinks, similar = null, rate, subscribe = null }) => {
-  if (!exploreLinks.length) return null;
-
+}> = ({ ariaName, stat, raterCount, similar = null, rate, subscribe = null }) => {
   const proof: string[] = [];
   if (raterCount > 0) {
     proof.push(`${raterCount.toLocaleString()} ${raterCount === 1 ? "person" : "people"} rated this`);
@@ -47,20 +39,7 @@ export const ConvertBand: FC<{
         </p>
       ) : null}
 
-      <div class="show-convert-block">
-        <p class="show-convert-label">Explore</p>
-        <ul class="show-convert-nav">
-          {exploreLinks.map((link) => (
-            <li>
-              <a class="show-convert-link chev-after" href={link.href}>
-                {link.label}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {similar && similar.items.length ? (
+      {similar?.items.length ? (
         <div class="show-convert-block show-convert-similar">
           <p class="show-convert-label">{similar.label}</p>
           <div class="show-convert-similar-chips">

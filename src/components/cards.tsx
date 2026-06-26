@@ -1,8 +1,9 @@
 // Poster cards, badges, explore tiles, the 3-line synopsis clamp.
 import { FC, PropsWithChildren } from "hono/jsx";
-import { ShowRow, MovieRow } from "../types";
-import { posterSrc } from "../lib/format";
-import { IconStar, IconStarBadge } from "./icons";
+import type { ExploreArt } from "../lib/explore-art";
+import { heroBg, posterSrc } from "../lib/format";
+import { MovieRow, ShowRow } from "../types";
+import { IconPlayDisc, IconStar, IconStarBadge } from "./icons";
 
 // A live title too new to have a stable rating (we hide flukey low-vote averages)
 // still deserves a badge — show "NEW" so the slot reads intentional, not missing.
@@ -27,11 +28,31 @@ export const StatusBadge: FC<{ status: string | null }> = ({ status }) => {
   return <span class={`badge ${cls}`}>{status}</span>;
 };
 
+// Play-trailer disc layered over a poster. The card is a link to the title page;
+// this control intercepts the click (media-video.js) and fetches the title's
+// YouTube trailer key on demand, then opens it in the on-page modal — so the
+// homepage never pays for trailers nobody plays. A <span role="button"> (valid
+// inside the card <a>); keyboard-activated by the same script. Rendered only when
+// the row carries a tmdb_id (the key needed to look the trailer up).
+const CardPlay: FC<{ type: "tv" | "movie"; id: number; name: string }> = ({ type, id, name }) => (
+  <span
+    class="card-play"
+    role="button"
+    tabindex={0}
+    aria-label={`Play ${name} trailer`}
+    data-trailer-type={type}
+    data-trailer-id={id}
+    data-trailer-name={name}
+  >
+    <IconPlayDisc />
+  </span>
+);
+
 // width/height match the CSS `aspect-ratio: 2/2.8` so the poster box is reserved
 // before the image loads (no CLS even if styles are slow); `eager` opts a known
 // above-the-fold card out of lazy-loading so it isn't deferred when it's the LCP.
 export const ShowCard: FC<{ show: ShowRow; eager?: boolean }> = ({ show, eager }) => (
-  <a class="card" href={`/show/${show.slug}`}>
+  <a class={show.tmdb_id != null ? "card has-play" : "card"} href={`/show/${show.slug}`}>
     <div class="card-media">
       {(() => {
         const p = posterSrc(show);
@@ -50,6 +71,7 @@ export const ShowCard: FC<{ show: ShowRow; eager?: boolean }> = ({ show, eager }
           <div class="card-fallback">{show.name}</div>
         );
       })()}
+      {show.tmdb_id != null ? <CardPlay type="tv" id={show.tmdb_id} name={show.name} /> : null}
       {show.rating != null ? (
         <span class="card-rating">
           <IconStarBadge class="card-rating-star" />
@@ -67,7 +89,7 @@ export const ShowCard: FC<{ show: ShowRow; eager?: boolean }> = ({ show, eager }
 );
 
 export const MovieCard: FC<{ movie: MovieRow; eager?: boolean }> = ({ movie, eager }) => (
-  <a class="card" href={`/movie/${movie.slug}`}>
+  <a class={movie.tmdb_id != null ? "card has-play" : "card"} href={`/movie/${movie.slug}`}>
     <div class="card-media">
       {movie.poster_url ? (
         <img
@@ -82,6 +104,7 @@ export const MovieCard: FC<{ movie: MovieRow; eager?: boolean }> = ({ movie, eag
       ) : (
         <div class="card-fallback">{movie.title}</div>
       )}
+      {movie.tmdb_id != null ? <CardPlay type="movie" id={movie.tmdb_id} name={movie.title} /> : null}
       {movie.rating != null ? (
         <span class="card-rating">
           <IconStarBadge class="card-rating-star" />
@@ -106,14 +129,25 @@ export const ExploreCard: FC<{
   desc: string;
   href: string;
   rating?: number;
-}> = ({ icon, title, desc, href, rating }) => (
-  <a class="explore-card" href={href}>
-    <span class="explore-kicker">
-      {icon}
-      {rating != null ? <span class="rating explore-rating"><IconStar class="rating-star" />{rating.toFixed(1)}</span> : null}
-      <span class="chev-icon explore-arrow" aria-hidden="true"></span>
+  backdrop?: ExploreArt;
+}> = ({ icon, title, desc, href, rating, backdrop }) => (
+  <a class={backdrop ? "explore-card explore-card-art" : "explore-card"} href={href}>
+    {backdrop ? (
+      <span class="explore-frame" style={heroBg(backdrop.x1, backdrop.x2)} aria-hidden="true"></span>
+    ) : null}
+    <span class="explore-body">
+      <span class="explore-kicker">
+        {icon}
+        {rating != null ? (
+          <span class="rating explore-rating">
+            <IconStar class="rating-star" />
+            {rating.toFixed(1)}
+          </span>
+        ) : null}
+        <span class="chev-icon explore-arrow" aria-hidden="true"></span>
+      </span>
+      <strong class="explore-title">{title}</strong>
+      <p class="muted">{desc}</p>
     </span>
-    <strong class="explore-title">{title}</strong>
-    <p class="muted">{desc}</p>
   </a>
 );

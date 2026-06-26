@@ -5,30 +5,37 @@ import { Honeypot } from "./Layout";
 import { IconMail } from "./icons";
 
 export const NewsletterBand: FC = () => (
-  <section class="news-band" aria-label="Get the TV Nightly newsletter">
+  <section class="news-band" aria-labelledby="news-band-title">
     <div class="news-band-inner">
+      <span class="news-band-glow" aria-hidden="true"></span>
       <div class="news-band-copy">
         <p class="news-band-kicker">
-          <IconMail size={17} /> The TV Nightly newsletter
+          <IconMail size={15} />
+          The TV Nightly newsletter
         </p>
-        <h2 class="news-band-title">Tonight's best TV, in your inbox</h2>
+        <h2 class="news-band-title" id="news-band-title">
+          Tonight&apos;s best TV, in your inbox
+        </h2>
         <p class="news-band-sub">
-          One short email each evening — what's on, ranked, and actually worth your time. Free, no spam.
+          One short email each evening — what&apos;s on, ranked, and actually worth your time.
         </p>
       </div>
-      <form action="/subscribe" method="post" class="news-band-form">
-        <input type="hidden" name="kind" value="daily" />
-        <input
-          type="email"
-          name="email"
-          placeholder="you@example.com"
-          required
-          autocomplete="email"
-          aria-label="Email address"
-        />
-        <button type="submit">Sign up free</button>
-        <Honeypot />
-      </form>
+      <div class="news-band-action">
+        <form action="/subscribe" method="post" class="news-band-form">
+          <input type="hidden" name="kind" value="daily" />
+          <input
+            type="email"
+            name="email"
+            placeholder="you@example.com"
+            required
+            autocomplete="email"
+            aria-label="Email address"
+          />
+          <button type="submit">Sign up free</button>
+          <Honeypot />
+        </form>
+        <p class="news-band-fine">Free · one email · unsubscribe anytime</p>
+      </div>
     </div>
   </section>
 );

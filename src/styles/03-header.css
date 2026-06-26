@@ -16,7 +16,7 @@
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .site-header { background: var(--surface); }
 }
-/* header & footer ride the same 948px column as main's content box */
+/* header & footer ride the same 1200px column as main's content box */
 .header-inner {
   position: relative;
   display: flex;
@@ -24,13 +24,15 @@
   gap: 1.1rem;
   flex-wrap: wrap;
   width: 100%;
-  max-width: 948px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 @media (min-width: 901px) {
+  /* logo + nav sit together on the left; the search takes the whole flexible
+     column on the right so it runs long across the wider 1200px rail */
   .header-inner {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) 14.5rem;
+    grid-template-columns: auto auto minmax(0, 1fr);
     align-items: center;
     flex-wrap: nowrap;
   }
@@ -39,18 +41,23 @@
      two-row block the 701–900px tablet range used to show; below 901px the
      hamburger drawer takes over instead. */
   .site-header nav {
-    justify-content: center;
+    justify-content: flex-start;
     gap: 1.1rem;
     flex-wrap: nowrap;
+    margin-left: 0.75rem; /* a little air between the wordmark and the menus */
   }
   .site-header nav a { white-space: nowrap; }
-  .search {
-    margin-left: 0;
+  /* fill the flexible third column so the search runs long across the bar.
+     .site-header .search outranks the base .search cap regardless of source
+     order, so the 14.5rem max no longer applies at desktop width. */
+  .site-header .search {
+    margin: 0;
     width: 100%;
     max-width: none;
+    flex: 1 1 auto;
   }
 }
-.footer-inner { max-width: 948px; margin: 0 auto; }
+.footer-inner { max-width: 1200px; margin: 0 auto; }
 .logo {
   display: inline-flex;
   align-items: center;
@@ -259,55 +266,89 @@
   transform: rotate(-135deg) translateY(0.11em);
   opacity: 1;
 }
-/* a tall, scrollable drawer — right-anchored to Browse so a narrow column
-   never runs off the right edge of the bar */
+/* Full-width slide-down overlay — the "Browse everything" page as a panel.
+   Fixed below the header, fills the rest of the viewport; opens/closes with a
+   short settle. Lives outside the header in the DOM (the header's backdrop-filter
+   would otherwise trap a fixed child to the header box). */
 .nav-mega-panel {
-  position: absolute;
-  top: calc(100% + 0.6rem);
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
   right: 0;
-  left: auto;
-  width: min(17.5rem, calc(100vw - 1.5rem));
-  display: flex;
-  flex-direction: column;
-  max-height: min(78vh, 40rem);
-  overflow: hidden;
-  /* fully opaque — a content-dense drawer must not let bright hero art ghost
-     through it; the frosted look is for the slim header bar, not this panel */
-  background: #1c1c21;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-2);
-  z-index: 60;
+  bottom: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* fully opaque — bright hero art must not ghost through the browse grid */
+  background: #161619;
+  border-top: 1px solid var(--line);
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.5);
+  z-index: 45; /* under the header (50) so it slides out from beneath it */
+  /* closed state — CSS owns visibility now; JS toggles .open */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-1.5rem);
+  transition: opacity 0.22s var(--ease), transform 0.3s var(--ease),
+    visibility 0.22s var(--ease);
 }
-/* author display:flex above beats the UA [hidden]{display:none}; restore it so
-   the JS can actually close the panel */
-.nav-mega-panel[hidden] { display: none; }
-/* the panel settles in rather than snapping — runs on display:none→block, so
-   no JS change needed; reduced-motion clamps it via the global rule */
-@keyframes navMegaIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
+/* JS drops the no-JS [hidden] on init; keep the box paint-able so it can animate */
+.nav-mega-panel[hidden] { display: block; }
+.nav-mega-panel.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
-.nav-mega.open .nav-mega-panel {
-  animation: navMegaIn var(--speed) var(--ease);
-}
-/* invisible bridge over the gap — panel is position:absolute so .nav-mega
-   doesn't grow; this keeps the pointer path from the button to the links */
-.nav-mega-panel::before {
-  content: "";
-  position: absolute;
-  left: -0.75rem;
-  right: -0.75rem;
-  bottom: 100%;
-  height: 0.85rem;
-}
+body.browse-open { overflow: hidden; }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .nav-mega-panel { background: var(--surface-2); }
+  .nav-mega-panel { background: #161619; }
 }
-@media (max-width: 900px) {
-  .nav-mega-panel { right: auto; left: 0; }
+/* the overlay's top bar: the page title (a link) + the X close */
+.nav-mega-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.1rem 1rem 0.5rem;
+}
+.nav-mega-heading {
+  font-family: var(--display);
+  font-stretch: 110%;
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+.nav-mega-heading:hover { text-decoration: none; color: var(--accent); }
+.nav-mega-close {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+.nav-mega-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 .nav-mega-scroll {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.6rem 1rem 2.4rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1.6rem 1.8rem;
+  align-items: start;
+}
+/* the drawer-era partial below is superseded by the grid above */
+.nav-mega-scroll--legacy {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -327,12 +368,9 @@
   background-clip: padding-box;
 }
 .nav-mega-scroll::-webkit-scrollbar-thumb:hover { background: #3a3a44; background-clip: padding-box; }
-.nm-sec { padding: 0.1rem 0 0.55rem; }
-.nm-sec + .nm-sec {
-  margin-top: 0.55rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
+.nm-sec { padding: 0; min-width: 0; }
+/* in the overlay grid each section is its own column — no stacked divider */
+.nm-sec + .nm-sec { margin-top: 0; padding-top: 0; border-top: 0; }
 .nav-mega-kicker {
   margin: 0 0 0.4rem;
   /* aligns with .nm-row text so a hovered row lines up under its heading */
@@ -451,23 +489,22 @@
   color: var(--accent);
 }
 .nm-all:hover { text-decoration: none; }
-/* pinned footer below the scroll region */
+/* a final CTA centred below the browse grid */
 .nav-mega-all {
-  flex: 0 0 auto;
   display: block;
-  padding: 0.7rem 0.95rem;
-  border-top: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.015);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.6rem 1rem 1.8rem;
   text-align: center;
   font-family: var(--display);
   font-stretch: 80%;
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent);
 }
-.nav-mega-all:hover { text-decoration: none; background: rgba(255, 169, 77, 0.06); }
+.nav-mega-all:hover { text-decoration: none; color: #fff; }
 
 /* ---- mobile nav: hamburger + full-height drawer (≤900px) ---- */
 .nav-toggle {
@@ -520,7 +557,7 @@
   animation: navMegaIn var(--speed) var(--ease);
 }
 .mobile-menu[hidden] { display: none; }
-.mobile-menu-inner { max-width: 948px; margin: 0 auto; display: flex; flex-direction: column; }
+.mobile-menu-inner { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; }
 .mm-link {
   display: flex;
   align-items: center;

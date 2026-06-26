@@ -24,7 +24,8 @@
    rather than pinning a fixed pixel height — without it the height attribute
    leaks through as a presentational hint and overrides aspect-ratio (stretching
    rail cards, which override to 2/3). */
-.card img { width: 100%; height: auto; aspect-ratio: 2/2.8; object-fit: cover; display: block; }
+.card img { width: 100%; height: auto; aspect-ratio: 2/2.8; object-fit: cover; display: block;
+  transition: filter var(--speed) var(--ease), transform var(--speed) var(--ease); }
 .card-fallback {
   width: 100%;
   aspect-ratio: 2/2.8;
@@ -43,26 +44,27 @@
   color: var(--muted);
 }
 .card-media { position: relative; }
-/* rating chip is TUCKED into the poster's bottom-right corner — not a floating
-   pill. It sits flush against the right and bottom edges, so each corner has a
-   different radius: the inner (top-left) corner is rounded, the two edge corners
-   are square, and the shared bottom-right corner is clipped to the poster's own
-   curve by .card's overflow:hidden. Deep amber (--rating) with a white chunky
-   star + score. Border only on the two inner edges (top + left); a soft up-left
-   shadow lifts it off the art. */
+/* rating chip is TUCKED into the poster's top-left corner — not a floating pill.
+   It sits flush against the top and left edges, so each corner has a different
+   radius: the inner (bottom-right) corner is rounded, the two edge corners are
+   square, and the shared top-left corner is clipped to the poster's own curve by
+   .card's overflow:hidden. Deep amber (--rating) with a white chunky star +
+   score. Border only on the two inner edges (bottom + right); a soft down-right
+   shadow lifts it off the art. Kept at the top so it clears the centred play
+   disc and the title that drops to the bottom on hover. */
 .card-rating {
   position: absolute;
-  bottom: 0;
-  right: 0;
+  top: 0;
+  left: 0;
   display: inline-flex;
   align-items: center;
   gap: 0.22rem;
   background: var(--rating);
-  border-top: 1px solid rgba(0, 0, 0, 0.2);
-  border-left: 1px solid rgba(0, 0, 0, 0.2);
-  border-top-left-radius: 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  border-right: 1px solid rgba(0, 0, 0, 0.2);
+  border-top-left-radius: 0;
   border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  border-bottom-right-radius: 10px;
   border-bottom-left-radius: 0;
   color: #fff;
   font-size: 0.74rem;
@@ -72,7 +74,7 @@
   line-height: 1;
   padding: 0.28rem 0.44rem;
   white-space: nowrap;
-  box-shadow: -1px -1px 7px rgba(0, 0, 0, 0.28);
+  box-shadow: 1px 1px 7px rgba(0, 0, 0, 0.28);
 }
 .card-rating-star {
   display: block;
@@ -138,6 +140,94 @@
 @media (hover: hover) {
   .card:hover .card-hover-title,
   .card:focus-visible .card-hover-title { opacity: 1; }
+}
+
+/* ---- play-trailer disc (poster overlay) ----
+   Thin white ring + semi-transparent play triangle — centred over the poster.
+   The card links to the title page; .card-play opens the trailer modal instead
+   (media-video.js). On card hover the poster darkens + blurs. */
+.card-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  transition: transform var(--speed) var(--ease), opacity var(--speed) var(--ease);
+}
+.card-play svg {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  pointer-events: none;
+  filter: none;
+}
+.card-play svg circle,
+.card-play svg path {
+  transition: stroke var(--speed) var(--ease), fill-opacity var(--speed) var(--ease), stroke-opacity var(--speed) var(--ease);
+}
+.card-play:hover,
+.card-play:focus-visible {
+  outline: none;
+  transform: translate(-50%, -50%) scale(1.08);
+}
+.card-play:hover svg circle,
+.card-play:focus-visible svg circle {
+  stroke: var(--accent);
+  stroke-opacity: 1;
+}
+.card-play:hover svg path,
+.card-play:focus-visible svg path {
+  fill-opacity: 0.82;
+  stroke-opacity: 0.82;
+}
+/* a fetch that finds no trailer dims the disc for a moment */
+.card-play.is-empty { opacity: 0.4; }
+/* a busy lookup: a spinner ring stands in for the triangle */
+.card-play.is-loading svg { opacity: 0; }
+.card-play.is-loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: card-play-spin 0.7s linear infinite;
+}
+@keyframes card-play-spin { to { transform: rotate(360deg); } }
+
+@media (hover: hover) {
+  .card.has-play:hover .card-media img,
+  .card.has-play:focus-within .card-media img {
+    filter: brightness(0.5) blur(2px);
+    transform: scale(1.05);
+  }
+  .card.has-play:hover .card-play,
+  .card.has-play:focus-within .card-play {
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+  .card.has-play:hover .card-hover-title,
+  .card.has-play:focus-within .card-hover-title {
+    align-items: flex-end;
+    background: linear-gradient(to top, rgba(9, 9, 12, 0.72), rgba(9, 9, 12, 0) 72%);
+    padding-bottom: 0.62rem;
+  }
+}
+@media (max-width: 600px) {
+  .card-play { width: 42px; height: 42px; }
 }
 @media (hover: none) {
   .card-body { display: flex; }

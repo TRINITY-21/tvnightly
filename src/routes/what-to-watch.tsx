@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { Bindings, ShowRow, MovieRow } from "../types";
+import { Bindings, HonoEnv, ShowRow, MovieRow } from "../types";
 import { visitorRegion } from "../lib/providers";
 import { stripHtml, posterSrc, heroBg, fmtRuntime, slugifyName } from "../lib/format";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
@@ -10,11 +10,13 @@ import { origin, canonical } from "../lib/seo";
 import { PICKER_MIN_WEIGHT } from "../lib/queries";
 import { Layout } from "../components/Layout";
 import { StatusBadge, ExploreCard } from "../components/cards";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import { KeepExploring, fillKeepGoingBackdrops } from "../components/keep-going";
 import { IconStarBadge } from "../components/icons";
 import { ProviderChips } from "../components/providers";
 import { RateInline, FilterSelect } from "../components/forms";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // ----------------------------------------------------- what-to-watch picker
 
@@ -248,9 +250,16 @@ app.get("/what-to-watch", async (c) => {
   const skipNext = picks.length
     ? [...skip, ...picks.map((p) => p.refId)].slice(-20).join(",")
     : skip.join(",");
+  const sidebar = c.get("siteSidebar");
+  const doorArts = fillKeepGoingBackdrops([
+    { icon: "", title: "", desc: "", href: "", backdrop: picks[0]?.bd ?? null },
+    { icon: "", title: "", desc: "", href: "", backdrop: picks[1]?.bd ?? picks[0]?.bd ?? null },
+    { icon: "", title: "", desc: "", href: "", backdrop: picks[0]?.bd ?? null },
+  ]).map((c) => c.backdrop ?? null);
   c.header("Cache-Control", "no-store");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title="What should I watch tonight? — TV show picker | TV Nightly"
       description="Can't decide what to watch? Spin the picker: a great TV show matching your genre, rating, and episode-length filters."
       canonical={origin(c) + "/what-to-watch"}
@@ -258,6 +267,8 @@ app.get("/what-to-watch", async (c) => {
       ogImageLarge
       scripts={["/js/dropdown.js", "/js/watch-scroll.js"]}
     >
+      <div class="home-main-grid">
+        <div class="home-col">
       <div class="watch-page">
         <header class="watch-head">
           <h1>What should I watch tonight?</h1>
@@ -488,30 +499,39 @@ app.get("/what-to-watch", async (c) => {
           )}
         </section>
 
-        {/* the floor under the picker — doors out instead of a bare end */}
-        <section class="watch-doors">
-          <h2>Keep exploring</h2>
-          <div class="explore-grid">
-            <ExploreCard
-              icon="Tonight"
-              title="What's actually on tonight"
-              desc="Every episode airing today, in air-time order."
-              href="/tonight"
-            />
-            <ExploreCard
-              icon="Tailored"
-              title="Rate one thing, get a pick"
-              desc="Tell us one show you love — we'll hand you your next watch."
-              href="/recommend"
-            />
-            <ExploreCard
-              icon="Canon"
-              title="The greatest episodes ever aired"
-              desc="Every show's finest hours, ranked on one honest list."
-              href="/best-episodes"
-            />
-          </div>
-        </section>
+        <KeepExploring
+          cards={[
+            {
+              icon: "Tonight",
+              title: "What's actually on tonight",
+              desc: "Every episode airing today, in air-time order.",
+              href: "/tonight",
+              backdrop: doorArts[0],
+            },
+            {
+              icon: "Tailored",
+              title: "Rate one thing, get a pick",
+              desc: "Tell us one show you love — we'll hand you your next watch.",
+              href: "/recommend",
+              backdrop: doorArts[1],
+            },
+            {
+              icon: "Canon",
+              title: "The greatest episodes ever aired",
+              desc: "Every show's finest hours, ranked on one honest list.",
+              href: "/best-episodes",
+              backdrop: doorArts[2],
+            },
+          ]}
+        />
+      </div>
+        </div>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
       </div>
     </Layout>,
   );

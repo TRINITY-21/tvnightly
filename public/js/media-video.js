@@ -1,9 +1,15 @@
 // Play trailers + clips in an on-page modal instead of bouncing to YouTube.
-// Progressive enhancement: every trigger is a real youtube.com link, so with
-// JS off the thumbnail still opens the video in a new tab.
+// Two kinds of trigger:
+//   • [data-video-key]  — a known YouTube id (media-page trailers, the Latest
+//     Trailers rail). Progressive enhancement: each is a real youtube.com link,
+//     so with JS off the thumbnail still opens the video in a new tab.
+//   • [data-trailer-id] — a poster-card play disc that knows only the title's
+//     tmdb id + media type; the key is fetched from /api/trailer on click.
+// Loaded site-wide via Layout, so it self-disables when a page has no triggers.
 (function () {
-  var triggers = [].slice.call(document.querySelectorAll("[data-video-key]"));
-  if (!triggers.length) return;
+  var directTriggers = [].slice.call(document.querySelectorAll("[data-video-key]"));
+  var cardTriggers = [].slice.call(document.querySelectorAll("[data-trailer-id]"));
+  if (!directTriggers.length && !cardTriggers.length) return;
 
   var modal = null;
   var frameWrap = null;
@@ -60,10 +66,59 @@
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
 
-  triggers.forEach(function (a) {
+  directTriggers.forEach(function (a) {
     a.addEventListener("click", function (e) {
       e.preventDefault();
       open(a.getAttribute("data-video-key"), a.getAttribute("data-video-name"));
+    });
+  });
+
+  // ---- poster-card play discs: fetch the key, then open --------------
+  var keyCache = {}; // "type:id" -> key | null (no refetch within a session)
+
+  function flashEmpty(el) {
+    el.classList.add("is-empty");
+    setTimeout(function () { el.classList.remove("is-empty"); }, 1400);
+  }
+
+  function activate(el) {
+    if (el.getAttribute("data-busy")) return;
+    var type = el.getAttribute("data-trailer-type");
+    var id = el.getAttribute("data-trailer-id");
+    var name = el.getAttribute("data-trailer-name") || "Trailer";
+    var ck = type + ":" + id;
+    if (ck in keyCache) {
+      if (keyCache[ck]) open(keyCache[ck], name);
+      else flashEmpty(el);
+      return;
+    }
+    el.setAttribute("data-busy", "1");
+    el.classList.add("is-loading");
+    fetch("/api/trailer?type=" + encodeURIComponent(type) + "&id=" + encodeURIComponent(id))
+      .then(function (r) { return r.ok ? r.json() : { key: null }; })
+      .catch(function () { return { key: null }; })
+      .then(function (data) {
+        el.classList.remove("is-loading");
+        el.removeAttribute("data-busy");
+        keyCache[ck] = data && data.key ? data.key : null;
+        if (keyCache[ck]) open(keyCache[ck], name);
+        else flashEmpty(el);
+      });
+  }
+
+  cardTriggers.forEach(function (el) {
+    el.addEventListener("click", function (e) {
+      // the disc lives inside the card's link — stop the navigation + bubbling
+      e.preventDefault();
+      e.stopPropagation();
+      activate(el);
+    });
+    el.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        e.stopPropagation();
+        activate(el);
+      }
     });
   });
 })();

@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { raw } from "hono/html";
-import { Bindings } from "../types";
+import { Bindings, HonoEnv } from "../types";
 import { ipHash } from "../lib/crypto";
 import { materializeShow } from "../lib/tmdb-show";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 app.post("/api/vote", async (c) => {
   let body: { episodeId?: unknown; dir?: unknown };

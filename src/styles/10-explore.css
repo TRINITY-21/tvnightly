@@ -5,6 +5,7 @@
   gap: 0.7rem;
 }
 .explore-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.28rem;
@@ -14,13 +15,61 @@
   padding: 0.8rem 0.95rem 0.85rem;
   color: var(--text);
   box-shadow: var(--shadow-1);
-  transition: border-color var(--speed) var(--ease), background var(--speed) var(--ease);
+  transition: border-color var(--speed) var(--ease), background var(--speed) var(--ease),
+    transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+  overflow: hidden;
+}
+.explore-card-art {
+  min-height: 9.5rem;
+  justify-content: flex-end;
+  padding: 0;
+  background: var(--plate);
+}
+.explore-frame {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 22%;
+  opacity: 0.82;
+  transform: scale(1.001);
+  transition: opacity var(--speed) var(--ease), transform 0.45s var(--ease);
+}
+.explore-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to top, rgba(14, 14, 17, 0.96), rgba(14, 14, 17, 0.62) 42%, rgba(14, 14, 17, 0.2)),
+    linear-gradient(to right, rgba(14, 14, 17, 0.5), rgba(14, 14, 17, 0) 58%);
+}
+.explore-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  padding: 0.8rem 0.95rem 0.85rem;
+}
+.explore-card-art .explore-body {
+  margin-top: auto;
+  width: 100%;
 }
 .explore-card:hover {
   border-color: rgba(255, 255, 255, 0.18);
   background: var(--surface-2);
   text-decoration: none;
 }
+.explore-card-art:hover {
+  background: var(--plate);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+.explore-card-art:hover .explore-frame {
+  opacity: 1;
+  transform: scale(1.03);
+}
+.explore-card-art .explore-kicker { color: rgba(255, 184, 77, 0.95); }
+.explore-card-art .explore-title { text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55); }
+.explore-card-art p { color: rgba(248, 246, 242, 0.78); }
 .explore-kicker {
   display: flex;
   align-items: center;
@@ -532,6 +581,18 @@
   opacity: 0.45;
 }
 .hub-sec { margin-top: 2.3rem; }
+/* guide heroes are full-bleed; content + rail start below the wash */
+.wo-hero.wo-hero-bleed + .home-main-grid {
+  margin-top: 2.3rem;
+}
+/* tabbed hubs (schedule, what's new): rail starts below the subnav line */
+.subnav + .home-main-grid,
+.subnav-scroll + .home-main-grid {
+  margin-top: 1.25rem;
+}
+.wo-hero.wo-hero-bleed + .home-main-grid .home-col > .hub-sec:first-child {
+  margin-top: 0;
+}
 
 /* bottom-of-page link rows — rectangular cards, not pills */
 .footer-picks {

@@ -8,9 +8,9 @@ import { origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMovieBackdrop, tmdbSearch, tmdbSearchPeople } from "../lib/tmdb";
 import { toMovieRow as tmdbMovieRow, toShowRow as tmdbShowRow } from "../lib/tmdb-rows";
 import { TMDB_PERSON_OFFSET } from "../lib/tmdb-show";
-import { Bindings, MovieRow, ShowRow } from "../types";
+import { Bindings, HonoEnv, MovieRow, ShowRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // --------------------------------------------------------------- search
 
@@ -295,7 +295,7 @@ app.get("/search", async (c) => {
   c.header("Cache-Control", "public, max-age=300");
   // infinite ?q= variants must not enter the index (doorway/thin-content risk)
   return c.html(
-    <Layout
+    <Layout c={c}
       title={q ? `Search results for '${q}' | TV Nightly` : `Search | TV Nightly`}
       description="Search TV Nightly for shows, movies and people — episode rankings, release dates, and where to stream."
       canonical={`${origin(c)}/search${q ? `?q=${encodeURIComponent(q)}` : ""}`}

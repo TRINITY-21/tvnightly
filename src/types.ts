@@ -1,5 +1,6 @@
 // Shared row shapes and app context. The D1 mirror's tables, typed.
 import type { Context } from "hono";
+import type { SiteSidebarData } from "./lib/site-sidebar";
 import type { SyncEnv } from "./sync";
 
 // ASSETS: the static-assets fetcher — the chart export embeds the Archivo
@@ -35,7 +36,14 @@ export type Bindings = SyncEnv & {
 export interface RateLimiter {
   limit(options: { key: string }): Promise<{ success: boolean }>;
 }
-export type AppContext = Context<{ Bindings: Bindings }>;
+
+export type HonoEnv = {
+  Bindings: Bindings;
+  Variables: {
+    siteSidebar?: SiteSidebarData | null;
+  };
+};
+export type AppContext = Context<HonoEnv>;
 
 export interface ShowRow {
   id: number;

@@ -1,29 +1,32 @@
 import { Hono } from "hono";
 import { raw } from "hono/html";
-import { Layout } from "../components/Layout";
-import { ClampSummary, ExploreCard } from "../components/cards";
+import { ExploreCard } from "../components/cards";
 import { VsCard } from "../components/compare";
+import { communityRingScore, DetailHero, heroWatchProvider, tmdbRingScore } from "../components/detail-hero";
 import { DossierRow } from "../components/dossier";
-import { ShowBlurb } from "../components/editorial";
-import { FilterSelect, RateInline, SubscribeForm } from "../components/forms";
+import { FilterSelect, SubscribeForm } from "../components/forms";
+import { HomeSidebarRail } from "../components/home-sidebar";
 import { IconPlay, IconStar } from "../components/icons";
+import { KeepGoing, loadShowKeepGoingArts } from "../components/keep-going";
+import { Layout } from "../components/Layout";
 import { SeasonTabs, ShowTabs } from "../components/nav";
-import { ProviderLine } from "../components/providers";
+import { mergeGalleryImages, PhotoGallery } from "../components/photo-gallery";
 import { ShareBar } from "../components/share";
-import { ShowConvertBand } from "../components/show-convert";
+import { VideoGallery } from "../components/video-gallery";
 import { buildDossier } from "../lib/dossier";
-import { comparePathFor, epCode, epHref, fmtRuntime, heroBg, hiRes, isNewYear, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml } from "../lib/format";
-import { PROVIDER_LOGOS, REGIONS, providerBrand, visitorRegion } from "../lib/providers";
+import { fetchShowExploreArts } from "../lib/explore-art";
+import { comparePathFor, epCode, epHref, fmtRuntime, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml } from "../lib/format";
+import { PROVIDER_LOGOS, providerBrand, providersFor, REGIONS, visitorRegion } from "../lib/providers";
 import { crewLinkMap, getShow, similarShows } from "../lib/queries";
 import { aggregateRatingLd, titleRaterCount, titleStat } from "../lib/ratings";
 import { breadcrumbLd, breadcrumbTrail, canonical, faqLd, origin } from "../lib/seo";
-import { tmdbBackdrop, tmdbMedia, tmdbRecommendations, tmdbShowCreators } from "../lib/tmdb";
+import { tmdbBackdrop, tmdbMedia, tmdbRecommendations, tmdbShowCreators, tmdbShowCrew } from "../lib/tmdb";
 import { toShowRow } from "../lib/tmdb-rows";
 import { d1OrLiveEpisodes, resolveShow, tmdbShowCast, tmdbShowData } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
-import { Bindings, EpisodeRow, ShowRow } from "../types";
+import { EpisodeRow, HonoEnv, ShowRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // A show's meta description: its real (HTML-stripped) summary when present, cut
 // cleanly on a word boundary; otherwise a synthesized line built from genre,
@@ -102,7 +105,7 @@ app.get("/show/:slug", async (c) => {
       ? tmdbShowCast(c.env.TMDB_API_KEY, show.tmdb_id)
       : Promise.resolve([] as CastTile[]);
   // one bound COUNT instead of the full network GROUP-BY scan per pageview
-  const [similar, stat, aggRating, netCount, cast, raterCount] = await Promise.all([
+  const [d1Similar, stat, aggRating, netCount, cast, raterCount, communityCounts] = await Promise.all([
     similarShows(c.env.DB, show),
     titleStat(c.env.DB, "tv", ratingRef),
     aggregateRatingLd(c.env.DB, "tv", ratingRef),
@@ -115,7 +118,20 @@ app.get("/show/:slug", async (c) => {
       : Promise.resolve(null),
     castFetch,
     titleRaterCount(c.env.DB, "tv", ratingRef),
+    c.env.DB
+      .prepare("SELECT loved, liked, meh, awful FROM title_ratings WHERE kind = ? AND ref = ?")
+      .bind("tv", ratingRef)
+      .first<{ loved: number; liked: number; meh: number; awful: number }>(),
   ]);
+  let similar = d1Similar;
+  // live-only titles carry TMDB genre names ("Action & Adventure") that don't
+  // overlap the mirror's TVmaze labels ("Action", "Adventure") — same fallback
+  // as /show/:slug/similar so the overview rail never comes up empty.
+  if (!similar.length && show.tmdb_id && c.env.TMDB_API_KEY) {
+    similar = (await tmdbRecommendations(c.env.TMDB_API_KEY, "tv", show.tmdb_id))
+      .slice(0, 6)
+      .map(toShowRow);
+  }
   const netEntry =
     netName && (netCount?.c ?? 0) >= 3 ? { name: netName, slug: slugifyName(netName) } : undefined;
 
@@ -136,6 +152,24 @@ app.get("/show/:slug", async (c) => {
   const creatorLinks = creators.length
     ? await crewLinkMap(c.env.DB, creators)
     : new Map<number, number>();
+
+  const [media, crew] =
+    show.tmdb_id && c.env.TMDB_API_KEY
+      ? await Promise.all([
+          tmdbMedia(c.env.TMDB_API_KEY, show.tmdb_id),
+          tmdbShowCrew(c.env.TMDB_API_KEY, show.tmdb_id, 12),
+        ])
+      : [null, []];
+  const trailerVid = media?.videos.find((v) => v.type === "Trailer") ?? media?.videos[0] ?? null;
+  const highlights = (media?.videos ?? []).filter((v) => v !== trailerVid).slice(0, 14);
+  const galleryPhotos = mergeGalleryImages(media?.posters ?? [], media?.backdrops ?? [], 12);
+  const galleryVideos = (media?.videos ?? []).slice(0, 12);
+  const writers = crew
+    .filter((p) => p.jobs.split(" · ").some((j) => j === "Writer" || j === "Screenplay"))
+    .slice(0, 3);
+  const writerLinks = writers.length ? await crewLinkMap(c.env.DB, writers) : new Map<number, number>();
+  const prov = providersFor(show, region);
+  const watchProv = heroWatchProvider(prov.names, show.name, prov.region);
 
   // TVSeries node built here (after creators resolve) so it can carry the creator
   // credits, plus genre and episode count from the data already in scope.
@@ -175,28 +209,46 @@ app.get("/show/:slug", async (c) => {
   ];
 
   const posterBg = hiRes(show.image_url);
-  const heroFrame = backdrop
-    ? heroBg(backdrop.x1, backdrop.x2)
-    : posterBg
-      ? heroBg(posterBg)
-      : null;
 
   // the rivals' backdrops for the head-to-head split cards (edge-cached)
-  const rivalBackdrops = c.env.TMDB_API_KEY
-    ? await Promise.all(
-        similar
-          .slice(0, 3)
-          .map((s) =>
-            s.tmdb_id ? tmdbBackdrop(c.env.TMDB_API_KEY!, s.tmdb_id) : Promise.resolve(null),
-          ),
-      )
-    : [];
+  const [rivalBackdrops] = await Promise.all([
+    c.env.TMDB_API_KEY
+      ? Promise.all(
+          similar
+            .slice(0, 3)
+            .map((s) =>
+              s.tmdb_id ? tmdbBackdrop(c.env.TMDB_API_KEY!, s.tmdb_id) : Promise.resolve(null),
+            ),
+        )
+      : Promise.resolve([] as (Awaited<ReturnType<typeof tmdbBackdrop>> | null)[]),
+  ]);
+  const sidebar = c.get("siteSidebar");
+
+  const exploreGenres: string[] = show.genres ? JSON.parse(show.genres) : [];
+  const exploreHub = hubForGenres(exploreGenres, null);
+  const exploreArts = c.env.TMDB_API_KEY
+    ? await fetchShowExploreArts(c.env.DB, c.env.TMDB_API_KEY, {
+        showBackdrop: backdrop,
+        compareBackdrop: rivalBackdrops[0] ?? backdrop,
+        netName: netEntry?.name ?? null,
+        genres: exploreGenres.slice(0, 2),
+        hubSlug: exploreHub?.slug ?? null,
+      })
+    : {
+        essential: backdrop,
+        compare: rivalBackdrops[0] ?? backdrop,
+        network: null,
+        genres: [],
+        hub: null,
+      };
 
   c.header("Cache-Control", "public, max-age=300");
   // og.png resolves live titles too, so a hybrid (non-D1) show still unfurls as the
   // branded 1200×630 card, not a portrait poster mis-sized as a large card.
   return c.html(
     <Layout
+      c={c}
+      sidebarInline
       title={`${show.name} — episodes, ratings & renewals | TV Nightly`}
       description={showMetaDescription(show)}
       canonical={canonical(c)}
@@ -206,147 +258,69 @@ app.get("/show/:slug", async (c) => {
       preloadImage={backdrop?.x2 ? { x1: backdrop.x1, x2: backdrop.x2 } : undefined}
       scripts={["/js/share.js"]}
     >
-      <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
-        <header class="detail-hero frame-hero">
-          {heroFrame ? (
-            <div class="hero-backdrop" style={heroFrame}></div>
-          ) : null}
-          <div class="detail-head">
-            <div class="detail-side">
-              {HeroPoster(show)}
-              <RateInline kind="tv" refId={ratingRef} stat={stat} />
-            </div>
-            <div class="detail-info">
-              <div class="detail-title-row">
-                <h1>{show.name}</h1>
-                <ShareBar url={canonical(c)} title={`${show.name} — episodes, ratings & where to stream`} />
-              </div>
-              <p class="meta-strip">
-                {/* the year range carries the status: closed = ended, –present = airing */}
-                <span>
-                  <a href="/top/tv" title="The top TV shows, ranked">TV</a>
-                </span>
-                {show.premiered ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>
-                      {show.premiered.slice(0, 4)}
-                      {show.ended
-                        ? `–${show.ended.slice(0, 4)}`
-                        : show.status === "Running"
-                          ? "–present"
-                          : ""}
-                    </span>
-                  </>
-                ) : null}
-                {episodes.length ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>
-                      <a
-                        href={`/show/${show.slug}/best-episodes`}
-                        title={`The best episodes of ${show.name}`}
-                      >
-                        {seasons.size} season{seasons.size === 1 ? "" : "s"}, {episodes.length}{" "}
-                        episode{episodes.length === 1 ? "" : "s"}
-                      </a>
-                    </span>
-                  </>
-                ) : null}
-                {netName ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>
-                      <a href={`/network/${slugifyName(netName)}`}>{netName}</a>
-                    </span>
-                  </>
-                ) : null}
-                {(() => {
-                  const g: string[] = show.genres ? JSON.parse(show.genres) : [];
-                  return g.length ? (
-                    <>
-                      <span class="sep">·</span>
-                      <span>
-                        {g.slice(0, 3).map((x, i) => (
-                          <>
-                            {i > 0 ? ", " : ""}
-                            <a href={`/genre/${slugifyName(x)}/shows`}>{x}</a>
-                          </>
-                        ))}
-                      </span>
-                    </>
-                  ) : null;
-                })()}
-                {show.runtime ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>{fmtRuntime(show.runtime)}</span>
-                  </>
-                ) : null}
-                {show.rating != null ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span class="rating"><IconStar class="rating-star" />{show.rating.toFixed(1)}</span>
-                  </>
-                ) : isNewYear(show.premiered ? Number(show.premiered.slice(0, 4)) : null) ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span class="meta-new">NEW</span>
-                  </>
-                ) : null}
-                {creators.length ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>
-                      Created by{" "}
-                      {creators.map((p, i) => {
-                        const pid = creatorLinks.get(p.id);
-                        return (
-                          <>
-                            {i > 0 ? ", " : ""}
-                            {pid ? (
-                              <a href={`/person/${slugifyName(p.name)}-${pid}`}>{p.name}</a>
-                            ) : (
-                              p.name
-                            )}
-                          </>
-                        );
-                      })}
-                    </span>
-                  </>
-                ) : null}
-              </p>
-              <ProviderLine
-                row={show}
-                region={region}
-                title={show.name}
-                fallbackHref={`/show/${show.slug}/release-date`}
-                pickerType="tv"
-                allHref={`/show/${show.slug}/where-to-watch`}
-              />
-              
-              {show.summary ? (
-                stripHtml(show.summary).length > 280 ? (
-                  <ClampSummary id="synopsis-clamp">{raw(show.summary)}</ClampSummary>
-                ) : (
-                  <div class="summary">{raw(show.summary)}</div>
-                )
-              ) : null}
-              {show.blurb ? (
-                <ShowBlurb text={show.blurb} />
-              ) : null}
-            </div>
-          </div>
-        </header>
-        <ShowTabs slug={show.slug} current="overview" />
-        <ShowConvertBand
-          show={show}
-          ratingRef={ratingRef}
-          stat={stat}
-          raterCount={raterCount}
-          episodes={episodes}
-          similar={similar.slice(0, 3)}
+      <article class="show-hub">
+        <DetailHero
+          kind="tv"
+          title={show.name}
+          yearLabel={
+            show.premiered
+              ? ` (${show.premiered.slice(0, 4)}${show.ended ? `–${show.ended.slice(0, 4)}` : show.status === "Running" ? "–present" : ""})`
+              : null
+          }
+          shareTitle={`${show.name} — episodes, ratings & where to stream`}
+          shareUrl={canonical(c)}
+          typeLabel="TV Show"
+          typeHref="/top/tv"
+          network={watchProv ? null : netName}
+          networkHref={netName ? `/network/${slugifyName(netName)}` : null}
+          tmdbScore={tmdbRingScore(show.rating)}
+          communityScore={communityRingScore(communityCounts ?? null)}
+          poster={HeroPoster(show)}
+          trailer={trailerVid}
+          highlights={highlights}
+          starring={cast.slice(0, 4).map((p) => ({
+            name: p.n,
+            href: personHref(p),
+          }))}
+          directors={creators.map((p) => ({
+            name: p.name,
+            href: creatorLinks.get(p.id)
+              ? `/person/${slugifyName(p.name)}-${creatorLinks.get(p.id)}`
+              : null,
+          }))}
+          writers={writers.map((p) => ({
+            name: p.name,
+            href: writerLinks.get(p.id)
+              ? `/person/${slugifyName(p.name)}-${writerLinks.get(p.id)}`
+              : null,
+          }))}
+          watchProvider={
+            watchProv
+              ? { ...watchProv, href: watchProv.href ?? `/show/${show.slug}/where-to-watch` }
+              : null
+          }
+          metaBadge={show.status === "Running" ? "On air" : show.status === "Ended" ? "Ended" : null}
+          genres={showGenres.slice(0, 4).map((g) => ({
+            name: g,
+            href: `/genre/${slugifyName(g)}/shows`,
+          }))}
+          metaExtra={
+            episodes.length
+              ? `${seasons.size} season${seasons.size === 1 ? "" : "s"}, ${episodes.length} episode${episodes.length === 1 ? "" : "s"}`
+              : null
+          }
+          metaExtraHref={episodes.length ? `/show/${show.slug}/best-episodes` : null}
+          plot={show.summary ? stripHtml(show.summary) : null}
+          blurb={show.blurb ?? null}
+          rateKind="tv"
+          rateRef={ratingRef}
+          rateStat={stat}
+          mediaHref={`/show/${show.slug}/media`}
+          fallbackBackdrop={backdrop}
         />
+        <ShowTabs slug={show.slug} current="overview" />
+        <div class="home-main-grid">
+          <div class="home-col">
         {(() => {
           const nextEp = episodes.find((e) => e.airstamp && new Date(e.airstamp) > new Date());
           return nextEp ? (
@@ -607,6 +581,19 @@ app.get("/show/:slug", async (c) => {
             </section>
           ) : null;
         })()}
+        {galleryPhotos.length ? (
+          <PhotoGallery
+            entityName={show.name}
+            mediaHref={`/show/${show.slug}/media`}
+            images={galleryPhotos}
+          />
+        ) : null}
+        {galleryVideos.length ? (
+          <VideoGallery
+            mediaHref={`/show/${show.slug}/media`}
+            videos={galleryVideos}
+          />
+        ) : null}
         {similar.length ? (
           <section id="similar">
             <h2>
@@ -689,12 +676,14 @@ app.get("/show/:slug", async (c) => {
                   title="The essential episodes"
                   desc="Short on time? The pilot-to-finale shortcut, only the episodes that matter."
                   href={`/show/${show.slug}/essential`}
+                  backdrop={exploreArts.essential}
                 />
                 <ExploreCard
                   icon="Matchup"
                   title="Compare with another show"
                   desc="Two shows' episode ratings on one chart — settle it."
                   href={`/compare?a=${show.slug}`}
+                  backdrop={exploreArts.compare}
                 />
                 {netEntry ? (
                   <ExploreCard
@@ -702,14 +691,16 @@ app.get("/show/:slug", async (c) => {
                     title={`Best ${netEntry.name} shows`}
                     desc="More from the same network, ranked by rating."
                     href={`/network/${netEntry.slug}`}
+                    backdrop={exploreArts.network}
                   />
                 ) : null}
-                {genres.slice(0, 2).map((g) => (
+                {genres.slice(0, 2).map((g, i) => (
                   <ExploreCard
                     icon="Genre"
                     title={`Best ${g.toLowerCase()} shows & films`}
                     desc={`The top of the ${g.toLowerCase()} pile, across both mediums.`}
                     href={`/genre/${slugifyName(g)}`}
+                    backdrop={exploreArts.genres[i] ?? null}
                   />
                 ))}
                 {hub ? (
@@ -718,12 +709,21 @@ app.get("/show/:slug", async (c) => {
                     title={`The ${hub.name.toLowerCase()} hub`}
                     desc="The whole fandom on one bookmarkable page — rankings, premieres, what's new."
                     href={`/${hub.slug}`}
+                    backdrop={exploreArts.hub}
                   />
                 ) : null}
               </div>
             </section>
           );
         })()}
+          </div>
+          <HomeSidebarRail
+            trailers={sidebar?.trailers ?? []}
+            topSeries={sidebar?.topSeries ?? []}
+            topMovies={sidebar?.topMovies ?? []}
+            newsletterHref="/#home-email-title"
+          />
+        </div>
       </article>
     </Layout>,
   );
@@ -805,9 +805,10 @@ app.get("/show/:slug/where-to-watch", async (c) => {
       : null;
 
   const site = origin(c);
+  const keepGoingArts = await loadShowKeepGoingArts(c.env.DB, c.env.TMDB_API_KEY, show);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`Where to watch ${show.name} — streaming options | TV Nightly`}
       description={
         names.length
@@ -912,20 +913,31 @@ app.get("/show/:slug/where-to-watch", async (c) => {
             </>
           )}
         </section>
-        <section>
-          <h2>Keep going</h2>
-          <div class="footer-picks">
-            <a class="footer-card" href={`/show/${show.slug}`}>
-              {show.name} overview
-            </a>
-            <a class="footer-card" href={`/show/${show.slug}/best-episodes`}>
-              Best episodes
-            </a>
-            <a class="footer-card" href={`/whats-new`}>
-              What's new on streaming
-            </a>
-          </div>
-        </section>
+        <KeepGoing
+          cards={[
+            {
+              icon: "Overview",
+              title: `${show.name} overview`,
+              desc: "Episodes, ratings, cast and the full series dossier.",
+              href: `/show/${show.slug}`,
+              backdrop: keepGoingArts.overview,
+            },
+            {
+              icon: "Charts",
+              title: "Best episodes",
+              desc: "The highest-rated hours, ranked with viewer scores.",
+              href: `/show/${show.slug}/best-episodes`,
+              backdrop: keepGoingArts.bestEpisodes,
+            },
+            {
+              icon: "Premieres",
+              title: "What's new on streaming",
+              desc: "Fresh arrivals and renewals across every service.",
+              href: "/whats-new",
+              backdrop: keepGoingArts.whatsNew,
+            },
+          ]}
+        />
         <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
       </article>
     </Layout>,
@@ -948,23 +960,15 @@ app.get("/show/:slug/similar", async (c) => {
   if (!similar.length) return c.redirect(`/show/${show.slug}`, 302);
   const region = visitorRegion(c);
   const base = `/show/${show.slug}/similar`;
-  const [stat, raterCount] = await Promise.all([
-    titleStat(c.env.DB, "tv", r.ratingRef),
-    titleRaterCount(c.env.DB, "tv", r.ratingRef),
-  ]);
-
-  const backdrop =
-    show.tmdb_id && c.env.TMDB_API_KEY
-      ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id)
-      : null;
-  const posterBg = hiRes(show.image_url);
-  const heroFrame = backdrop
-    ? heroBg(backdrop.x1, backdrop.x2)
-    : posterBg
-      ? heroBg(posterBg)
-      : null;
 
   const site = origin(c);
+  const sidebar = c.get("siteSidebar");
+  const keepGoingArts = await loadShowKeepGoingArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    show,
+    similar[0]?.tmdb_id,
+  );
   const ld = [
     breadcrumbLd(site, show, "Similar shows", base),
     {
@@ -982,6 +986,8 @@ app.get("/show/:slug/similar", async (c) => {
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
+      c={c}
+      sidebarInline
       title={`Shows like ${show.name} — ${similar.length} similar shows ranked | TV Nightly`}
       description={`The ${similar.length} closest matches to ${show.name}: ${similar
         .slice(0, 4)
@@ -992,13 +998,10 @@ app.get("/show/:slug/similar", async (c) => {
       ld={ld}
       scripts={["/js/share.js"]}
     >
-      <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
-        <header class="detail-hero frame-hero">
-          {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
+      <article class="show-hub">
+        <header class="detail-hero media-hero">
           <div class="detail-head">
-            <div class="detail-side">
-              {HeroPoster(show)}
-            </div>
+            <div class="detail-side">{HeroPoster(show)}</div>
             <div class="detail-info">
               <p class="ep-eyebrow">
                 <a href={`/show/${show.slug}`}>{show.name}</a>
@@ -1017,14 +1020,8 @@ app.get("/show/:slug/similar", async (c) => {
           </div>
         </header>
         <ShowTabs slug={show.slug} current="similar" />
-        <ShowConvertBand
-          show={show}
-          ratingRef={r.ratingRef}
-          stat={stat}
-          raterCount={raterCount}
-          episodes={r.episodes}
-          hideSimilar
-        />
+        <div class="home-main-grid">
+          <div class="home-col">
         <section>
           <h2>The closest matches</h2>
           <ol class="dossier-board">
@@ -1044,20 +1041,39 @@ app.get("/show/:slug/similar", async (c) => {
             ))}
           </ol>
         </section>
-        <section>
-          <h2>Keep going</h2>
-          <div class="footer-picks">
-            <a class="footer-card" href={`/show/${show.slug}`}>
-              {show.name} overview
-            </a>
-            <a class="footer-card" href={`/show/${show.slug}/where-to-watch`}>
-              Where to watch
-            </a>
-            <a class="footer-card" href="/what-to-watch">
-              What should I watch tonight?
-            </a>
+        <KeepGoing
+          cards={[
+            {
+              icon: "Overview",
+              title: `${show.name} overview`,
+              desc: "Episodes, ratings, cast and the full series dossier.",
+              href: `/show/${show.slug}`,
+              backdrop: keepGoingArts.overview,
+            },
+            {
+              icon: "Stream",
+              title: "Where to watch",
+              desc: `Every service carrying ${show.name}, region by region.`,
+              href: `/show/${show.slug}/where-to-watch`,
+              backdrop: keepGoingArts.watch,
+            },
+            {
+              icon: "Picker",
+              title: "What should I watch tonight?",
+              desc: "Filter by mood, service and runtime — pick in seconds.",
+              href: "/what-to-watch",
+              backdrop: keepGoingArts.tonight,
+            },
+          ]}
+        />
           </div>
-        </section>
+          <HomeSidebarRail
+            trailers={sidebar?.trailers ?? []}
+            topSeries={sidebar?.topSeries ?? []}
+            topMovies={sidebar?.topMovies ?? []}
+            newsletterHref="/#home-email-title"
+          />
+        </div>
       </article>
     </Layout>,
   );
@@ -1081,17 +1097,7 @@ app.get("/show/:slug/media", async (c) => {
   const backdrops = (media?.backdrops ?? []).slice(0, 12);
   const posters = (media?.posters ?? []).slice(0, 12);
   const hasAny = Boolean(trailer || clips.length || backdrops.length || posters.length);
-
-  const backdrop =
-    show.tmdb_id && c.env.TMDB_API_KEY
-      ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id)
-      : null;
-  const posterBg = hiRes(show.image_url);
-  const heroFrame = backdrop
-    ? heroBg(backdrop.x1, backdrop.x2)
-    : posterBg
-      ? heroBg(posterBg)
-      : null;
+  const sidebar = c.get("siteSidebar");
 
   const ld: unknown[] = [breadcrumbLd(site, show, "Media", base)];
   if (trailer) {
@@ -1105,23 +1111,30 @@ app.get("/show/:slug/media", async (c) => {
     });
   }
 
+  const similarPick = await similarShows(c.env.DB, show, 1);
+  const keepGoingArts = await loadShowKeepGoingArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    show,
+    similarPick[0]?.tmdb_id,
+  );
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
+      c={c}
+      sidebarInline
       title={`${show.name} — trailer, posters & artwork | TV Nightly`}
       description={`Every trailer, clip, poster and backdrop for ${show.name} in one place.`}
       canonical={`${site}${base}`}
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={ld}
-      scripts={["/js/media-lightbox.js", "/js/media-video.js"]}
+      scripts={["/js/media-lightbox.js"]}
     >
-      <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
-        <header class="detail-hero frame-hero">
-          {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
+      <article class="show-hub">
+        <header class="detail-hero media-hero">
           <div class="detail-head">
-            <div class="detail-side">
-              {HeroPoster(show)}
-            </div>
+            <div class="detail-side">{HeroPoster(show)}</div>
             <div class="detail-info">
               <p class="ep-eyebrow">
                 <a href={`/show/${show.slug}`}>{show.name}</a>
@@ -1137,6 +1150,8 @@ app.get("/show/:slug/media", async (c) => {
           </div>
         </header>
         <ShowTabs slug={show.slug} current="media" />
+        <div class="home-main-grid">
+          <div class="home-col">
         {trailer ? (
           <section>
             <h2>Trailer</h2>
@@ -1246,21 +1261,40 @@ app.get("/show/:slug/media", async (c) => {
             </div>
           </section>
         ) : null}
-        <section>
-          <h2>Keep going</h2>
-          <div class="footer-picks">
-            <a class="footer-card" href={`/show/${show.slug}`}>
-              {show.name} overview
-            </a>
-            <a class="footer-card" href={`/show/${show.slug}/similar`}>
-              Shows like {show.name}
-            </a>
-            <a class="footer-card" href={`/show/${show.slug}/where-to-watch`}>
-              Where to watch
-            </a>
-          </div>
-        </section>
+        <KeepGoing
+          cards={[
+            {
+              icon: "Overview",
+              title: `${show.name} overview`,
+              desc: "Episodes, ratings, cast and the full series dossier.",
+              href: `/show/${show.slug}`,
+              backdrop: keepGoingArts.overview,
+            },
+            {
+              icon: "Matchup",
+              title: `Shows like ${show.name}`,
+              desc: "The closest matches, ranked by overlap and rating.",
+              href: `/show/${show.slug}/similar`,
+              backdrop: keepGoingArts.similar,
+            },
+            {
+              icon: "Stream",
+              title: "Where to watch",
+              desc: `Every service carrying ${show.name}, region by region.`,
+              href: `/show/${show.slug}/where-to-watch`,
+              backdrop: keepGoingArts.watch,
+            },
+          ]}
+        />
         <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
+          </div>
+          <HomeSidebarRail
+            trailers={sidebar?.trailers ?? []}
+            topSeries={sidebar?.topSeries ?? []}
+            topMovies={sidebar?.topMovies ?? []}
+            newsletterHref="/#home-email-title"
+          />
+        </div>
       </article>
     </Layout>,
   );
@@ -1290,28 +1324,56 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
     eps = epsRes.results;
     maxRow = mx;
   }
-  const similar = await similarShows(c.env.DB, show);
+  const similar = await similarShows(c.env.DB, show, 6);
   if (eps.length === 0) return c.notFound();
   const region = visitorRegion(c);
+  const keepGoingArts = await loadShowKeepGoingArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    show,
+    similar[0]?.tmdb_id,
+  );
+  const sidebar = c.get("siteSidebar");
 
   const site = origin(c);
   const path = new URL(c.req.url).pathname;
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
+      c={c}
+      sidebarInline
       title={`${show.name} Season ${n} — episode list, ratings & air dates | TV Nightly`}
       description={`All ${eps.length} episodes of ${show.name} Season ${n}, with air dates and viewer ratings.`}
       canonical={canonical(c)}
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, `Season ${n}`, path)]}
+      preloadImage={
+        eps[0]?.image_url
+          ? { x1: eps[0].image_url, x2: largeStill(eps[0].image_url) }
+          : undefined
+      }
     >
-      <h1 class="epreg-h1">
-        <a href={`/show/${show.slug}`}>{show.name}</a> — Season {n}
-      </h1>
-      <SeasonTabs slug={show.slug} season={n} current="overview" latest={n === maxRow?.m} />
-      <p class="epreg-method">
-        All {eps.length} episodes in airing order, with first-run dates and viewer ratings.
-      </p>
+      <article class="show-hub">
+        <header class="detail-hero media-hero">
+          <div class="detail-head">
+            <div class="detail-side">{HeroPoster(show)}</div>
+            <div class="detail-info">
+              <p class="ep-eyebrow">
+                <a href={`/show/${show.slug}`}>{show.name}</a>
+                <span class="sep">·</span> Season {n}
+              </p>
+              <h1>
+                <a href={`/show/${show.slug}`}>{show.name}</a> — Season {n}
+              </h1>
+              <p class="summary">
+                All {eps.length} episodes in airing order, with first-run dates and viewer ratings.
+              </p>
+            </div>
+          </div>
+        </header>
+        <SeasonTabs slug={show.slug} season={n} current="overview" latest={n === maxRow?.m} />
+        <div class="home-main-grid">
+          <div class="home-col">
       {(() => {
         const anyStill = eps.some((e) => e.image_url);
         return (
@@ -1382,6 +1444,47 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
           </ol>
         </section>
       ) : null}
+      <KeepGoing
+        cards={[
+          {
+            icon: "Overview",
+            title: `${show.name} overview`,
+            desc: "Episodes, ratings, cast and the full series dossier.",
+            href: `/show/${show.slug}`,
+            backdrop: keepGoingArts.overview,
+          },
+          {
+            icon: "Charts",
+            title: "Best episodes",
+            desc: `The highest-rated hours of Season ${n}, ranked.`,
+            href: `/show/${show.slug}/best-episodes?season=${n}`,
+            backdrop: keepGoingArts.bestEpisodes,
+          },
+          {
+            icon: "Charts",
+            title: "Ratings graph",
+            desc: `Every rated episode of Season ${n} on one chart.`,
+            href: `/show/${show.slug}/ratings?season=${n}`,
+            backdrop: keepGoingArts.similar,
+          },
+          {
+            icon: "Stream",
+            title: "Where to watch",
+            desc: `Every service carrying ${show.name}, region by region.`,
+            href: `/show/${show.slug}/where-to-watch`,
+            backdrop: keepGoingArts.watch,
+          },
+        ]}
+      />
+          </div>
+          <HomeSidebarRail
+            trailers={sidebar?.trailers ?? []}
+            topSeries={sidebar?.topSeries ?? []}
+            topMovies={sidebar?.topMovies ?? []}
+            newsletterHref="/#home-email-title"
+          />
+        </div>
+      </article>
     </Layout>,
   );
 });

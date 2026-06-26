@@ -1,15 +1,17 @@
 import { Hono } from "hono";
 import { Layout, Honeypot } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import { fillKeepGoingBackdrops, finalizeExploreArt } from "../components/keep-going";
 import { FilterSelect } from "../components/forms";
 import { NEWS_TABS, SubNav } from "../components/nav";
 import { heroBg, hiRes, longDate, shortDate, stripHtml } from "../lib/format";
 import { PROVIDER_LOGOS, REGIONS, visitorRegion } from "../lib/providers";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
-import { Bindings, EventRow } from "../types";
+import { Bindings, HonoEnv, EventRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // ------------------------------------------------------------- renewals
 
@@ -138,9 +140,11 @@ app.get("/renewals", async (c) => {
     ) : null;
 
   const site = origin(c);
+  const sidebar = c.get("siteSidebar");
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title="Renewed & cancelled TV shows — live tracker | TV Nightly"
       description="A live feed of TV renewals, cancellations, and premiere-date announcements, detected hourly from schedule data."
       canonical={canonical(c)}
@@ -161,6 +165,8 @@ app.get("/renewals", async (c) => {
       ]}
     >
       <SubNav items={NEWS_TABS} current="/renewals" />
+      <div class="home-main-grid">
+        <div class="home-col">
       <h1>Renewals, cancellations & premiere dates</h1>
       {results.length ? (
         <p class="sched-sum">
@@ -206,6 +212,14 @@ app.get("/renewals", async (c) => {
           <button type="submit">Sign me up</button>
           <Honeypot />
         </form>
+      </div>
+        </div>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
       </div>
     </Layout>,
   );
@@ -312,9 +326,27 @@ app.get("/whats-new", async (c) => {
   );
 
   const site = origin(c);
+  const sidebar = c.get("siteSidebar");
+  const doorArts = fillKeepGoingBackdrops([
+    {
+      icon: "",
+      title: "",
+      desc: "",
+      href: "",
+      backdrop: finalizeExploreArt(null, added[0] ? posters.get(added[0].slug) ?? null : null),
+    },
+    {
+      icon: "",
+      title: "",
+      desc: "",
+      href: "",
+      backdrop: finalizeExploreArt(null, added[1] ? posters.get(added[1].slug) ?? null : null),
+    },
+  ]).map((c) => c.backdrop ?? null);
   c.header("Cache-Control", "private, max-age=300");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`What's new on streaming (${region}) — and what just left | TV Nightly`}
       description="Titles that just arrived on or left Netflix, Prime Video, Disney+ and more — tracked by our availability patrol, localized to your country."
       canonical={`${site}/whats-new`}
@@ -331,6 +363,8 @@ app.get("/whats-new", async (c) => {
       ]}
     >
       <SubNav items={NEWS_TABS} current="/whats-new" />
+      <div class="home-main-grid">
+        <div class="home-col">
       <h1>What's new on streaming ({region})</h1>
       <p class="muted">
         Our patrol re-checks availability around the clock and logs every change. Yesterday's
@@ -381,12 +415,14 @@ app.get("/whats-new", async (c) => {
             title="Renewals & cancellations"
             desc="New seasons confirmed, ended runs, and status moves — detected hourly."
             href="/renewals"
+            backdrop={doorArts[0] ?? undefined}
           />
           <ExploreCard
             icon="Premieres"
             title="Upcoming premiere dates"
             desc="Season launches in the next few weeks, in calendar order."
             href="/premieres"
+            backdrop={doorArts[1] ?? undefined}
           />
         </div>
       </section>
@@ -398,6 +434,14 @@ app.get("/whats-new", async (c) => {
           <button type="submit">Sign me up</button>
           <Honeypot />
         </form>
+      </div>
+        </div>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
       </div>
     </Layout>,
   );

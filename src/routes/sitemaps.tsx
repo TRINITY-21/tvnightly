@@ -7,9 +7,9 @@ import { genreDirectory, networkDirectory } from "../lib/queries";
 import { epochDay, origin, sitemapUrl, xmlRes } from "../lib/seo";
 import { TV_UNIVERSES } from "../lib/tv-universes";
 import { VERTICALS } from "../lib/verticals";
-import { Bindings } from "../types";
+import { Bindings, HonoEnv } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // --------------------------------------------------------------- sitemaps
 

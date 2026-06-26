@@ -4,9 +4,9 @@ import { Layout } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
 import { epCode, epHref, largeStill, longDate, stripHtml } from "../lib/format";
 import { canonical, origin } from "../lib/seo";
-import { Bindings, EpisodeRow } from "../types";
+import { Bindings, HonoEnv, EpisodeRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // ------------------------------------------- all-time best episodes (global)
 
@@ -29,7 +29,7 @@ app.get("/best-episodes", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="Best TV Episodes of All Time — Top 100 Ranked | TV Nightly"
       description={`The best TV episodes of all time, ranked by viewer rating across every tracked show${
         results[0] ? ` — led by ${results[0].show_name}'s "${results[0].name ?? epCode(results[0])}"` : ""

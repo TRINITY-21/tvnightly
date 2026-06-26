@@ -23,6 +23,10 @@
     document.addEventListener(
       "click",
       function (e) {
+        // poster-card play discs sit inside the card's link but open a modal,
+        // never navigate — don't start the bar for them (this listener captures,
+        // so it runs before the disc's own preventDefault marks the event)
+        if (e.target.closest && e.target.closest("[data-trailer-id]")) return;
         var a = e.target.closest && e.target.closest("a[href]");
         if (!a) return;
         if (a.target === "_blank" || a.hasAttribute("download")) return;

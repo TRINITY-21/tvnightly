@@ -617,6 +617,108 @@ a.cast-tile:hover { text-decoration: none; }
   margin: 0;
   font-size: 0.8rem;
 }
+/* compact episode header: poster + vote beside the facts, no full-bleed frame */
+.show-hub .detail-hero.media-hero.episode-hero .detail-head {
+  align-items: flex-start;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  gap: 1.35rem;
+}
+.show-hub .detail-hero.media-hero.episode-hero .detail-side {
+  flex: 0 0 7.375rem;
+  width: 7.375rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.7rem;
+}
+.show-hub .detail-hero.media-hero.episode-hero .detail-info {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.show-hub .detail-hero.media-hero.episode-hero .detail-side .ep-vote {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 0.35rem 0.4rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.show-hub .detail-hero.media-hero.episode-hero .detail-side .ep-vote .muted {
+  grid-column: 1 / -1;
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.show-hub .detail-hero.media-hero.episode-hero .detail-side .ep-vote .vote-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  padding: 0.28rem 0.35rem;
+  margin: 0;
+}
+.show-hub .detail-hero.media-hero.episode-hero h1,
+.show-hub .detail-hero.media-hero.episode-hero .meta-strip,
+.show-hub .detail-hero.media-hero.episode-hero .ep-eyebrow,
+.show-hub .detail-hero.media-hero.episode-hero .summary {
+  text-shadow: none;
+}
+.show-hub .detail-hero.media-hero.episode-hero h1 {
+  font-size: clamp(1.35rem, 2.8vw, 1.95rem);
+  margin: 0.1rem 0 0.4rem;
+  line-height: 1.1;
+}
+.show-hub .detail-hero.media-hero.episode-hero .meta-strip {
+  margin: 0 0 0.65rem;
+}
+.show-hub .detail-hero.media-hero.episode-hero .summary {
+  max-width: none;
+  margin: 0 0 0.15rem;
+  font-size: 0.98rem;
+  line-height: 1.5;
+}
+.show-hub .detail-hero.media-hero.episode-hero .ep-hero-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.show-hub .detail-hero.media-hero.episode-hero .ep-hero-foot .provs {
+  flex: 1 1 16rem;
+  margin: 0;
+}
+.show-hub .detail-hero.media-hero.episode-hero .ep-hero-foot .share-bar {
+  margin: 0;
+  flex: 0 0 auto;
+}
+.show-hub .home-col > .episode-hero + .stat-band {
+  margin-top: 1.15rem;
+}
+@media (max-width: 520px) {
+  .show-hub .detail-hero.media-hero.episode-hero .detail-head {
+    gap: 1rem;
+  }
+  .show-hub .detail-hero.media-hero.episode-hero .detail-side {
+    flex-basis: 5.5rem;
+    width: 5.5rem;
+  }
+  .show-hub .detail-hero.media-hero.episode-hero .detail-side .ep-vote {
+    font-size: 0.76rem;
+    padding: 0.45rem 0.5rem;
+  }
+  .show-hub .detail-hero.media-hero.episode-hero .ep-hero-foot {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 @media (max-width: 600px) {
   .show-hub .frame-hero { padding-top: 5rem; }
   /* on a phone the poster, rate widget, title and meta all stack down into the

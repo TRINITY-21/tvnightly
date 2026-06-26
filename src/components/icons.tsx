@@ -1,7 +1,7 @@
 // Drawn glyphs in the brand's line voice — stroke-based, currentColor,
 // no emoji. Same drawing language as the logo mark and CSS chevrons.
-import { FC } from "hono/jsx";
 import { raw } from "hono/html";
+import { FC } from "hono/jsx";
 
 export const IconCal: FC<{ size?: number }> = ({ size = 15 }) => (
   <svg class="icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
@@ -207,6 +207,22 @@ export const IconPlay: FC<{ size?: number }> = ({ size = 18 }) => (
   <svg class="icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
     <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8" />
     <path d="M10 8.6l5.4 3.4-5.4 3.4z" fill="currentColor" stroke="currentColor" stroke-linejoin="round" />
+  </svg>
+);
+
+/* poster / trailer overlay: thick white ring + semi-transparent play triangle */
+export const IconPlayDisc: FC<{ size?: number; class?: string }> = ({ size = 44, class: cls }) => (
+  <svg class={cls} width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
+    <circle cx="24" cy="24" r="19.5" fill="none" stroke="#fff" stroke-opacity="0.88" stroke-width="3.5" />
+    <path
+      d="M18.4 14.2v19.6l15.2-9.8z"
+      fill="#fff"
+      fill-opacity="0.55"
+      stroke="#fff"
+      stroke-opacity="0.55"
+      stroke-width="0.75"
+      stroke-linejoin="round"
+    />
   </svg>
 );
 

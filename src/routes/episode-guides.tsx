@@ -5,15 +5,14 @@ import { Layout } from "../components/Layout";
 import { ShowBlurb } from "../components/editorial";
 import { ChevDown, ChevUp, IconStar } from "../components/icons";
 import { ShowTabs } from "../components/nav";
-import { ShowConvertBand, loadShowConvertCtx } from "../components/show-convert";
 import { EPISODE_GUIDES, EPISODE_GUIDE_BY_SLUG } from "../lib/episode-guides";
 import { epCode, epHref, fmtRuntime, heroBg, largeStill, longDate, posterSrc, stripHtml } from "../lib/format";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { resolveShow } from "../lib/tmdb-show";
-import { Bindings, EpisodeRow } from "../types";
+import { Bindings, HonoEnv, EpisodeRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 const slugTitle = (slug: string) =>
   slug
@@ -40,7 +39,7 @@ app.get("/guides", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=86400");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="TV episode ranking guides — every episode ranked | TV Nightly"
       description="Shareable ranked lists: every Game of Thrones, Breaking Bad, The Office episode and more — ranked by real viewer ratings."
       canonical={canonical(c)}
@@ -117,7 +116,6 @@ app.get("/guide/:slug", async (c) => {
     eps = res.results;
   }
 
-  const convert = await loadShowConvertCtx(c.env.DB, show, resolved.ratingRef);
   const anyStill = eps.some((e) => e.image_url);
   const plates = eps.length >= 10 ? 3 : eps.length >= 4 ? 1 : 0;
   const site = origin(c);
@@ -125,7 +123,7 @@ app.get("/guide/:slug", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={guide.title}
       description={guide.description}
       canonical={`${site}${path}`}
@@ -160,14 +158,6 @@ app.get("/guide/:slug", async (c) => {
         <h1 class="epreg-h1">{guide.h1}</h1>
         <p class="epreg-method">{guide.intro}</p>
         {show.blurb ? <ShowBlurb text={show.blurb} /> : null}
-        <ShowConvertBand
-          show={show}
-          ratingRef={resolved.ratingRef}
-          stat={convert.stat}
-          raterCount={convert.raterCount}
-          episodes={resolved.episodes}
-          similar={convert.similar}
-        />
         <ShowTabs slug={show.slug} current="best" />
         <ol class={anyStill ? "epreg" : "epreg epreg--textonly"}>
           {eps.map((e, i) => (

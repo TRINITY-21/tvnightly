@@ -40,7 +40,7 @@ import {
 import { tmdbBackdrop, tmdbLogo, tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
 import { resolveShow } from "../lib/tmdb-show";
 import { TV_UNIVERSES, TV_UNIVERSE_BY_SLUG } from "../lib/tv-universes";
-import { AppContext, Bindings, MovieRow, ShowRow } from "../types";
+import { AppContext, Bindings, HonoEnv, MovieRow, ShowRow } from "../types";
 
 const STUDIO_GENRES = [
   "Drama",
@@ -75,7 +75,7 @@ type CardShowRow = {
   premiered: string | null;
 };
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // Basic-auth gate for /admin/* (username "admin", password = ADMIN_KEY). Returns
 // a Response to short-circuit, or null when the request is authorized. Unset
@@ -141,7 +141,7 @@ app.get("/admin/feedback", async (c) => {
   }>();
 
   return c.html(
-    <Layout title="Feedback — admin" noindex>
+    <Layout c={c} title="Feedback — admin" noindex>
       <p class="adm-nav">
         <a href="/admin/subscribers">Subscribers</a> ·{" "}
         <a href="/admin/studio">Social studio <span class="chev-icon chev-icon-sm" aria-hidden="true"></span></a>
@@ -196,7 +196,7 @@ app.get("/admin/subscribers", async (c) => {
   const pending = (totals?.total ?? 0) - (totals?.confirmed ?? 0);
 
   return c.html(
-    <Layout title="Subscribers — admin" noindex>
+    <Layout c={c} title="Subscribers — admin" noindex>
       <p class="adm-nav">
         <a href="/admin/feedback">Feedback</a> ·{" "}
         <a href="/admin/studio">Social studio <span class="chev-icon chev-icon-sm" aria-hidden="true"></span></a>
@@ -543,7 +543,7 @@ app.get("/admin/studio", async (c) => {
     (cat.engine === "promo" && moments.length > 0);
 
   return c.html(
-    <Layout title="Studio — admin" noindex bare scripts={["/js/mp4-muxer.js", "/js/studio.js"]}>
+    <Layout c={c} title="Studio — admin" noindex bare scripts={["/js/mp4-muxer.js", "/js/studio.js"]}>
       <div class="studio">
         <header class="studio-top">
           <div class="studio-brand">

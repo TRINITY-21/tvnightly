@@ -6,9 +6,9 @@ import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { resolveShow } from "../lib/tmdb-show";
 import { TV_UNIVERSES, TV_UNIVERSE_BY_SLUG, type TvUniverseEntry } from "../lib/tv-universes";
-import { Bindings, ShowRow } from "../types";
+import { Bindings, HonoEnv, ShowRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 const slugTitle = (slug: string) =>
   slug
@@ -46,7 +46,7 @@ app.get("/tv-watch-orders", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=86400");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="TV watch-order guides — every universe in order | TV Nightly"
       description="How to watch Game of Thrones, Breaking Bad, Star Trek, Marvel TV and more — the right order for every major TV universe."
       canonical={canonical(c)}
@@ -167,7 +167,7 @@ app.get("/tv-watch-order/:slug", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=86400");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`${u.name} watch order — how to watch in order | TV Nightly`}
       description={`${u.name} watch order: ${ordered.length} series in the right sequence${u.aka ? ` (${u.aka})` : ""} — with episode rankings and streaming info for each.`}
       canonical={canonical(c)}

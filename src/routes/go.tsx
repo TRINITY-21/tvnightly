@@ -6,10 +6,10 @@
 // <src> is fb|ig|tt|x|pin; ?c=<campaign> overrides the path-derived default when
 // the studio used a custom campaign (e.g. ratings, showcase, promo themes).
 import { Hono } from "hono";
-import { Bindings } from "../types";
+import { Bindings, HonoEnv } from "../types";
 import { SRC_FROM_CODE, UTM_MEDIUM, utmCampaignFromPath } from "../lib/utm";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // Humans get a clean 302 with the UTMs reattached. (OG-scraper crawlers are
 // intercepted earlier in index.tsx and served the destination page directly, so

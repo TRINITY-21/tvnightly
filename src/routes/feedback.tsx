@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { Bindings } from "../types";
+import { Bindings, HonoEnv } from "../types";
 import { Layout, MessagePage } from "../components/Layout";
 import { canonical } from "../lib/seo";
 import { sendEmails } from "../email";
@@ -7,7 +7,7 @@ import { verifyTurnstile } from "../lib/turnstile";
 
 const TURNSTILE_API = "https://challenges.cloudflare.com/turnstile/v0/api.js";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const escapeHtml = (s: string) =>
@@ -15,7 +15,7 @@ const escapeHtml = (s: string) =>
 
 app.get("/feedback", (c) =>
   c.html(
-    <Layout
+    <Layout c={c}
       title="Send feedback | TV Nightly"
       description="Found a bug, a wrong air date, or have an idea for TV Nightly? Send us your feedback — it goes straight to the team."
       canonical={canonical(c)}

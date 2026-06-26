@@ -6,7 +6,8 @@ import { ErrorPage, NotFoundPage } from "./components/notfound";
 import { setAffiliate } from "./lib/affiliate";
 import { submitIndexNow } from "./lib/indexnow";
 import { notifyOwnerSignups, providerPatrol, runSync, sendDailyDigest } from "./sync";
-import type { Bindings } from "./types";
+import { fetchSiteSidebar, shouldFetchSiteSidebar } from "./lib/site-sidebar";
+import type { Bindings, HonoEnv } from "./types";
 
 import admin from "./routes/admin";
 import bestEpisodes from "./routes/best-episodes";
@@ -39,7 +40,7 @@ import votes from "./routes/votes";
 import watchOrders from "./routes/watch-orders";
 import whatToWatch from "./routes/what-to-watch";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // NOTE: HTML edge-caching is deliberately NOT done in the Worker. caches.default
 // + Hono's post-handler response rewriting proved unreliable to verify, and it's
@@ -52,9 +53,17 @@ const app = new Hono<{ Bindings: Bindings }>();
 // inline JSON-LD + third-party poster CDNs, and an unsafe-inline CSP buys little.
 // This also threads the public Web Analytics beacon token into the Layout module.
 app.use("*", async (c, next) => {
-  const admin = new URL(c.req.url).pathname.startsWith("/admin");
-  setBeaconToken(c.env.CF_BEACON_TOKEN);
-  setGaId(c.env.GA_ID);
+  const url = new URL(c.req.url);
+  const admin = url.pathname.startsWith("/admin");
+  // Analytics only on the real production origin. CF_BEACON_TOKEN and GA_ID are
+  // plain vars (so they're present in `wrangler dev` too) — without this guard,
+  // local pageviews report into the production Cloudflare Web Analytics + GA
+  // properties and inflate the real numbers. Gate on SITE_ORIGIN (set to the
+  // localhost origin in .dev.vars, the apex in wrangler.jsonc) rather than the
+  // request host: it's a direct env read, not subject to URL parsing.
+  const prod = c.env.SITE_ORIGIN === "https://tvnightly.com";
+  setBeaconToken(prod ? c.env.CF_BEACON_TOKEN : undefined);
+  setGaId(prod ? c.env.GA_ID : undefined);
   setSiteAnalytics(!admin);
   setAffiliate(c.env);
   c.header("X-Content-Type-Options", "nosniff");
@@ -62,6 +71,19 @@ app.use("*", async (c, next) => {
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
   c.header("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), browsing-topics=()");
+  return next();
+});
+
+// Right-rail sidebar (trailers + top charts) for public content pages — one fetch
+// per eligible GET/HEAD. Legal, admin, subscribe flows, and asset endpoints skip.
+app.use("*", async (c, next) => {
+  const path = new URL(c.req.url).pathname;
+  if (shouldFetchSiteSidebar(path, c.req.method)) {
+    c.set(
+      "siteSidebar",
+      await fetchSiteSidebar(c.env.DB, c.env.TMDB_API_KEY),
+    );
+  }
   return next();
 });
 
@@ -147,6 +169,7 @@ app.notFound((c) => c.html(<NotFoundPage />, 404));
 // on-brand 500 instead of a bare stack trace — and the error is logged, not leaked.
 app.onError((err, c) => {
   console.error(`[error] ${c.req.method} ${c.req.path}:`, err);
+  c.set("siteSidebar", undefined);
   return c.html(<ErrorPage />, 500);
 });
 

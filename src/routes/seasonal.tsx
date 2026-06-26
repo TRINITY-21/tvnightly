@@ -8,9 +8,9 @@ import { epCode, epHref, heroBg, hiRes, largeStill, longDate, posterSrc } from "
 import { breadcrumbTrail, canonical, faqLd, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbTopRated } from "../lib/tmdb";
 import { toMovieRow } from "../lib/tmdb-rows";
-import { Bindings, EpisodeRow, MovieRow, ShowRow } from "../types";
+import { Bindings, HonoEnv, EpisodeRow, MovieRow, ShowRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 const HORROR = `genres LIKE '%"Horror"%'`;
 const XMAS_EP = `(e.name LIKE '%Christmas%' OR e.name LIKE '%christmas%' OR e.name LIKE '%Xmas%' OR e.name LIKE '%xmas%')`;
@@ -70,7 +70,7 @@ app.get("/halloween", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`Best Horror TV for Halloween ${year} — Scary Shows Ranked | TV Nightly`}
       description={`The best horror TV shows for Halloween ${year} — ranked by viewer rating, with episode guides and where to stream.`}
       canonical={canonical(c)}
@@ -154,7 +154,7 @@ app.get("/christmas-tv", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`Best Christmas TV ${year} — Holiday Episodes & Specials | TV Nightly`}
       description={`The best Christmas TV episodes and holiday specials ${year} — series ranked by their highest-rated Christmas hours.`}
       canonical={canonical(c)}
@@ -248,7 +248,7 @@ app.get("/best-thanksgiving-episodes", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`Best Thanksgiving TV Episodes ${year} — Ranked | TV Nightly`}
       description={`The best Thanksgiving TV episodes of all time — Friends, The West Wing, Bob's Burgers, and every Turkey Day classic ranked by viewer rating.`}
       canonical={canonical(c)}

@@ -2,19 +2,48 @@ import { Hono } from "hono";
 import { FC } from "hono/jsx";
 import { Layout } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import { KeepExploring, fillKeepGoingBackdrops, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
+import type { ExploreArt } from "../lib/explore-art";
 import { SCHEDULE_TABS, SubNav } from "../components/nav";
 import { MONTHS, airTime, epCode, heroBg, hiRes, homeDateline, longDate, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbUpcomingMovies } from "../lib/tmdb";
 import { liveTonight } from "../lib/schedule-live";
-import { Bindings, TonightRow } from "../types";
+import { Bindings, HonoEnv, TonightRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // Even the full guide keeps to real programming — no news, talk, reality, game,
 // variety, sport or award filler. type is TVmaze's own classification. (The
 // homepage rails curate harder still, adding a rating gate that also drops soaps.)
 const SCRIPTED_TYPES = "'Scripted', 'Animation', 'Documentary'";
+
+/** Backdrops for schedule hub doors — cascade from the first available still. */
+const schedSpot = (
+  e: { show_image: string | null; show_poster: string | null; tmdb_id?: number | null } | null,
+) =>
+  e
+    ? { tmdb_id: e.tmdb_id ?? null, show_image: e.show_image, show_poster: e.show_poster }
+    : { tmdb_id: null, show_image: null, show_poster: null };
+
+async function schedDoorArts(
+  apiKey: string | undefined,
+  spots: { tmdb_id: number | null; show_image: string | null; show_poster: string | null }[],
+): Promise<ExploreArt[]> {
+  const arts = await Promise.all(
+    spots.slice(0, 3).map((s) =>
+      showKeepGoingBackdrop(apiKey, {
+        tmdb_id: s.tmdb_id,
+        image_url: s.show_image,
+        poster_url: s.show_poster,
+      }),
+    ),
+  );
+  return fillKeepGoingBackdrops(
+    arts.map((backdrop) => ({ icon: "", title: "", desc: "", href: "", backdrop })),
+  ).map((c) => c.backdrop ?? null);
+}
 
 // ------------------------------------------------------- tonight / calendar
 
@@ -105,9 +134,16 @@ app.get("/tonight", async (c) => {
     .sort((a, b) => (a.airstamp ?? "").localeCompare(b.airstamp ?? ""));
 
   const site = origin(c);
+  const sidebar = c.get("siteSidebar");
+  const doorArts = await schedDoorArts(c.env.TMDB_API_KEY, [
+    schedSpot(head),
+    schedSpot(rest[0] ?? head),
+    schedSpot(rest[1] ?? rest[0] ?? head),
+  ]);
   c.header("Cache-Control", "public, max-age=300");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title="What's on TV tonight | TV Nightly"
       description="Every episode airing on TV and streaming tonight, in air-time order."
       canonical={canonical(c)}
@@ -128,6 +164,8 @@ app.get("/tonight", async (c) => {
       ]}
     >
       <SubNav items={SCHEDULE_TABS} current="/tonight" />
+      <div class="home-main-grid">
+        <div class="home-col">
       <p class="section-eyebrow">{homeDateline()}</p>
       <h1>
         <span class="live-dot"></span>On TV tonight
@@ -177,29 +215,39 @@ app.get("/tonight", async (c) => {
         </ol>
       ) : null}
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Calendar"
-            title="This week's calendar"
-            desc="Every episode airing in the next seven days, grouped by day."
-            href="/calendar"
-          />
-          <ExploreCard
-            icon="Premieres"
-            title="Upcoming premieres"
-            desc="Season premieres on the books for the next ninety days."
-            href="/premieres"
-          />
-          <ExploreCard
-            icon="Charts"
-            title="Top TV shows"
-            desc="The highest-rated series we track — weight and popularity gate the board."
-            href="/top/tv"
-          />
+      <KeepExploring
+        cards={[
+          {
+            icon: "Calendar",
+            title: "This week's calendar",
+            desc: "Every episode airing in the next seven days, grouped by day.",
+            href: "/calendar",
+            backdrop: doorArts[0],
+          },
+          {
+            icon: "Premieres",
+            title: "Upcoming premieres",
+            desc: "Season premieres on the books for the next ninety days.",
+            href: "/premieres",
+            backdrop: doorArts[1],
+          },
+          {
+            icon: "Charts",
+            title: "Top TV shows",
+            desc: "The highest-rated series we track — weight and popularity gate the board.",
+            href: "/top/tv",
+            backdrop: doorArts[2],
+          },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 });
@@ -224,9 +272,17 @@ app.get("/calendar", async (c) => {
   });
 
   const site = origin(c);
+  const sidebar = c.get("siteSidebar");
+  const firstSpot = results[0] ?? null;
+  const doorArts = await schedDoorArts(c.env.TMDB_API_KEY, [
+    schedSpot(firstSpot),
+    schedSpot(results[1] ?? firstSpot),
+    schedSpot(results[2] ?? results[1] ?? firstSpot),
+  ]);
   c.header("Cache-Control", "public, max-age=900");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title="TV schedule this week | TV Nightly"
       description="The 7-day TV calendar: every episode airing this week, by day."
       canonical={canonical(c)}
@@ -245,6 +301,8 @@ app.get("/calendar", async (c) => {
       ]}
     >
       <SubNav items={SCHEDULE_TABS} current="/calendar" />
+      <div class="home-main-grid">
+        <div class="home-col">
       <p class="section-eyebrow">The week ahead</p>
       <h1>This week's TV calendar</h1>
       {byDay.size === 0 ? (
@@ -271,29 +329,39 @@ app.get("/calendar", async (c) => {
         </section>
       ))}
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Tonight"
-            title="On TV tonight"
-            desc="Every episode airing today, in air-time order."
-            href="/tonight"
-          />
-          <ExploreCard
-            icon="Premieres"
-            title="Upcoming premieres"
-            desc="Season premieres on the books for the next ninety days."
-            href="/premieres"
-          />
-          <ExploreCard
-            icon="Shortcut"
-            title="All-time best episodes"
-            desc="The single greatest hours of television, across every show."
-            href="/best-episodes"
-          />
+      <KeepExploring
+        cards={[
+          {
+            icon: "Tonight",
+            title: "On TV tonight",
+            desc: "Every episode airing today, in air-time order.",
+            href: "/tonight",
+            backdrop: doorArts[0],
+          },
+          {
+            icon: "Premieres",
+            title: "Upcoming premieres",
+            desc: "Season premieres on the books for the next ninety days.",
+            href: "/premieres",
+            backdrop: doorArts[1],
+          },
+          {
+            icon: "Shortcut",
+            title: "All-time best episodes",
+            desc: "The single greatest hours of television, across every show.",
+            href: "/best-episodes",
+            backdrop: doorArts[2],
+          },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 });
@@ -372,9 +440,40 @@ app.get("/premieres", async (c) => {
   const monthLabel = (ym: string) => `${MONTHS[Number(ym.slice(5, 7)) - 1] ?? ym} ${ym.slice(0, 4)}`;
 
   const site = origin(c);
+  const sidebar = c.get("siteSidebar");
+  const apiKey = c.env.TMDB_API_KEY;
+  const tvSpot = results[0] ?? null;
+  const [tvArt0, tvArt1, filmArt] = await Promise.all([
+    tvSpot
+      ? showKeepGoingBackdrop(apiKey, {
+          tmdb_id: null,
+          image_url: tvSpot.show_image,
+          poster_url: tvSpot.show_poster,
+        })
+      : Promise.resolve(null),
+    results[1]
+      ? showKeepGoingBackdrop(apiKey, {
+          tmdb_id: null,
+          image_url: results[1].show_image,
+          poster_url: results[1].show_poster,
+        })
+      : Promise.resolve(null),
+    movies[0]?.slug
+      ? c.env.DB.prepare("SELECT imdb_id, poster_url FROM movies WHERE slug = ?")
+          .bind(movies[0].slug)
+          .first<{ imdb_id: string; poster_url: string | null }>()
+          .then((row) => (row ? movieKeepGoingBackdrop(apiKey, row) : null))
+      : Promise.resolve(null),
+  ]);
+  const doorArts = fillKeepGoingBackdrops([
+    { icon: "", title: "", desc: "", href: "", backdrop: tvArt0 },
+    { icon: "", title: "", desc: "", href: "", backdrop: tvArt1 ?? tvArt0 },
+    { icon: "", title: "", desc: "", href: "", backdrop: filmArt ?? tvArt0 },
+  ]).map((c) => c.backdrop ?? null);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title="Upcoming premieres — new TV seasons & movies | TV Nightly"
       description="Every season premiere and movie release coming soon — TV and film in one place, with dates and countdowns."
       canonical={canonical(c)}
@@ -393,6 +492,8 @@ app.get("/premieres", async (c) => {
       ]}
     >
       <SubNav items={SCHEDULE_TABS} current="/premieres" />
+      <div class="home-main-grid">
+        <div class="home-col">
       <p class="section-eyebrow">The next 90 days</p>
       <h1>Upcoming premieres</h1>
       <p class="sched-sum">
@@ -490,29 +591,39 @@ app.get("/premieres", async (c) => {
         </div>
       </div>
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Tonight"
-            title="On TV tonight"
-            desc="Every episode airing today, in air-time order."
-            href="/tonight"
-          />
-          <ExploreCard
-            icon="Calendar"
-            title="This week's calendar"
-            desc="Every episode airing in the next seven days, grouped by day."
-            href="/calendar"
-          />
-          <ExploreCard
-            icon="Live"
-            title="Renewals & cancellations"
-            desc="Which shows got picked up, which got the axe."
-            href="/renewals"
-          />
+      <KeepExploring
+        cards={[
+          {
+            icon: "Tonight",
+            title: "On TV tonight",
+            desc: "Every episode airing today, in air-time order.",
+            href: "/tonight",
+            backdrop: doorArts[0],
+          },
+          {
+            icon: "Calendar",
+            title: "This week's calendar",
+            desc: "Every episode airing in the next seven days, grouped by day.",
+            href: "/calendar",
+            backdrop: doorArts[1],
+          },
+          {
+            icon: "Live",
+            title: "Renewals & cancellations",
+            desc: "Which shows got picked up, which got the axe.",
+            href: "/renewals",
+            backdrop: doorArts[2],
+          },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 });

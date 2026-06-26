@@ -17,9 +17,9 @@ import { posterDataUri } from "../lib/signal";
 import { TasteProfileCardData, buildOgCard, buildTasteProfileCard, buildTasteProfileOgCard } from "../lib/social";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import type { AppContext } from "../types";
-import { Bindings } from "../types";
+import { Bindings, HonoEnv } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // Ratings collected before we synthesize the match (rate card 1 + deck cards).
 const TARGET = 5;
@@ -366,7 +366,7 @@ app.get("/recommend/taste", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`My TV taste: ${tasteProfile.summary} | TV Nightly`}
       description={`My TV taste profile — ${tasteProfile.summary}${primary ? ` → next watch: ${primary.name}` : ""}. Make yours at TV Nightly.`}
       canonical={tasteUrl}
@@ -464,7 +464,7 @@ app.get("/recommend", async (c) => {
 
     c.header("Cache-Control", "no-store");
     return c.html(
-      <Layout
+      <Layout c={c}
         title={primary ? (peek ? `A starting point: ${primary.name} | TV Nightly` : `Watch ${primary.name} next | TV Nightly`) : "Your next watch | TV Nightly"}
         description={primary ? `Based on your ratings, TV Nightly says watch ${primary.name} next.` : "Rate a few things, get your next watch."}
         canonical={`${origin(c)}/recommend`}
@@ -594,7 +594,7 @@ app.get("/recommend", async (c) => {
 
     c.header("Cache-Control", "no-store");
     return c.html(
-      <Layout title="Calculating your taste... | TV Nightly" canonical={`${origin(c)}/recommend`} noindex scripts={["/js/recommend.js"]}>
+      <Layout c={c} title="Calculating your taste... | TV Nightly" canonical={`${origin(c)}/recommend`} noindex scripts={["/js/recommend.js"]}>
         <div class="rec-page rec-narrow rec-center rec-room">
           <RecProgress done={rated.length} target={TARGET} />
           <div class="rec-deck" data-rated={ratedStr} data-target={String(TARGET)}>
@@ -635,7 +635,7 @@ app.get("/recommend", async (c) => {
       .filter((t) => t.image);
     c.header("Cache-Control", "no-store");
     return c.html(
-      <Layout
+      <Layout c={c}
         title="Generating your next watch… | TV Nightly"
         canonical={`${origin(c)}/recommend`}
         noindex
@@ -679,7 +679,7 @@ app.get("/recommend", async (c) => {
     const backHref = `/recommend?step=enrich&rated=${encodeURIComponent(fmtRated(rated))}`;
     c.header("Cache-Control", "public, max-age=3600");
     return c.html(
-      <Layout title={`How was ${cardName}? | TV Nightly`} canonical={`${origin(c)}/recommend`} noindex scripts={["/js/recommend.js"]}>
+      <Layout c={c} title={`How was ${cardName}? | TV Nightly`} canonical={`${origin(c)}/recommend`} noindex scripts={["/js/recommend.js"]}>
         <div class="rec-page rec-narrow rec-center rec-room">
           {rated.length ? <RecProgress done={rated.length} target={5} /> : null}
           <div class="rec-card-shell rec-rate-card">
@@ -725,7 +725,7 @@ app.get("/recommend", async (c) => {
     }
     c.header("Cache-Control", "public, max-age=300");
     return c.html(
-      <Layout title="Which one did you watch? | TV Nightly" canonical={`${origin(c)}/recommend`} noindex>
+      <Layout c={c} title="Which one did you watch? | TV Nightly" canonical={`${origin(c)}/recommend`} noindex>
         <div class="rec-page rec-narrow">
           <header class="chart-head">
             <p class="section-eyebrow">Pick the right one</p>
@@ -774,7 +774,7 @@ app.get("/recommend", async (c) => {
   const picks = await landingPicks(db, 12);
   c.header("Cache-Control", "public, max-age=1800");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="What should I watch next? Rate a few, get your pick | TV Nightly"
       description="Tell us a few things you've watched and how they landed — we triangulate your taste and pick your next watch. No account needed."
       canonical={canonical(c)}
@@ -985,7 +985,7 @@ app.get("/loved", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=900");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="The most loved shows & movies on TV Nightly"
       description="Community charts built from real one-tap verdicts: what TV Nightly's raters love right now."
       canonical={canonical(c)}

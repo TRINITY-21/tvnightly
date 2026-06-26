@@ -1,13 +1,22 @@
 import { Context, Hono } from "hono";
+import { Child, FC } from "hono/jsx";
 import { Layout } from "../components/Layout";
 import { ClampSummary, ExploreCard } from "../components/cards";
+import { DossierRow } from "../components/dossier";
+import { HomeSidebarRail } from "../components/home-sidebar";
 import { IconGlobe, IconInstagram, IconStar, IconX } from "../components/icons";
+import { KeepGoing, fillKeepGoingBackdrops, loadShowKeepGoingArts, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
 import { SeasonTabs, ShowTabs } from "../components/nav";
-import { ageOf, headshot, longDate, slugifyName, stripHtml } from "../lib/format";
-import { crewLinkMap } from "../lib/queries";
+import { buildDossier } from "../lib/dossier";
+import { genreShowArt, hubArt } from "../lib/explore-art";
+import { ageOf, headshot, longDate, posterSrc, slugifyName, stripHtml } from "../lib/format";
+import { visitorRegion } from "../lib/providers";
+import { crewLinkMap, similarShows } from "../lib/queries";
 import { breadcrumbLd, breadcrumbTrail, canonical, origin } from "../lib/seo";
+import { tmdbPersonTaggedStills, tmdbTrailer } from "../lib/tmdb";
 import { TMDB_PERSON_OFFSET, resolvePersonProfile, resolveShow, tmdbShowCast } from "../lib/tmdb-show";
-import { Bindings, PersonRow, ShowRow } from "../types";
+import { hubForGenres } from "../lib/verticals";
+import { HonoEnv, PersonRow, ShowRow } from "../types";
 
 /** genres are stored as a JSON string array on shows & movies */
 const parseGenres = (j: string | null): string[] => {
@@ -20,7 +29,36 @@ const parseGenres = (j: string | null): string[] => {
   }
 };
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
+
+/** Compact show subpage header: poster beside the title, aligned with the column below. */
+const ShowPosterHero: FC<{ show: ShowRow; kicker: string; title: Child }> = ({
+  show,
+  kicker,
+  title,
+}) => {
+  const p = posterSrc(show);
+  return (
+    <header class="detail-hero media-hero">
+      <div class="detail-head">
+        <div class="detail-side">
+          {p ? (
+            <img class="poster" src={p.src} srcset={p.srcset} alt={`${show.name} poster`} />
+          ) : (
+            <div class="poster card-fallback">{show.name}</div>
+          )}
+        </div>
+        <div class="detail-info">
+          <p class="ep-eyebrow">
+            <a href={`/show/${show.slug}`}>{show.name}</a>
+            <span class="sep">·</span> {kicker}
+          </p>
+          <h1>{title}</h1>
+        </div>
+      </div>
+    </header>
+  );
+};
 
 interface TmdbSeasonCast {
   id: number;
@@ -146,7 +184,7 @@ const CrewGrid = ({
   ) : null;
 
 async function seasonCastPage(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   show: ShowRow,
   season: number,
   latest: boolean,
@@ -158,6 +196,14 @@ async function seasonCastPage(
   const cast = (agg?.cast ?? []).slice(0, 24);
   const crew = keyCrew(agg?.crew ?? [], 12);
   const crewLinks = await crewLinkMap(c.env.DB, crew);
+  const similar = await similarShows(c.env.DB, show, 6);
+  const region = visitorRegion(c);
+  const keepGoingArts = await loadShowKeepGoingArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    show,
+    similar[0]?.tmdb_id,
+  );
   // link anyone we already track on this show, matched by name
   const linkable = new Map<string, number>();
   if (cast.length) {
@@ -171,9 +217,12 @@ async function seasonCastPage(
 
   const site = origin(c);
   const base = `/show/${show.slug}/cast`;
+  const sidebar = c.get("siteSidebar");
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
+      c={c}
+      sidebarInline
       title={`${show.name} Season ${season} cast — who's in it & episode counts | TV Nightly`}
       description={
         cast.length
@@ -187,10 +236,19 @@ async function seasonCastPage(
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, `Season ${season} cast`, base)]}
     >
-      <h1>
-        <a href={`/show/${show.slug}`}>{show.name}</a> — Season {season} cast
-      </h1>
-      <SeasonTabs slug={show.slug} season={season} current="cast" latest={latest} />
+      <article class="show-hub">
+        <ShowPosterHero
+          show={show}
+          kicker={`Season ${season}`}
+          title={
+            <>
+              <a href={`/show/${show.slug}`}>{show.name}</a> — Season {season} cast
+            </>
+          }
+        />
+        <SeasonTabs slug={show.slug} season={season} current="cast" latest={latest} />
+        <div class="home-main-grid">
+          <div class="home-col">
       {cast.length ? (
         <>
           <p class="muted">
@@ -247,6 +305,67 @@ async function seasonCastPage(
         </p>
       )}
       <CrewGrid crew={crew} links={crewLinks} />
+      {similar.length ? (
+        <section>
+          <h2>Shows like {show.name}</h2>
+          <p class="dossier-method">
+            The closest matches on shared genres, ranked by match strength and popularity.
+          </p>
+          <ol class="dossier-board">
+            {similar.map((s, i) => (
+              <DossierRow
+                i={i}
+                href={`/show/${s.slug}`}
+                name={s.name}
+                d={buildDossier(show, s, region)}
+                rating={s.rating}
+                poster={posterSrc(s)}
+              />
+            ))}
+          </ol>
+        </section>
+      ) : null}
+      <KeepGoing
+        cards={[
+          {
+            icon: "Overview",
+            title: `${show.name} overview`,
+            desc: "Episodes, ratings, cast and the full series dossier.",
+            href: `/show/${show.slug}`,
+            backdrop: keepGoingArts.overview,
+          },
+          {
+            icon: "Matchup",
+            title: `Shows like ${show.name}`,
+            desc: "The closest matches, ranked by overlap and rating.",
+            href: `/show/${show.slug}/similar`,
+            backdrop: keepGoingArts.similar,
+          },
+          {
+            icon: "Charts",
+            title: "Ratings graph",
+            desc: `Every rated episode of ${show.name} on one chart.`,
+            href: `/show/${show.slug}/ratings`,
+            backdrop: keepGoingArts.bestEpisodes,
+          },
+          {
+            icon: "Stream",
+            title: "Where to watch",
+            desc: `Every service carrying ${show.name}, region by region.`,
+            href: `/show/${show.slug}/where-to-watch`,
+            backdrop: keepGoingArts.watch,
+          },
+        ]}
+      />
+          </div>
+          <HomeSidebarRail
+            trailers={sidebar?.trailers ?? []}
+            topSeries={sidebar?.topSeries ?? []}
+            topMovies={sidebar?.topMovies ?? []}
+            newsletterHref="/#home-email-title"
+          />
+        </div>
+      </article>
     </Layout>,
   );
 }
@@ -333,11 +452,22 @@ app.get("/show/:slug/cast", async (c) => {
       ? keyCrew((await tmdbAggCredits(c.env.TMDB_API_KEY, show.tmdb_id, null))?.crew ?? [], 18)
       : [];
   const crewLinks = await crewLinkMap(c.env.DB, crew);
+  const similar = await similarShows(c.env.DB, show, 6);
+  const region = visitorRegion(c);
+  const keepGoingArts = await loadShowKeepGoingArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    show,
+    similar[0]?.tmdb_id,
+  );
   const site = origin(c);
+  const sidebar = c.get("siteSidebar");
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
+      c={c}
+      sidebarInline
       title={`${show.name} cast — main cast & guest stars | TV Nightly`}
       description={
         main.length
@@ -351,10 +481,19 @@ app.get("/show/:slug/cast", async (c) => {
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       ld={[breadcrumbLd(site, show, "Cast", `/show/${show.slug}/cast`)]}
     >
-      <h1>
-        Cast of <a href={`/show/${show.slug}`}>{show.name}</a>
-      </h1>
-      <ShowTabs slug={show.slug} current="cast" />
+      <article class="show-hub">
+        <ShowPosterHero
+          show={show}
+          kicker="Cast"
+          title={
+            <>
+              Cast of <a href={`/show/${show.slug}`}>{show.name}</a>
+            </>
+          }
+        />
+        <ShowTabs slug={show.slug} current="cast" />
+        <div class="home-main-grid">
+          <div class="home-col">
       {main.length ? (
         <>
           <h2>Main cast</h2>
@@ -419,6 +558,67 @@ app.get("/show/:slug/cast", async (c) => {
         </section>
       ) : null}
       <CrewGrid crew={crew} links={crewLinks} />
+      {similar.length ? (
+        <section>
+          <h2>Shows like {show.name}</h2>
+          <p class="dossier-method">
+            The closest matches on shared genres, ranked by match strength and popularity.
+          </p>
+          <ol class="dossier-board">
+            {similar.map((s, i) => (
+              <DossierRow
+                i={i}
+                href={`/show/${s.slug}`}
+                name={s.name}
+                d={buildDossier(show, s, region)}
+                rating={s.rating}
+                poster={posterSrc(s)}
+              />
+            ))}
+          </ol>
+        </section>
+      ) : null}
+      <KeepGoing
+        cards={[
+          {
+            icon: "Overview",
+            title: `${show.name} overview`,
+            desc: "Episodes, ratings, cast and the full series dossier.",
+            href: `/show/${show.slug}`,
+            backdrop: keepGoingArts.overview,
+          },
+          {
+            icon: "Matchup",
+            title: `Shows like ${show.name}`,
+            desc: "The closest matches, ranked by overlap and rating.",
+            href: `/show/${show.slug}/similar`,
+            backdrop: keepGoingArts.similar,
+          },
+          {
+            icon: "Charts",
+            title: "Ratings graph",
+            desc: `Every rated episode of ${show.name} on one chart.`,
+            href: `/show/${show.slug}/ratings`,
+            backdrop: keepGoingArts.bestEpisodes,
+          },
+          {
+            icon: "Stream",
+            title: "Where to watch",
+            desc: `Every service carrying ${show.name}, region by region.`,
+            href: `/show/${show.slug}/where-to-watch`,
+            backdrop: keepGoingArts.watch,
+          },
+        ]}
+      />
+          </div>
+          <HomeSidebarRail
+            trailers={sidebar?.trailers ?? []}
+            topSeries={sidebar?.topSeries ?? []}
+            topMovies={sidebar?.topMovies ?? []}
+            newsletterHref="/#home-email-title"
+          />
+        </div>
+      </article>
     </Layout>,
   );
 });
@@ -564,9 +764,161 @@ app.get("/person/:slug", async (c) => {
         { name: person.name, url: `${site}/person/${canonicalSlug}` },
       ];
 
+  const apiKey = c.env.TMDB_API_KEY;
+
+  type PersonSpot =
+    | { kind: "tv"; row: (typeof roles)[number] }
+    | { kind: "movie"; row: (typeof films)[number] };
+
+  const rankedCredits: (PersonSpot & { score: number })[] = [
+    ...roles.map((r) => ({ kind: "tv" as const, row: r, score: r.weight ?? 0 })),
+    ...films.map((m) => ({ kind: "movie" as const, row: m, score: m.popularity ?? 0 })),
+  ].sort((a, b) => b.score - a.score);
+
+  let spotlight: PersonSpot | null = rankedCredits[0] ?? null;
+  let featureVideo: { key: string; name: string; href: string; title: string } | null = null;
+  if (apiKey && rankedCredits.length) {
+    const trailerHits = await Promise.all(
+      rankedCredits.slice(0, 12).map(async (credit) => {
+        const id =
+          credit.kind === "tv"
+            ? credit.row.tmdb_id
+            : credit.row.tmdb_id ?? credit.row.imdb_id;
+        if (id == null) return { credit, trailer: null as { key: string; name: string } | null };
+        const trailer = await tmdbTrailer(
+          apiKey,
+          credit.kind === "tv" ? "tv" : "movie",
+          id,
+        );
+        return { credit, trailer };
+      }),
+    );
+    const hit = trailerHits.find((x) => x.trailer);
+    if (hit?.trailer) {
+      spotlight = hit.credit;
+      featureVideo = {
+        key: hit.trailer.key,
+        name: hit.trailer.name,
+        title: hit.credit.kind === "tv" ? hit.credit.row.name : hit.credit.row.title,
+        href:
+          hit.credit.kind === "tv"
+            ? `/show/${hit.credit.row.slug}/media`
+            : `/movie/${hit.credit.row.slug}/media`,
+      };
+    }
+  }
+
+  const featureHref = spotlight
+    ? spotlight.kind === "tv"
+      ? `/show/${spotlight.row.slug}`
+      : `/movie/${spotlight.row.slug}`
+    : null;
+  const featureBackdrop =
+    !featureVideo && spotlight
+      ? spotlight.kind === "tv"
+        ? await showKeepGoingBackdrop(apiKey, spotlight.row)
+        : await movieKeepGoingBackdrop(apiKey, spotlight.row)
+      : null;
+
+  const highlights: { href: string; label: string; img: string }[] = [];
+  const personTmdbId =
+    person.tmdb_id ?? (person.id >= TMDB_PERSON_OFFSET ? person.id - TMDB_PERSON_OFFSET : null);
+  const taggedStills =
+    apiKey && personTmdbId ? await tmdbPersonTaggedStills(apiKey, personTmdbId) : [];
+  const creditLinks = new Map<string, { href: string; label: string }>();
+  for (const r of roles) {
+    if (r.tmdb_id) creditLinks.set(`tv:${r.tmdb_id}`, { href: `/show/${r.slug}`, label: r.name });
+  }
+  for (const m of films) {
+    if (m.tmdb_id) creditLinks.set(`movie:${m.tmdb_id}`, { href: `/movie/${m.slug}`, label: m.title });
+  }
+  const resolveHighlightLink = (s: (typeof taggedStills)[number]) => {
+    const cached = creditLinks.get(`${s.mediaType}:${s.mediaId}`);
+    if (cached) return cached;
+    if (s.mediaType === "tv") {
+      const r = roles.find((x) => x.tmdb_id === s.mediaId);
+      if (r) return { href: `/show/${r.slug}`, label: r.name };
+      return { href: `/show/${slugifyName(s.mediaTitle)}?t=${s.mediaId}`, label: s.mediaTitle };
+    }
+    const m = films.find((x) => x.tmdb_id === s.mediaId);
+    if (m) return { href: `/movie/${m.slug}`, label: m.title };
+    return { href: `/movie/${slugifyName(s.mediaTitle)}?t=${s.mediaId}`, label: s.mediaTitle };
+  };
+  const seenHighlight = new Set<string>();
+  for (const s of taggedStills) {
+    if (highlights.length >= 6) break;
+    const link = resolveHighlightLink(s);
+    const key = `${s.mediaType}:${s.mediaId}`;
+    if (seenHighlight.has(key)) continue;
+    seenHighlight.add(key);
+    highlights.push({
+      href: link.href,
+      label: link.label,
+      img: `https://image.tmdb.org/t/p/w780${s.filePath}`,
+    });
+  }
+
+  const occBadge = occupation
+    ? occupation.toUpperCase()
+    : person.known_dept
+      ? person.known_dept.toUpperCase()
+      : "CELEBRITY";
+  const birthPlace = person.birthplace || person.country;
+
+  const spotlightMediaHref = spotlight
+    ? spotlight.kind === "tv"
+      ? `/show/${spotlight.row.slug}/media`
+      : `/movie/${spotlight.row.slug}/media`
+    : null;
+
+  const exploreHub = topGenres[0] ? hubForGenres([topGenres[0]], null) : null;
+  const [bestTitleArt, genreArt, directoryArt] = await Promise.all([
+    bestShow && bestTitle?.href === `/show/${bestShow.slug}`
+      ? showKeepGoingBackdrop(apiKey, bestShow)
+      : bestMovie && bestTitle?.href === `/movie/${bestMovie.slug}`
+        ? movieKeepGoingBackdrop(apiKey, bestMovie)
+        : Promise.resolve(null),
+    topGenres[0] && apiKey ? genreShowArt(c.env.DB, apiKey, topGenres[0]) : Promise.resolve(null),
+    exploreHub?.slug && apiKey ? hubArt(c.env.DB, apiKey, exploreHub.slug) : Promise.resolve(null),
+  ]);
+  const personDoors = fillKeepGoingBackdrops([
+    ...(bestTitle
+      ? [
+          {
+            icon: "Highest rated",
+            title: bestTitle.name,
+            desc: `${person.name.split(" ")[0]}'s best-reviewed title — ratings and where to watch.`,
+            href: bestTitle.href,
+            backdrop: bestTitleArt,
+          },
+        ]
+      : []),
+    ...(topGenres[0]
+      ? [
+          {
+            icon: "Genre",
+            title: `The best of ${topGenres[0]}`,
+            desc: `Top-rated ${topGenres[0].toLowerCase()} shows and films, ranked.`,
+            href: `/genre/${slugifyName(topGenres[0])}`,
+            backdrop: genreArt,
+          },
+        ]
+      : []),
+    {
+      icon: "Directory",
+      title: "Browse everything",
+      desc: "Networks, genres, fandom hubs, and every chart in one place.",
+      href: "/lists",
+      backdrop: directoryArt,
+    },
+  ]);
+
+  const sidebar = c.get("siteSidebar");
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`${person.name} — TV shows, age & roles | TV Nightly`}
       description={personDescription}
       canonical={canonical(c)}
@@ -574,122 +926,189 @@ app.get("/person/:slug", async (c) => {
       ld={[ld, breadcrumbTrail(personCrumbs)]}
     >
       <article class="show-hub">
-        <header class="detail-hero person-hero">
-          {person.image_url ? (
-            <div class="hero-backdrop" style={`background-image:url('${person.image_url}')`}></div>
-          ) : null}
-          <div class="detail-head">
-            <div class="detail-side">
-              {(() => {
-                const h = headshot(person.image_url, true);
-                return h ? (
-                  <img class="poster" src={h.src} srcset={h.srcset} alt={person.name} />
-                ) : (
-                  <div class="poster card-fallback">{person.name}</div>
-                );
-              })()}
-              {socials.ig || socials.tw || person.homepage ? (
-                <div class="soc-links">
-                  {socials.ig ? (
-                    <a
-                      class="soc-link"
-                      href={`https://www.instagram.com/${socials.ig}/`}
-                      rel="noopener"
-                      aria-label={`${person.name} on Instagram`}
-                      title="Instagram"
-                    >
-                      <IconInstagram />
-                    </a>
-                  ) : null}
-                  {socials.tw ? (
-                    <a
-                      class="soc-link"
-                      href={`https://x.com/${socials.tw}`}
-                      rel="noopener"
-                      aria-label={`${person.name} on X`}
-                      title="X"
-                    >
-                      <IconX />
-                    </a>
-                  ) : null}
-                  {person.homepage ? (
-                    <a
-                      class="soc-link"
-                      href={person.homepage}
-                      rel="noopener"
-                      aria-label="Official website"
-                      title="Website"
-                    >
-                      <IconGlobe />
-                    </a>
-                  ) : null}
-                </div>
-              ) : null}
+        <header class="hub-hero person-hero" aria-label={`${person.name} profile`}>
+          <div class="hub-hero-inner">
+            <div class="hub-hero-head">
+              <h1 class="hub-hero-title">{person.name}</h1>
             </div>
-            <div class="detail-info">
-              <h1>{person.name}</h1>
-              <p class="meta-strip">
+            <div class="hub-hero-intro">
+              <div class="hub-hero-chips">
+                <span class="hub-hero-badge">{occBadge}</span>
+              </div>
+            </div>
+
+            <div class="hub-hero-stage">
+              <div class="hub-hero-poster">
                 {(() => {
-                  const hasDept = Boolean(person.known_dept && person.known_dept !== "Acting");
-                  const lifeSpan = Boolean(years || age != null);
-                  const place = person.birthplace || person.country;
-                  return (
-                    <>
-                      {hasDept ? <span>{person.known_dept}</span> : null}
-                      {/* only print the separator when something actually follows */}
-                      {hasDept && (lifeSpan || place) ? <span class="sep">·</span> : null}
-                      {years ? (
-                        <span>
-                          {years}
-                          {age != null ? ` (aged ${age})` : ""}
-                        </span>
-                      ) : age != null ? (
-                        <span>
-                          Age {age}
-                          {person.birthday ? ` — born ${longDate(person.birthday)}` : ""}
-                        </span>
-                      ) : null}
-                      {place ? (
-                        <>
-                          {lifeSpan ? <span class="sep sep-loc">·</span> : null}
-                          <span class="ms-birthplace">{person.birthplace ?? person.country}</span>
-                        </>
-                      ) : null}
-                    </>
+                  const h = headshot(person.image_url, true);
+                  return h ? (
+                    <img class="poster" src={h.src} srcset={h.srcset} alt={person.name} />
+                  ) : (
+                    <div class="poster card-fallback">{person.name}</div>
                   );
                 })()}
-              </p>
-              {person.bio ? (
-                stripHtml(person.bio).length > 280 ? (
-                  <ClampSummary id="bio-clamp">{person.bio}</ClampSummary>
+              </div>
+              <div class="hub-hero-player" data-hero-pip>
+                {featureVideo ? (
+                  <div class="hub-hero-video">
+                    <iframe
+                      class="hub-hero-video-frame"
+                      src={`https://www.youtube-nocookie.com/embed/${featureVideo.key}?autoplay=1&mute=1&loop=1&playlist=${featureVideo.key}&controls=1&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`}
+                      title={`${person.name} — ${featureVideo.name}`}
+                      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                      loading="eager"
+                      referrerpolicy="strict-origin-when-cross-origin"
+                      allowfullscreen
+                    ></iframe>
+                  </div>
+                ) : featureBackdrop && featureHref ? (
+                  <a class="hub-hero-video hub-hero-video-empty hub-hero-video-backdrop" href={featureHref}>
+                    <img
+                      src={featureBackdrop.x1}
+                      {...(featureBackdrop.x2
+                        ? { srcset: `${featureBackdrop.x1} 1x, ${featureBackdrop.x2} 2x` }
+                        : {})}
+                      alt=""
+                      loading="eager"
+                      decoding="async"
+                    />
+                  </a>
                 ) : (
-                  <div class="summary">{person.bio}</div>
-                )
-              ) : roles.length ? (
-                <p class="summary">
-                  Best known for{" "}
-                  {roles.slice(0, 2).map((r, i) => (
-                    <>
-                      {i > 0 ? " and " : ""}
-                      <a href={`/show/${r.slug}`}>{r.name}</a>
-                      {r.character ? ` (as ${r.character})` : ""}
-                    </>
-                  ))}
-                  .
-                </p>
-              ) : null}
-              {topGenres.length ? (
-                <p class="person-genres" aria-label="Works in">
-                  {topGenres.map((g) => (
-                    <a class="genre-chip" href={`/genre/${slugifyName(g)}`}>
-                      {g}
+                  <a
+                    class="hub-hero-video hub-hero-video-empty"
+                    href={spotlightMediaHref ?? "#"}
+                  >
+                    <span class="hub-hero-video-fallback">Trailers &amp; clips</span>
+                  </a>
+                )}
+              </div>
+              <aside class="hub-hero-credits hub-hero-credits-person" aria-label="Biography">
+                <div class="hub-hero-credits-body">
+                  {person.birthday ? (
+                    <div class="hub-credit-block">
+                      <h3>Birthday</h3>
+                      <p>{longDate(person.birthday)}</p>
+                    </div>
+                  ) : null}
+                  {birthPlace ? (
+                    <div class="hub-credit-block">
+                      <h3>From</h3>
+                      <p>{birthPlace}</p>
+                    </div>
+                  ) : null}
+                  {occupation ? (
+                    <div class="hub-credit-block">
+                      <h3>Known for</h3>
+                      <p>{occupation}</p>
+                    </div>
+                  ) : null}
+                </div>
+                {socials.ig || socials.tw || person.homepage ? (
+                  <div class="hub-hero-credits-foot">
+                    <div class="soc-links">
+                      {socials.ig ? (
+                        <a
+                          class="soc-link"
+                          href={`https://www.instagram.com/${socials.ig}/`}
+                          rel="noopener"
+                          aria-label={`${person.name} on Instagram`}
+                          title="Instagram"
+                        >
+                          <IconInstagram />
+                        </a>
+                      ) : null}
+                      {socials.tw ? (
+                        <a
+                          class="soc-link"
+                          href={`https://x.com/${socials.tw}`}
+                          rel="noopener"
+                          aria-label={`${person.name} on X`}
+                          title="X"
+                        >
+                          <IconX />
+                        </a>
+                      ) : null}
+                      {person.homepage ? (
+                        <a
+                          class="soc-link"
+                          href={person.homepage}
+                          rel="noopener"
+                          aria-label="Official website"
+                          title="Website"
+                        >
+                          <IconGlobe />
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </aside>
+            </div>
+
+            {highlights.length ? (
+              <section class="hub-hero-highlights" aria-label={`${person.name} highlights`}>
+                <h2 class="hub-hero-section-label">
+                  {person.name} <span>highlights</span>
+                </h2>
+                <div class="hub-hero-vidrow">
+                  {highlights.map((h) => (
+                    <a
+                      class="hub-hero-vid"
+                      href={h.href}
+                      aria-label={h.label}
+                      title={h.label}
+                    >
+                      <span class="hub-hero-vid-thumb">
+                        <img
+                          src={h.img}
+                          alt=""
+                          width="160"
+                          height="90"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </span>
                     </a>
                   ))}
-                </p>
-              ) : null}
-            </div>
+                </div>
+              </section>
+            ) : null}
           </div>
         </header>
+        <div class="home-main-grid">
+          <div class="home-col">
+        {person.bio || topGenres.length || (roles.length && !person.bio) ? (
+          <section class="person-intro">
+            {person.bio ? (
+              stripHtml(person.bio).length > 280 ? (
+                <ClampSummary id="bio-clamp">{person.bio}</ClampSummary>
+              ) : (
+                <div class="summary">{person.bio}</div>
+              )
+            ) : roles.length ? (
+              <p class="summary">
+                Best known for{" "}
+                {roles.slice(0, 2).map((r, i) => (
+                  <>
+                    {i > 0 ? " and " : ""}
+                    <a href={`/show/${r.slug}`}>{r.name}</a>
+                    {r.character ? ` (as ${r.character})` : ""}
+                  </>
+                ))}
+                .
+              </p>
+            ) : null}
+            {topGenres.length ? (
+              <p class="person-genres" aria-label="Works in">
+                {topGenres.map((g) => (
+                  <a class="genre-chip" href={`/genre/${slugifyName(g)}`}>
+                    {g}
+                  </a>
+                ))}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
         {roles.length || films.length ? (
           <section class="stat-band">
             <div class="stat">
@@ -729,7 +1148,7 @@ app.get("/person/:slug", async (c) => {
         {roles.length ? (
           <section class="credit-sec">
             <h2 class="credit-head">
-              Top TV shows <span class="credit-count">{roles.length}</span>
+              {person.name}'s top TV shows <span class="credit-count">{roles.length}</span>
               <a class="more" href={`/tv/featuring/${canonicalSlug}`}>
                 best {person.name} shows
               </a>
@@ -782,7 +1201,7 @@ app.get("/person/:slug", async (c) => {
         {films.length ? (
           <section class="credit-sec">
             <h2 class="credit-head">
-              Top movies <span class="credit-count">{films.length}</span>
+              {person.name}'s top movies <span class="credit-count">{films.length}</span>
               <a class="more" href={`/movies/featuring/${canonicalSlug}`}>
                 best {person.name} movies
               </a>
@@ -824,36 +1243,33 @@ app.get("/person/:slug", async (c) => {
             </ol>
           </section>
         ) : null}
-        {bestTitle || topGenres.length ? (
+        {personDoors.length ? (
           <section class="wo-doors">
             <h2>Keep exploring</h2>
             <div class="explore-grid">
-              {bestTitle ? (
+              {personDoors.map((card) => (
                 <ExploreCard
-                  icon="Highest rated"
-                  title={bestTitle.name}
-                  desc={`${person.name.split(" ")[0]}'s best-reviewed title — ratings and where to watch.`}
-                  href={bestTitle.href}
-                  rating={bestTitle.rating}
+                  icon={card.icon}
+                  title={card.title}
+                  desc={card.desc}
+                  href={card.href}
+                  backdrop={card.backdrop ?? undefined}
+                  {...(bestTitle && card.href === bestTitle.href
+                    ? { rating: bestTitle.rating }
+                    : {})}
                 />
-              ) : null}
-              {topGenres[0] ? (
-                <ExploreCard
-                  icon="Genre"
-                  title={`The best of ${topGenres[0]}`}
-                  desc={`Top-rated ${topGenres[0].toLowerCase()} shows and films, ranked.`}
-                  href={`/genre/${slugifyName(topGenres[0])}`}
-                />
-              ) : null}
-              <ExploreCard
-                icon="Directory"
-                title="Browse everything"
-                desc="Networks, genres, fandom hubs, and every chart in one place."
-                href="/lists"
-              />
+              ))}
             </div>
           </section>
         ) : null}
+          </div>
+          <HomeSidebarRail
+            trailers={sidebar?.trailers ?? []}
+            topSeries={sidebar?.topSeries ?? []}
+            topMovies={sidebar?.topMovies ?? []}
+            newsletterHref="/#home-email-title"
+          />
+        </div>
       </article>
     </Layout>,
   );
@@ -862,7 +1278,7 @@ app.get("/person/:slug", async (c) => {
 type PersonHubRow = PersonRow & { credit_count: number; peak_weight: number };
 
 async function personHubPage(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   dept: "Acting" | "Directing",
 ) {
   const isActor = dept === "Acting";
@@ -900,7 +1316,7 @@ async function personHubPage(
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`${title} — TV & film credits, ranked by catalogue weight | TV Nightly`}
       description={
         isActor

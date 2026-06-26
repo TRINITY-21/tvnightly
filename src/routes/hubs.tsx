@@ -1,15 +1,18 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import { KeepExploring, fillKeepGoingBackdrops, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
+import { hubArt } from "../lib/explore-art";
 import { heroBg, hiRes, premiereDateParts, shortDate, slugifyName } from "../lib/format";
 import { FRANCHISE_BY_SLUG } from "../lib/franchises";
 import { PROVIDER_LOGOS, visitorRegion } from "../lib/providers";
 import { breadcrumbTrail, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { VERTICALS, Vertical, genreBinds, genreOr } from "../lib/verticals";
-import { AppContext, Bindings, MovieRow, ShowRow } from "../types";
+import { AppContext, Bindings, HonoEnv, MovieRow, ShowRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 const hubHandler = (v: Vertical) => async (c: AppContext) => {
   const db = c.env.DB;
@@ -155,9 +158,39 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
       };
 
   const site = origin(c);
+  const sidebar = c.get("siteSidebar");
+  const apiKey = c.env.TMDB_API_KEY;
+  const doorArts = fillKeepGoingBackdrops([
+    {
+      icon: "",
+      title: "",
+      desc: "",
+      href: "",
+      backdrop: shows[0]
+        ? await showKeepGoingBackdrop(apiKey, shows[0])
+        : movies[0]
+          ? await movieKeepGoingBackdrop(apiKey, movies[0])
+          : await hubArt(db, apiKey ?? "", v.slug),
+    },
+    {
+      icon: "",
+      title: "",
+      desc: "",
+      href: "",
+      backdrop: movies[0] ? await movieKeepGoingBackdrop(apiKey, movies[0]) : null,
+    },
+    {
+      icon: "",
+      title: "",
+      desc: "",
+      href: "",
+      backdrop: await hubArt(db, apiKey ?? "", v.slug),
+    },
+  ]).map((c) => c.backdrop ?? null);
   c.header("Cache-Control", "private, max-age=600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`${v.pageTitle} | TV Nightly`}
       description={v.description}
       canonical={`${site}/${v.slug}`}
@@ -196,6 +229,8 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
         </div>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       {arrivals.length ? (
         <section class="sched-day">
           <h2>
@@ -284,24 +319,25 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
         </section>
       ) : null}
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard icon={chartDoor.icon} title={chartDoor.title} desc={chartDoor.desc} href={chartDoor.href} />
-          <ExploreCard
-            icon="Tailored"
-            title="Rate one thing, get a pick"
-            desc="The recommender finds your next watch from one rating."
-            href="/recommend"
-          />
-          <ExploreCard
-            icon="Community"
-            title="Loved by this community"
-            desc="The chart built from real one-tap reader verdicts."
-            href="/loved"
-          />
-        </div>
-      </section>
+      <KeepExploring
+        cards={[
+          { ...chartDoor, backdrop: doorArts[0] },
+          {
+            icon: "Tailored",
+            title: "Rate one thing, get a pick",
+            desc: "The recommender finds your next watch from one rating.",
+            href: "/recommend",
+            backdrop: doorArts[1],
+          },
+          {
+            icon: "Community",
+            title: "Loved by this community",
+            desc: "The chart built from real one-tap reader verdicts.",
+            href: "/loved",
+            backdrop: doorArts[2],
+          },
+        ]}
+      />
       <div class="sub-form inline">
         <form method="post" action="/subscribe" class="sub-form">
           <input type="hidden" name="kind" value="daily" />
@@ -309,6 +345,14 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
           <input type="email" name="email" placeholder="you@example.com" required />
           <button type="submit">Sign me up</button>
         </form>
+      </div>
+        </div>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
       </div>
     </Layout>,
   );

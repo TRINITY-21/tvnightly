@@ -2,7 +2,7 @@
 // that isn't in the D1 mirror renders the *exact same* show page (episode guide,
 // cast, providers, ratings) — not a lighter fallback. Two edge-cached calls.
 import type { Context } from "hono";
-import { Bindings, EpisodeRow, MovieRow, PersonRow, ShowRow } from "../types";
+import { Bindings, HonoEnv, EpisodeRow, MovieRow, PersonRow, ShowRow } from "../types";
 import { getShow } from "./queries";
 import { tmdbSearch, liveRating } from "./tmdb";
 import { slugifyName } from "./format";
@@ -45,7 +45,7 @@ const STATUS: Record<string, string> = {
 
 /** Resolve a /show/:slug miss to a TMDB title and build it into our row shapes. */
 export async function tmdbShowData(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   slug: string,
 ): Promise<{ show: ShowRow; episodes: EpisodeRow[]; tmdbId: number } | null> {
   const key = c.env.TMDB_API_KEY;
@@ -68,7 +68,7 @@ export const TMDB_SHOW_OFFSET = 20_000_000;
 /** Build a full ShowRow + episodes from a known TMDB tv id. `slug` overrides the
  *  derived slug (used so a /show/:slug URL keeps its slug). */
 export async function buildTmdbShow(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   tmdbId: number,
   slug?: string,
 ): Promise<{ show: ShowRow; episodes: EpisodeRow[]; tmdbId: number } | null> {
@@ -187,7 +187,7 @@ export async function tmdbShowCast(
  *  (by tmdb_id or slug) it just returns the existing id. This is the founder's
  *  "only save the show when someone acts on it" rule for the write paths. */
 export async function materializeShow(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   tmdbId: number,
 ): Promise<number | null> {
   const db = c.env.DB;
@@ -286,7 +286,7 @@ export async function tmdbHeroShow(key: string, tmdbId: number): Promise<ShowRow
 
 /** Resolve a /movie/:slug miss to a TMDB film and build it into our MovieRow. */
 export async function tmdbMovieData(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   slug: string,
 ): Promise<{ movie: MovieRow; tmdbId: number } | null> {
   const key = c.env.TMDB_API_KEY;
@@ -343,7 +343,7 @@ export async function tmdbMovieData(
  *  ratings graph (e.g. The Boys). The live episodes ride the same edge cache as
  *  the rest of the hybrid catalogue. */
 export async function d1OrLiveEpisodes(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   show: ShowRow,
 ): Promise<EpisodeRow[]> {
   const d1 = (
@@ -359,7 +359,7 @@ export async function d1OrLiveEpisodes(
 // Shared resolvers used by EVERY /show/:slug* and /movie/:slug* route, so all of
 // them render the same whether the title is in D1 or built live from TMDB.
 export async function resolveShow(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   slug: string,
 ): Promise<{ show: ShowRow; episodes: EpisodeRow[]; ratingRef: string; isTmdb: boolean } | null> {
   const d1 = await getShow(c.env.DB, slug);
@@ -374,7 +374,7 @@ export async function resolveShow(
 }
 
 export async function resolveMovie(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   slug: string,
 ): Promise<{ movie: MovieRow; ratingRef: string; isTmdb: boolean } | null> {
   const d1 = await c.env.DB.prepare("SELECT * FROM movies WHERE slug = ?").bind(slug).first<MovieRow>();
@@ -389,7 +389,7 @@ export type PersonFilms = (MovieRow & { character: string | null })[];
 /** Build a person page (bio + TV roles + films) live from TMDB. tmdbPersonId is
  *  the person's TMDB id (a /person/<slug>-<10M+id> link decodes back to it). */
 export async function tmdbPersonData(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   tmdbPersonId: number,
 ): Promise<{ person: PersonRow; roles: PersonRoles; films: PersonFilms } | null> {
   const key = c.env.TMDB_API_KEY;
@@ -435,7 +435,7 @@ export async function tmdbPersonData(
  *  alone makes a real actor look like they did 1–2 titles). Returns null when no
  *  such person resolves anywhere. */
 export async function resolvePersonProfile(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   pid: number,
 ): Promise<{ person: PersonRow; roles: PersonRoles; films: PersonFilms } | null> {
   let person = await c.env.DB.prepare("SELECT * FROM people WHERE id = ?").bind(pid).first<PersonRow>();
@@ -662,7 +662,7 @@ function buildPersonCredits(
  *  wrong actor on. With no known titles to check against, or a single
  *  unambiguous hit, we trust TMDB's popularity ranking. */
 export async function tmdbPersonByName(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   name: string,
   knownSlugs: Set<string>,
 ): Promise<{ person: PersonRow; roles: PersonRoles; films: PersonFilms } | null> {

@@ -2,22 +2,25 @@
 // of television. Guest cast comes live from TVmaze (free, keyless) through
 // the edge cache so the D1 mirror stays lean.
 import { Hono } from "hono";
-import { IconStar, ChevUp, ChevDown } from "../components/icons";
-import { Bindings, EpisodeRow } from "../types";
-import { stripHtml, epCode, epHref, hiRes, heroBg, retinaSet, posterSrc, longDate, slugifyName, fmtRuntime } from "../lib/format";
-import { tmdbBackdrops } from "../lib/tmdb";
-import { origin, canonical } from "../lib/seo";
-import { resolveShow, TMDB_PERSON_OFFSET } from "../lib/tmdb-show";
-import { servePng } from "../lib/render";
-import { posterDataUri } from "../lib/signal";
-import { buildOgCard } from "../lib/social";
-import { visitorRegion } from "../lib/providers";
+import { DossierRow } from "../components/dossier";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import { ChevDown, ChevUp, IconStar } from "../components/icons";
+import { episodeKeepGoingBackdrop, KeepGoing, loadShowKeepGoingArts } from "../components/keep-going";
 import { Layout } from "../components/Layout";
 import { ProviderLine } from "../components/providers";
 import { ShareBar } from "../components/share";
-import { ShowConvertBand, loadShowConvertCtx } from "../components/show-convert";
+import { buildDossier } from "../lib/dossier";
+import { epCode, epHref, fmtRuntime, hiRes, longDate, posterSrc, slugifyName, stripHtml } from "../lib/format";
+import { visitorRegion } from "../lib/providers";
+import { similarShows } from "../lib/queries";
+import { servePng } from "../lib/render";
+import { canonical, origin } from "../lib/seo";
+import { posterDataUri } from "../lib/signal";
+import { buildOgCard } from "../lib/social";
+import { resolveShow, TMDB_PERSON_OFFSET } from "../lib/tmdb-show";
+import { EpisodeRow, HonoEnv } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 interface GuestCredit {
   person: { id: number; name: string; image: { medium: string } | null };
@@ -191,11 +194,6 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
   const seriesRank = rankIn(episodes);
   const vsAvg = ep.rating != null && seasonAvg != null ? ep.rating - seasonAvg : null;
 
-  // kick the convert-band data off here so its queries overlap the credits +
-  // people lookups below, instead of adding a serial round-trip on the
-  // cache-warm episode hot path (these are the search-landing pages).
-  const convertP = loadShowConvertCtx(c.env.DB, show, r.ratingRef);
-
   const credits =
     r.isTmdb && show.tmdb_id && c.env.TMDB_API_KEY
       ? await tmdbEpisodeCredits(c.env.TMDB_API_KEY, show.tmdb_id, seasonNo, epNo)
@@ -228,10 +226,6 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
   const site = origin(c);
   const code = epCode(ep);
   const pitch = stripHtml(ep.summary);
-  // the above-the-fold "keep going" band — episode pages are where search lands
-  // (watch-intent "[show] full episode"), so give them the strongest internal
-  // links + renewal capture before they bounce. (kicked off above to overlap.)
-  const convert = await convertP;
   const ld = [
     {
       "@context": "https://schema.org",
@@ -267,25 +261,22 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
     return (sp > 120 ? cut.slice(0, sp) : cut).trimEnd() + "…";
   })();
 
-  // a sharp, full-res hero: pull the show's whole hi-res TMDB backdrop gallery
-  // and give each episode a *different* frame (deterministic by S/E, so it's
-  // stable across loads) — no more the same lead art on every episode. The
-  // TVmaze still (~210px, soft full-bleed) is only the last-resort fallback.
-  const gallery =
-    show.tmdb_id && c.env.TMDB_API_KEY ? await tmdbBackdrops(c.env.TMDB_API_KEY, show.tmdb_id) : [];
-  const heroArt = gallery.length
-    ? gallery[(((ep.season ?? 0) * 31 + (ep.number ?? 0)) % gallery.length + gallery.length) % gallery.length]
-    : null;
-  const heroStill = hiRes(ep.image_url ?? show.image_url);
-  const heroStyle = heroArt
-    ? heroBg(heroArt.x1, heroArt.x2)
-    : heroStill
-      ? `background-image:url('${heroStill}')`
-      : null;
+  const similar = await similarShows(c.env.DB, show, 6);
+  const region = visitorRegion(c);
+  const keepGoingArts = await loadShowKeepGoingArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    show,
+    similar[0]?.tmdb_id,
+  );
+  const seasonArt = episodeKeepGoingBackdrop(keepGoingArts.season, ep.image_url);
+  const sidebar = c.get("siteSidebar");
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
+      c={c}
+      sidebarInline
       title={`${show.name} ${code}: ${ep.name ?? "episode"} — recap, rating & where to watch`}
       description={epDesc}
       canonical={canonical(c)}
@@ -294,11 +285,10 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
       ogImageLarge
       scripts={["/js/votes.js", "/js/share.js"]}
     >
-      <article class={`show-hub${heroStyle ? " hub-backdrop" : ""}`}>
-        {/* Full-bleed hero behind a legibility scrim; the show's poster anchors
-            the facts. The backdrop prefers the show's hi-res TMDB art. */}
-        <header class="detail-hero frame-hero">
-          {heroStyle ? <div class="hero-backdrop" style={heroStyle}></div> : null}
+      <article class="show-hub">
+        <div class="home-main-grid">
+          <div class="home-col">
+        <header class="detail-hero media-hero episode-hero">
           <div class="detail-head">
             <div class="detail-side">
               {(() => {
@@ -363,26 +353,20 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
                 ) : null}
               </p>
               {pitch ? <div class="summary">{pitch}</div> : null}
-              <ProviderLine
-                row={show}
-                region={visitorRegion(c)}
-                title={show.name}
-                fallbackHref={`/show/${show.slug}/release-date`}
-                pickerType="tv"
-                allHref={`/show/${show.slug}/where-to-watch`}
-              />
-              <ShareBar url={canonical(c)} title={`${show.name} ${code}${ep.name ? ` — ${ep.name}` : ""} on TV Nightly`} />
+              <div class="ep-hero-foot">
+                <ProviderLine
+                  row={show}
+                  region={visitorRegion(c)}
+                  title={show.name}
+                  fallbackHref={`/show/${show.slug}/release-date`}
+                  pickerType="tv"
+                  allHref={`/show/${show.slug}/where-to-watch`}
+                />
+                <ShareBar url={canonical(c)} title={`${show.name} ${code}${ep.name ? ` — ${ep.name}` : ""} on TV Nightly`} />
+              </div>
             </div>
           </div>
         </header>
-        <ShowConvertBand
-          show={show}
-          ratingRef={r.ratingRef}
-          stat={convert.stat}
-          raterCount={convert.raterCount}
-          episodes={episodes}
-          similar={convert.similar}
-        />
         {ep.rating != null && (seasonRank || seriesRank) ? (
           <section class="stat-band">
             {seasonRank ? (
@@ -518,20 +502,59 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             )}
           </nav>
         ) : null}
-        <section>
-          <h2>Keep going</h2>
-          <div class="footer-picks">
-            <a class="footer-card" href={`/show/${show.slug}/season/${seasonNo}`}>
-              Season {seasonNo} ranked & reviewed
-            </a>
-            <a class="footer-card" href={`/show/${show.slug}/where-to-watch`}>
-              Where to watch {show.name}
-            </a>
-            <a class="footer-card" href={`/show/${show.slug}/similar`}>
-              Shows like {show.name}
-            </a>
+        {similar.length ? (
+          <section>
+            <h2>Shows like {show.name}</h2>
+            <p class="dossier-method">
+              The closest matches on shared genres, ranked by match strength and popularity.
+            </p>
+            <ol class="dossier-board">
+              {similar.map((s, i) => (
+                <DossierRow
+                  i={i}
+                  href={`/show/${s.slug}`}
+                  name={s.name}
+                  d={buildDossier(show, s, region)}
+                  rating={s.rating}
+                  poster={posterSrc(s)}
+                />
+              ))}
+            </ol>
+          </section>
+        ) : null}
+        <KeepGoing
+          cards={[
+            {
+              icon: "Season",
+              title: `Season ${seasonNo} ranked & reviewed`,
+              desc: "Every episode in airing order with ratings and dates.",
+              href: `/show/${show.slug}/season/${seasonNo}`,
+              backdrop: seasonArt,
+            },
+            {
+              icon: "Stream",
+              title: `Where to watch ${show.name}`,
+              desc: "Every streaming service and region, checked around the clock.",
+              href: `/show/${show.slug}/where-to-watch`,
+              backdrop: keepGoingArts.watch,
+            },
+            {
+              icon: "Matchup",
+              title: `Shows like ${show.name}`,
+              desc: "The closest matches, ranked by overlap and rating.",
+              href: `/show/${show.slug}/similar`,
+              backdrop: keepGoingArts.similar,
+            },
+          ]}
+        />
           </div>
-        </section>
+          <HomeSidebarRail
+            trailers={sidebar?.trailers ?? []}
+            topSeries={sidebar?.topSeries ?? []}
+            topMovies={sidebar?.topMovies ?? []}
+            newsletterHref="/#home-email-title"
+          />
+        </div>
       </article>
     </Layout>,
   );

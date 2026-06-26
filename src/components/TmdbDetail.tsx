@@ -2,6 +2,7 @@
 // yet (the hybrid catalog). Reuses the detail-hero / cast styles so it reads as
 // a native page; SSR'd and indexable, canonical pointing at the clean URL.
 import { FC } from "hono/jsx";
+import type { AppContext } from "../types";
 import { Layout } from "./Layout";
 import { IconStar } from "./icons";
 import { heroBg, stripHtml } from "../lib/format";
@@ -13,13 +14,14 @@ const tmdbImg = (path: string | null, size: string) =>
   path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
 
 export const TmdbTitlePage: FC<{
+  c?: AppContext;
   t: TmdbTitle;
   providers: string[];
   region: string;
   stat: string | null;
   ratingLd: Record<string, unknown> | null;
   canonical: string;
-}> = ({ t, providers, region, stat, ratingLd, canonical }) => {
+}> = ({ c, t, providers, region, stat, ratingLd, canonical }) => {
   const isTv = t.kind === "tv";
   const dek = t.overview ? stripHtml(t.overview) : "";
   const metaType = isTv ? "TV" : "Movie";
@@ -38,7 +40,7 @@ export const TmdbTitlePage: FC<{
   };
 
   return (
-    <Layout
+    <Layout c={c}
       title={`${t.name}${t.year ? ` (${t.year})` : ""} — where to watch | TV Nightly`}
       description={
         dek

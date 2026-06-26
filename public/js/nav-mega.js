@@ -1,56 +1,54 @@
-// Browse mega-menu: hover with a close delay so the pointer can reach the panel;
-// click/tap toggle on coarse pointers; Escape/outside close.
+// Browse: a full-width slide-down overlay (the "Browse everything" page as a
+// panel). Click the Browse control to open; the X button, Escape, a link, the
+// panel backdrop, or a click outside closes it. Click-only (no hover) since it
+// covers the page. The panel lives outside the header in the DOM, so it's wired
+// up by id rather than as a child of the trigger's wrapper.
 (function () {
-  document.querySelectorAll(".nav-mega").forEach(function (wrap) {
-    var btn = wrap.querySelector(".nav-mega-btn");
-    var panel = wrap.querySelector(".nav-mega-panel");
-    if (!btn || !panel) return;
+  var btn = document.querySelector(".nav-mega-btn");
+  var panel = document.getElementById("browse-panel");
+  if (!btn || !panel) return;
+  var wrap = btn.closest(".nav-mega");
+  var closeBtn = panel.querySelector(".nav-mega-close");
 
-    var hoverable = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-    var closeTimer = 0;
+  // CSS now owns visibility (opacity/transform transitions); drop the no-JS
+  // [hidden] so the panel can animate open and closed.
+  panel.hidden = false;
 
-    function open() {
-      wrap.classList.add("open");
-      btn.setAttribute("aria-expanded", "true");
-      panel.hidden = false;
+  function open() {
+    panel.classList.add("open");
+    if (wrap) wrap.classList.add("open");
+    btn.setAttribute("aria-expanded", "true");
+    document.body.classList.add("browse-open");
+  }
+  function close() {
+    panel.classList.remove("open");
+    if (wrap) wrap.classList.remove("open");
+    btn.setAttribute("aria-expanded", "false");
+    document.body.classList.remove("browse-open");
+  }
+
+  btn.addEventListener("click", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    panel.classList.contains("open") ? close() : open();
+  });
+  if (closeBtn) closeBtn.addEventListener("click", close);
+
+  // a link inside closes the panel, then navigates
+  panel.querySelectorAll("a").forEach(function (link) {
+    link.addEventListener("click", close);
+  });
+  // a click on the panel's own backdrop (its empty area, not the content) closes
+  panel.addEventListener("click", function (e) {
+    if (e.target === panel) close();
+  });
+  // a click anywhere outside the panel and the trigger closes
+  document.addEventListener("click", function (e) {
+    if (panel.classList.contains("open") && !panel.contains(e.target) && !btn.contains(e.target)) {
+      close();
     }
-    function close() {
-      wrap.classList.remove("open");
-      btn.setAttribute("aria-expanded", "false");
-      panel.hidden = true;
-    }
-    function cancelClose() {
-      clearTimeout(closeTimer);
-    }
-    function scheduleClose() {
-      cancelClose();
-      closeTimer = setTimeout(close, 160);
-    }
-
-    btn.addEventListener("click", function (e) {
-      e.preventDefault();
-      wrap.classList.contains("open") ? close() : open();
-    });
-
-    panel.querySelectorAll("a").forEach(function (link) {
-      link.addEventListener("click", close);
-    });
-
-    document.addEventListener("click", function (e) {
-      if (!wrap.contains(e.target)) close();
-    });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") close();
-    });
-
-    if (hoverable) {
-      btn.addEventListener("mouseenter", function () {
-        cancelClose();
-        open();
-      });
-      btn.addEventListener("mouseleave", scheduleClose);
-      panel.addEventListener("mouseenter", cancelClose);
-      panel.addEventListener("mouseleave", scheduleClose);
-    }
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") close();
   });
 })();

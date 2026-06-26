@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { raw } from "hono/html";
-import { Bindings, AppContext, ShowRow, EpisodeRow } from "../types";
+import { Bindings, HonoEnv, AppContext, ShowRow, EpisodeRow } from "../types";
 import { comparePathFor, hiRes } from "../lib/format";
 import { origin, canonical, breadcrumbTrail } from "../lib/seo";
 import { similarShows } from "../lib/queries";
@@ -15,7 +15,7 @@ import { ShareBar } from "../components/share";
 import { ExploreCard } from "../components/cards";
 import { VsCard, VsSide } from "../components/compare";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // The head-to-head episode chart: two rating lines with gradient fills on a
 // 900x300 stage that scales to its container. We emit the per-episode points
@@ -216,7 +216,7 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`${showA.name} vs ${showB.name} — episode ratings compared | TV Nightly`}
       description={`${showA.name} or ${showB.name}? Both shows' full episode-rating histories on one chart, plus head-to-head stats.`}
       canonical={`${origin(c)}${comparePathFor(showA.slug, showB.slug)}`}
@@ -447,7 +447,7 @@ app.get("/compare", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="Compare TV shows by episode rating | TV Nightly"
       description="Put two shows' full episode-rating histories on one chart and settle the argument."
       canonical={`${origin(c)}/compare`}

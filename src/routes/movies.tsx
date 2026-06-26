@@ -1,15 +1,19 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
-import { ClampSummary, ExploreCard } from "../components/cards";
+import { ExploreCard } from "../components/cards";
 import { VsCard, VsSide } from "../components/compare";
+import { DetailHero, communityRingScore, heroWatchProvider, tmdbRingScore } from "../components/detail-hero";
+import { HomeSidebarRail } from "../components/home-sidebar";
 import { DossierRow } from "../components/dossier";
-import { FilterSelect, RateInline } from "../components/forms";
+import { FilterSelect } from "../components/forms";
+import { KeepGoing, KeepExploring, loadMovieChartDoorArts, loadMovieKeepGoingArts } from "../components/keep-going";
 import { IconPlay, IconStar } from "../components/icons";
 import { MovieConvertBand, loadMovieConvertCtx } from "../components/movie-convert";
 import { MovieTabs } from "../components/nav";
-import { ProviderLine } from "../components/providers";
-import { ShareBar } from "../components/share";
+import { PhotoGallery, mergeGalleryImages } from "../components/photo-gallery";
+import { VideoGallery } from "../components/video-gallery";
 import { buildMovieDossier } from "../lib/dossier";
+import { fetchMovieExploreArts } from "../lib/explore-art";
 import { fmtRuntime, heroBg, isNewYear, movieComparePathFor, slugifyName, stripHtml } from "../lib/format";
 import { franchiseOfMovie } from "../lib/franchises";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, providersFor, visitorRegion } from "../lib/providers";
@@ -24,9 +28,9 @@ import { tmdbDiscoverGenre, tmdbGenreId, tmdbMovieBackdrop, tmdbMovieCast, tmdbM
 import { toMovieRow } from "../lib/tmdb-rows";
 import { TMDB_PERSON_OFFSET, resolveMovie, tmdbMovieData } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
-import { AppContext, Bindings, MovieRow } from "../types";
+import { AppContext, Bindings, HonoEnv, MovieRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 const fmtVotes = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n);
@@ -125,7 +129,7 @@ app.get("/movies", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="Popular movies — ratings, runtimes & picks | TV Nightly"
       description="The most popular movies with ratings, runtimes and genres — plus ranked best-of lists and a what-to-watch picker."
       canonical={canonical(c)}
@@ -320,9 +324,16 @@ app.get("/movies/best", async (c) => {
   const heading = genre ? `The best ${genre.toLowerCase()} movies, ranked` : "The best movies of all time, ranked";
   const year = new Date().getFullYear();
   const gSlug = genre ? slugifyName(genre) : "";
+  const sidebar = c.get("siteSidebar");
+  const [yearArt, underratedArt, ordersArt, lovedArt] = await loadMovieChartDoorArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    top,
+  );
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`${heading} | TV Nightly`}
       description={`${heading} by viewer rating${results[0] ? `, from ${results[0].title} down` : ""}.`}
       canonical={
@@ -363,6 +374,8 @@ app.get("/movies/best", async (c) => {
           </p>
         </div>
       </header>
+      <div class="home-main-grid">
+        <div class="home-col">
       {/* data-submit-on-change: dropdown.js submits on pick (no Go button) */}
       <form method="get" action="/movies/best" class="region-line watch-region" data-submit-on-change>
         <FilterSelect
@@ -427,35 +440,46 @@ app.get("/movies/best", async (c) => {
           ) : null}
         </div>
       </section>
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Watch guide"
-            title={genre ? `Best ${genre.toLowerCase()} movies of ${year}` : `Best movies of ${year}`}
-            desc="The acclaimed films to watch this year, newest greats first."
-            href={genre ? `/movies/best/${year}/${gSlug}` : `/movies/best/${year}`}
-          />
-          <ExploreCard
-            icon="Hidden gems"
-            title={genre ? `Underrated ${genre.toLowerCase()} movies` : "Underrated movies"}
-            desc="High ratings, low profile — the great films most people have missed."
-            href={genre ? `/movies/underrated/${gSlug}` : "/movies/underrated"}
-          />
-          <ExploreCard
-            icon="Guides"
-            title="Watch every saga in order"
-            desc="Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked."
-            href="/watch-orders"
-          />
-          <ExploreCard
-            icon="Community"
-            title="Loved by this community"
-            desc="The chart built from real one-tap reader verdicts."
-            href="/loved"
-          />
+      <KeepExploring
+        cards={[
+          {
+            icon: "Watch guide",
+            title: genre ? `Best ${genre.toLowerCase()} movies of ${year}` : `Best movies of ${year}`,
+            desc: "The acclaimed films to watch this year, newest greats first.",
+            href: genre ? `/movies/best/${year}/${gSlug}` : `/movies/best/${year}`,
+            backdrop: yearArt,
+          },
+          {
+            icon: "Hidden gems",
+            title: genre ? `Underrated ${genre.toLowerCase()} movies` : "Underrated movies",
+            desc: "High ratings, low profile — the great films most people have missed.",
+            href: genre ? `/movies/underrated/${gSlug}` : "/movies/underrated",
+            backdrop: underratedArt,
+          },
+          {
+            icon: "Guides",
+            title: "Watch every saga in order",
+            desc: "Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked.",
+            href: "/watch-orders",
+            backdrop: ordersArt,
+          },
+          {
+            icon: "Community",
+            title: "Loved by this community",
+            desc: "The chart built from real one-tap reader verdicts.",
+            href: "/loved",
+            backdrop: lovedArt,
+          },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 });
@@ -507,12 +531,22 @@ app.get("/movie/:slug", async (c) => {
   }
   const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
   const region = visitorRegion(c);
-  const [stat, aggRating, raterCount, simMovies] = await Promise.all([
+  const [stat, aggRating, raterCount, d1Similar, communityCounts] = await Promise.all([
     titleStat(c.env.DB, "movie", ratingRef),
     aggregateRatingLd(c.env.DB, "movie", ratingRef),
     titleRaterCount(c.env.DB, "movie", ratingRef),
     similarMovies(c.env.DB, movie),
+    c.env.DB
+      .prepare("SELECT loved, liked, meh, awful FROM title_ratings WHERE kind = ? AND ref = ?")
+      .bind("movie", ratingRef)
+      .first<{ loved: number; liked: number; meh: number; awful: number }>(),
   ]);
+  let simMovies = d1Similar;
+  if (!simMovies.length && movie.tmdb_id && c.env.TMDB_API_KEY) {
+    simMovies = (await tmdbRecommendations(c.env.TMDB_API_KEY, "movie", movie.tmdb_id))
+      .slice(0, 6)
+      .map(toMovieRow);
+  }
   const movieFranchise = franchiseOfMovie(movie);
 
   // the movie's real designed backdrop + billed cast (TMDB takes the IMDb id
@@ -526,34 +560,66 @@ app.get("/movie/:slug", async (c) => {
     : movie.tmdb_id
       ? String(movie.tmdb_id)
       : movie.imdb_id;
-  const [backdrop, cast, crew, facts] = c.env.TMDB_API_KEY
+  const [backdrop, cast, crew, facts, media] = c.env.TMDB_API_KEY
     ? await Promise.all([
         tmdbMovieBackdrop(c.env.TMDB_API_KEY, bundleId),
         tmdbMovieCast(c.env.TMDB_API_KEY, bundleId, 8),
         tmdbMovieCrew(c.env.TMDB_API_KEY, bundleId, 12),
         tmdbMovieFacts(c.env.TMDB_API_KEY, bundleId),
+        tmdbMovieMedia(c.env.TMDB_API_KEY, bundleId),
       ])
-    : [null, [], [], null];
+    : [null, [], [], null, null];
   // the director is the headline credit on a film — pulled from the same cached
   // bundle as the cast, linked to a person page where we track them
   const directors = crew.filter((p) => p.jobs.split(" · ").includes("Director"));
   const directorLinks = directors.length
     ? await crewLinkMap(c.env.DB, directors)
     : new Map<number, number>();
+  const writers = crew
+    .filter((p) => p.jobs.split(" · ").some((j) => j === "Writer" || j === "Screenplay"))
+    .slice(0, 3);
+  const writerLinks = writers.length ? await crewLinkMap(c.env.DB, writers) : new Map<number, number>();
+  const prov = providersFor(movie, region);
+  const watchProv = heroWatchProvider(prov.names, movie.title, prov.region);
+  const trailerVid =
+    facts?.trailer ??
+    media?.videos.find((v) => v.type === "Trailer") ??
+    media?.videos[0] ??
+    null;
+  const highlights = (media?.videos ?? [])
+    .filter((v) => v.key !== trailerVid?.key)
+    .slice(0, 14);
+  const galleryPhotos = mergeGalleryImages(media?.posters ?? [], media?.backdrops ?? [], 12);
+  const galleryVideos = (media?.videos ?? []).slice(0, 12);
   // mirror the show hero: a real backdrop leads; otherwise the poster itself
   // feeds the frame-hero wash (not an ambient blur), so no-backdrop movies read
   // like no-backdrop shows
-  const heroFrame = backdrop
-    ? heroBg(backdrop.x1, backdrop.x2)
-    : movie.poster_url
-      ? heroBg(movie.poster_url.replace("/w342/", "/w780/"))
-      : null;
   // the rivals' backdrops for the head-to-head split cards (edge-cached)
-  const rivalBackdrops = c.env.TMDB_API_KEY
-    ? await Promise.all(
-        simMovies.slice(0, 3).map((m) => tmdbMovieBackdrop(c.env.TMDB_API_KEY!, m.imdb_id)),
-      )
-    : [];
+  const [rivalBackdrops] = await Promise.all([
+    c.env.TMDB_API_KEY
+      ? Promise.all(
+          simMovies.slice(0, 3).map((m) => tmdbMovieBackdrop(c.env.TMDB_API_KEY!, m.imdb_id)),
+        )
+      : Promise.resolve([] as Awaited<ReturnType<typeof tmdbMovieBackdrop>>[]),
+  ]);
+  const sidebar = c.get("siteSidebar");
+
+  const exploreHub = hubForGenres(genres, movie.year);
+  const exploreArts = c.env.TMDB_API_KEY
+    ? await fetchMovieExploreArts(c.env.DB, c.env.TMDB_API_KEY, {
+        movieBackdrop: backdrop,
+        franchiseSlug: movieFranchise?.slug ?? null,
+        genres: genres.slice(0, 2),
+        provider: prov.names[0] ?? null,
+        hubSlug: exploreHub?.slug ?? null,
+      })
+    : {
+        franchise: null,
+        compare: backdrop,
+        genres: [],
+        provider: null,
+        hub: null,
+      };
   // link the actors we already track (scoped to this movie's enriched credits)
   const linkable = new Map<string, number>();
   if (cast.length) {
@@ -636,6 +702,8 @@ app.get("/movie/:slug", async (c) => {
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout
+      c={c}
+      sidebarInline
       title={movieTitleTag(movie, genres)}
       description={movieDescriptionTag(movie, directors, cast)}
       canonical={canonical(c)}
@@ -648,126 +716,85 @@ app.get("/movie/:slug", async (c) => {
       ld={[ld, breadcrumb]}
       scripts={["/js/share.js"]}
     >
-      <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
-        <header class={heroFrame ? "detail-hero frame-hero" : "detail-hero"}>
-          {heroFrame ? (
-            <div class="hero-backdrop" style={heroFrame}></div>
-          ) : movie.poster_url ? (
-            <div class="hero-backdrop" style={`background-image:url('${movie.poster_url}')`}></div>
-          ) : null}
-          <div class="detail-head">
-            <div class="detail-side">
-              {movie.poster_url ? (
-                <img
-                  class="poster"
-                  src={movie.poster_url}
-                  srcset={`${movie.poster_url} 1x, ${movie.poster_url.replace("/w342/", "/w780/")} 2x`}
-                  alt={`${movie.title}${movie.year ? ` (${movie.year})` : ""} movie poster`}
-                  width="200"
-                  height="300"
-                  fetchpriority="high"
-                  decoding="async"
-                />
-              ) : (
-                <div class="poster card-fallback">{movie.title}</div>
-              )}
-              <RateInline kind="movie" refId={ratingRef} stat={stat} />
-            </div>
-            <div class="detail-info">
-              <div class="detail-title-row">
-                <h1>{movie.title}</h1>
-                <ShareBar url={canonical(c)} title={`${movie.title}${movie.year ? ` (${movie.year})` : ""} on TV Nightly`} />
-              </div>
-              <p class="meta-strip">
-                <span>
-                  <a href="/movies/best" title="The best movies, ranked">Movie</a>
-                </span>
-                {movie.year ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>{movie.year}</span>
-                  </>
-                ) : null}
-                {genres.length ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>
-                      {genres.slice(0, 3).map((g, i) => (
-                        <>
-                          {i > 0 ? ", " : ""}
-                          <a href={`/genre/${slugifyName(g)}/movies`}>{g}</a>
-                        </>
-                      ))}
-                    </span>
-                  </>
-                ) : null}
-                {movie.runtime ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>{fmtRuntime(movie.runtime)}</span>
-                  </>
-                ) : null}
-                {movie.rating != null ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span class="rating"><IconStar class="rating-star" />{movie.rating.toFixed(1)}</span>
-                    {movie.votes ? <span> ({movie.votes.toLocaleString()})</span> : null}
-                  </>
-                ) : isNewYear(movie.year) ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span class="meta-new">NEW</span>
-                  </>
-                ) : null}
-                {directors.length ? (
-                  <>
-                    <span class="sep">·</span>
-                    <span>
-                      Directed by{" "}
-                      {directors.map((d, i) => {
-                        const pid = directorLinks.get(d.id) ?? (d.id ? TMDB_PERSON_OFFSET + d.id : null);
-                        return (
-                          <>
-                            {i > 0 ? ", " : ""}
-                            {pid ? (
-                              <a href={`/person/${slugifyName(d.name)}-${pid}`}>{d.name}</a>
-                            ) : (
-                              d.name
-                            )}
-                          </>
-                        );
-                      })}
-                    </span>
-                  </>
-                ) : null}
-              </p>
-              <ProviderLine
-                row={movie}
-                region={region}
-                title={movie.title}
-                fallbackHref="/what-to-watch?type=movie"
-                pickerType="movie"
-                allHref={`/movie/${movie.slug}/where-to-watch`}
+      <article class="show-hub">
+        <DetailHero
+          kind="movie"
+          title={movie.title}
+          yearLabel={movie.year ? ` (${movie.year})` : null}
+          shareTitle={`${movie.title}${movie.year ? ` (${movie.year})` : ""} on TV Nightly`}
+          shareUrl={canonical(c)}
+          typeLabel="Movie"
+          typeHref="/movies/best"
+          tmdbScore={tmdbRingScore(movie.rating)}
+          communityScore={communityRingScore(communityCounts ?? null)}
+          poster={
+            movie.poster_url ? (
+              <img
+                class="poster"
+                src={movie.poster_url}
+                srcset={`${movie.poster_url} 1x, ${movie.poster_url.replace("/w342/", "/w780/")} 2x`}
+                alt={`${movie.title}${movie.year ? ` (${movie.year})` : ""} movie poster`}
+                width="200"
+                height="300"
+                fetchpriority="high"
+                decoding="async"
               />
-              {movie.overview ? (
-                movie.overview.length > 280 ? (
-                  <ClampSummary id="synopsis-clamp">{movie.overview}</ClampSummary>
-                ) : (
-                  <div class="summary">{movie.overview}</div>
-                )
-              ) : null}
-            </div>
-          </div>
-        </header>
-        <MovieTabs slug={movie.slug} current="overview" />
-        <MovieConvertBand
-          movie={movie}
-          ratingRef={ratingRef}
-          stat={stat}
-          raterCount={raterCount}
-          similar={simMovies.slice(0, 3)}
-          franchiseSlug={movieFranchise?.slug ?? null}
+            ) : (
+              <div class="poster card-fallback">{movie.title}</div>
+            )
+          }
+          trailer={
+            trailerVid
+              ? { key: trailerVid.key, name: trailerVid.name, type: "Trailer" }
+              : null
+          }
+          highlights={highlights}
+          starring={cast.slice(0, 4).map((p) => {
+            const id =
+              linkable.get(p.name.toLowerCase()) ?? (p.id ? TMDB_PERSON_OFFSET + p.id : null);
+            return {
+              name: p.name,
+              href: id ? `/person/${slugifyName(p.name)}-${id}` : null,
+            };
+          })}
+          directors={directors.map((d) => {
+            const pid = directorLinks.get(d.id) ?? (d.id ? TMDB_PERSON_OFFSET + d.id : null);
+            return {
+              name: d.name,
+              href: pid ? `/person/${slugifyName(d.name)}-${pid}` : null,
+            };
+          })}
+          writers={writers.map((p) => {
+            const pid = writerLinks.get(p.id) ?? (p.id ? TMDB_PERSON_OFFSET + p.id : null);
+            return {
+              name: p.name,
+              href: pid ? `/person/${slugifyName(p.name)}-${pid}` : null,
+            };
+          })}
+          watchProvider={
+            watchProv
+              ? {
+                  ...watchProv,
+                  href: watchProv.href ?? `/movie/${movie.slug}/where-to-watch`,
+                }
+              : null
+          }
+          metaBadge={isNewYear(movie.year) ? "New" : null}
+          genres={genres.slice(0, 4).map((g) => ({
+            name: g,
+            href: `/genre/${slugifyName(g)}/movies`,
+          }))}
+          metaExtra={movie.runtime ? fmtRuntime(movie.runtime) : null}
+          plot={movie.overview ?? null}
+          rateKind="movie"
+          rateRef={ratingRef}
+          rateStat={stat}
+          mediaHref={`/movie/${movie.slug}/media`}
+          fallbackBackdrop={backdrop}
         />
+        <MovieTabs slug={movie.slug} current="overview" />
+        <div class="home-main-grid">
+          <div class="home-col">
         {cast.length ? (
           <section id="cast">
             <h2>
@@ -806,6 +833,19 @@ app.get("/movie/:slug", async (c) => {
               })}
             </div>
           </section>
+        ) : null}
+        {galleryPhotos.length ? (
+          <PhotoGallery
+            entityName={movie.title}
+            mediaHref={`/movie/${movie.slug}/media`}
+            images={galleryPhotos}
+          />
+        ) : null}
+        {galleryVideos.length ? (
+          <VideoGallery
+            mediaHref={`/movie/${movie.slug}/media`}
+            videos={galleryVideos}
+          />
         ) : null}
         {simMovies.length ? (
           <section id="similar">
@@ -893,6 +933,7 @@ app.get("/movie/:slug", async (c) => {
                     title={`${fr.name} watch order`}
                     desc="Every film in the franchise, release and chronological order."
                     href={`/watch-order/${fr.slug}`}
+                    backdrop={exploreArts.franchise}
                   />
                 ) : null}
                 <ExploreCard
@@ -900,13 +941,15 @@ app.get("/movie/:slug", async (c) => {
                   title="Compare with another movie"
                   desc="Two films' ratings, runtimes and streaming, side by side."
                   href={`/movie/${movie.slug}/compare`}
+                  backdrop={exploreArts.compare}
                 />
-                {genres.slice(0, 2).map((g) => (
+                {genres.slice(0, 2).map((g, i) => (
                   <ExploreCard
                     icon="Genre"
                     title={`Best ${g.toLowerCase()} films & shows`}
                     desc={`The top of the ${g.toLowerCase()} pile, across both mediums.`}
                     href={`/genre/${slugifyName(g)}`}
+                    backdrop={exploreArts.genres[i] ?? null}
                   />
                 ))}
                 {prov0 ? (
@@ -915,6 +958,7 @@ app.get("/movie/:slug", async (c) => {
                     title={`Spin a ${prov0} movie`}
                     desc="Random great pick from the same service you already pay for."
                     href={`/what-to-watch?type=movie&service=${encodeURIComponent(prov0)}`}
+                    backdrop={exploreArts.provider}
                   />
                 ) : null}
                 {hub ? (
@@ -923,12 +967,21 @@ app.get("/movie/:slug", async (c) => {
                     title={`The ${hub.name.toLowerCase()} hub`}
                     desc="The whole fandom on one bookmarkable page — rankings, premieres, what's new."
                     href={`/${hub.slug}`}
+                    backdrop={exploreArts.hub}
                   />
                 ) : null}
               </div>
             </section>
           );
         })()}
+          </div>
+          <HomeSidebarRail
+            trailers={sidebar?.trailers ?? []}
+            topSeries={sidebar?.topSeries ?? []}
+            topMovies={sidebar?.topMovies ?? []}
+            newsletterHref="/#home-email-title"
+          />
+        </div>
       </article>
     </Layout>,
   );
@@ -957,6 +1010,12 @@ app.get("/movie/:slug/similar", async (c) => {
     : null;
   const heroFrame = backdrop ? heroBg(backdrop.x1, backdrop.x2) : null;
 
+  const keepGoingArts = await loadMovieKeepGoingArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    movie,
+    simMovies[0]?.imdb_id,
+  );
   const ld = [
     {
       "@context": "https://schema.org",
@@ -981,7 +1040,7 @@ app.get("/movie/:slug/similar", async (c) => {
   ];
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`Movies like ${movie.title} — ${simMovies.length} similar movies ranked | TV Nightly`}
       description={`The ${simMovies.length} closest matches to ${movie.title}: ${simMovies
         .slice(0, 4)
@@ -1029,7 +1088,6 @@ app.get("/movie/:slug/similar", async (c) => {
           stat={convert.stat}
           raterCount={convert.raterCount}
           similar={convert.similar}
-          franchiseSlug={movieFranchise?.slug ?? null}
           hideSimilar
         />
         <section>
@@ -1054,20 +1112,31 @@ app.get("/movie/:slug/similar", async (c) => {
             ))}
           </ol>
         </section>
-        <section>
-          <h2>Keep going</h2>
-          <div class="footer-picks">
-            <a class="footer-card" href={`/movie/${movie.slug}`}>
-              {movie.title} overview
-            </a>
-            <a class="footer-card" href="/movies/best">
-              Best movies
-            </a>
-            <a class="footer-card" href="/what-to-watch?type=movie">
-              What should I watch tonight?
-            </a>
-          </div>
-        </section>
+        <KeepGoing
+          cards={[
+            {
+              icon: "Overview",
+              title: `${movie.title} overview`,
+              desc: "Cast, ratings, trailers and the full film dossier.",
+              href: `/movie/${movie.slug}`,
+              backdrop: keepGoingArts.overview,
+            },
+            {
+              icon: "Charts",
+              title: "Best movies",
+              desc: "The highest-rated films we track, ranked by score.",
+              href: "/movies/best",
+              backdrop: keepGoingArts.bestMovies,
+            },
+            {
+              icon: "Picker",
+              title: "What should I watch tonight?",
+              desc: "Filter by mood, service and runtime — pick in seconds.",
+              href: "/what-to-watch?type=movie",
+              backdrop: keepGoingArts.tonight,
+            },
+          ]}
+        />
       </article>
     </Layout>,
   );
@@ -1100,6 +1169,14 @@ app.get("/movie/:slug/media", async (c) => {
       )
     : null;
 
+  const similarPick = await similarMovies(c.env.DB, movie, 1);
+  const keepGoingArts = await loadMovieKeepGoingArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    movie,
+    similarPick[0]?.imdb_id,
+  );
+
   const ld: unknown[] = [
     {
       "@context": "https://schema.org",
@@ -1124,13 +1201,13 @@ app.get("/movie/:slug/media", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`${movie.title} — trailer, posters & artwork | TV Nightly`}
       description={`Every trailer, clip, poster and backdrop for ${movie.title} in one place.`}
       canonical={`${site}${base}`}
       ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
       ld={ld}
-      scripts={["/js/media-lightbox.js", "/js/media-video.js"]}
+      scripts={["/js/media-lightbox.js"]}
     >
       <article class={`show-hub${heroArt ? " hub-backdrop" : ""}`}>
         <header class={heroArt ? "detail-hero frame-hero" : "detail-hero"}>
@@ -1171,7 +1248,6 @@ app.get("/movie/:slug/media", async (c) => {
           stat={convert.stat}
           raterCount={convert.raterCount}
           similar={convert.similar}
-          franchiseSlug={movieFranchise?.slug ?? null}
         />
         {trailer ? (
           <section>
@@ -1282,20 +1358,31 @@ app.get("/movie/:slug/media", async (c) => {
             </div>
           </section>
         ) : null}
-        <section>
-          <h2>Keep going</h2>
-          <div class="footer-picks">
-            <a class="footer-card" href={`/movie/${movie.slug}`}>
-              {movie.title} overview
-            </a>
-            <a class="footer-card" href={`/movie/${movie.slug}/similar`}>
-              Movies like {movie.title}
-            </a>
-            <a class="footer-card" href="/movies/best">
-              Best movies
-            </a>
-          </div>
-        </section>
+        <KeepGoing
+          cards={[
+            {
+              icon: "Overview",
+              title: `${movie.title} overview`,
+              desc: "Cast, ratings, trailers and the full film dossier.",
+              href: `/movie/${movie.slug}`,
+              backdrop: keepGoingArts.overview,
+            },
+            {
+              icon: "Matchup",
+              title: `Movies like ${movie.title}`,
+              desc: "The closest matches, ranked by overlap and rating.",
+              href: `/movie/${movie.slug}/similar`,
+              backdrop: keepGoingArts.similar,
+            },
+            {
+              icon: "Charts",
+              title: "Best movies",
+              desc: "The highest-rated films we track, ranked by score.",
+              href: "/movies/best",
+              backdrop: keepGoingArts.bestMovies,
+            },
+          ]}
+        />
       </article>
     </Layout>,
   );
@@ -1335,7 +1422,7 @@ app.get("/movie/:slug/cast", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`${movie.title} cast — who's in it | TV Nightly`}
       description={
         cast.length
@@ -1366,7 +1453,6 @@ app.get("/movie/:slug/cast", async (c) => {
         stat={convert.stat}
         raterCount={convert.raterCount}
         similar={convert.similar}
-        franchiseSlug={movieFranchise?.slug ?? null}
       />
       {cast.length ? (
         <>
@@ -1471,9 +1557,16 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
     : null;
   const heroFrame = backdrop ? heroBg(backdrop.x1, backdrop.x2) : null;
   const site = origin(c);
+  const similarPick = await similarMovies(c.env.DB, movie, 1);
+  const keepGoingArts = await loadMovieKeepGoingArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    movie,
+    similarPick[0]?.imdb_id,
+  );
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`Where to watch ${movie.title} — streaming options | TV Nightly`}
       description={
         names.length
@@ -1540,8 +1633,6 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
           stat={convert.stat}
           raterCount={convert.raterCount}
           similar={convert.similar}
-          franchiseSlug={movieFranchise?.slug ?? null}
-          hideWatchLink
         />
         <section>
           <h2>Streaming in {region}</h2>
@@ -1601,20 +1692,31 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
             </>
           )}
         </section>
-        <section>
-          <h2>Keep going</h2>
-          <div class="footer-picks">
-            <a class="footer-card" href={`/movie/${movie.slug}`}>
-              {movie.title} overview
-            </a>
-            <a class="footer-card" href={`/movie/${movie.slug}/similar`}>
-              Movies like {movie.title}
-            </a>
-            <a class="footer-card" href="/what-to-watch?type=movie">
-              What should I watch tonight?
-            </a>
-          </div>
-        </section>
+        <KeepGoing
+          cards={[
+            {
+              icon: "Overview",
+              title: `${movie.title} overview`,
+              desc: "Cast, ratings, trailers and the full film dossier.",
+              href: `/movie/${movie.slug}`,
+              backdrop: keepGoingArts.overview,
+            },
+            {
+              icon: "Matchup",
+              title: `Movies like ${movie.title}`,
+              desc: "The closest matches, ranked by overlap and rating.",
+              href: `/movie/${movie.slug}/similar`,
+              backdrop: keepGoingArts.similar,
+            },
+            {
+              icon: "Picker",
+              title: "What should I watch tonight?",
+              desc: "Filter by mood, service and runtime — pick in seconds.",
+              href: "/what-to-watch?type=movie",
+              backdrop: keepGoingArts.tonight,
+            },
+          ]}
+        />
       </article>
     </Layout>,
   );
@@ -1676,7 +1778,7 @@ app.get("/movies/compare", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="Compare two movies — head-to-head | TV Nightly"
       description="Put two films side by side: ratings, votes, runtime and where to stream."
       canonical={`${origin(c)}/movies/compare`}
@@ -1776,7 +1878,7 @@ app.get("/movie/:slug/compare", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`Compare ${movie.title} — head-to-head matchups | TV Nightly`}
       description={`${movie.title} against ${rivals
         .slice(0, 3)
@@ -1803,8 +1905,6 @@ app.get("/movie/:slug/compare", async (c) => {
         stat={convert.stat}
         raterCount={convert.raterCount}
         similar={convert.similar}
-        franchiseSlug={movieFranchise?.slug ?? null}
-        hideCompareLink
       />
       <p class="dossier-method">
         Pick a matchup — ratings, votes, runtime and where to stream, side by side.
@@ -1951,7 +2051,7 @@ app.get("/compare/movie/:pair{[^/]+-vs-[^/]+}", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`${a.title} vs ${b.title} — which should you watch? | TV Nightly`}
       description={`${a.title} or ${b.title}? Ratings, votes, runtime and where to stream, side by side.`}
       canonical={`${site}${canonicalPath}`}

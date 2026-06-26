@@ -9,6 +9,14 @@ import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard } from "../components/cards";
 import { FilterSelect } from "../components/forms";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import {
+  fillKeepGoingBackdrops,
+  KeepExploring,
+  loadMovieGuideDoorArts,
+  movieKeepGoingBackdrop,
+  showKeepGoingBackdrop,
+} from "../components/keep-going";
 import { fmtRuntime, headshot, heroBg, slugifyName } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { genreDirectory } from "../lib/queries";
@@ -16,9 +24,9 @@ import { canonical, faqLd, origin } from "../lib/seo";
 import { tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
 import { resolvePersonProfile } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
-import { AppContext, Bindings, MovieRow } from "../types";
+import { AppContext, Bindings, HonoEnv, MovieRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // "Underrated" = trustworthy rating, but far fewer votes than the blockbusters,
 // AND out long enough to prove it was overlooked rather than merely new. The
@@ -202,6 +210,12 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
   const site = origin(c);
   const hub = genre ? hubForGenres([genre], null) : null;
   const siblings = dir.movie.filter((g) => g !== genre);
+  const sidebar = c.get("siteSidebar");
+  const doorArts = await loadMovieGuideDoorArts(c.env.DB, c.env.TMDB_API_KEY, {
+    lead: rows[0] ?? null,
+    genre: genre || null,
+    hubSlug: hub?.slug ?? null,
+  });
 
   const faqs = [
     {
@@ -224,7 +238,8 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`Best ${genre ? `${genre} ` : ""}Movies to Watch in ${year} | TV Nightly`}
       description={`The best ${genre ? `${lower} ` : ""}movies to watch in ${year}, ranked by viewer rating with where to stream${rows.length ? ` — ${titleList(rows, 3)} and more` : ""}.`}
       canonical={canonical(c)}
@@ -280,6 +295,8 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
         </div>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       {/* data-submit-on-change: dropdown.js submits on pick; the :year handler
           turns ?genre=slug into the clean /movies/best/{year}/{slug} path */}
       <form method="get" action={`/movies/best/${year}`} class="region-line watch-region" data-submit-on-change>
@@ -335,38 +352,47 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
 
       <FaqSection items={faqs} />
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Hidden gems"
-            title={genre ? `Underrated ${lower} movies` : "Underrated movies"}
-            desc="High ratings, low profile — the great films most people have missed."
-            href={genre ? `/movies/underrated/${genreSlug}` : "/movies/underrated"}
-          />
-          <ExploreCard
-            icon="The chart"
-            title={genre ? `Best ${lower} movies of all time` : "Best movies of all time"}
-            desc="The all-time ranking by viewer rating — a thousand-vote minimum."
-            href={genre ? `/movies/best?genre=${encodeURIComponent(genre)}` : "/movies/best"}
-          />
-          {hub ? (
-            <ExploreCard
-              icon="Fandom hub"
-              title={`The ${hub.name} hub`}
-              desc="News, premieres, and the best of the genre on one page."
-              href={`/${hub.slug}`}
-            />
-          ) : (
-            <ExploreCard
-              icon="Tailored"
-              title="Rate one thing, get a pick"
-              desc="The recommender finds your next watch from one rating."
-              href="/recommend"
-            />
-          )}
+      <KeepExploring
+        cards={[
+          {
+            icon: "Hidden gems",
+            title: genre ? `Underrated ${lower} movies` : "Underrated movies",
+            desc: "High ratings, low profile — the great films most people have missed.",
+            href: genre ? `/movies/underrated/${genreSlug}` : "/movies/underrated",
+            backdrop: doorArts.underrated,
+          },
+          {
+            icon: "The chart",
+            title: genre ? `Best ${lower} movies of all time` : "Best movies of all time",
+            desc: "The all-time ranking by viewer rating — a thousand-vote minimum.",
+            href: genre ? `/movies/best?genre=${encodeURIComponent(genre)}` : "/movies/best",
+            backdrop: doorArts.chart,
+          },
+          hub
+            ? {
+                icon: "Fandom hub",
+                title: `The ${hub.name} hub`,
+                desc: "News, premieres, and the best of the genre on one page.",
+                href: `/${hub.slug}`,
+                backdrop: doorArts.extra,
+              }
+            : {
+                icon: "Tailored",
+                title: "Rate one thing, get a pick",
+                desc: "The recommender finds your next watch from one rating.",
+                href: "/recommend",
+                backdrop: doorArts.extra,
+              },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 }
@@ -421,6 +447,12 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
   const site = origin(c);
   const hub = genre ? hubForGenres([genre], null) : null;
   const siblings = dir.movie.filter((g) => g !== genre);
+  const sidebar = c.get("siteSidebar");
+  const doorArts = await loadMovieGuideDoorArts(c.env.DB, c.env.TMDB_API_KEY, {
+    lead: rows[0] ?? null,
+    genre: genre || null,
+    hubSlug: hub?.slug ?? null,
+  });
 
   const faqs = [
     {
@@ -441,7 +473,8 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`Underrated ${genre ? `${genre} ` : ""}Movies — Hidden Gems to Stream | TV Nightly`}
       description={`Underrated ${genre ? `${lower} ` : ""}movies worth discovering — highly rated but overlooked films${rows.length ? ` like ${titleList(rows, 3)}` : ""}, with where to stream each.`}
       canonical={canonical(c)}
@@ -493,6 +526,8 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
         </div>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       <form method="get" action="/movies/underrated" class="region-line watch-region" data-submit-on-change>
         <FilterSelect
           label="Genre"
@@ -533,38 +568,47 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
 
       <FaqSection items={faqs} />
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Watch guide"
-            title={genre ? `Best ${lower} movies of ${new Date().getFullYear()}` : `Best movies of ${new Date().getFullYear()}`}
-            desc="The acclaimed films to watch this year, newest greats first."
-            href={genre ? `/movies/best/${new Date().getFullYear()}/${genreSlug}` : `/movies/best/${new Date().getFullYear()}`}
-          />
-          {hub ? (
-            <ExploreCard
-              icon="Fandom hub"
-              title={`The ${hub.name} hub`}
-              desc="News, premieres, and the best of the genre on one page."
-              href={`/${hub.slug}`}
-            />
-          ) : (
-            <ExploreCard
-              icon="The chart"
-              title="Best movies of all time"
-              desc="Every movie ranked by rating, with where to stream."
-              href="/movies/best"
-            />
-          )}
-          <ExploreCard
-            icon="Community"
-            title="Loved by this community"
-            desc="The chart built from real one-tap reader verdicts."
-            href="/loved"
-          />
+      <KeepExploring
+        cards={[
+          {
+            icon: "Watch guide",
+            title: genre ? `Best ${lower} movies of ${new Date().getFullYear()}` : `Best movies of ${new Date().getFullYear()}`,
+            desc: "The acclaimed films to watch this year, newest greats first.",
+            href: genre ? `/movies/best/${new Date().getFullYear()}/${genreSlug}` : `/movies/best/${new Date().getFullYear()}`,
+            backdrop: doorArts.chart,
+          },
+          hub
+            ? {
+                icon: "Fandom hub",
+                title: `The ${hub.name} hub`,
+                desc: "News, premieres, and the best of the genre on one page.",
+                href: `/${hub.slug}`,
+                backdrop: doorArts.extra,
+              }
+            : {
+                icon: "The chart",
+                title: "Best movies of all time",
+                desc: "Every movie ranked by rating, with where to stream.",
+                href: "/movies/best",
+                backdrop: doorArts.chart,
+              },
+          {
+            icon: "Community",
+            title: "Loved by this community",
+            desc: "The chart built from real one-tap reader verdicts.",
+            href: "/loved",
+            backdrop: doorArts.underrated,
+          },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 }
@@ -587,7 +631,7 @@ app.get("/movies/featuring/:slug", async (c) => {
   // and bounced this page straight back to /person.
   const profile = await resolvePersonProfile(c, Number(idMatch[1]));
   if (!profile) return c.notFound();
-  const { person, films } = profile;
+  const { person, films, roles: shows } = profile;
   // one canonical URL per person — name drift 301s to the real slug
   const canonicalSlug = `${slugifyName(person.name)}-${person.id}`;
   if (slug !== canonicalSlug) return c.redirect(`/movies/featuring/${canonicalSlug}`, 301);
@@ -596,13 +640,45 @@ app.get("/movies/featuring/:slug", async (c) => {
 
   const region = visitorRegion(c);
   const site = origin(c);
-  const best = films.find((m) => m.rating != null) ?? null;
+  const best = films.find((m) => m.rating != null) ?? films[0] ?? null;
   const rated = films.filter((m) => m.rating != null);
   const avg = rated.length
     ? (rated.reduce((s, m) => s + m.rating!, 0) / rated.length).toFixed(1)
     : null;
   const { art, ambient } = await topArt(c, films[0]);
   const first = person.name.split(" ")[0];
+  const sidebar = c.get("siteSidebar");
+  const apiKey = c.env.TMDB_API_KEY;
+  const topShow = shows.find((s) => s.rating != null) ?? shows[0] ?? null;
+  const profileFilm = films.find((m) => m.slug !== best?.slug) ?? films[0] ?? null;
+  const [bestArt, profileArt, tvArt] = await Promise.all([
+    best ? movieKeepGoingBackdrop(apiKey, best) : Promise.resolve(null),
+    profileFilm ? movieKeepGoingBackdrop(apiKey, profileFilm) : Promise.resolve(null),
+    topShow ? showKeepGoingBackdrop(apiKey, topShow) : Promise.resolve(null),
+  ]);
+  const featuringDoors = fillKeepGoingBackdrops([
+    {
+      icon: "Highest rated",
+      title: best.title,
+      desc: `${first}'s best-reviewed film — rating, runtime and where to watch.`,
+      href: `/movie/${best.slug}`,
+      backdrop: bestArt,
+    },
+    {
+      icon: "Profile",
+      title: `${person.name}: shows, age & roles`,
+      desc: "The full profile — every TV role and film credit on one page.",
+      href: `/person/${canonicalSlug}`,
+      backdrop: profileArt,
+    },
+    {
+      icon: "TV",
+      title: `Best TV shows featuring ${first}`,
+      desc: "The television side — every series ranked by viewer rating.",
+      href: `/tv/featuring/${canonicalSlug}`,
+      backdrop: tvArt,
+    },
+  ]);
 
   const faqs = [
     {
@@ -623,7 +699,8 @@ app.get("/movies/featuring/:slug", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`Best Movies Featuring ${person.name} — Ranked | TV Nightly`}
       description={`Every ${person.name} movie we track, ranked by viewer rating${best ? ` — from ${best.title} down` : ""}, with where to stream each.`}
       canonical={canonical(c)}
@@ -691,6 +768,8 @@ app.get("/movies/featuring/:slug", async (c) => {
         </div>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       <section class="hub-sec">
         <h2>
           {person.name}'s films, ranked <span class="sched-count">{films.length}</span>
@@ -703,29 +782,28 @@ app.get("/movies/featuring/:slug", async (c) => {
       <section class="wo-doors">
         <h2>Keep exploring</h2>
         <div class="explore-grid">
-          {best ? (
+          {featuringDoors.map((card) => (
             <ExploreCard
-              icon="Highest rated"
-              title={best.title}
-              desc={`${first}'s best-reviewed film — rating, runtime and where to watch.`}
-              href={`/movie/${best.slug}`}
-              rating={best.rating ?? undefined}
+              icon={card.icon}
+              title={card.title}
+              desc={card.desc}
+              href={card.href}
+              backdrop={card.backdrop ?? undefined}
+              {...(card.href === `/movie/${best.slug}` && best.rating != null
+                ? { rating: best.rating }
+                : {})}
             />
-          ) : null}
-          <ExploreCard
-            icon="Profile"
-            title={`${person.name}: shows, age & roles`}
-            desc="The full profile — every TV role and film credit on one page."
-            href={`/person/${canonicalSlug}`}
-          />
-          <ExploreCard
-            icon="TV"
-            title={`Best TV shows featuring ${first}`}
-            desc="The television side — every series ranked by viewer rating."
-            href={`/tv/featuring/${canonicalSlug}`}
-          />
+          ))}
         </div>
       </section>
+        </div>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 });

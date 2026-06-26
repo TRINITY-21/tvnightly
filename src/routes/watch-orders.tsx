@@ -8,9 +8,9 @@ import { providersFor, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
 import { similarMovies } from "../lib/queries";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbMovieBackdrop } from "../lib/tmdb";
-import { Bindings, MovieRow } from "../types";
+import { Bindings, HonoEnv, MovieRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // ------------------------------------------------- franchise watch orders
 
@@ -86,7 +86,7 @@ app.get("/watch-orders", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=86400");
   return c.html(
-    <Layout
+    <Layout c={c}
       title="Movie watch-order guides — every franchise | TV Nightly"
       description="How to watch every big movie franchise in order: Marvel, Star Wars, Harry Potter and more — release and chronological orders with runtimes and streaming info."
       canonical={canonical(c)}
@@ -296,7 +296,7 @@ app.get("/watch-order/:slug", async (c) => {
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
       title={`How to watch ${fr.name} in order (release & chronological) | TV Nightly`}
       description={`${fr.name} watch order: all ${fr.entries.length} films in release and chronological order, with runtimes and streaming availability.`}
       canonical={canonical(c)}

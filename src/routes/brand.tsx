@@ -2,11 +2,11 @@
 // card. Both rasterize on the edge via the same resvg pipeline as the per-page
 // og.png cards (src/lib/render.ts), and are heavily edge-cached.
 import { Hono } from "hono";
-import { Bindings } from "../types";
+import { Bindings, HonoEnv } from "../types";
 import { servePng } from "../lib/render";
 import { buildBrandOgCard, buildLogoSvg } from "../lib/social";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // Square raster logo for schema.org Organization.logo (Google prefers a raster
 // over the SVG favicon). 512×512, edge-cached like every other brand image.

@@ -1,11 +1,14 @@
 // Page chrome: header/nav/footer, logo mark, message page.
-import { FC, PropsWithChildren } from "hono/jsx";
 import { raw } from "hono/html";
-import { jsonLd } from "../lib/seo";
-import { VERTICALS } from "../lib/verticals";
-import { networkLogo } from "../lib/providers";
+import { FC, PropsWithChildren } from "hono/jsx";
 import { slugifyName } from "../lib/format";
-import { IconTikTok, IconInstagram, IconX, IconFacebook } from "./icons";
+import { networkLogo } from "../lib/providers";
+import { jsonLd } from "../lib/seo";
+import type { SiteSidebarData } from "../lib/site-sidebar";
+import { VERTICALS } from "../lib/verticals";
+import type { AppContext } from "../types";
+import { HomeSidebarRail } from "./home-sidebar";
+import { IconFacebook, IconInstagram, IconTikTok, IconX } from "./icons";
 
 // Social handles — one place to update. Same @handle across platforms keeps the
 // brand findable and matches the tvnightly.com domain.
@@ -192,6 +195,15 @@ export const Layout: FC<
     /** Drop the public site header + marketing footer — for admin tooling
      *  (the studio, inbox) that should read as a focused app, not a page. */
     bare?: boolean;
+    /** Request context — when set, Layout reads pre-fetched sidebar data from
+     *  middleware and wraps main content in the home two-column grid. */
+    c?: AppContext;
+    /** Page manages its own home-main-grid + rail (homepage, show/movie overview). */
+    sidebarInline?: boolean;
+    /** Never wrap in the global right rail (404/500 and other full-bleed pages). */
+    noSidebar?: boolean;
+    /** Override middleware sidebar data (rare; inline pages use sidebarInline). */
+    sidebar?: SiteSidebarData | null;
     /** Meta-refresh auto-forward (no-JS path for the synth interstitial). */
     refresh?: { delay: number; url: string };
     /** LCP insurance for full-bleed CSS-background heroes, which browsers
@@ -218,6 +230,23 @@ export const Layout: FC<
     prefixes.some((p) => path === p || path.startsWith(p + "/")) ? "active" : "";
   const browseActive = BROWSE_PATHS.some((p) => path === p || path.startsWith(p + "/"));
   const BROWSE_SECTIONS = browseSections(new Date().getFullYear());
+  const sidebarData: SiteSidebarData | undefined =
+    !props.bare && !props.sidebarInline && !props.noSidebar
+      ? (props.sidebar ?? props.c?.get("siteSidebar") ?? undefined)
+      : undefined;
+  const mainBody = sidebarData ? (
+    <div class="home-main-grid">
+      <div class="home-col">{props.children}</div>
+      <HomeSidebarRail
+        trailers={sidebarData.trailers}
+        topSeries={sidebarData.topSeries}
+        topMovies={sidebarData.topMovies}
+        newsletterHref="/#home-email-title"
+      />
+    </div>
+  ) : (
+    props.children
+  );
   return (
   <html lang="en">
     <head>
@@ -322,74 +351,6 @@ export const Layout: FC<
                 Browse
                 <span class="nav-mega-chev" aria-hidden="true"></span>
               </button>
-              <div id="browse-panel" class="nav-mega-panel" hidden>
-                <div class="nav-mega-scroll">
-                  {BROWSE_SECTIONS.map((sec) => (
-                    <div class="nm-sec">
-                      <p class="nav-mega-kicker">{sec.kicker}</p>
-                      <div class="nm-rows">
-                        {sec.links.map(([label, href]) => (
-                          <a class="nm-row" href={href}>
-                            {label}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  <div class="nm-sec">
-                    <p class="nav-mega-kicker">Networks</p>
-                    <div class="nm-nets">
-                      {BROWSE_NETWORKS.map(([label, logoName, slug]) => {
-                        const logo = networkLogo(logoName);
-                        return (
-                          <a class="nm-net" href={`/network/${slug}`} title={label} aria-label={label}>
-                            {logo ? (
-                              <img
-                                src={logo}
-                                alt={label}
-                                width="28"
-                                height="28"
-                                loading="lazy"
-                                decoding="async"
-                              />
-                            ) : (
-                              <span class="nm-net-fallback" aria-hidden="true">
-                                {label.slice(0, 2)}
-                              </span>
-                            )}
-                          </a>
-                        );
-                      })}
-                    </div>
-                    <a class="nm-all chev-after" href="/top/networks">
-                      All networks
-                    </a>
-                  </div>
-                  <div class="nm-sec">
-                    <p class="nav-mega-kicker">TV genres</p>
-                    <div class="nm-chips">
-                      {BROWSE_TV_GENRES.map(([label, g]) => (
-                        <a class="nm-chip" href={`/genre/${slugifyName(g)}`}>
-                          {label}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                  <div class="nm-sec">
-                    <p class="nav-mega-kicker">Movie genres</p>
-                    <div class="nm-chips">
-                      {BROWSE_MOVIE_GENRES.map(([label, g]) => (
-                        <a class="nm-chip" href={`/genre/${slugifyName(g)}/movies`}>
-                          {label}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <a class="nav-mega-all chev-after" href="/lists">
-                  Browse everything
-                </a>
-              </div>
             </div>
           </nav>
           <form action="/search" method="get" class="search" role="search">
@@ -446,7 +407,101 @@ export const Layout: FC<
         </div>
       </header>
       )}
-      <main>{props.children}</main>
+      {/* Browse: a full-width slide-down overlay (the "Browse everything" page as
+          a panel). Rendered outside the header on purpose — the header's
+          backdrop-filter would otherwise become the containing block for this
+          position:fixed panel and collapse it to the header box. */}
+      {props.bare ? null : (
+        <div id="browse-panel" class="nav-mega-panel" hidden>
+          <div class="nav-mega-bar">
+            <a class="nav-mega-heading" href="/lists">
+              Browse everything
+            </a>
+            <button type="button" class="nav-mega-close" aria-label="Close browse menu">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+          <div class="nav-mega-scroll">
+            {BROWSE_SECTIONS.map((sec) => (
+              <div class="nm-sec">
+                <p class="nav-mega-kicker">{sec.kicker}</p>
+                <div class="nm-rows">
+                  {sec.links.map(([label, href]) => (
+                    <a class="nm-row" href={href}>
+                      {label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <div class="nm-sec">
+              <p class="nav-mega-kicker">Networks</p>
+              <div class="nm-nets">
+                {BROWSE_NETWORKS.map(([label, logoName, slug]) => {
+                  const logo = networkLogo(logoName);
+                  return (
+                    <a class="nm-net" href={`/network/${slug}`} title={label} aria-label={label}>
+                      {logo ? (
+                        <img
+                          src={logo}
+                          alt={label}
+                          width="28"
+                          height="28"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <span class="nm-net-fallback" aria-hidden="true">
+                          {label.slice(0, 2)}
+                        </span>
+                      )}
+                    </a>
+                  );
+                })}
+              </div>
+              <a class="nm-all chev-after" href="/top/networks">
+                All networks
+              </a>
+            </div>
+            <div class="nm-sec">
+              <p class="nav-mega-kicker">TV genres</p>
+              <div class="nm-chips">
+                {BROWSE_TV_GENRES.map(([label, g]) => (
+                  <a class="nm-chip" href={`/genre/${slugifyName(g)}`}>
+                    {label}
+                  </a>
+                ))}
+              </div>
+            </div>
+            <div class="nm-sec">
+              <p class="nav-mega-kicker">Movie genres</p>
+              <div class="nm-chips">
+                {BROWSE_MOVIE_GENRES.map(([label, g]) => (
+                  <a class="nm-chip" href={`/genre/${slugifyName(g)}/movies`}>
+                    {label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+          <a class="nav-mega-all chev-after" href="/lists">
+            Browse everything
+          </a>
+        </div>
+      )}
+      <main>{mainBody}</main>
       {props.bare ? null : (
       <footer class="site-footer">
         <div class="footer-inner">
@@ -549,7 +604,20 @@ export const Layout: FC<
         </div>
       </footer>
       )}
-      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", "/js/localtime.js", ...(props.scripts ?? [])].map((s) => (
+      {props.bare ? null : (
+        <button type="button" class="back-to-top" aria-label="Back to top" tabIndex={-1}>
+          <span class="back-to-top-chevs" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 15.5l7-7 7 7" />
+            </svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 15.5l7-7 7 7" />
+            </svg>
+          </span>
+          <span class="back-to-top-label">Back to top</span>
+        </button>
+      )}
+      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", "/js/localtime.js", "/js/media-video.js", "/js/hero-pip.js", "/js/photo-gallery.js", "/js/back-to-top.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>
       ))}
     </body>

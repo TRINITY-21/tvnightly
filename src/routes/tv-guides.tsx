@@ -12,6 +12,15 @@ import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, ShowCard } from "../components/cards";
 import { FilterSelect } from "../components/forms";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import {
+  fillKeepGoingBackdrops,
+  KeepExploring,
+  loadTvGuideDoorArts,
+  movieKeepGoingBackdrop,
+  showKeepGoingBackdrop,
+} from "../components/keep-going";
+import { genreShowArt } from "../lib/explore-art";
 import { headshot, heroBg, hiRes, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { parseDecadeSlug, TV_DECADES } from "../lib/decades";
@@ -20,9 +29,9 @@ import { canonical, faqLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { resolvePersonProfile } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
-import { AppContext, Bindings, ShowRow } from "../types";
+import { AppContext, Bindings, HonoEnv, ShowRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 // recognizable-popularity floor — the same TVmaze weight the genre charts use,
 // so guide pages rank the same trustworthy pool
@@ -221,9 +230,17 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
     },
   ];
 
+  const sidebar = c.get("siteSidebar");
+  const doorArts = await loadTvGuideDoorArts(c.env.DB, c.env.TMDB_API_KEY, {
+    lead: rows[0] ?? null,
+    genre: genre || null,
+    hubSlug: hub?.slug ?? null,
+  });
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`Best ${genre ? `${genre} ` : ""}TV Shows to Watch in ${year} | TV Nightly`}
       description={`The best ${genre ? `${lower} ` : ""}TV shows to watch in ${year}, ranked by viewer rating with where to stream${rows.length ? ` — ${nameList(rows, 3)} and more` : ""}.`}
       canonical={canonical(c)}
@@ -278,6 +295,8 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
         </div>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       {/* data-submit-on-change: dropdown.js submits on pick; the :year handler
           turns ?genre=slug into the clean /tv/best/{year}/{slug} path */}
       <form method="get" action={`/tv/best/${year}`} class="region-line watch-region" data-submit-on-change>
@@ -333,38 +352,47 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
 
       <FaqSection items={faqs} />
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Hidden gems"
-            title={genre ? `Underrated ${lower} shows` : "Underrated TV shows"}
-            desc="High ratings, low profile — the great series most people have missed."
-            href={genre ? `/tv/underrated/${genreSlug}` : "/tv/underrated"}
-          />
-          <ExploreCard
-            icon="The chart"
-            title={genre ? `Top ${lower} shows, ranked` : "Top TV shows of all time"}
-            desc="The all-time ranking by viewer rating, with where to stream."
-            href={genre ? `/genre/${genreSlug}/shows` : "/top/tv"}
-          />
-          {hub ? (
-            <ExploreCard
-              icon="Fandom hub"
-              title={`The ${hub.name} hub`}
-              desc="News, premieres, and the best of the genre on one page."
-              href={`/${hub.slug}`}
-            />
-          ) : (
-            <ExploreCard
-              icon="Tonight"
-              title="What's actually on"
-              desc="Tonight's schedule, in air-time order."
-              href="/tonight"
-            />
-          )}
+      <KeepExploring
+        cards={[
+          {
+            icon: "Hidden gems",
+            title: genre ? `Underrated ${lower} shows` : "Underrated TV shows",
+            desc: "High ratings, low profile — the great series most people have missed.",
+            href: genre ? `/tv/underrated/${genreSlug}` : "/tv/underrated",
+            backdrop: doorArts.underrated,
+          },
+          {
+            icon: "The chart",
+            title: genre ? `Top ${lower} shows, ranked` : "Top TV shows of all time",
+            desc: "The all-time ranking by viewer rating, with where to stream.",
+            href: genre ? `/genre/${genreSlug}/shows` : "/top/tv",
+            backdrop: doorArts.chart,
+          },
+          hub
+            ? {
+                icon: "Fandom hub",
+                title: `The ${hub.name} hub`,
+                desc: "News, premieres, and the best of the genre on one page.",
+                href: `/${hub.slug}`,
+                backdrop: doorArts.extra,
+              }
+            : {
+                icon: "Tonight",
+                title: "What's actually on",
+                desc: "Tonight's schedule, in air-time order.",
+                href: "/tonight",
+                backdrop: doorArts.extra,
+              },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 }
@@ -427,9 +455,23 @@ async function bestDecadePage(c: AppContext, decadeSlug: string, genreSlug?: str
     },
   ];
 
+  const sidebar = c.get("siteSidebar");
+  const apiKey = c.env.TMDB_API_KEY;
+  const [chartArt, episodesArt, yearArt] = await Promise.all([
+    rows[0] ? showKeepGoingBackdrop(apiKey, rows[0]) : Promise.resolve(null),
+    rows[1] ? showKeepGoingBackdrop(apiKey, rows[1]) : Promise.resolve(null),
+    genre && apiKey ? genreShowArt(db, apiKey, genre) : Promise.resolve(null),
+  ]);
+  const decadeDoors = fillKeepGoingBackdrops([
+    { icon: "", title: "", desc: "", href: "", backdrop: chartArt },
+    { icon: "", title: "", desc: "", href: "", backdrop: episodesArt },
+    { icon: "", title: "", desc: "", href: "", backdrop: yearArt ?? chartArt },
+  ]);
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`Best ${genre ? `${genre} ` : ""}TV Shows of the ${decade.label} | TV Nightly`}
       description={`The best ${genre ? `${lower} ` : ""}TV shows of the ${decade.label}, ranked by viewer rating${rows.length ? ` — ${nameList(rows, 3)} and more` : ""}.`}
       canonical={canonical(c)}
@@ -481,6 +523,8 @@ async function bestDecadePage(c: AppContext, decadeSlug: string, genreSlug?: str
         </div>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       <form method="get" action={`/tv/best/${decade.label}`} class="region-line watch-region" data-submit-on-change>
         <FilterSelect
           label="Genre"
@@ -531,29 +575,39 @@ async function bestDecadePage(c: AppContext, decadeSlug: string, genreSlug?: str
 
       <FaqSection items={faqs} />
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="The chart"
-            title="Top TV shows of all time"
-            desc="The all-time ranking by viewer rating."
-            href="/top/tv"
-          />
-          <ExploreCard
-            icon="Shortcut"
-            title="Best episodes ever"
-            desc="The single greatest hours of television."
-            href="/best-episodes"
-          />
-          <ExploreCard
-            icon="Premieres"
-            title={`Best TV of ${new Date().getFullYear()}`}
-            desc="What's worth watching this year."
-            href={`/tv/best/${new Date().getFullYear()}`}
-          />
+      <KeepExploring
+        cards={[
+          {
+            icon: "The chart",
+            title: "Top TV shows of all time",
+            desc: "The all-time ranking by viewer rating.",
+            href: "/top/tv",
+            backdrop: decadeDoors[0]?.backdrop,
+          },
+          {
+            icon: "Shortcut",
+            title: "Best episodes ever",
+            desc: "The single greatest hours of television.",
+            href: "/best-episodes",
+            backdrop: decadeDoors[1]?.backdrop,
+          },
+          {
+            icon: "Premieres",
+            title: `Best TV of ${new Date().getFullYear()}`,
+            desc: "What's worth watching this year.",
+            href: `/tv/best/${new Date().getFullYear()}`,
+            backdrop: decadeDoors[2]?.backdrop,
+          },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 }
@@ -631,9 +685,17 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
     },
   ];
 
+  const sidebar = c.get("siteSidebar");
+  const doorArts = await loadTvGuideDoorArts(c.env.DB, c.env.TMDB_API_KEY, {
+    lead: rows[0] ?? null,
+    genre: genre || null,
+    hubSlug: hub?.slug ?? null,
+  });
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`Underrated ${genre ? `${genre} ` : ""}Shows — Hidden Gems to Stream | TV Nightly`}
       description={`Underrated ${genre ? `${lower} ` : ""}TV shows worth discovering — highly rated but overlooked series${rows.length ? ` like ${nameList(rows, 3)}` : ""}, with where to stream each.`}
       canonical={canonical(c)}
@@ -685,6 +747,8 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
         </div>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       <form method="get" action="/tv/underrated" class="region-line watch-region" data-submit-on-change>
         <FilterSelect
           label="Genre"
@@ -725,38 +789,47 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
 
       <FaqSection items={faqs} />
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Watch guide"
-            title={genre ? `Best ${lower} shows of ${new Date().getFullYear()}` : `Best shows of ${new Date().getFullYear()}`}
-            desc="The acclaimed series to watch this year, what's airing now first."
-            href={genre ? `/tv/best/${new Date().getFullYear()}/${genreSlug}` : `/tv/best/${new Date().getFullYear()}`}
-          />
-          {hub ? (
-            <ExploreCard
-              icon="Fandom hub"
-              title={`The ${hub.name} hub`}
-              desc="News, premieres, and the best of the genre on one page."
-              href={`/${hub.slug}`}
-            />
-          ) : (
-            <ExploreCard
-              icon="The chart"
-              title="Top TV shows of all time"
-              desc="Every series ranked by rating, with where to stream."
-              href="/top/tv"
-            />
-          )}
-          <ExploreCard
-            icon="Community"
-            title="Loved by this community"
-            desc="The chart built from real one-tap reader verdicts."
-            href="/loved"
-          />
+      <KeepExploring
+        cards={[
+          {
+            icon: "Watch guide",
+            title: genre ? `Best ${lower} shows of ${new Date().getFullYear()}` : `Best shows of ${new Date().getFullYear()}`,
+            desc: "The acclaimed series to watch this year, what's airing now first.",
+            href: genre ? `/tv/best/${new Date().getFullYear()}/${genreSlug}` : `/tv/best/${new Date().getFullYear()}`,
+            backdrop: doorArts.chart,
+          },
+          hub
+            ? {
+                icon: "Fandom hub",
+                title: `The ${hub.name} hub`,
+                desc: "News, premieres, and the best of the genre on one page.",
+                href: `/${hub.slug}`,
+                backdrop: doorArts.extra,
+              }
+            : {
+                icon: "The chart",
+                title: "Top TV shows of all time",
+                desc: "Every series ranked by rating, with where to stream.",
+                href: "/top/tv",
+                backdrop: doorArts.chart,
+              },
+          {
+            icon: "Community",
+            title: "Loved by this community",
+            desc: "The chart built from real one-tap reader verdicts.",
+            href: "/loved",
+            backdrop: doorArts.underrated,
+          },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 }
@@ -779,7 +852,7 @@ app.get("/tv/featuring/:slug", async (c) => {
   // this page straight back to /person.
   const profile = await resolvePersonProfile(c, Number(idMatch[1]));
   if (!profile) return c.notFound();
-  const { person, roles: shows } = profile;
+  const { person, roles: shows, films } = profile;
   // one canonical URL per person — name drift 301s to the real slug
   const canonicalSlug = `${slugifyName(person.name)}-${person.id}`;
   if (slug !== canonicalSlug) return c.redirect(`/tv/featuring/${canonicalSlug}`, 301);
@@ -795,6 +868,42 @@ app.get("/tv/featuring/:slug", async (c) => {
     : null;
   const { art, ambient } = await topArt(c, shows[0]);
   const first = person.name.split(" ")[0];
+  const sidebar = c.get("siteSidebar");
+  const apiKey = c.env.TMDB_API_KEY;
+  const bestFilm = films.find((m) => m.rating != null) ?? films[0] ?? null;
+  const profileSpot = shows.find((s) => s.slug !== best?.slug) ?? shows[0] ?? null;
+  const [bestArt, profileArt, moviesArt] = await Promise.all([
+    best ? showKeepGoingBackdrop(apiKey, best) : Promise.resolve(null),
+    profileSpot ? showKeepGoingBackdrop(apiKey, profileSpot) : Promise.resolve(null),
+    bestFilm ? movieKeepGoingBackdrop(apiKey, bestFilm) : Promise.resolve(null),
+  ]);
+  const featuringDoors = fillKeepGoingBackdrops([
+    ...(best
+      ? [
+          {
+            icon: "Highest rated",
+            title: best.name,
+            desc: `${first}'s best-reviewed series — rating and where to watch.`,
+            href: `/show/${best.slug}`,
+            backdrop: bestArt,
+          },
+        ]
+      : []),
+    {
+      icon: "Profile",
+      title: `${person.name}: shows, age & roles`,
+      desc: "The full profile — every TV role and film credit on one page.",
+      href: `/person/${canonicalSlug}`,
+      backdrop: profileArt,
+    },
+    {
+      icon: "Movies",
+      title: `Best movies featuring ${first}`,
+      desc: "The film side — every credit ranked by viewer rating.",
+      href: `/movies/featuring/${canonicalSlug}`,
+      backdrop: moviesArt,
+    },
+  ]);
 
   const faqs = [
     {
@@ -815,7 +924,8 @@ app.get("/tv/featuring/:slug", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`Best TV Shows Featuring ${person.name} — Ranked | TV Nightly`}
       description={`Every ${person.name} TV show we track, ranked by viewer rating${best ? ` — from ${best.name} down` : ""}, with where to stream each.`}
       canonical={canonical(c)}
@@ -883,6 +993,8 @@ app.get("/tv/featuring/:slug", async (c) => {
         </div>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       <section class="hub-sec">
         <h2>
           {person.name}'s shows, ranked <span class="sched-count">{shows.length}</span>
@@ -895,29 +1007,28 @@ app.get("/tv/featuring/:slug", async (c) => {
       <section class="wo-doors">
         <h2>Keep exploring</h2>
         <div class="explore-grid">
-          {best ? (
+          {featuringDoors.map((card) => (
             <ExploreCard
-              icon="Highest rated"
-              title={best.name}
-              desc={`${first}'s best-reviewed series — rating and where to watch.`}
-              href={`/show/${best.slug}`}
-              rating={best.rating ?? undefined}
+              icon={card.icon}
+              title={card.title}
+              desc={card.desc}
+              href={card.href}
+              backdrop={card.backdrop ?? undefined}
+              {...(best && card.href === `/show/${best.slug}`
+                ? { rating: best.rating ?? undefined }
+                : {})}
             />
-          ) : null}
-          <ExploreCard
-            icon="Profile"
-            title={`${person.name}: shows, age & roles`}
-            desc="The full profile — every TV role and film credit on one page."
-            href={`/person/${canonicalSlug}`}
-          />
-          <ExploreCard
-            icon="Movies"
-            title={`Best movies featuring ${first}`}
-            desc="The film side — every credit ranked by viewer rating."
-            href={`/movies/featuring/${canonicalSlug}`}
-          />
+          ))}
         </div>
       </section>
+        </div>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 });

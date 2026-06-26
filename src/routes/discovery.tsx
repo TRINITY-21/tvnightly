@@ -3,14 +3,16 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
 import { ExploreCard, ShowCard } from "../components/cards";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import { KeepExploring, loadTvChartDoorArts, showKeepGoingBackdrop, fillKeepGoingBackdrops } from "../components/keep-going";
 import { IconStar } from "../components/icons";
 import { emmySeason, goldenGlobeSeason, type AwardsSeason } from "../lib/awards";
 import { heroBg, hiRes, posterSrc } from "../lib/format";
 import { breadcrumbTrail, canonical, faqLd, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
-import { AppContext, Bindings, ShowRow } from "../types";
+import { AppContext, Bindings, HonoEnv, ShowRow } from "../types";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<HonoEnv>();
 
 const SCRIPTED = "'Scripted', 'Animation', 'Documentary'";
 
@@ -69,9 +71,34 @@ async function awardsTrackerPage(
     },
   ];
 
+  const sidebar = c.get("siteSidebar");
+  const apiKey = c.env.TMDB_API_KEY;
+  const doorArts = fillKeepGoingBackdrops([
+    { icon: "", title: "", desc: "", href: "", backdrop: lead ? await showKeepGoingBackdrop(apiKey, lead) : null },
+    {
+      icon: "",
+      title: "",
+      desc: "",
+      href: "",
+      backdrop: categories[0]?.shows[1]
+        ? await showKeepGoingBackdrop(apiKey, categories[0].shows[1])
+        : null,
+    },
+    {
+      icon: "",
+      title: "",
+      desc: "",
+      href: "",
+      backdrop: categories[1]?.shows[0]
+        ? await showKeepGoingBackdrop(apiKey, categories[1].shows[0])
+        : null,
+    },
+  ]).map((c) => c.backdrop ?? null);
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`${opts.awardLabel} ${season.year} — Nominees, Frontrunners & Where to Watch | TV Nightly`}
       description={`${season.ceremony}: drama, comedy, and limited-series frontrunners with episode ratings, renewal status, and streaming links.`}
       canonical={`${site}${path}`}
@@ -114,6 +141,8 @@ async function awardsTrackerPage(
         </div>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       {categories.map((cat) => (
         <section class="hub-sec">
           <h2>{cat.name}</h2>
@@ -136,23 +165,41 @@ async function awardsTrackerPage(
         ))}
       </section>
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard icon="Charts" title="Top TV shows" desc="The highest-rated series we track." href="/top/tv" />
-          <ExploreCard icon="Premieres" title="Upcoming TV" desc="In-development series and dated premieres." href="/upcoming" />
-          <ExploreCard
-            icon="Hidden gems"
-            title={opts.awardLabel.includes("Emmy") ? `Golden Globes ${season.year}` : `Emmy Awards ${season.year}`}
-            desc="The other major awards tracker on TV Nightly."
-            href={
-              opts.awardLabel.includes("Emmy")
-                ? `/awards/golden-globes/${season.year}`
-                : `/awards/emmys/${season.year}`
-            }
-          />
+      <KeepExploring
+        cards={[
+          {
+            icon: "Charts",
+            title: "Top TV shows",
+            desc: "The highest-rated series we track.",
+            href: "/top/tv",
+            backdrop: doorArts[0],
+          },
+          {
+            icon: "Premieres",
+            title: "Upcoming TV",
+            desc: "In-development series and dated premieres.",
+            href: "/upcoming",
+            backdrop: doorArts[1],
+          },
+          {
+            icon: "Hidden gems",
+            title: opts.awardLabel.includes("Emmy") ? `Golden Globes ${season.year}` : `Emmy Awards ${season.year}`,
+            desc: "The other major awards tracker on TV Nightly.",
+            href: opts.awardLabel.includes("Emmy")
+              ? `/awards/golden-globes/${season.year}`
+              : `/awards/emmys/${season.year}`,
+            backdrop: doorArts[2],
+          },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 }
@@ -229,9 +276,18 @@ app.get("/upcoming", async (c) => {
     },
   ];
 
+  const sidebar = c.get("siteSidebar");
+  const [decadeArt, episodesArt, emmyArt] = await loadTvChartDoorArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    lead ?? null,
+    developing.results[1] ?? awaiting.results[0] ?? null,
+  );
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout
+    <Layout c={c}
+      sidebarInline
       title={`Upcoming TV Shows ${year} — New Series & Premiere Dates | TV Nightly`}
       description={`Upcoming TV shows in ${year}: series in development, awaiting renewal, and newly announced seasons — plus dated premieres in the next 90 days.`}
       canonical={canonical(c)}
@@ -271,6 +327,8 @@ app.get("/upcoming", async (c) => {
         </div>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       {premieres.results.length ? (
         <section class="hub-sec">
           <h2>Season premieres on the calendar</h2>
@@ -366,29 +424,39 @@ app.get("/upcoming", async (c) => {
         ))}
       </section>
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Charts"
-            title="Best TV of the 2010s"
-            desc="The highest-rated series that premiered during the 2010s."
-            href="/tv/best/2010s"
-          />
-          <ExploreCard
-            icon="Shortcut"
-            title="Best episodes ever"
-            desc="The single greatest hours of television, across every show."
-            href="/best-episodes"
-          />
-          <ExploreCard
-            icon="Premieres"
-            title={`Emmy Awards ${year}`}
-            desc="Frontrunners, categories, and where to stream each contender."
-            href={`/awards/emmys/${year}`}
-          />
+      <KeepExploring
+        cards={[
+          {
+            icon: "Charts",
+            title: "Best TV of the 2010s",
+            desc: "The highest-rated series that premiered during the 2010s.",
+            href: "/tv/best/2010s",
+            backdrop: decadeArt,
+          },
+          {
+            icon: "Shortcut",
+            title: "Best episodes ever",
+            desc: "The single greatest hours of television, across every show.",
+            href: "/best-episodes",
+            backdrop: episodesArt,
+          },
+          {
+            icon: "Premieres",
+            title: `Emmy Awards ${year}`,
+            desc: "Frontrunners, categories, and where to stream each contender.",
+            href: `/awards/emmys/${year}`,
+            backdrop: emmyArt,
+          },
+        ]}
+      />
         </div>
-      </section>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+          newsletterHref="/#home-email-title"
+        />
+      </div>
     </Layout>,
   );
 });

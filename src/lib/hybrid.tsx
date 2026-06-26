@@ -2,7 +2,7 @@
 // The mirror is our warm/engaged subset; this makes every TMDB title findable
 // and viewable (and indexable) without seeding.
 import type { Context } from "hono";
-import { Bindings } from "../types";
+import { Bindings, HonoEnv } from "../types";
 import { tmdbSearch, tmdbTitle, tmdbWatchProviders } from "./tmdb";
 import { slugifyName } from "./format";
 import { origin } from "./seo";
@@ -15,7 +15,7 @@ import { TmdbTitlePage } from "../components/TmdbDetail";
  *  Resolves the tmdb id from the `?t=` hint (a search click) or, for a clean /
  *  shared URL, by matching the slug against a TMDB search. */
 export async function tmdbFallback(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<HonoEnv>,
   kind: "tv" | "movie",
   slug: string,
 ) {
@@ -46,6 +46,7 @@ export async function tmdbFallback(
   c.header("Cache-Control", "public, max-age=600");
   return c.html(
     <TmdbTitlePage
+      c={c}
       t={t}
       providers={providers}
       region={region}

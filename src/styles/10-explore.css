@@ -224,6 +224,16 @@
   }
 }
 
+@media (max-width: 600px) {
+  /* long "Best TV/movies featuring …" titles — smaller than generic bleed heroes */
+  .wo-hero-person .wo-hero-text h1 {
+    font-size: 1.05rem;
+    font-stretch: 102%;
+    line-height: 1.22;
+    text-wrap: balance;
+  }
+}
+
 /* full-bleed variant (/top/tv, /movies/best): no card chrome — the #1's still
    runs up to the nav and edge-to-edge, the lockup rides the page column over
    a scrim that resolves to --bg, so the chart below just becomes the page */

@@ -3,9 +3,9 @@ import type { HonoEnv, MovieRow, ShowRow } from "../types";
 import { enrichMoviesFromD1, enrichShowsFromD1 } from "./chart-enrich";
 import { sortMovies, sortShows, type ChartFilters } from "./chart-filters";
 import { slugifyName } from "./format";
-import { providerBrand } from "./providers";
+import { providerBrand, tmdbNetworkId } from "./providers";
 import { networkDirectory } from "./queries";
-import { tmdbDiscoverProvider, tmdbGenreId } from "./tmdb";
+import { tmdbDiscoverNetwork, tmdbDiscoverProvider, tmdbGenreId, tmdbShowNetworks } from "./tmdb";
 import { toMovieRow, toShowRow, withGenreLabel } from "./tmdb-rows";
 
 export type NetEntry = { name: string; slug: string; count: number };
@@ -167,6 +167,55 @@ async function fetchNetworkMoviesD1(
   return results.filter((m) => regionHas(m.providers_intl));
 }
 
+/**
+ * TMDB network id for a channel: the curated name→id map first (fast, no fetch),
+ * then resolved from a sample D1 show's `networks[]` (cached a week). Lets *any*
+ * channel we hold a show for drive a with_networks chart, not just the 26 curated.
+ */
+async function resolveNetworkTmdbId(c: Ctx, entry: NetEntry): Promise<number | null> {
+  const curated = tmdbNetworkId(entry.name);
+  if (curated) return curated;
+  const apiKey = c.env.TMDB_API_KEY;
+  if (!apiKey) return null;
+  const cache = caches.default;
+  const cacheKey = new Request(`https://edge-cache.tvnightly.com/network-id/${entry.slug}`);
+  try {
+    const hit = await cache.match(cacheKey);
+    if (hit) return ((await hit.json()) as { id: number | null }).id;
+  } catch {
+    /* cache miss */
+  }
+  const row = await c.env.DB.prepare(
+    `SELECT tmdb_id FROM shows WHERE (network = ? OR web_channel = ?) AND tmdb_id IS NOT NULL
+     ORDER BY weight DESC LIMIT 1`,
+  )
+    .bind(entry.name, entry.name)
+    .first<{ tmdb_id: number }>();
+  let id: number | null = null;
+  if (row?.tmdb_id) {
+    const nets = await tmdbShowNetworks(apiKey, row.tmdb_id);
+    const want = slugifyName(entry.name);
+    const match =
+      nets.find((n) => slugifyName(n.name) === want) ??
+      nets.find((n) => {
+        const ns = slugifyName(n.name);
+        return ns.includes(want) || want.includes(ns);
+      });
+    id = match?.id ?? null;
+  }
+  try {
+    await cache.put(
+      cacheKey,
+      new Response(JSON.stringify({ id }), {
+        headers: { "Cache-Control": "public, max-age=604800", "content-type": "application/json" },
+      }),
+    );
+  } catch {
+    /* best-effort cache */
+  }
+  return id;
+}
+
 async function fetchNetworkShowsLive(
   c: Ctx,
   entry: NetEntry,
@@ -174,15 +223,31 @@ async function fetchNetworkShowsLive(
   filters: ChartFilters,
 ): Promise<ShowRow[]> {
   const apiKey = c.env.TMDB_API_KEY;
-  const pid = apiKey ? tmdbProviderId(entry.name) : null;
-  if (!apiKey || !pid) return [];
+  if (!apiKey) return [];
   const genreId = filters.genre ? tmdbGenreId("tv", slugifyName(filters.genre)) : null;
   if (filters.genre && !genreId) return [];
-  const hits = await tmdbDiscoverProvider(apiKey, "tv", pid, region, TMDB_NETWORK_PAGES, {
-    genreId,
-    year: filters.year,
-    sort: filters.sort,
-  });
+  // Streamers (Netflix, Hulu, Disney+…) → their full streaming catalogue via
+  // watch-provider. Broadcast/cable channels (HBO, Disney Channel, BBC One…) aren't
+  // TMDB watch-providers, so fall back to the channel's own catalogue via
+  // with_networks — otherwise these pages render empty despite being listed.
+  const pid = tmdbProviderId(entry.name);
+  let hits;
+  if (pid) {
+    hits = await tmdbDiscoverProvider(apiKey, "tv", pid, region, TMDB_NETWORK_PAGES, {
+      genreId,
+      year: filters.year,
+      sort: filters.sort,
+    });
+  } else {
+    const nid = await resolveNetworkTmdbId(c, entry);
+    hits = nid
+      ? await tmdbDiscoverNetwork(apiKey, nid, TMDB_NETWORK_PAGES, {
+          genreId,
+          year: filters.year,
+          sort: filters.sort,
+        })
+      : [];
+  }
   return hits.map((h) => withGenreLabel(toShowRow(h), filters.genre || null));
 }
 
@@ -280,9 +345,10 @@ export async function fetchNetworkTvChartResults(
   regionHas: (json: string | null) => boolean,
 ): Promise<ShowRow[]> {
   const apiKey = c.env.TMDB_API_KEY;
-  const pid = apiKey ? tmdbProviderId(entry.name) : null;
 
-  if (apiKey && pid) {
+  // fetchNetworkShowsLive resolves a watch-provider OR a TMDB network id; only
+  // when it finds neither (and returns []) do we drop to the D1 catalogue.
+  if (apiKey) {
     const live = await fetchNetworkShowsLive(c, entry, region, filters);
     if (live.length) {
       const enriched = await enrichShowsFromD1(c.env.DB, live);

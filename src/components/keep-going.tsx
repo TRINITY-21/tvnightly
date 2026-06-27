@@ -327,3 +327,117 @@ export async function loadMoviesHubDoorArts(
   ]);
   return filled.map((c) => c.backdrop ?? null) as [ExploreArt, ExploreArt, ExploreArt, ExploreArt];
 };
+
+/** /actors and /directors hub — cross-link, top TV, browse-all doors. */
+export async function loadPersonHubDoorArts(
+  db: D1Database,
+  apiKey: string | undefined,
+  dept: "Acting" | "Directing",
+): Promise<[ExploreArt, ExploreArt, ExploreArt]> {
+  const [topShow, topMovie, crossRow] = await Promise.all([
+    db
+      .prepare(
+        `SELECT * FROM shows WHERE rating IS NOT NULL AND weight >= 75
+         ORDER BY rating DESC, weight DESC LIMIT 1`,
+      )
+      .first<ShowRow>(),
+    db
+      .prepare(
+        `SELECT imdb_id, poster_url FROM movies WHERE rating IS NOT NULL AND votes >= 1000
+         ORDER BY rating DESC, votes DESC LIMIT 1`,
+      )
+      .first<{ imdb_id: string; poster_url: string | null }>(),
+    dept === "Directing"
+      ? db
+          .prepare(
+            `SELECT s.tmdb_id, s.image_url, s.poster_url FROM people p
+             JOIN credits cr ON cr.person_id = p.id AND cr.guest = 0
+             JOIN shows s ON s.id = cr.show_id AND s.weight >= 45
+             WHERE (p.known_dept = 'Acting' OR (p.known_dept IS NULL AND cr.character IS NOT NULL AND cr.character != ''))
+               AND s.rating IS NOT NULL
+             ORDER BY s.rating DESC, s.weight DESC LIMIT 1`,
+          )
+          .first<{ tmdb_id: number | null; image_url: string | null; poster_url: string | null }>()
+      : db
+          .prepare(
+            `SELECT m.imdb_id, m.poster_url FROM people p
+             JOIN movie_credits mc ON mc.person_id = p.id
+             JOIN movies m ON m.imdb_id = mc.movie_id
+             WHERE p.known_dept = 'Directing' AND m.rating IS NOT NULL
+             ORDER BY m.rating DESC, m.votes DESC LIMIT 1`,
+          )
+          .first<{ imdb_id: string; poster_url: string | null }>(),
+  ]);
+
+  const [crossArt, chartsArt, browseArt] = await Promise.all([
+    crossRow
+      ? dept === "Directing"
+        ? // crossRow is the show-shape row for Directing, movie-shape otherwise (see
+          // the discriminated query above) — TS can't narrow it across the ternary.
+          showKeepGoingBackdrop(apiKey, crossRow as Parameters<typeof showKeepGoingBackdrop>[1])
+        : movieKeepGoingBackdrop(apiKey, crossRow as Parameters<typeof movieKeepGoingBackdrop>[1])
+      : topShow
+        ? showKeepGoingBackdrop(apiKey, topShow)
+        : Promise.resolve(null),
+    topShow ? showKeepGoingBackdrop(apiKey, topShow) : Promise.resolve(null),
+    topMovie ? movieKeepGoingBackdrop(apiKey, topMovie) : Promise.resolve(null),
+  ]);
+
+  const filled = fillKeepGoingBackdrops([
+    { icon: "", title: "", desc: "", href: "", backdrop: crossArt },
+    { icon: "", title: "", desc: "", href: "", backdrop: chartsArt },
+    { icon: "", title: "", desc: "", href: "", backdrop: browseArt },
+  ]);
+  return filled.map((c) => c.backdrop ?? null) as [ExploreArt, ExploreArt, ExploreArt];
+}
+
+/** Three-door footer on /recommend results + taste share pages. */
+export async function loadRecDoorArts(
+  db: D1Database,
+  apiKey: string | undefined,
+  tonightHead: { show_image: string | null; show_poster: string | null } | null,
+): Promise<[ExploreArt, ExploreArt, ExploreArt]> {
+  const lovedRow = await db
+    .prepare(
+      `SELECT kind, ref FROM title_ratings
+       WHERE (loved + liked + meh + awful) >= 2
+       ORDER BY (loved + 0.5 * liked) / CAST(loved + liked + meh + awful AS REAL) DESC,
+                (loved + liked + meh + awful) DESC
+       LIMIT 1`,
+    )
+    .first<{ kind: string; ref: string }>();
+
+  const [pickerArt, tonightArt, lovedArt] = await Promise.all([
+    genreShowArt(db, apiKey ?? "", "Drama"),
+    tonightHead
+      ? showKeepGoingBackdrop(apiKey, {
+          tmdb_id: null,
+          image_url: tonightHead.show_image,
+          poster_url: tonightHead.show_poster,
+        })
+      : Promise.resolve(null),
+    lovedRow
+      ? lovedRow.kind === "tv"
+        ? db
+            .prepare(
+              `SELECT tmdb_id, image_url, COALESCE(poster_url, image_url) AS poster_url
+               FROM shows WHERE id = ? LIMIT 1`,
+            )
+            .bind(Number(lovedRow.ref))
+            .first<{ tmdb_id: number | null; image_url: string | null; poster_url: string | null }>()
+            .then((row) => (row ? showKeepGoingBackdrop(apiKey, row) : null))
+        : db
+            .prepare("SELECT imdb_id, poster_url FROM movies WHERE imdb_id = ? LIMIT 1")
+            .bind(lovedRow.ref)
+            .first<{ imdb_id: string; poster_url: string | null }>()
+            .then((row) => (row ? movieKeepGoingBackdrop(apiKey, row) : null))
+      : Promise.resolve(null),
+  ]);
+
+  const filled = fillKeepGoingBackdrops([
+    { icon: "", title: "", desc: "", href: "", backdrop: pickerArt },
+    { icon: "", title: "", desc: "", href: "", backdrop: tonightArt },
+    { icon: "", title: "", desc: "", href: "", backdrop: lovedArt },
+  ]);
+  return filled.map((c) => c.backdrop ?? null) as [ExploreArt, ExploreArt, ExploreArt];
+}

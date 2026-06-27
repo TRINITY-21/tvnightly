@@ -91,7 +91,7 @@ export async function loadShowDetailHeroContext(
     .slice(0, 3);
   const writerLinks = writers.length ? await crewLinkMap(c.env.DB, writers) : new Map<number, number>();
   const prov = providersFor(show, region);
-  const watchProv = heroWatchProvider(prov.names, show.name, prov.region);
+  const watchProv = heroWatchProvider(prov.names, show.name, prov.region, "tv");
   const showGenres: string[] = show.genres ? JSON.parse(show.genres) : [];
 
   return {

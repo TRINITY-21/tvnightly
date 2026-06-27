@@ -3,7 +3,7 @@ import { Child, FC } from "hono/jsx";
 import { Honeypot, Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
 import { HomeSidebarRail } from "../components/home-sidebar";
-import { KeepExploring, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
+import { KeepExploring, loadRecDoorArts, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
 import { IconStar, IconStarBadge } from "../components/icons";
 import { ShareBar } from "../components/share";
 import { TasteProfileShare } from "../components/taste-profile";
@@ -14,6 +14,7 @@ import { RatedEntry, VERDICTS, VERDICT_SCALE, fmtRated, getRatedTitle, parseRate
 import { DeckCard, Pick, WhySignal, buildRecommendation, enrichDeck, landingPicks } from "../lib/recommend";
 import { servePng } from "../lib/render";
 import { foldSql, foldText } from "../lib/search";
+import { liveTonight } from "../lib/schedule-live";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { posterDataUri } from "../lib/signal";
 import { TasteProfileCardData, buildOgCard, buildTasteProfileCard, buildTasteProfileOgCard } from "../lib/social";
@@ -238,11 +239,11 @@ const MatchHero: FC<{
   </header>
 );
 
-const RecDoors: FC = () => (
+const RecDoors: FC<{ arts?: [ExploreArt, ExploreArt, ExploreArt] }> = ({ arts }) => (
   <div class="rec-doors">
-    <ExploreCard icon="Picker" title="Browse by mood" desc="Filter by genre, service and runtime — pick in seconds." href="/what-to-watch" />
-    <ExploreCard icon="Tonight" title="On tonight" desc="Every episode airing today, in air-time order." href="/tonight" />
-    <ExploreCard icon="Loved" title="Community loved" desc="What TV Nightly's raters rate highest right now." href="/loved" />
+    <ExploreCard icon="Picker" title="Browse by mood" desc="Filter by genre, service and runtime — pick in seconds." href="/what-to-watch" backdrop={arts?.[0] ?? undefined} />
+    <ExploreCard icon="Tonight" title="On tonight" desc="Every episode airing today, in air-time order." href="/tonight" backdrop={arts?.[1] ?? undefined} />
+    <ExploreCard icon="Loved" title="Community loved" desc="What TV Nightly's raters rate highest right now." href="/loved" backdrop={arts?.[2] ?? undefined} />
   </div>
 );
 
@@ -367,6 +368,8 @@ app.get("/recommend/taste", async (c) => {
   const site = origin(c);
   const tasteUrl = `${site}/recommend/taste?rated=${encodeURIComponent(ratedStr)}`;
   const cardUrl = `/recommend/taste.png?rated=${encodeURIComponent(ratedStr)}`;
+  const tonightHead = (await liveTonight(c))[0] ?? null;
+  const recDoorArts = await loadRecDoorArts(c.env.DB, c.env.TMDB_API_KEY, tonightHead);
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -401,7 +404,7 @@ app.get("/recommend/taste", async (c) => {
             </a>
           </p>
         </section>
-        <RecDoors />
+        <RecDoors arts={recDoorArts} />
       </article>
     </Layout>,
   );
@@ -465,6 +468,8 @@ app.get("/recommend", async (c) => {
         return p.poster ? heroBg(hiRes(p.poster) ?? p.poster) : null;
       }),
     );
+    const tonightHead = (await liveTonight(c))[0] ?? null;
+    const recDoorArts = await loadRecDoorArts(db, c.env.TMDB_API_KEY, tonightHead);
 
     c.header("Cache-Control", "no-store");
     return c.html(
@@ -573,7 +578,7 @@ app.get("/recommend", async (c) => {
                 </button>
               </div>
             ) : null}
-            <RecDoors />
+            <RecDoors arts={recDoorArts} />
             <RecEmail />
           </section>
         </article>

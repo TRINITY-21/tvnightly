@@ -2,7 +2,8 @@
 // highlights, facts, social actions, and plot.
 import { FC, PropsWithChildren } from "hono/jsx";
 import { watchUrl } from "../lib/affiliate";
-import { PROVIDER_LOGOS, providerBrand } from "../lib/providers";
+import { networkChartBasePath, type ChartKind } from "../lib/chart-filters";
+import { PROVIDER_LOGOS, providerBrand, providerNetworkSlug } from "../lib/providers";
 import { RateInline } from "./forms";
 import { IconPlayDisc } from "./icons";
 import { ShareBar } from "./share";
@@ -57,7 +58,7 @@ export const DetailHero: FC<{
   starring: CreditPerson[];
   directors: CreditPerson[];
   writers: CreditPerson[];
-  watchProvider?: { name: string; logo?: string; href?: string | null } | null;
+  watchProvider?: { name: string; logo?: string; href?: string | null; chartHref?: string | null } | null;
   metaBadge?: string | null;
   genres: { name: string; href: string }[];
   metaExtra?: string | null;
@@ -124,10 +125,21 @@ export const DetailHero: FC<{
             </a>
             {metaBadge ? <span class="hub-hero-badge">{metaBadge}</span> : null}
             {watchProvider?.logo ? (
-              <span class="hub-hero-chip hub-hero-chip-logo">
-                <img src={watchProvider.logo} alt="" width="18" height="18" loading="lazy" />
-                {watchProvider.name}
-              </span>
+              watchProvider.chartHref ? (
+                <a
+                  class="hub-hero-chip hub-hero-chip-logo"
+                  href={watchProvider.chartHref}
+                  title={`Top ${watchProvider.name} ${kind === "movie" ? "movies" : "shows"}`}
+                >
+                  <img src={watchProvider.logo} alt="" width="18" height="18" loading="lazy" />
+                  {watchProvider.name}
+                </a>
+              ) : (
+                <span class="hub-hero-chip hub-hero-chip-logo">
+                  <img src={watchProvider.logo} alt="" width="18" height="18" loading="lazy" />
+                  {watchProvider.name}
+                </span>
+              )
             ) : network ? (
               networkHref ? (
                 <a class="hub-hero-chip" href={networkHref}>
@@ -269,15 +281,18 @@ export function heroWatchProvider(
   names: string[],
   title: string,
   region: string,
-): { name: string; logo?: string; href?: string | null } | null {
+  kind: ChartKind,
+): { name: string; logo?: string; href?: string | null; chartHref: string } | null {
   if (!names.length) return null;
   const name = names[0];
   const logo = PROVIDER_LOGOS[name];
   const watch = watchUrl(name, title, region);
+  const brand = providerBrand(name);
   return {
-    name: providerBrand(name),
+    name: brand,
     logo,
     href: watch?.href ?? null,
+    chartHref: networkChartBasePath(providerNetworkSlug(name), kind),
   };
 }
 export const tmdbRingScore = (rating: number | null | undefined): number | null =>

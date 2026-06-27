@@ -612,19 +612,25 @@ body.browse-open { overflow: hidden; }
 .nav-toggle[aria-expanded="true"] .nav-toggle-bars span:nth-child(3) { transform: translateY(-5px) rotate(-45deg); }
 
 .mobile-menu {
-  position: absolute;
-  top: 100%;
+  position: fixed;
+  top: var(--nav-header-h, var(--header-h));
   left: 0;
   right: 0;
-  height: calc(100dvh - 100%);
+  bottom: 0;
+  width: 100%;
+  max-width: 100vw;
+  margin: 0;
+  box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   background: #15151a;
   border-top: 1px solid var(--line);
-  z-index: 49;
-  padding: 0.5rem 1rem 2.5rem;
-  animation: navMegaIn var(--speed) var(--ease);
+  z-index: 250;
+  padding: 0.5rem 1rem calc(2.5rem + env(safe-area-inset-bottom, 0px));
+}
+.mobile-menu.is-open {
+  z-index: 250;
 }
 .mobile-menu[hidden] { display: none; }
 .mobile-menu-inner { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; }
@@ -663,6 +669,39 @@ body.browse-open { overflow: hidden; }
   color: var(--text);
 }
 .mm-row:active { background: rgba(255, 255, 255, 0.04); }
+/* network logos — 3×3 grid of white chips (same marks as the desktop browse panel) */
+.mm-nets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+  padding: 0.2rem 0.3rem 0.55rem;
+}
+.mm-net {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  background: #fff;
+  transition: transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+.mm-net:active {
+  transform: scale(0.97);
+  text-decoration: none;
+}
+.mm-net img {
+  width: 62%;
+  height: 62%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.mm-net-fallback {
+  font-family: var(--display);
+  font-stretch: 90%;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #15151a;
+}
 .mm-all {
   margin-top: 1.1rem;
   padding: 0.85rem 0.3rem;
@@ -675,14 +714,40 @@ body.browse-open { overflow: hidden; }
   text-transform: uppercase;
   color: var(--accent);
 }
-body.nav-open { overflow: hidden; }
+html.nav-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+body.nav-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+body.nav-open .mobile-menu {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+body.nav-open .back-to-top {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* Pinned by JS while the drawer is open — overflow:hidden kills sticky, so the
+   header must be position:fixed or it scrolls off-screen mid-page. */
+.site-header.nav-pinned {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 300;
+}
 @media (max-width: 900px) {
   /* One-row header: logo mark · search (fills the middle) · hamburger pinned
      right. The wordmark collapses to the mark to buy the search its width — the
      full "TV NIGHTLY." returns at ≥901px. Search is the header's primary control
      on phone and tablet and stays always-visible; navigation lives in the drawer.
      The toggle lives directly under .site-header (not .header-inner) so its
-     absolute box anchors to the sticky header — same as the drawer. */
+     absolute box anchors to the sticky header. The drawer is a sibling in the
+     DOM (see Layout) — fixed below the header, not inside it. */
   .header-inner {
     display: flex;
     flex-direction: row;
@@ -723,7 +788,7 @@ body.nav-open { overflow: hidden; }
     top: 50%;
     right: 1rem;
     transform: translateY(-50%);
-    z-index: 60;
+    z-index: 1;
   }
   .search {
     flex: 1 1 auto;

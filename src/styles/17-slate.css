@@ -199,7 +199,8 @@
 }
 
 @media (max-width: 700px) {
-  .slate.has-media { grid-template-columns: 1fr; }
+  .slate.has-media,
+  .slate.has-media.is-poster { grid-template-columns: 1fr; }
   .slate-media img { max-height: 220px; }
   .count-band { gap: 1.4rem; }
   .count-num { font-size: 1.7rem; }
@@ -228,17 +229,24 @@
 }
 
 @media (max-width: 600px) {
-  /* the count band wraps to a 2x2 grid so a 3-digit Days value never
-     overruns the narrow slate body; stat-band voice and tokens unchanged */
+  /* four equal columns — a 2×2 wrap reads as a tall stack in a narrow body */
   .count-band {
-    flex-wrap: wrap;
-    gap: 0.6rem 1.4rem;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.35rem 0.45rem;
+    flex-wrap: unset;
   }
   .count {
-    flex: 0 0 calc(50% - 0.7rem);
+    flex: unset;
+    align-items: center;
+    text-align: center;
   }
   .count-num {
-    font-size: 1.5rem;
+    font-size: 1.35rem;
+  }
+  .count-label {
+    font-size: 0.58rem;
+    letter-spacing: 0.06em;
   }
 }
 
@@ -327,7 +335,8 @@
 }
 @media (max-width: 720px) {
   .next-slate.has-media,
-  .next-slate.is-poster {
+  .next-slate.has-media.is-poster,
+  .slate.next-slate.has-media.is-poster {
     grid-template-columns: 1fr;
   }
   .next-slate .slate-media {
@@ -338,14 +347,38 @@
     max-height: 220px;
     aspect-ratio: 16 / 9;
   }
+  .next-slate.is-poster .slate-media {
+    display: flex;
+    justify-content: center;
+  }
   .next-slate.is-poster .slate-media img {
-    max-height: 240px;
+    max-height: none;
+    width: 118px;
+    max-width: 42vw;
     aspect-ratio: 2 / 3;
-    width: auto;
-    max-width: 140px;
     margin: 0 auto;
   }
   .next-slate .slate-body {
     padding: 1rem 1.1rem 1.15rem;
+  }
+  .next-slate .slate-title {
+    font-size: clamp(1.2rem, 6.5vw, 1.65rem);
+    text-wrap: balance;
+  }
+  .next-slate .count-band {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.35rem 0.4rem;
+  }
+  .next-slate .count {
+    align-items: center;
+    text-align: center;
+  }
+  .next-slate .count-num {
+    font-size: 1.3rem;
+  }
+  .next-slate .count-label {
+    font-size: 0.56rem;
+    letter-spacing: 0.05em;
   }
 }

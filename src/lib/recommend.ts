@@ -12,9 +12,9 @@
 //   - always a primary (graceful cold-start), never an empty page.
 //
 // Almost all of this is in-memory after a handful of indexed reads.
-import { ShowRow, MovieRow } from "../types";
+import { MovieRow, ShowRow } from "../types";
+import { similarMovies, similarShows } from "./queries";
 import { RatedEntry, VERDICT_WEIGHT, getRatedTitle, titleKey } from "./ratings";
-import { similarShows, similarMovies, PICKER_MIN_WEIGHT } from "./queries";
 
 // The legible "why" behind a pick — every field points back at something the
 // user actually rated, so the result is checkable rather than magic. This is
@@ -74,6 +74,9 @@ export interface TasteProfile {
   era: string | null;
   summary: string;
 }
+
+/** 1 primary + runner-ups shown in "If not that, then". */
+const RECOMMEND_POOL = 10;
 
 const buildTasteProfile = (taste: Map<string, number>, eraCenter: number | null): TasteProfile => {
   const positives = [...taste.entries()].filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]);
@@ -318,14 +321,14 @@ export async function buildRecommendation(
     }
     genreCount.set(lead, (genreCount.get(lead) ?? 0) + 1);
     ordered.push(s);
-    if (ordered.length >= 7) break;
+    if (ordered.length >= RECOMMEND_POOL) break;
   }
   for (const s of overflow) {
-    if (ordered.length >= 7) break;
+    if (ordered.length >= RECOMMEND_POOL) break;
     ordered.push(s);
   }
 
-  let top = ordered.slice(0, 7);
+  let top = ordered.slice(0, RECOMMEND_POOL);
 
   // 6. Cold start / starved pool: confident fallback so a page is never empty.
   if (top.length === 0) {
@@ -335,7 +338,7 @@ export async function buildRecommendation(
       await db
         .prepare(
           `SELECT * FROM shows WHERE weight >= ? AND rating >= 7.8 AND poster_url IS NOT NULL ${likeClause}
-           ORDER BY rating DESC, weight DESC LIMIT 7`,
+           ORDER BY rating DESC, weight DESC LIMIT ${RECOMMEND_POOL}`,
         )
         .bind(...(wantGenre ? [85, `%"${wantGenre}"%`] : [85]))
         .all<ShowRow>()
@@ -345,7 +348,7 @@ export async function buildRecommendation(
 
   const withReasons = top.map((s, i) => ({ ...s.pick, reason: s.pick.reason || reasonFor(s, i === 0), why: whyFor(s) }));
   const primary = withReasons[0] ?? null;
-  const contenders = withReasons.slice(1, 7);
+  const contenders = withReasons.slice(1, RECOMMEND_POOL);
 
   const topScore = top[0]?.pick.score ?? 0;
   const confidence = !primary

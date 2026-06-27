@@ -889,6 +889,59 @@ export type TmdbChartDiscoverOpts = {
 };
 
 const TMDB_CHART_PAGES_MAX = 25;
+// When a quality-thresholded discover pass yields fewer than this, top it up with
+// a lenient (low-vote-floor) pass so niche genre × year × network combos still
+// fill out a chart. The quality titles already fetched stay ranked first.
+const TMDB_FILL_TARGET = 40;
+const TMDB_FILL_PAGES = 10;
+
+/** Fetch `pages` of a /discover query in parallel and flatten (deduped by caller). */
+async function discoverPages(
+  key: string,
+  kind: "tv" | "movie",
+  pages: number,
+  extra: string,
+): Promise<TmdbSearchHit[]> {
+  const batches = await Promise.all(
+    Array.from({ length: pages }, (_, i) => tmdbList(key, `/discover/${kind}`, kind, i + 1, extra)),
+  );
+  return batches.flat();
+}
+
+/** Dedupe hits by tmdbId, preserving first-seen order. */
+function dedupeHits(hits: TmdbSearchHit[]): TmdbSearchHit[] {
+  const seen = new Set<number>();
+  return hits.filter((h) => !seen.has(h.tmdbId) && seen.add(h.tmdbId));
+}
+
+/**
+ * Two-pass /discover: a quality pass (real vote floor + optional rating floor)
+ * ranked first, then — only when that comes up short — a lenient pass on the same
+ * filters with a low vote floor to fill the tail. Guarantees breadth on sparse
+ * combos without letting one-vote titles outrank the real catalogue.
+ */
+async function discoverWithFill(
+  key: string,
+  kind: "tv" | "movie",
+  pages: number,
+  base: string, // sort + genre/year/decade/provider filters, no vote/rating gate
+  qualityVotes: number,
+  ratingFloor: number | null,
+  lenientVotes: number,
+): Promise<TmdbSearchHit[]> {
+  const ratingGate = ratingFloor != null ? `&vote_average.gte=${ratingFloor}` : "";
+  const primary = dedupeHits(
+    await discoverPages(key, kind, pages, `${base}&vote_count.gte=${qualityVotes}${ratingGate}`),
+  );
+  if (primary.length >= TMDB_FILL_TARGET) return primary;
+  const fill = await discoverPages(
+    key,
+    kind,
+    Math.min(pages, TMDB_FILL_PAGES),
+    `${base}&vote_count.gte=${lenientVotes}`,
+  );
+  return dedupeHits([...primary, ...fill]);
+}
 
 /** Live /discover for chart lists — TMDB is the source of truth for catalog breadth. */
 export async function tmdbDiscoverChart(
@@ -898,27 +951,18 @@ export async function tmdbDiscoverChart(
   const { kind, sort = "rated", genreId, year, decade } = opts;
   const pages = Math.max(1, Math.min(opts.pages ?? TMDB_CHART_PAGES_MAX, TMDB_CHART_PAGES_MAX));
   const sortBy = tmdbDiscoverSortBy(kind, sort);
-  let extra = `&sort_by=${sortBy}&vote_count.gte=${kind === "tv" ? 30 : 200}&vote_average.gte=5`;
-  if (genreId) extra += `&with_genres=${genreId}`;
+  let base = `&sort_by=${sortBy}`;
+  if (genreId) base += `&with_genres=${genreId}`;
   if (year != null) {
-    extra +=
-      kind === "tv"
-        ? `&first_air_date_year=${year}`
-        : `&primary_release_year=${year}`;
+    base += kind === "tv" ? `&first_air_date_year=${year}` : `&primary_release_year=${year}`;
   }
   if (decade) {
-    extra +=
+    base +=
       kind === "tv"
         ? `&first_air_date.gte=${decade.start}-01-01&first_air_date.lte=${decade.end}-12-31`
         : `&primary_release_date.gte=${decade.start}-01-01&primary_release_date.lte=${decade.end}-12-31`;
   }
-  const batches = await Promise.all(
-    Array.from({ length: pages }, (_, i) =>
-      tmdbList(key, `/discover/${kind}`, kind, i + 1, extra),
-    ),
-  );
-  const seen = new Set<number>();
-  return batches.flat().filter((h) => !seen.has(h.tmdbId) && seen.add(h.tmdbId));
+  return discoverWithFill(key, kind, pages, base, kind === "tv" ? 30 : 200, 5, kind === "tv" ? 3 : 15);
 }
 
 /** Live /discover for a genre (popularity-ranked, rated only). */
@@ -947,20 +991,61 @@ export async function tmdbDiscoverProvider(
 ): Promise<TmdbSearchHit[]> {
   const sort = opts?.sort ?? "popular";
   const sortBy = tmdbDiscoverSortBy(kind, sort);
-  let extra = `&with_watch_providers=${providerId}&watch_region=${region}&sort_by=${sortBy}&vote_count.gte=${kind === "tv" ? 30 : 100}`;
-  if (opts?.genreId) extra += `&with_genres=${opts.genreId}`;
+  let base = `&with_watch_providers=${providerId}&watch_region=${region}&sort_by=${sortBy}`;
+  if (opts?.genreId) base += `&with_genres=${opts.genreId}`;
   if (opts?.year != null) {
-    extra +=
-      kind === "tv"
-        ? `&first_air_date_year=${opts.year}`
-        : `&primary_release_year=${opts.year}`;
+    base += kind === "tv" ? `&first_air_date_year=${opts.year}` : `&primary_release_year=${opts.year}`;
   }
   const n = Math.max(1, Math.min(pages, TMDB_CHART_PAGES_MAX));
-  const batches = await Promise.all(
-    Array.from({ length: n }, (_, i) => tmdbList(key, `/discover/${kind}`, kind, i + 1, extra)),
-  );
-  const seen = new Set<number>();
-  return batches.flat().filter((h) => !seen.has(h.tmdbId) && seen.add(h.tmdbId));
+  // Provider catalogues are region-scoped and thin out fast on genre/year filters;
+  // no rating floor here (a provider's catalogue is the signal), just vote floors.
+  return discoverWithFill(key, kind, n, base, kind === "tv" ? 30 : 100, null, kind === "tv" ? 3 : 10);
+}
+
+/** Live /discover by TMDB network (with_networks) — a broadcast/cable channel's
+ *  own catalogue. TV only (TMDB has no movie networks); same adaptive fill as the
+ *  provider charts, so a channel that isn't a streaming watch-provider (HBO, The
+ *  CW, BBC One…) still returns a full chart. */
+export async function tmdbDiscoverNetwork(
+  key: string,
+  networkId: number,
+  pages = 2,
+  opts?: { genreId?: number | null; year?: number | null; sort?: TmdbDiscoverSort },
+): Promise<TmdbSearchHit[]> {
+  const sort = opts?.sort ?? "popular";
+  const sortBy = tmdbDiscoverSortBy("tv", sort);
+  let base = `&with_networks=${networkId}&sort_by=${sortBy}`;
+  if (opts?.genreId) base += `&with_genres=${opts.genreId}`;
+  if (opts?.year != null) base += `&first_air_date_year=${opts.year}`;
+  const n = Math.max(1, Math.min(pages, TMDB_CHART_PAGES_MAX));
+  return discoverWithFill(key, "tv", n, base, 30, null, 3);
+}
+
+/** A TMDB show's networks (id + name) — a light detail fetch, edge-cached a week.
+ *  Used to resolve a network name to its TMDB id when it isn't in the curated map
+ *  (so any channel with a sample show can drive a with_networks chart). */
+export async function tmdbShowNetworks(
+  key: string,
+  tmdbId: number,
+): Promise<{ id: number; name: string }[]> {
+  const cacheKey = new Request(`https://edge-cache.tvnightly.com/tv-networks/${tmdbId}`);
+  const cache = caches.default;
+  try {
+    let res = await cache.match(cacheKey);
+    if (!res) {
+      const live = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${key}`, {
+        headers: { accept: "application/json" },
+      });
+      if (!live.ok) return [];
+      res = new Response(live.body, live);
+      res.headers.set("Cache-Control", "public, max-age=604800");
+      await cache.put(cacheKey, res.clone());
+    }
+    const data = (await res.json()) as { networks?: { id: number; name: string }[] };
+    return data.networks ?? [];
+  } catch {
+    return [];
+  }
 }
 
 /** TMDB "recommendations" for a title — the live fallback for "Shows/Movies like

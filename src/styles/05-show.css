@@ -509,9 +509,36 @@
   flex-wrap: nowrap;
   margin-top: 1rem;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
 }
 .subnav-scroll::-webkit-scrollbar { display: none; }
-.subnav-scroll a { white-space: nowrap; flex-shrink: 0; }
+.subnav-scroll a {
+  white-space: nowrap;
+  flex-shrink: 0;
+  scroll-snap-align: start;
+}
+@media (max-width: 600px) {
+  /* edge-to-edge swipe rail — tabs must not clip without a scroll affordance */
+  .subnav-scroll {
+    margin-left: -1rem;
+    margin-right: -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    scroll-padding-inline: 1rem;
+  }
+  .subnav-scroll a {
+    padding: 0.42rem 0.55rem;
+    font-size: 0.82rem;
+  }
+  /* schedule answer pages: long uppercase h1 + many tabs */
+  main > h1:has(+ .subnav-scroll) {
+    font-size: 1.18rem;
+    line-height: 1.22;
+    text-wrap: balance;
+    margin-bottom: 0.45rem;
+  }
+}
 
 /* cast rail: headshot cards, same edge-fade language as poster rails */
 .cast-row {

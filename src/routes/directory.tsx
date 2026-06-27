@@ -34,8 +34,6 @@ import {
     networkHasStreamingCatalog,
     resolveNetwork,
     regionTester,
-    topNetworkMovies,
-    topNetworkShows,
 } from "../lib/network-chart";
 import { genreShowArt, hubArt, networkShowArt, type ExploreArt } from "../lib/explore-art";
 import { heroBg, hiRes, posterSrc, slugifyName } from "../lib/format";
@@ -2083,15 +2081,6 @@ app.get("/network/:slug/shows", (c) => networkTvChart(c, c.req.param("slug")));
 app.get("/network/:slug/movies", (c) => networkMovieChart(c, c.req.param("slug")));
 
 /** Does a title's genres array (JSON) contain this label? */
-const inGenre = (json: string | null, label: string): boolean => {
-  if (!json) return false;
-  try {
-    return (JSON.parse(json) as string[]).includes(label);
-  } catch {
-    return false;
-  }
-};
-
 // "Best {genre} on {service}" — the high-intent long-tail page ("best horror on
 // netflix"). Registered AFTER /shows + /movies so those literal paths win; any
 // other 3rd segment is treated as a genre. 404s on combos with no titles so we
@@ -2110,12 +2099,22 @@ app.get("/network/:slug/:genre", async (c) => {
 
   const region = visitorRegion(c);
   const regionHas = regionTester(region, entry.name);
-  const [allShows, allMovies] = await Promise.all([
-    tvGenre ? topNetworkShows(c, entry, region, regionHas, 300) : Promise.resolve([] as ShowRow[]),
-    movieGenre ? topNetworkMovies(c, entry, region, regionHas, 300) : Promise.resolve([] as MovieRow[]),
+  // Filter the genre at the TMDB-discover level (with_genres) instead of pulling
+  // the network's top-300 and filtering in JS — the latter starved niche genres.
+  // Each fetcher is live-TMDB-first with an adaptive low-vote fill, so a network ×
+  // genre combo returns a full chart wherever the provider has a catalogue.
+  const [shows, movies] = await Promise.all([
+    tvGenre
+      ? fetchNetworkTvChartResults(c, entry, { genre: tvGenre, year: null, sort: "rated" }, region, regionHas).then(
+          (r) => r.slice(0, CHART_PAGE_SIZE),
+        )
+      : Promise.resolve([] as ShowRow[]),
+    movieGenre
+      ? fetchNetworkMovieChartResults(c, entry, { genre: movieGenre, year: null, sort: "rated" }, region, regionHas).then(
+          (r) => r.slice(0, CHART_PAGE_SIZE),
+        )
+      : Promise.resolve([] as MovieRow[]),
   ]);
-  const shows = tvGenre ? allShows.filter((s) => inGenre(s.genres, tvGenre)).slice(0, NETWORK_CHART_LIMIT) : [];
-  const movies = movieGenre ? allMovies.filter((m) => inGenre(m.genres, movieGenre)).slice(0, NETWORK_CHART_LIMIT) : [];
   if (!shows.length && !movies.length) return c.notFound();
 
   const { art, ambient } = await networkHeroArt(c.env.TMDB_API_KEY, shows, movies);
@@ -2136,9 +2135,11 @@ app.get("/network/:slug/:genre", async (c) => {
     leadMovie: movies[0] ?? null,
     runnerMovie: movies[1] ?? null,
   });
+  const sidebar = c.get("siteSidebar");
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout c={c}
+      sidebarInline
       title={`Best ${lc} on ${entry.name} — ranked | TV Nightly`}
       description={`The best ${lc} ${kindWord} on ${entry.name}, ranked by viewer rating — with where to watch in your region.`}
       canonical={canonical(c)}
@@ -2174,41 +2175,50 @@ app.get("/network/:slug/:genre", async (c) => {
           All networks ranked
         </a>
       </NetworkHero>
-      {shows.length ? (
-        <section class="hub-sec">
-          <h2>
-            Top {lc} series on {entry.name}{" "}
-            {tvGenre ? (
-              <a class="more" href={`/network/${slug}/shows`}>
-                all shows
-              </a>
-            ) : null}
-          </h2>
-          <div class="grid">
-            {shows.map((s) => (
-              <ShowCard show={s} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-      {movies.length ? (
-        <section class="hub-sec">
-          <h2>
-            Top {lc} movies on {entry.name}{" "}
-            {movieGenre ? (
-              <a class="more" href={`/network/${slug}/movies`}>
-                all movies
-              </a>
-            ) : null}
-          </h2>
-          <div class="grid">
-            {movies.map((m) => (
-              <MovieCard movie={m} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-      <NetworkKeepExploring doors={doors} />
+      <div class="home-main-grid">
+        <div class="home-col">
+          {shows.length ? (
+            <section class="hub-sec">
+              <h2>
+                Top {lc} series on {entry.name}{" "}
+                {tvGenre ? (
+                  <a class="more" href={`/network/${slug}/shows`}>
+                    all shows
+                  </a>
+                ) : null}
+              </h2>
+              <div class="grid">
+                {shows.map((s) => (
+                  <ShowCard show={s} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {movies.length ? (
+            <section class="hub-sec">
+              <h2>
+                Top {lc} movies on {entry.name}{" "}
+                {movieGenre ? (
+                  <a class="more" href={`/network/${slug}/movies`}>
+                    all movies
+                  </a>
+                ) : null}
+              </h2>
+              <div class="grid">
+                {movies.map((m) => (
+                  <MovieCard movie={m} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+          <NetworkKeepExploring doors={doors} />
+        </div>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+        />
+      </div>
     </Layout>,
   );
 });

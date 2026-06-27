@@ -9,7 +9,7 @@
 // plus ItemList + BreadcrumbList.
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
-import { ExploreCard, ShowCard } from "../components/cards";
+import { ExploreCard } from "../components/cards";
 import { ChartFilterBar } from "../components/chart-filters";
 import { ChartHeroHead, ChartSpotlight } from "../components/chart-hero";
 import {
@@ -17,28 +17,24 @@ import {
     ChartRankGrid,
     showChartRankItem,
 } from "../components/chart-rank-card";
-import { FilterSelect } from "../components/forms";
 import { HomeSidebarRail } from "../components/home-sidebar";
 import { IconStar } from "../components/icons";
 import {
     KeepExploring,
     fillKeepGoingBackdrops,
     loadTvChartDoorArts,
-    loadTvGuideDoorArts,
     movieKeepGoingBackdrop,
-    showKeepGoingBackdrop,
+    showKeepGoingBackdrop
 } from "../components/keep-going";
 import { parseChartFilters } from "../lib/chart-filters";
 import { CHART_PAGE_SIZE, fetchTvChartResults, fetchTvDecadeChartResults, fetchTvUnderratedResults } from "../lib/chart-results";
 import { parseDecadeSlug } from "../lib/decades";
-import { genreShowArt } from "../lib/explore-art";
-import { headshot, heroBg, hiRes, posterSrc, slugifyName, stripHtml } from "../lib/format";
+import { headshot, heroBg, hiRes, posterSrc, slugifyName } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { genreDirectory, showSeasonCounts } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbTrailer } from "../lib/tmdb";
 import { resolvePersonProfile } from "../lib/tmdb-show";
-import { hubForGenres } from "../lib/verticals";
 import { AppContext, HonoEnv, ShowRow } from "../types";
 
 const app = new Hono<HonoEnv>();
@@ -52,7 +48,9 @@ const SHOW_QUALITY_WEIGHT = 60;
 const SHOW_UNDERRATED_MIN_RATING = 7.8;
 const SHOW_UNDERRATED_MIN_WEIGHT = 40;
 const SHOW_UNDERRATED_MAX_WEIGHT = 96;
-const YEAR_MIN = 2015;
+// Match the year picker's range (chartYearOptions starts at 1907) — live TMDB +
+// adaptive fill serves any year, so every option the dropdown offers resolves.
+const YEAR_MIN = 1907;
 
 const aOrAn = (w: string) => (/^[aeiou]/i.test(w) ? "an" : "a");
 const nameList = (rows: ShowRow[], n: number) => rows.slice(0, n).map((s) => s.name).join(", ");
@@ -99,7 +97,6 @@ const ShowRankList = ({
       const links = rowLinks(s, region);
       const p = posterSrc(s);
       const yr = showYears(s);
-      const synopsis = s.blurb || stripHtml(s.summary);
       return (
         <li class="wo-row">
           <span class="wo-num" aria-hidden="true">
@@ -124,7 +121,6 @@ const ShowRankList = ({
               <a href={`/show/${s.slug}`}>{s.name}</a>
               {yr ? <span class="muted"> ({yr})</span> : null}
             </span>
-            {synopsis ? <span class="wo-synopsis">{synopsis}</span> : null}
             <span class="wo-provs">
               {s.character ? (
                 <>

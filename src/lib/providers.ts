@@ -3,6 +3,7 @@ import networkLogosData from "../../data/network-logos.json";
 import providerLogosData from "../../data/provider-logos.json";
 import tmdbNetworkLogosData from "../../data/tmdb-network-logos.json";
 import { AppContext } from "../types";
+import { slugifyName } from "./format";
 
 // provider_name -> TMDB logo URL; regenerate with scripts/fetch-provider-logos.mjs
 export const PROVIDER_LOGOS: Record<string, string> = providerLogosData;
@@ -68,6 +69,27 @@ export const providerBrand = (name: string) =>
     .replace(/\s+(premium|essential|standard|basic)$/i, "")
     .replace(/\s+/g, " ")
     .trim();
+
+/** /network/{slug} for a streaming provider label (Max → hbo-max, etc.). */
+const PROVIDER_NETWORK_SLUG: Record<string, string> = {
+  netflix: "netflix",
+  hulu: "hulu",
+  "disney plus": "disney-plus",
+  "amazon prime video": "prime-video",
+  "prime video": "prime-video",
+  "apple tv": "apple-tv",
+  "hbo max": "hbo-max",
+  max: "hbo-max",
+  "paramount plus": "paramount-plus",
+  peacock: "peacock",
+  showtime: "showtime",
+  starz: "starz",
+};
+
+export function providerNetworkSlug(name: string): string {
+  const brand = providerBrand(name);
+  return PROVIDER_NETWORK_SLUG[brand] ?? slugifyName(brand);
+}
 
 function networkLogoExact(name: string): string | null {
   const trimmed = name.trim();
@@ -146,6 +168,17 @@ function networkLogoOverride(name: string): string | null {
       const url = networkLogoExact(provider);
       if (url) return logoHiRes(url);
     }
+  }
+  return null;
+}
+
+/** TMDB network id (for `with_networks` discover) for a broadcast/cable network
+ *  name — from the same curated patterns as the logos. Lets the network charts
+ *  pull a channel's own catalogue (HBO, The CW, BBC One…) even when it isn't a
+ *  TMDB streaming watch-provider. */
+export function tmdbNetworkId(name: string): number | null {
+  for (const { match, tmdb_network } of NETWORK_LOGO_OVERRIDES) {
+    if (tmdb_network != null && new RegExp(match, "i").test(name)) return tmdb_network;
   }
   return null;
 }

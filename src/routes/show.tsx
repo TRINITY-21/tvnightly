@@ -23,7 +23,6 @@ import { breadcrumbLd, breadcrumbTrail, canonical, faqLd, origin } from "../lib/
 import { tmdbBackdrop, tmdbMedia, tmdbRecommendations, tmdbShowCreators, tmdbShowCrew } from "../lib/tmdb";
 import { toShowRow } from "../lib/tmdb-rows";
 import { d1OrLiveEpisodes, resolveShow, tmdbShowCast, tmdbShowData } from "../lib/tmdb-show";
-import { loadShowDetailHeroContext } from "../lib/show-detail-hero";
 import { hubForGenres } from "../lib/verticals";
 import { EpisodeRow, HonoEnv, ShowRow } from "../types";
 
@@ -170,7 +169,7 @@ app.get("/show/:slug", async (c) => {
     .slice(0, 3);
   const writerLinks = writers.length ? await crewLinkMap(c.env.DB, writers) : new Map<number, number>();
   const prov = providersFor(show, region);
-  const watchProv = heroWatchProvider(prov.names, show.name, prov.region);
+  const watchProv = heroWatchProvider(prov.names, show.name, prov.region, "tv");
 
   // TVSeries node built here (after creators resolve) so it can carry the creator
   // credits, plus genre and episode count from the data already in scope.
@@ -781,7 +780,7 @@ app.get("/show/:slug/calendar.ics", async (c) => {
 app.get("/show/:slug/where-to-watch", async (c) => {
   const r = await resolveShow(c, c.req.param("slug"));
   if (!r) return c.notFound();
-  const { show, episodes, ratingRef } = r;
+  const { show } = r;
   const base = `/show/${show.slug}/where-to-watch`;
   const reqRegion = (c.req.query("region") ?? "").trim().toUpperCase();
   if (reqRegion && !REGIONS.includes(reqRegion)) return c.redirect(base, 301);
@@ -793,10 +792,10 @@ app.get("/show/:slug/where-to-watch", async (c) => {
   const names = intl[region] ?? [];
   const elsewhere = REGIONS.filter((r) => r !== region && intl[r]?.length);
 
-  const [hero, d1Similar] = await Promise.all([
-    loadShowDetailHeroContext(c, show, episodes, ratingRef, region, {
-      metaBadge: "Streaming guide",
-    }),
+  const [backdrop, d1Similar] = await Promise.all([
+    show.tmdb_id && c.env.TMDB_API_KEY
+      ? tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id)
+      : Promise.resolve(null),
     similarShows(c.env.DB, show, 6),
   ]);
   let similar = d1Similar;
@@ -805,9 +804,11 @@ app.get("/show/:slug/where-to-watch", async (c) => {
       .slice(0, 6)
       .map(toShowRow);
   }
-  const watchProv =
-    heroWatchProvider(names, show.name, region) ??
-    (hero.watchProv ? { ...hero.watchProv, href: base } : null);
+  const heroFrame = backdrop
+    ? heroBg(backdrop.x1, backdrop.x2)
+    : show.poster_url
+      ? heroBg(show.poster_url.replace("/w342/", "/w780/"))
+      : null;
 
   const site = origin(c);
   const sidebar = c.get("siteSidebar");
@@ -831,7 +832,7 @@ app.get("/show/:slug/where-to-watch", async (c) => {
       canonical={`${site}${base}`}
       ogImage={`${site}/show/${show.slug}/og.png`}
       ogImageLarge
-      preloadImage={hero.backdrop?.x2 ? { x1: hero.backdrop.x1, x2: hero.backdrop.x2 } : undefined}
+      preloadImage={backdrop?.x2 ? { x1: backdrop.x1, x2: backdrop.x2 } : undefined}
       ld={[
         breadcrumbLd(site, show, "Where to watch", base),
         ...(names.length
@@ -845,55 +846,30 @@ app.get("/show/:slug/where-to-watch", async (c) => {
             ]
           : []),
       ]}
-      scripts={["/js/dropdown.js", "/js/share.js"]}
+      scripts={["/js/dropdown.js"]}
     >
-      <article class="show-hub">
-        <DetailHero
-          kind="tv"
-          title={show.name}
-          yearLabel={hero.yearLabel}
-          shareTitle={`Where to watch ${show.name}`}
-          shareUrl={`${site}${base}`}
-          typeLabel="TV Show"
-          typeHref={`/show/${show.slug}`}
-          network={watchProv ? null : hero.netName}
-          networkHref={hero.netHref}
-          tmdbScore={tmdbRingScore(show.rating)}
-          communityScore={communityRingScore(hero.communityCounts)}
-          poster={HeroPoster(show)}
-          trailer={hero.trailerVid}
-          highlights={hero.highlights}
-          starring={hero.starring}
-          directors={hero.directors}
-          writers={hero.writers}
-          watchProvider={
-            watchProv
-              ? { ...watchProv, href: watchProv.href ?? base }
-              : null
-          }
-          metaBadge={hero.metaBadge}
-          genres={hero.genres}
-          metaExtra={hero.metaExtra}
-          metaExtraHref={hero.metaExtraHref}
-          plot={show.summary ? stripHtml(show.summary) : null}
-          blurb={show.blurb ?? null}
-          rateKind="tv"
-          rateRef={ratingRef}
-          rateStat={hero.stat}
-          mediaHref={`/show/${show.slug}/media`}
-          fallbackBackdrop={hero.backdrop}
-          ariaLabel={`Where to watch ${show.name}`}
-          introExtra={
-            <form method="get" action={base} class="region-line watch-region" data-submit-on-change>
-              <FilterSelect
-                label="Showing options for"
-                name="region"
-                current={region}
-                options={regionOptions()}
-              />
-            </form>
-          }
-        />
+      <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
+        <header class="detail-hero frame-hero">
+          {heroFrame ? <div class="hero-backdrop" style={heroFrame}></div> : null}
+          <div class="detail-head">
+            <div class="detail-side">{HeroPoster(show)}</div>
+            <div class="detail-info">
+              <p class="ep-eyebrow">
+                <a href={`/show/${show.slug}`}>{show.name}</a>
+                <span class="sep">·</span> Streaming guide
+              </p>
+              <h1>Where to watch {show.name}</h1>
+              <form method="get" action={base} class="region-line watch-region" data-submit-on-change>
+                <FilterSelect
+                  label="Showing options for"
+                  name="region"
+                  current={region}
+                  options={regionOptions()}
+                />
+              </form>
+            </div>
+          </div>
+        </header>
         <ShowTabs slug={show.slug} current="watch" />
         <div class="home-main-grid">
           <div class="home-col">

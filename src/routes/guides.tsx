@@ -5,25 +5,23 @@
 // Each renders a keyword-matched H1, ranked list, internal genre/person links,
 // a visible FAQ mirrored into FAQPage JSON-LD, and ItemList + BreadcrumbList.
 import { Hono } from "hono";
-import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
-import { ExploreCard, MovieCard } from "../components/cards";
+import { ExploreCard } from "../components/cards";
 import { ChartFilterBar } from "../components/chart-filters";
 import { ChartHeroHead, ChartSpotlight } from "../components/chart-hero";
 import {
-  ChartRankCard,
-  ChartRankGrid,
-  movieChartRankItem,
+    ChartRankCard,
+    ChartRankGrid,
+    movieChartRankItem,
 } from "../components/chart-rank-card";
-import { FilterSelect } from "../components/forms";
 import { HomeSidebarRail } from "../components/home-sidebar";
+import { IconStar } from "../components/icons";
 import {
-  fillKeepGoingBackdrops,
-  KeepExploring,
-  loadMovieChartDoorArts,
-  loadMovieGuideDoorArts,
-  movieKeepGoingBackdrop,
-  showKeepGoingBackdrop,
+    KeepExploring,
+    fillKeepGoingBackdrops,
+    loadMovieChartDoorArts,
+    movieKeepGoingBackdrop,
+    showKeepGoingBackdrop
 } from "../components/keep-going";
 import { chartBasePath, parseChartFilters } from "../lib/chart-filters";
 import { CHART_PAGE_SIZE, fetchMovieChartResults, fetchMovieUnderratedResults } from "../lib/chart-results";
@@ -33,13 +31,12 @@ import { genreDirectory } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
 import { movieSpotlightTrailer, tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
 import {
-  movieBundleId,
-  resolveMovie,
-  resolveMovieBundleId,
-  resolvePersonProfile,
+    movieBundleId,
+    resolveMovie,
+    resolveMovieBundleId,
+    resolvePersonProfile,
 } from "../lib/tmdb-show";
-import { hubForGenres } from "../lib/verticals";
-import { AppContext, Bindings, HonoEnv, MovieRow } from "../types";
+import { AppContext, HonoEnv, MovieRow } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -54,7 +51,9 @@ const UNDERRATED_MAX_VOTES = 10000;
 const UNDERRATED_MIN_AGE = 2; // years since release before a film can read as "overlooked"
 // Oldest year a /movies/best/:year page will render — keeps the route from
 // minting junk pages for nonsense years while leaving recent archives crawlable.
-const YEAR_MIN = 2015;
+// Match the year picker's range (chartYearOptions starts at 1907) — live TMDB +
+// adaptive fill serves any year, so every option the dropdown offers resolves.
+const YEAR_MIN = 1907;
 
 const aOrAn = (w: string) => (/^[aeiou]/i.test(w) ? "an" : "a");
 const fmtVotes = (n: number) =>
@@ -128,7 +127,6 @@ const RankList = ({
               <a href={`/movie/${m.slug}`}>{m.title}</a>
               {m.year ? <span class="muted"> ({m.year})</span> : null}
             </span>
-            {m.overview ? <span class="wo-synopsis">{m.overview}</span> : null}
             <span class="wo-provs">
               {m.character ? (
                 <>

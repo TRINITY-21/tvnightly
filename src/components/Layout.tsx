@@ -380,32 +380,6 @@ export const Layout: FC<
             <span></span>
           </span>
         </button>
-        <div id="mobile-menu" class="mobile-menu" hidden>
-          <div class="mobile-menu-inner" role="navigation" aria-label="Browse">
-            <a class={`mm-link ${navClass(["/tonight", "/calendar", "/premieres"])}`} href="/tonight">
-              Tonight
-            </a>
-            <a class={`mm-link ${navClass(["/what-to-watch", "/recommend"])}`} href="/what-to-watch">
-              What to watch
-            </a>
-            <a class={`mm-link ${navClass(["/whats-new", "/renewals"])}`} href="/whats-new">
-              What&apos;s new
-            </a>
-            {BROWSE_SECTIONS.map((sec) => (
-              <div class="mm-sec">
-                <p class="mm-kicker">{sec.kicker}</p>
-                {sec.links.map(([label, href]) => (
-                  <a class="mm-row" href={href}>
-                    {label}
-                  </a>
-                ))}
-              </div>
-            ))}
-            <a class="mm-all chev-after" href="/lists">
-              Browse everything
-            </a>
-          </div>
-        </div>
       </header>
       )}
       {/* Browse: a full-width slide-down overlay (the "Browse everything" page as
@@ -644,6 +618,58 @@ export const Layout: FC<
           </span>
           <span class="back-to-top-label">Back to top</span>
         </button>
+      )}
+      {/* Mobile nav drawer — last in <body> so no ancestor transform/backdrop-filter
+          traps position:fixed; must not live inside .site-header. */}
+      {props.bare ? null : (
+        <div id="mobile-menu" class="mobile-menu" hidden>
+          <div class="mobile-menu-inner" role="navigation" aria-label="Browse">
+            <a class={`mm-link ${navClass(["/tonight", "/calendar", "/premieres"])}`} href="/tonight">
+              Tonight
+            </a>
+            <a class={`mm-link ${navClass(["/what-to-watch", "/recommend"])}`} href="/what-to-watch">
+              What to watch
+            </a>
+            <a class={`mm-link ${navClass(["/whats-new", "/renewals"])}`} href="/whats-new">
+              What&apos;s new
+            </a>
+            {BROWSE_SECTIONS.map((sec) => (
+              <div class="mm-sec">
+                <p class="mm-kicker">{sec.kicker}</p>
+                {sec.links.map(([label, href]) => (
+                  <a class="mm-row" href={href}>
+                    {label}
+                  </a>
+                ))}
+              </div>
+            ))}
+            <div class="mm-sec">
+              <p class="mm-kicker">Networks</p>
+              <div class="mm-nets">
+                {BROWSE_NETWORKS.map(([label, logoName, slug]) => {
+                  const logo = networkLogo(logoName);
+                  return (
+                    <a class="mm-net" href={`/network/${slug}`} title={label} aria-label={label}>
+                      {logo ? (
+                        <img src={logo} alt="" width="28" height="28" loading="lazy" decoding="async" />
+                      ) : (
+                        <span class="mm-net-fallback" aria-hidden="true">
+                          {label.slice(0, 2)}
+                        </span>
+                      )}
+                    </a>
+                  );
+                })}
+              </div>
+              <a class="mm-row chev-after" href="/top/networks">
+                All networks
+              </a>
+            </div>
+            <a class="mm-all chev-after" href="/lists">
+              Browse everything
+            </a>
+          </div>
+        </div>
       )}
       {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", "/js/localtime.js", "/js/media-video.js", "/js/hero-trailer-fallback.js", "/js/hero-pip.js", "/js/photo-gallery.js", "/js/back-to-top.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>

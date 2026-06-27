@@ -604,14 +604,16 @@ app.get("/movie/:slug", async (c) => {
     .slice(0, 3);
   const writerLinks = writers.length ? await crewLinkMap(c.env.DB, writers) : new Map<number, number>();
   const prov = providersFor(movie, region);
-  const watchProv = heroWatchProvider(prov.names, movie.title, prov.region);
+  const watchProv = heroWatchProvider(prov.names, movie.title, prov.region, "movie");
   let trailerVid =
     facts?.trailer ??
     media?.videos.find((v) => v.type === "Trailer") ??
     media?.videos[0] ??
     null;
   if (!trailerVid && c.env.TMDB_API_KEY && bundleId) {
-    trailerVid = await movieSpotlightTrailer(c.env.TMDB_API_KEY, bundleId);
+    const spotlight = await movieSpotlightTrailer(c.env.TMDB_API_KEY, bundleId);
+    // the spotlight helper carries no publish date; the hero only needs key/name
+    if (spotlight) trailerVid = { ...spotlight, published: null };
   }
   const highlights = (media?.videos ?? [])
     .filter((v) => v.key !== trailerVid?.key)
@@ -1719,8 +1721,6 @@ app.get("/movie/:slug/where-to-watch", async (c) => {
                 <span class="sep">·</span> Streaming guide
               </p>
               <h1>Where to watch {movie.title}</h1>
-              <p class="summary">{stripHtml(movie.overview ?? "").slice(0, 180)}</p>
-              {/* data-submit-on-change: dropdown.js submits on pick (no Go button) */}
               <form method="get" action={base} class="region-line watch-region" data-submit-on-change>
                 <FilterSelect
                   label="Showing options for"

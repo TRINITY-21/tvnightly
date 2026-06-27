@@ -112,7 +112,8 @@
   color: var(--text);
   text-decoration: none;
 }
-a.hub-hero-chip:hover { color: var(--accent); text-decoration: none; }
+a.hub-hero-chip:hover,
+a.hub-hero-chip-logo:hover { color: var(--accent); text-decoration: none; }
 .hub-hero-chip-muted { color: var(--muted); font-weight: 500; }
 .hub-hero-chip-logo {
   display: inline-flex;
@@ -317,9 +318,18 @@ a.hub-hero-chip:hover { color: var(--accent); text-decoration: none; }
 @media (max-width: 560px) {
   .hub-hero-video.is-pip,
   .chart-hero-video.is-pip {
+    position: fixed;
+    inset: auto;
+    left: auto;
+    top: auto;
     right: 0.65rem;
     bottom: max(0.65rem, env(safe-area-inset-bottom, 0px));
-    width: min(11.5rem, 46vw);
+    width: min(11.5rem, calc(100vw - 1.3rem));
+    height: auto;
+    max-width: none;
+    max-height: none;
+    aspect-ratio: 16 / 9;
+    z-index: var(--pip-z);
   }
 }
 .hub-hero-video-empty {
@@ -714,28 +724,105 @@ a.hub-hero-chip:hover { color: var(--accent); text-decoration: none; }
   .hub-hero-chips > .hub-hero-fact {
     white-space: normal;
   }
+  /* poster | trailer on one row — poster is a small 2:3 thumb (full art, not
+     desktop-sized). Column split: player is 16:9, poster width = height×2/3,
+     so poster gets 3/11 of the row (gap accounted). */
   .hub-hero-stage {
-    grid-template-columns: 1fr;
-    justify-items: center;
-    align-items: start;
+    display: grid;
+    grid-template-columns: calc((100% - 0.6rem) * 3 / 11) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    grid-template-areas:
+      "poster player"
+      "credits credits";
+    gap: 0.55rem 0.6rem;
+    justify-items: stretch;
+    align-items: stretch;
+    padding: 0.85rem 0 0.35rem;
   }
   .hub-hero-poster {
-    width: min(260px, 52vw);
+    grid-area: poster;
+    align-self: stretch;
+    justify-self: stretch;
+    width: 100%;
     height: auto;
-    align-self: auto;
+    min-width: 0;
+    min-height: 0;
+    aspect-ratio: 2 / 3;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
   }
   .hub-hero-poster .poster,
   .hub-hero-poster .card-fallback {
-    height: auto;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
     min-height: unset;
-    aspect-ratio: 2 / 3;
+    aspect-ratio: unset;
+    object-fit: contain;
+    object-position: top center;
   }
-  .hub-hero-player,
+  .hub-hero-poster .hub-poster-rating {
+    width: 2.85rem;
+    height: 2.85rem;
+  }
+  .hub-hero-poster .hub-poster-rating-ribbon {
+    top: 0.58rem;
+    right: -1.2rem;
+    width: 4.5rem;
+    padding: 0.22rem 0;
+  }
+  .hub-hero-poster .hub-poster-rating-val {
+    font-size: 0.58rem;
+  }
+  .hub-hero-player {
+    grid-area: player;
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    align-self: stretch;
+    aspect-ratio: 16 / 9;
+    display: block;
+  }
+  /* chart spotlight shares .hub-hero-player but not .hub-hero-stage grid areas */
+  .chart-hero-stage .hub-hero-player {
+    grid-area: unset;
+    aspect-ratio: auto;
+    height: auto;
+    align-self: start;
+  }
   .hub-hero-credits {
+    grid-area: credits;
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     height: auto;
   }
-  .hub-hero-video {
-    height: auto;
+  .hub-hero-credits-body {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 0.65rem;
+    overflow: visible;
+    flex: 0 1 auto;
+  }
+  .hub-credit-block {
+    flex: none;
+    min-width: 0;
+  }
+  /* inline player fill only — not the body-reparented mini-player */
+  .hub-hero-player:not(.has-pip) .hub-hero-video,
+  .hub-hero-player:not(.has-pip) .hub-hero-video-trailer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: unset;
+    aspect-ratio: unset;
+  }
+  .hub-hero-player.has-pip::after {
+    width: 100%;
     aspect-ratio: 16 / 9;
   }
   .hub-hero-tagline {
@@ -743,7 +830,22 @@ a.hub-hero-chip:hover { color: var(--accent); text-decoration: none; }
   }
   .hub-hero-credits-foot {
     flex-direction: column;
+    flex-wrap: nowrap;
     align-items: stretch;
+  }
+  /* 900px sets row-oriented flex bases (watch = 100%, rate = 12rem). With
+     column direction + wrap those become height bases and the foot wraps into a
+     second ~325px column off-screen — stack cleanly instead. */
+  .hub-hero-credits-foot > .hub-hero-watch,
+  .hub-hero-credits-foot .share-bar,
+  .hub-hero-credits-foot .rate-inline {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+  }
+  .hub-hero-credits .rate-inline {
+    flex-wrap: wrap;
+    align-items: center;
   }
   .hub-hero-plot-body {
     padding-left: 0;
@@ -751,5 +853,31 @@ a.hub-hero-chip:hover { color: var(--accent); text-decoration: none; }
   .hub-hero-plot-text {
     font-size: 0.98rem;
     line-height: 1.68;
+  }
+  /* reparented to <body> — beat any inline hero fill rules above */
+  .hub-hero-video.is-pip,
+  .hub-hero-video-trailer.is-pip,
+  .chart-hero-video.is-pip {
+    position: fixed;
+    inset: auto;
+    left: auto;
+    top: auto;
+    right: 0.65rem;
+    bottom: max(0.65rem, env(safe-area-inset-bottom, 0px));
+    width: min(11.5rem, calc(100vw - 1.3rem));
+    height: auto;
+    max-width: none;
+    max-height: none;
+    aspect-ratio: 16 / 9;
+    z-index: var(--pip-z);
+  }
+  .hub-hero-video.is-pip .hub-hero-video-frame,
+  .hub-hero-video-trailer.is-pip .hub-hero-video-frame,
+  .chart-hero-video.is-pip .hub-hero-video-frame,
+  .chart-hero-video.is-pip .chart-hero-video-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
   }
 }

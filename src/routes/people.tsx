@@ -5,7 +5,7 @@ import { ClampSummary, ExploreCard } from "../components/cards";
 import { DossierRow } from "../components/dossier";
 import { HomeSidebarRail } from "../components/home-sidebar";
 import { IconGlobe, IconInstagram, IconStar, IconX } from "../components/icons";
-import { KeepGoing, fillKeepGoingBackdrops, loadShowKeepGoingArts, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
+import { KeepGoing, fillKeepGoingBackdrops, loadPersonHubDoorArts, loadShowKeepGoingArts, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
 import { SeasonTabs, ShowTabs } from "../components/nav";
 import { buildDossier } from "../lib/dossier";
 import { genreShowArt, hubArt } from "../lib/explore-art";
@@ -1317,7 +1317,7 @@ async function personHubPage(
   const site = origin(c);
   const path = isActor ? "/actors" : "/directors";
   const title = isActor ? "Actors" : "Directors";
-  const lead = results[0];
+  const [crossArt, chartsArt, browseArt] = await loadPersonHubDoorArts(c.env.DB, c.env.TMDB_API_KEY, dept);
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -1392,9 +1392,22 @@ async function personHubPage(
             title={isActor ? "Directors" : "Actors"}
             desc={isActor ? "Film directors in our catalogue." : "TV actors in our catalogue."}
             href={isActor ? "/directors" : "/actors"}
+            backdrop={crossArt ?? undefined}
           />
-          <ExploreCard icon="Charts" title="Top TV shows" desc="The highest-rated series we track." href="/top/tv" />
-          <ExploreCard icon="Shortcut" title="Browse everything" desc="Charts, genres, and networks." href="/lists" />
+          <ExploreCard
+            icon="Charts"
+            title="Top TV shows"
+            desc="The highest-rated series we track."
+            href="/top/tv"
+            backdrop={chartsArt ?? undefined}
+          />
+          <ExploreCard
+            icon="Shortcut"
+            title="Browse everything"
+            desc="Charts, genres, and networks."
+            href="/lists"
+            backdrop={browseArt ?? undefined}
+          />
         </div>
       </section>
     </Layout>,

@@ -10,6 +10,30 @@ export const PROVIDER_LOGOS: Record<string, string> = providerLogosData;
 // Regions we mirror providers for (must match scripts/seed-movies.mjs).
 export const REGIONS = ["US", "GB", "CA", "AU", "IN", "DE", "FR", "ES", "IT", "BR", "MX", "NG", "NL", "SE", "JP", "KR"];
 
+// Full country names for the regions above — used as the dropdown option title
+// (hover/assistive label) so a bare "KR" still reads as "South Korea".
+export const REGION_NAMES: Record<string, string> = {
+  US: "United States", GB: "United Kingdom", CA: "Canada", AU: "Australia",
+  IN: "India", DE: "Germany", FR: "France", ES: "Spain", IT: "Italy",
+  BR: "Brazil", MX: "Mexico", NG: "Nigeria", NL: "Netherlands", SE: "Sweden",
+  JP: "Japan", KR: "South Korea",
+};
+
+/** Unicode flag emoji for an ISO 3166-1 alpha-2 code (e.g. "CA" -> 🇨🇦).
+ *  Used as the native-<select> option glyph (the only flag a mobile OS picker
+ *  can show); desktop's enhanced combobox swaps in a crisp /flags/<cc>.png. */
+export function regionFlagEmoji(cc: string): string {
+  return cc
+    .toUpperCase()
+    .replace(/[A-Z]/g, (ch) => String.fromCodePoint(127397 + ch.charCodeAt(0)));
+}
+
+/** Region <FilterSelect> options carrying the country code (cc) so the picker
+ *  can render a flag next to each abbreviation. Shared by every region select. */
+export function regionOptions(): { value: string; text: string; cc: string; title: string }[] {
+  return REGIONS.map((r) => ({ value: r, text: r, cc: r.toLowerCase(), title: REGION_NAMES[r] ?? r }));
+}
+
 /** Visitor region: explicit ?region= override, else Cloudflare geo, else US. */
 export function visitorRegion(c: AppContext): string {
   const param = (c.req.query("region") ?? "").toUpperCase();

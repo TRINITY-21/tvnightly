@@ -2,8 +2,11 @@ import { Hono } from "hono";
 import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard } from "../components/cards";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import { KeepExploring, movieKeepGoingBackdrop } from "../components/keep-going";
 import { fmtMarathon, fmtRuntime, heroBg, slugifyName } from "../lib/format";
 import { FRANCHISES, FRANCHISE_BY_SLUG, FranchiseEntry } from "../lib/franchises";
+import { hubArt } from "../lib/explore-art";
 import { providersFor, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
 import { similarMovies } from "../lib/queries";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
@@ -83,6 +86,22 @@ app.get("/watch-orders", async (c) => {
     }),
   );
 
+  const artFor = (slug: string) => arts[guides.findIndex((g) => g.f.slug === slug)] ?? null;
+
+  const apiKey = c.env.TMDB_API_KEY;
+  const chartLead =
+    best?.rep ??
+    guides.find((g) => g.rep)?.rep ??
+    (await c.env.DB.prepare(
+      "SELECT * FROM movies WHERE rating IS NOT NULL ORDER BY rating DESC, popularity DESC LIMIT 1",
+    ).first<MovieRow>());
+  const spinLead = shortest?.rep ?? guides.find((g) => g.rep)?.rep ?? chartLead;
+  const [bestDoorArt, classicsArt, pickerArt] = await Promise.all([
+    chartLead ? movieKeepGoingBackdrop(apiKey, chartLead) : Promise.resolve(null),
+    hubArt(c.env.DB, apiKey ?? "", "classics"),
+    spinLead ? movieKeepGoingBackdrop(apiKey, spinLead) : Promise.resolve(null),
+  ]);
+
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=86400");
   return c.html(
@@ -138,6 +157,7 @@ app.get("/watch-orders", async (c) => {
                 title={shortest.f.name}
                 desc="The shortest run on the board — one determined weekend clears it end to end."
                 href={`/watch-order/${shortest.f.slug}`}
+                backdrop={artFor(shortest.f.slug) ?? undefined}
               />
             ) : null}
             {longest && longest !== shortest ? (
@@ -146,6 +166,7 @@ app.get("/watch-orders", async (c) => {
                 title={longest.f.name}
                 desc="The longest haul we track. Block out the month before you press play."
                 href={`/watch-order/${longest.f.slug}`}
+                backdrop={artFor(longest.f.slug) ?? undefined}
               />
             ) : null}
             {best ? (
@@ -155,34 +176,37 @@ app.get("/watch-orders", async (c) => {
                 title={best.f.name}
                 desc="The highest average rating across its films — the safest bet on the board."
                 href={`/watch-order/${best.f.slug}`}
+                backdrop={artFor(best.f.slug) ?? undefined}
               />
             ) : null}
           </div>
         </section>
       ) : null}
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Film"
-            title="The best films of all time"
-            desc="Every movie ranked by rating, with where to stream."
-            href="/movies/best"
-          />
-          <ExploreCard
-            icon="The canon"
-            title="Classic film, minus the dust"
-            desc="The greatest pre-1980 movies, streamable tonight."
-            href="/classics"
-          />
-          <ExploreCard
-            icon="Picker"
-            title="Can't pick a saga?"
-            desc="Filter by genre, runtime, and streaming service — then spin."
-            href="/what-to-watch"
-          />
-        </div>
-      </section>
+      <KeepExploring
+        cards={[
+          {
+            icon: "Film",
+            title: "The best films of all time",
+            desc: "Every movie ranked by rating, with where to stream.",
+            href: "/movies/best",
+            backdrop: bestDoorArt,
+          },
+          {
+            icon: "The canon",
+            title: "Classic film, minus the dust",
+            desc: "The greatest pre-1980 movies, streamable tonight.",
+            href: "/classics",
+            backdrop: classicsArt,
+          },
+          {
+            icon: "Picker",
+            title: "Can't pick a saga?",
+            desc: "Filter by genre, runtime, and streaming service — then spin.",
+            href: "/what-to-watch",
+            backdrop: pickerArt,
+          },
+        ]}
+      />
       <p class="wo-foot">
         <a class="chev-after" href="/tv-watch-orders">TV universe watch orders</a>
       </p>
@@ -294,9 +318,11 @@ app.get("/watch-order/:slug", async (c) => {
   };
 
   const site = origin(c);
+  const sidebar = c.get("siteSidebar");
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout c={c}
+      sidebarInline
       title={`How to watch ${fr.name} in order (release & chronological) | TV Nightly`}
       description={`${fr.name} watch order: all ${fr.entries.length} films in release and chronological order, with runtimes and streaming availability.`}
       canonical={canonical(c)}
@@ -360,6 +386,9 @@ app.get("/watch-order/:slug", async (c) => {
           ) : null}
         </div>
       </header>
+
+      <div class="home-main-grid">
+        <div class="home-col">
       <section class="wo-section">
         <h2>Release order (best first watch)</h2>
         <ol class="wo-list">
@@ -390,6 +419,13 @@ app.get("/watch-order/:slug", async (c) => {
       <p class="wo-back">
         <a class="chev-after" href="/watch-orders">All watch-order guides</a>
       </p>
+        </div>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+        />
+      </div>
     </Layout>,
   );
 });

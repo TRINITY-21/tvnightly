@@ -552,7 +552,6 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             trailers={sidebar?.trailers ?? []}
             topSeries={sidebar?.topSeries ?? []}
             topMovies={sidebar?.topMovies ?? []}
-            newsletterHref="/#home-email-title"
           />
         </div>
       </article>

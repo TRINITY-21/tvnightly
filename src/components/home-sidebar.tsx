@@ -1,6 +1,7 @@
-import { FC } from "hono/jsx";
+import { FC, PropsWithChildren } from "hono/jsx";
 import type { TrailerItem } from "../lib/latest-trailers";
 import type { SideRankItem } from "../lib/sidebar-tops";
+import type { AppContext } from "../types";
 import { Honeypot } from "./Layout";
 import { IconFacebook, IconInstagram, IconMail, IconPlayDisc, IconTikTok, IconX } from "./icons";
 
@@ -11,7 +12,7 @@ const FOLLOW: { label: string; url: string; Icon: FC<{ size?: number }> }[] = [
   { label: "TikTok", url: "https://www.tiktok.com/@tvnightly", Icon: IconTikTok },
 ];
 
-export const FollowGrid: FC<{ newsletterHref?: string }> = ({ newsletterHref = "#home-email-title" }) => (
+export const FollowGrid: FC = () => (
   <section class="side-card side-follow" aria-labelledby="side-follow-title">
     <h2 class="side-title" id="side-follow-title">
       Follow TV Nightly
@@ -31,12 +32,6 @@ export const FollowGrid: FC<{ newsletterHref?: string }> = ({ newsletterHref = "
           <span class="follow-label">{label}</span>
         </a>
       ))}
-      <a class="follow-tile" href={newsletterHref} aria-label="TV Nightly newsletter">
-        <span class="follow-ico">
-          <IconMail size={22} />
-        </span>
-        <span class="follow-label">Newsletter</span>
-      </a>
     </div>
   </section>
 );
@@ -48,13 +43,12 @@ export const SidebarNewsletter: FC = () => (
         <IconMail size={18} />
       </span>
       <h2 class="side-newsletter-title" id="side-newsletter-title">
-        The evening email
+        Tonight, decided
       </h2>
     </div>
     <div class="side-newsletter-body">
       <p class="side-newsletter-dek">
-        Tonight&apos;s lineup, streaming arrivals, and a pick worth your time — one short message
-        each evening.
+        What&apos;s on, what&apos;s new, and what to watch. One email each evening.
       </p>
       <form action="/subscribe" method="post" class="side-newsletter-form">
         <input type="hidden" name="kind" value="daily" />
@@ -135,8 +129,9 @@ const SideRankList: FC<{ title: string; id: string; items: SideRankItem[] }> = (
               <span class="side-rank-meta">
                 <span class="side-rank-name">{item.name}</span>
                 <span class="side-rank-kind">
-                  {item.kind}
-                  {item.rating != null ? ` · ${item.rating.toFixed(1)}` : ""}
+                  {[item.genres ?? item.kind, item.rating != null ? item.rating.toFixed(1) : null]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </span>
               </span>
             </a>
@@ -150,13 +145,30 @@ export const HomeSidebarRail: FC<{
   trailers: TrailerItem[];
   topSeries: SideRankItem[];
   topMovies: SideRankItem[];
-  newsletterHref?: string;
-}> = ({ trailers, topSeries, topMovies, newsletterHref }) => (
+}> = ({ trailers, topSeries, topMovies }) => (
   <aside class="home-rail" aria-label="More from TV Nightly">
-    <FollowGrid newsletterHref={newsletterHref} />
+    <FollowGrid />
     <SidebarNewsletter />
     <LatestTrailers items={trailers} />
     <SideRankList title="Top series" id="side-top-series-title" items={topSeries} />
     <SideRankList title="Top movies" id="side-top-movies-title" items={topMovies} />
   </aside>
 );
+
+/** Full-bleed hero + two-column content/rail (use with Layout sidebarInline). */
+export const SidebarPageGrid: FC<{
+  c: AppContext;
+  children: PropsWithChildren["children"];
+}> = ({ c, children }) => {
+  const sidebar = c.get("siteSidebar");
+  return (
+    <div class="home-main-grid">
+      <div class="home-col">{children}</div>
+      <HomeSidebarRail
+        trailers={sidebar?.trailers ?? []}
+        topSeries={sidebar?.topSeries ?? []}
+        topMovies={sidebar?.topMovies ?? []}
+      />
+    </div>
+  );
+};

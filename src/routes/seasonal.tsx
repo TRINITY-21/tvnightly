@@ -2,9 +2,18 @@
 // Built from genres + episode titles we already mirror; rerank every year.
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
-import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
+import { MovieCard, ShowCard } from "../components/cards";
+import {
+  KeepExploring,
+  episodeKeepGoingBackdrop,
+  fillKeepGoingBackdrops,
+  showKeepGoingBackdrop,
+} from "../components/keep-going";
+import { SidebarPageGrid } from "../components/home-sidebar";
 import { IconStar } from "../components/icons";
-import { epCode, epHref, heroBg, hiRes, largeStill, longDate, posterSrc } from "../lib/format";
+import type { ExploreArt } from "../lib/explore-art";
+import { genreShowArt } from "../lib/explore-art";
+import { epCode, epHref, heroBg, hiRes, largeStill, longDate } from "../lib/format";
 import { breadcrumbTrail, canonical, faqLd, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbTopRated } from "../lib/tmdb";
 import { toMovieRow } from "../lib/tmdb-rows";
@@ -23,6 +32,98 @@ async function horrorArt(c: { env: Bindings }, show: ShowRow | undefined) {
   }
   const p = show ? hiRes(show.image_url) : null;
   return p ? { x1: p, x2: undefined as string | undefined } : null;
+}
+
+type ShowArtRow = { tmdb_id: number | null; image_url: string | null; poster_url: string | null };
+
+async function halloweenDoorArt(db: D1Database, apiKey: string | undefined): Promise<ExploreArt> {
+  const row = await db
+    .prepare(
+      `SELECT tmdb_id, image_url, poster_url FROM shows
+       WHERE ${HORROR} AND rating IS NOT NULL AND weight >= 50
+       ORDER BY rating DESC, weight DESC LIMIT 1`,
+    )
+    .first<ShowArtRow>();
+  if (row) return showKeepGoingBackdrop(apiKey, row);
+  return apiKey ? genreShowArt(db, apiKey, "Horror") : null;
+}
+
+async function christmasDoorArt(db: D1Database, apiKey: string | undefined): Promise<ExploreArt> {
+  const row = await db
+    .prepare(
+      `SELECT s.tmdb_id, s.image_url, s.poster_url
+       FROM episodes e JOIN shows s ON s.id = e.show_id
+       WHERE ${XMAS_EP} AND e.rating IS NOT NULL AND s.weight >= 40
+       GROUP BY s.id
+       ORDER BY MAX(e.rating) DESC, s.weight DESC
+       LIMIT 1`,
+    )
+    .first<ShowArtRow>();
+  return row ? showKeepGoingBackdrop(apiKey, row) : null;
+}
+
+async function thanksgivingDoorArt(db: D1Database, apiKey: string | undefined): Promise<ExploreArt> {
+  const row = await db
+    .prepare(
+      `SELECT e.image_url, s.tmdb_id, s.image_url AS show_img, s.poster_url
+       FROM episodes e JOIN shows s ON s.id = e.show_id
+       WHERE ${THANKS_EP} AND e.rating IS NOT NULL AND s.weight >= 40
+       ORDER BY e.rating DESC, s.weight DESC
+       LIMIT 1`,
+    )
+    .first<{ image_url: string | null; tmdb_id: number | null; show_img: string | null; poster_url: string | null }>();
+  if (!row) return null;
+  const showArt = await showKeepGoingBackdrop(apiKey, {
+    tmdb_id: row.tmdb_id,
+    image_url: row.show_img,
+    poster_url: row.poster_url,
+  });
+  return episodeKeepGoingBackdrop(showArt, row.image_url);
+}
+
+async function bestEpisodesDoorArt(db: D1Database, apiKey: string | undefined): Promise<ExploreArt> {
+  const row = await db
+    .prepare(
+      `SELECT e.image_url, s.tmdb_id, s.image_url AS show_img, s.poster_url
+       FROM episodes e JOIN shows s ON s.id = e.show_id
+       WHERE e.rating IS NOT NULL AND s.rating IS NOT NULL AND s.weight >= 75
+       ORDER BY (e.rating + 2.0 * s.rating) / 3.0 DESC
+       LIMIT 1`,
+    )
+    .first<{ image_url: string | null; tmdb_id: number | null; show_img: string | null; poster_url: string | null }>();
+  if (!row) return null;
+  const showArt = await showKeepGoingBackdrop(apiKey, {
+    tmdb_id: row.tmdb_id,
+    image_url: row.show_img,
+    poster_url: row.poster_url,
+  });
+  return episodeKeepGoingBackdrop(showArt, row.image_url);
+}
+
+const DOOR_FETCHERS = {
+  halloween: halloweenDoorArt,
+  christmas: christmasDoorArt,
+  thanksgiving: thanksgivingDoorArt,
+  "best-episodes": bestEpisodesDoorArt,
+} as const;
+
+type SeasonalDoor = keyof typeof DOOR_FETCHERS;
+
+async function loadSeasonalDoorArts(
+  db: D1Database,
+  apiKey: string | undefined,
+  doors: SeasonalDoor[],
+): Promise<ExploreArt[]> {
+  const cards = await Promise.all(
+    doors.map(async (door) => ({
+      icon: "",
+      title: "",
+      desc: "",
+      href: "",
+      backdrop: await DOOR_FETCHERS[door](db, apiKey),
+    })),
+  );
+  return fillKeepGoingBackdrops(cards).map((c) => c.backdrop ?? null);
 }
 
 // ------------------------------------------------------------------ /halloween
@@ -51,6 +152,11 @@ app.get("/halloween", async (c) => {
   const lead = shows.results[0];
   const art = await horrorArt(c, lead);
   const site = origin(c);
+  const [christmasArt, thanksArt, bestEpArt] = await loadSeasonalDoorArts(c.env.DB, c.env.TMDB_API_KEY, [
+    "christmas",
+    "thanksgiving",
+    "best-episodes",
+  ]);
 
   const faqs = [
     {
@@ -71,6 +177,7 @@ app.get("/halloween", async (c) => {
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout c={c}
+      sidebarInline
       title={`Best Horror TV for Halloween ${year} — Scary Shows Ranked | TV Nightly`}
       description={`The best horror TV shows for Halloween ${year} — ranked by viewer rating, with episode guides and where to stream.`}
       canonical={canonical(c)}
@@ -97,6 +204,7 @@ app.get("/halloween", async (c) => {
         </div>
       </header>
 
+      <SidebarPageGrid c={c}>
       {shows.results.length ? (
         <section class="hub-sec">
           <h2>Top horror series</h2>
@@ -119,14 +227,32 @@ app.get("/halloween", async (c) => {
         </section>
       ) : null}
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard icon="Hidden gems" title="Christmas TV" desc="Holiday episodes and specials." href="/christmas-tv" />
-          <ExploreCard icon="Shortcut" title="Thanksgiving episodes" desc="The best Turkey Day hours." href="/best-thanksgiving-episodes" />
-          <ExploreCard icon="Charts" title="Best episodes ever" desc="All-time top hours of TV." href="/best-episodes" />
-        </div>
-      </section>
+      <KeepExploring
+        cards={[
+          {
+            icon: "Hidden gems",
+            title: "Christmas TV",
+            desc: "Holiday episodes and specials.",
+            href: "/christmas-tv",
+            backdrop: christmasArt,
+          },
+          {
+            icon: "Shortcut",
+            title: "Thanksgiving episodes",
+            desc: "The best Turkey Day hours.",
+            href: "/best-thanksgiving-episodes",
+            backdrop: thanksArt,
+          },
+          {
+            icon: "Charts",
+            title: "Best episodes ever",
+            desc: "All-time top hours of TV.",
+            href: "/best-episodes",
+            backdrop: bestEpArt,
+          },
+        ]}
+      />
+      </SidebarPageGrid>
     </Layout>,
   );
 });
@@ -151,10 +277,16 @@ app.get("/christmas-tv", async (c) => {
   const lead = results[0];
   const art = await horrorArt(c, lead);
   const site = origin(c);
+  const [halloweenArt, thanksArt, bestEpArt] = await loadSeasonalDoorArts(c.env.DB, c.env.TMDB_API_KEY, [
+    "halloween",
+    "thanksgiving",
+    "best-episodes",
+  ]);
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout c={c}
+      sidebarInline
       title={`Best Christmas TV ${year} — Holiday Episodes & Specials | TV Nightly`}
       description={`The best Christmas TV episodes and holiday specials ${year} — series ranked by their highest-rated Christmas hours.`}
       canonical={canonical(c)}
@@ -179,54 +311,47 @@ app.get("/christmas-tv", async (c) => {
         </div>
       </header>
 
+      <SidebarPageGrid c={c}>
       {results.length ? (
         <section class="hub-sec">
           <h2>Series with great Christmas episodes</h2>
           <p class="muted">Ranked by the rating of each show's best Christmas hour.</p>
-          <ol class="wo-list wo-ranked wo-ranked-meta">
-            {results.map((s, i) => {
-              const art = posterSrc(s);
-              return (
-                <li class="wo-row">
-                  <span class="wo-num" aria-hidden="true">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  {art ? (
-                    <img class="wo-poster" src={art.src} srcset={art.srcset} alt="" width="46" height="69" loading="lazy" />
-                  ) : (
-                    <span class="wo-poster wo-poster-blank" aria-hidden="true"></span>
-                  )}
-                  <span class="wo-main">
-                    <span class="wo-title">
-                      <a href={`/show/${s.slug}`}>{s.name}</a>
-                    </span>
-                    <span class="wo-synopsis muted">
-                      {s.ep_count} Christmas episode{s.ep_count === 1 ? "" : "s"} tracked
-                    </span>
-                  </span>
-                  <span class="wo-side">
-                    <span class="rating">
-                      <IconStar class="rating-star" />
-                      {s.best_ep_rating.toFixed(1)}
-                    </span>
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
+          <div class="grid">
+            {results.map((s) => (
+              <ShowCard show={{ ...s, rating: s.best_ep_rating }} />
+            ))}
+          </div>
         </section>
       ) : (
         <p class="muted">Holiday episodes are still syncing — check back soon.</p>
       )}
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard icon="Hidden gems" title="Halloween horror" desc="Scary series ranked." href="/halloween" />
-          <ExploreCard icon="Shortcut" title="Thanksgiving episodes" desc="Turkey Day classics." href="/best-thanksgiving-episodes" />
-          <ExploreCard icon="Charts" title="Best episodes ever" desc="All-time top hours." href="/best-episodes" />
-        </div>
-      </section>
+      <KeepExploring
+        cards={[
+          {
+            icon: "Hidden gems",
+            title: "Halloween horror",
+            desc: "Scary series ranked.",
+            href: "/halloween",
+            backdrop: halloweenArt,
+          },
+          {
+            icon: "Shortcut",
+            title: "Thanksgiving episodes",
+            desc: "Turkey Day classics.",
+            href: "/best-thanksgiving-episodes",
+            backdrop: thanksArt,
+          },
+          {
+            icon: "Charts",
+            title: "Best episodes ever",
+            desc: "All-time top hours.",
+            href: "/best-episodes",
+            backdrop: bestEpArt,
+          },
+        ]}
+      />
+      </SidebarPageGrid>
     </Layout>,
   );
 });
@@ -245,10 +370,16 @@ app.get("/best-thanksgiving-episodes", async (c) => {
 
   const site = origin(c);
   const anyStill = results.some((e) => e.image_url);
+  const [christmasArt, halloweenArt, bestEpArt] = await loadSeasonalDoorArts(c.env.DB, c.env.TMDB_API_KEY, [
+    "christmas",
+    "halloween",
+    "best-episodes",
+  ]);
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout c={c}
+      sidebarInline
       title={`Best Thanksgiving TV Episodes ${year} — Ranked | TV Nightly`}
       description={`The best Thanksgiving TV episodes of all time — Friends, The West Wing, Bob's Burgers, and every Turkey Day classic ranked by viewer rating.`}
       canonical={canonical(c)}
@@ -271,6 +402,7 @@ app.get("/best-thanksgiving-episodes", async (c) => {
         ]),
       ]}
     >
+      <SidebarPageGrid c={c}>
       <article class="chart-page">
         <header class="chart-head">
           <p class="section-eyebrow">Seasonal · Thanksgiving {year}</p>
@@ -319,14 +451,32 @@ app.get("/best-thanksgiving-episodes", async (c) => {
         )}
       </article>
 
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard icon="Hidden gems" title="Christmas TV" desc="Holiday specials ranked." href="/christmas-tv" />
-          <ExploreCard icon="Shortcut" title="Halloween horror" desc="Scary series for October." href="/halloween" />
-          <ExploreCard icon="Charts" title="Best episodes ever" desc="All-time top hours." href="/best-episodes" />
-        </div>
-      </section>
+      <KeepExploring
+        cards={[
+          {
+            icon: "Hidden gems",
+            title: "Christmas TV",
+            desc: "Holiday specials ranked.",
+            href: "/christmas-tv",
+            backdrop: christmasArt,
+          },
+          {
+            icon: "Shortcut",
+            title: "Halloween horror",
+            desc: "Scary series for October.",
+            href: "/halloween",
+            backdrop: halloweenArt,
+          },
+          {
+            icon: "Charts",
+            title: "Best episodes ever",
+            desc: "All-time top hours.",
+            href: "/best-episodes",
+            backdrop: bestEpArt,
+          },
+        ]}
+      />
+      </SidebarPageGrid>
     </Layout>,
   );
 });

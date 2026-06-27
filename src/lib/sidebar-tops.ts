@@ -1,7 +1,10 @@
+import type { MovieRow, ShowRow } from "../types";
 import { posterSrc } from "./format";
 import { tmdbTopRated } from "./tmdb";
 import { toMovieRow, toShowRow } from "./tmdb-rows";
-import type { MovieRow, ShowRow } from "../types";
+
+export const SIDEBAR_TRAILER_LIMIT = 7;
+export const SIDEBAR_RANK_LIMIT = 5;
 
 export type SideRankItem = {
   name: string;
@@ -9,6 +12,17 @@ export type SideRankItem = {
   poster: string | null;
   rating: number | null;
   kind: "TV" | "Movie";
+  genres: string | null;
+};
+
+const genreLine = (genresJson: string | null, max = 2): string | null => {
+  if (!genresJson) return null;
+  try {
+    const labels = (JSON.parse(genresJson) as string[]).filter(Boolean).slice(0, max);
+    return labels.length ? labels.join(" · ") : null;
+  } catch {
+    return null;
+  }
 };
 
 const showItem = (s: ShowRow): SideRankItem => {
@@ -19,6 +33,7 @@ const showItem = (s: ShowRow): SideRankItem => {
     poster: p?.src ?? s.poster_url ?? s.image_url,
     rating: s.rating,
     kind: "TV",
+    genres: genreLine(s.genres),
   };
 };
 
@@ -28,13 +43,14 @@ const movieItem = (m: MovieRow): SideRankItem => ({
   poster: m.poster_url,
   rating: m.rating,
   kind: "Movie",
+  genres: genreLine(m.genres),
 });
 
 /** Top-rated series for the right rail — same blend as /top/tv, capped for the sidebar. */
 export async function sidebarTopSeries(
   db: D1Database,
   apiKey: string | undefined,
-  limit = 6,
+  limit = SIDEBAR_RANK_LIMIT,
 ): Promise<SideRankItem[]> {
   const d1 = (
     await db
@@ -64,7 +80,7 @@ export async function sidebarTopSeries(
 export async function sidebarTopMovies(
   db: D1Database,
   apiKey: string | undefined,
-  limit = 6,
+  limit = SIDEBAR_RANK_LIMIT,
 ): Promise<SideRankItem[]> {
   const d1 = (
     await db
@@ -93,7 +109,7 @@ export async function sidebarTopMovies(
 export async function fetchSidebarTops(
   db: D1Database,
   apiKey: string | undefined,
-  limit = 6,
+  limit = SIDEBAR_RANK_LIMIT,
 ): Promise<{ series: SideRankItem[]; movies: SideRankItem[] }> {
   const [series, movies] = await Promise.all([
     sidebarTopSeries(db, apiKey, limit),

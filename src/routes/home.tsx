@@ -2,16 +2,18 @@ import { Hono } from "hono";
 import { FC, PropsWithChildren } from "hono/jsx";
 import { Honeypot, Layout } from "../components/Layout";
 import { MovieCard, ShowCard, StatusBadge } from "../components/cards";
+import { HeroTrailerEmbed } from "../components/hero-trailer";
 import { HomeSidebarRail } from "../components/home-sidebar";
 import { IconCal, IconClapper, IconDial, IconHearts, IconMail, IconReel, IconRoute, IconSparkle, IconStar, IconTvPlay, IconVs } from "../components/icons";
 import { NewsletterBand } from "../components/newsletter";
 import { ProviderLine } from "../components/providers";
 import { airTime, epCode, heroBg, hiRes, homeDateline, isNewYear, longDate, personHref, posterSrc, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
+import { latestTrailers, trailerSeedsFromRails } from "../lib/latest-trailers";
 import { PROVIDER_LOGOS, visitorRegion } from "../lib/providers";
 import { communityVerdictTotal } from "../lib/ratings";
 import { liveTonight } from "../lib/schedule-live";
 import { canonical, origin, siteIdentityLd } from "../lib/seo";
-import { latestTrailers, trailerSeedsFromRails } from "../lib/latest-trailers";
+import { SIDEBAR_TRAILER_LIMIT } from "../lib/sidebar-tops";
 import { tmdbBackdrop, tmdbMovieBackdrop, tmdbPopular, tmdbTrailer, tmdbTrendingList, tmdbUpcomingMovies } from "../lib/tmdb";
 import { toMovieRow, toShowRow } from "../lib/tmdb-rows";
 import { tmdbHeroShow, tmdbShowCast } from "../lib/tmdb-show";
@@ -26,12 +28,15 @@ const app = new Hono<HonoEnv>();
 app.get("/api/trailer", async (c) => {
   const type = c.req.query("type");
   const id = c.req.query("id");
-  if ((type !== "tv" && type !== "movie") || !id || !/^\d+$/.test(id)) {
+  if ((type !== "tv" && type !== "movie") || !id) {
     return c.json({ key: null }, 400);
   }
   const key = c.env.TMDB_API_KEY;
   if (!key) return c.json({ key: null }, 503);
-  const t = await tmdbTrailer(key, type, Number(id));
+  const bundleId =
+    type === "movie" && /^tt\d+$/.test(id) ? id : /^\d+$/.test(id) ? Number(id) : null;
+  if (bundleId == null) return c.json({ key: null }, 400);
+  const t = await tmdbTrailer(key, type, bundleId);
   c.header("Cache-Control", "public, max-age=604800");
   return c.json(t ?? { key: null });
 });
@@ -390,6 +395,7 @@ app.get("/", async (c) => {
   const sidebarTrailers = await latestTrailers(
     c.env.TMDB_API_KEY,
     trailerSeedsFromRails(trendTvRail, trendMovies, top, topMovies),
+    SIDEBAR_TRAILER_LIMIT,
   );
 
   c.header("Cache-Control", "public, max-age=300");
@@ -412,7 +418,7 @@ app.get("/", async (c) => {
           <div class="home-newsbar-inner">
             <div class="home-newsbar-copy">
               <span class="home-newsbar-kicker" aria-hidden="true">
-                <IconMail size={15} />
+                <IconMail size={13} />
               </span>
               <p class="home-newsbar-title" id="home-email-title">
                 <span class="home-newsbar-title-main">Tonight's best TV</span>
@@ -552,19 +558,16 @@ app.get("/", async (c) => {
                   frame never loads. */}
               {heroTrailer ? (
                 <div class="spot-aside">
-                  <div
-                    class="spot-trailer"
-                    style={backdrop ? heroBg(backdrop.x1, backdrop.x2) : undefined}
-                  >
-                    <iframe
-                      class="spot-trailer-frame"
-                      src={`https://www.youtube-nocookie.com/embed/${heroTrailer.key}?autoplay=1&mute=1&loop=1&playlist=${heroTrailer.key}&controls=1&rel=0&modestbranding=1&playsinline=1`}
-                      title={`${spot.name} — trailer`}
-                      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                      loading="lazy"
-                      referrerpolicy="strict-origin-when-cross-origin"
-                      allowfullscreen
-                    ></iframe>
+                  <div class="hub-hero-player spot-trailer-wrap" data-hero-pip>
+                    <HeroTrailerEmbed
+                      href={`/show/${spot.slug}`}
+                      title={spot.name}
+                      trailerKey={heroTrailer.key}
+                      trailerName="Trailer"
+                      fallbackBackdrop={backdrop}
+                      videoClass="spot-trailer hub-hero-video"
+                      frameClass="spot-trailer-frame hub-hero-video-frame"
+                    />
                   </div>
                   {heroCast.length ? (
                     <div class="spot-cast" aria-label={`${spot.name} cast`}>

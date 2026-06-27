@@ -495,7 +495,7 @@
 /* ---- back to top ---- */
 .back-to-top {
   position: fixed;
-  right: max(1rem, env(safe-area-inset-right, 0px));
+  left: 50%;
   bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
   z-index: 48;
   display: inline-flex;
@@ -515,7 +515,7 @@
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: translateY(0.45rem);
+  transform: translateX(-50%) translateY(0.45rem);
   transition:
     opacity var(--speed) var(--ease),
     visibility var(--speed) var(--ease),
@@ -528,7 +528,7 @@
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-  transform: translateY(0);
+  transform: translateX(-50%) translateY(0);
 }
 .back-to-top:hover {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));

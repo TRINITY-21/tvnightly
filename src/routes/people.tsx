@@ -13,7 +13,7 @@ import { ageOf, headshot, longDate, posterSrc, slugifyName, stripHtml } from "..
 import { visitorRegion } from "../lib/providers";
 import { crewLinkMap, similarShows } from "../lib/queries";
 import { breadcrumbLd, breadcrumbTrail, canonical, origin } from "../lib/seo";
-import { tmdbPersonTaggedStills, tmdbTrailer } from "../lib/tmdb";
+import { tmdbPersonProfileImages, tmdbPersonTaggedStills, tmdbTrailer } from "../lib/tmdb";
 import { TMDB_PERSON_OFFSET, resolvePersonProfile, resolveShow, tmdbShowCast } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
 import { HonoEnv, PersonRow, ShowRow } from "../types";
@@ -362,7 +362,6 @@ async function seasonCastPage(
             trailers={sidebar?.trailers ?? []}
             topSeries={sidebar?.topSeries ?? []}
             topMovies={sidebar?.topMovies ?? []}
-            newsletterHref="/#home-email-title"
           />
         </div>
       </article>
@@ -615,7 +614,6 @@ app.get("/show/:slug/cast", async (c) => {
             trailers={sidebar?.trailers ?? []}
             topSeries={sidebar?.topSeries ?? []}
             topMovies={sidebar?.topMovies ?? []}
-            newsletterHref="/#home-email-title"
           />
         </div>
       </article>
@@ -654,9 +652,6 @@ app.get("/person/:slug", async (c) => {
   ].filter((x): x is { name: string; rating: number } => x.rating != null);
   const topRated = ratedCredits.length
     ? ratedCredits.reduce((a, b) => (b.rating > a.rating ? b : a))
-    : null;
-  const avgRating = ratedCredits.length
-    ? (ratedCredits.reduce((s, x) => s + x.rating, 0) / ratedCredits.length).toFixed(1)
     : null;
   const showYears = (r: ShowRow) =>
     r.premiered
@@ -820,41 +815,45 @@ app.get("/person/:slug", async (c) => {
         : await movieKeepGoingBackdrop(apiKey, spotlight.row)
       : null;
 
-  const highlights: { href: string; label: string; img: string }[] = [];
+  const highlights: { label: string; thumb: string; view: string }[] = [];
   const personTmdbId =
     person.tmdb_id ?? (person.id >= TMDB_PERSON_OFFSET ? person.id - TMDB_PERSON_OFFSET : null);
-  const taggedStills =
-    apiKey && personTmdbId ? await tmdbPersonTaggedStills(apiKey, personTmdbId) : [];
-  const creditLinks = new Map<string, { href: string; label: string }>();
+  const [profiles, taggedStills] = await Promise.all([
+    apiKey && personTmdbId ? tmdbPersonProfileImages(apiKey, personTmdbId) : [],
+    apiKey && personTmdbId ? tmdbPersonTaggedStills(apiKey, personTmdbId) : [],
+  ]);
+  const creditLabels = new Map<string, string>();
   for (const r of roles) {
-    if (r.tmdb_id) creditLinks.set(`tv:${r.tmdb_id}`, { href: `/show/${r.slug}`, label: r.name });
+    if (r.tmdb_id) creditLabels.set(`tv:${r.tmdb_id}`, r.name);
   }
   for (const m of films) {
-    if (m.tmdb_id) creditLinks.set(`movie:${m.tmdb_id}`, { href: `/movie/${m.slug}`, label: m.title });
+    if (m.tmdb_id) creditLabels.set(`movie:${m.tmdb_id}`, m.title);
   }
-  const resolveHighlightLink = (s: (typeof taggedStills)[number]) => {
-    const cached = creditLinks.get(`${s.mediaType}:${s.mediaId}`);
-    if (cached) return cached;
-    if (s.mediaType === "tv") {
-      const r = roles.find((x) => x.tmdb_id === s.mediaId);
-      if (r) return { href: `/show/${r.slug}`, label: r.name };
-      return { href: `/show/${slugifyName(s.mediaTitle)}?t=${s.mediaId}`, label: s.mediaTitle };
-    }
-    const m = films.find((x) => x.tmdb_id === s.mediaId);
-    if (m) return { href: `/movie/${m.slug}`, label: m.title };
-    return { href: `/movie/${slugifyName(s.mediaTitle)}?t=${s.mediaId}`, label: s.mediaTitle };
-  };
+  const highlightCreditLabel = (s: (typeof taggedStills)[number]) =>
+    creditLabels.get(`${s.mediaType}:${s.mediaId}`) ?? s.mediaTitle;
   const seenHighlight = new Set<string>();
+  const seenImages = new Set<string>();
+  for (const p of profiles) {
+    if (highlights.length >= 6) break;
+    if (seenImages.has(p.filePath)) continue;
+    seenImages.add(p.filePath);
+    highlights.push({
+      label: person.name,
+      thumb: `https://image.tmdb.org/t/p/w500${p.filePath}`,
+      view: `https://image.tmdb.org/t/p/w1280${p.filePath}`,
+    });
+  }
   for (const s of taggedStills) {
     if (highlights.length >= 6) break;
-    const link = resolveHighlightLink(s);
+    if (seenImages.has(s.filePath)) continue;
     const key = `${s.mediaType}:${s.mediaId}`;
     if (seenHighlight.has(key)) continue;
     seenHighlight.add(key);
+    seenImages.add(s.filePath);
     highlights.push({
-      href: link.href,
-      label: link.label,
-      img: `https://image.tmdb.org/t/p/w780${s.filePath}`,
+      label: `${person.name} in ${highlightCreditLabel(s)}`,
+      thumb: `https://image.tmdb.org/t/p/w780${s.filePath}`,
+      view: `https://image.tmdb.org/t/p/w1280${s.filePath}`,
     });
   }
 
@@ -924,6 +923,7 @@ app.get("/person/:slug", async (c) => {
       canonical={canonical(c)}
       ogImage={person.image_url ?? undefined}
       ld={[ld, breadcrumbTrail(personCrumbs)]}
+      scripts={["/js/media-lightbox.js"]}
     >
       <article class="show-hub">
         <header class="hub-hero person-hero" aria-label={`${person.name} profile`}>
@@ -962,7 +962,7 @@ app.get("/person/:slug", async (c) => {
                     ></iframe>
                   </div>
                 ) : featureBackdrop && featureHref ? (
-                  <a class="hub-hero-video hub-hero-video-empty hub-hero-video-backdrop" href={featureHref}>
+                  <a class="hub-hero-video hub-hero-video-backdrop" href={featureHref}>
                     <img
                       src={featureBackdrop.x1}
                       {...(featureBackdrop.x2
@@ -996,11 +996,28 @@ app.get("/person/:slug", async (c) => {
                       <p>{birthPlace}</p>
                     </div>
                   ) : null}
-                  {occupation ? (
-                    <div class="hub-credit-block">
-                      <h3>Known for</h3>
-                      <p>{occupation}</p>
-                    </div>
+                  {roles.length || films.length ? (
+                    <>
+                      {yearsActive ? (
+                        <div class="hub-credit-block hub-person-stat">
+                          <h3>Years active</h3>
+                          <p class="hub-person-stat-val">{yearsActive}</p>
+                          <p class="hub-person-stat-sub muted">first to latest</p>
+                        </div>
+                      ) : null}
+                      {topRated ? (
+                        <div class="hub-credit-block hub-person-stat">
+                          <h3>Highest rated</h3>
+                          <p class="hub-person-stat-val">
+                            {topRated.rating.toFixed(1)}{" "}
+                            <span class="rating">
+                              <IconStar class="rating-star" />
+                            </span>
+                          </p>
+                          <p class="hub-person-stat-sub muted">{topRated.name}</p>
+                        </div>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
                 {socials.ig || socials.tw || person.homepage ? (
@@ -1046,24 +1063,31 @@ app.get("/person/:slug", async (c) => {
             </div>
 
             {highlights.length ? (
-              <section class="hub-hero-highlights" aria-label={`${person.name} highlights`}>
+              <section class="hub-hero-highlights person-highlights" aria-label={`${person.name} highlights`}>
                 <h2 class="hub-hero-section-label">
                   {person.name} <span>highlights</span>
                 </h2>
-                <div class="hub-hero-vidrow">
-                  {highlights.map((h) => (
+                <div
+                  class="hub-hero-vidrow person-highlight-gallery"
+                  data-gallery-title={person.name}
+                  data-gallery-kind="Photo"
+                >
+                  {highlights.map((h, i) => (
                     <a
-                      class="hub-hero-vid"
-                      href={h.href}
+                      class="hub-hero-vid media-art"
+                      href={h.view}
+                      data-gallery="person-highlights"
+                      data-view={h.view}
+                      data-alt={`${h.label} — photo ${i + 1} of ${highlights.length}`}
                       aria-label={h.label}
                       title={h.label}
                     >
                       <span class="hub-hero-vid-thumb">
                         <img
-                          src={h.img}
+                          src={h.thumb}
                           alt=""
                           width="160"
-                          height="90"
+                          height="240"
                           loading="lazy"
                           decoding="async"
                         />
@@ -1106,42 +1130,6 @@ app.get("/person/:slug", async (c) => {
                   </a>
                 ))}
               </p>
-            ) : null}
-          </section>
-        ) : null}
-        {roles.length || films.length ? (
-          <section class="stat-band">
-            <div class="stat">
-              <span class="stat-num">{roles.length + films.length}</span>
-              <span class="stat-label">Credits</span>
-              <span class="stat-sub muted">
-                {roles.length} TV · {films.length} film{films.length === 1 ? "" : "s"}
-              </span>
-            </div>
-            {yearsActive ? (
-              <div class="stat">
-                <span class="stat-num">{yearsActive}</span>
-                <span class="stat-label">Years active</span>
-                <span class="stat-sub muted">first to latest</span>
-              </div>
-            ) : null}
-            {topRated ? (
-              <div class="stat">
-                <span class="stat-num">
-                  {topRated.rating.toFixed(1)} <span class="rating"><IconStar class="rating-star" /></span>
-                </span>
-                <span class="stat-label">Highest rated</span>
-                <span class="stat-sub muted">{topRated.name}</span>
-              </div>
-            ) : null}
-            {avgRating && ratedCredits.length > 1 ? (
-              <div class="stat">
-                <span class="stat-num">
-                  {avgRating} <span class="rating"><IconStar class="rating-star" /></span>
-                </span>
-                <span class="stat-label">Average rating</span>
-                <span class="stat-sub muted">across {ratedCredits.length} titles</span>
-              </div>
             ) : null}
           </section>
         ) : null}
@@ -1267,7 +1255,6 @@ app.get("/person/:slug", async (c) => {
             trailers={sidebar?.trailers ?? []}
             topSeries={sidebar?.topSeries ?? []}
             topMovies={sidebar?.topMovies ?? []}
-            newsletterHref="/#home-email-title"
           />
         </div>
       </article>
@@ -1275,7 +1262,13 @@ app.get("/person/:slug", async (c) => {
   );
 });
 
-type PersonHubRow = PersonRow & { credit_count: number; peak_weight: number };
+type PersonHubRow = PersonRow & {
+  credit_count: number;
+  peak_weight: number;
+  // directors can surface via a film cameo or a TV credit — this drives the
+  // "N films" vs "N shows" label per row
+  credit_kind?: "film" | "show";
+};
 
 async function personHubPage(
   c: Context<HonoEnv>,
@@ -1293,18 +1286,30 @@ async function personHubPage(
               OR (p.known_dept IS NULL AND cr.character IS NOT NULL AND cr.character != '')
            GROUP BY p.id
            ORDER BY peak_weight DESC, credit_count DESC, p.name
-           LIMIT 60`,
+           LIMIT 120`,
         )
         .all<PersonHubRow>()
     : await c.env.DB
         .prepare(
-          `SELECT p.*, COUNT(DISTINCT mc.movie_id) AS credit_count, MAX(m.popularity) AS peak_weight
-           FROM people p
-           JOIN movie_credits mc ON mc.person_id = p.id
-           JOIN movies m ON m.imdb_id = mc.movie_id
-           WHERE p.known_dept = 'Directing'
-           GROUP BY p.id
-           ORDER BY peak_weight DESC, credit_count DESC, p.name
+          // Directors are tagged via known_dept; they surface either through a
+          // film cameo (movie_credits) OR a TV credit. Counting both — and
+          // labelling each row films/shows accordingly — widens the hub well
+          // beyond the handful who happen to have acted in a mirrored film.
+          `SELECT *,
+             CASE WHEN film_count > 0 THEN film_count ELSE tv_count END AS credit_count,
+             CASE WHEN film_count > 0 THEN 'film' ELSE 'show' END AS credit_kind,
+             CASE WHEN film_count > 0 THEN peak_film ELSE peak_tv END AS peak_weight
+           FROM (
+             SELECT p.*,
+               (SELECT COUNT(DISTINCT mc.movie_id) FROM movie_credits mc WHERE mc.person_id = p.id) AS film_count,
+               (SELECT COUNT(DISTINCT cr.show_id) FROM credits cr JOIN shows s ON s.id = cr.show_id AND s.weight >= 45 WHERE cr.person_id = p.id) AS tv_count,
+               (SELECT MAX(m.popularity) FROM movie_credits mc JOIN movies m ON m.imdb_id = mc.movie_id WHERE mc.person_id = p.id) AS peak_film,
+               (SELECT MAX(s.weight) FROM credits cr JOIN shows s ON s.id = cr.show_id WHERE cr.person_id = p.id) AS peak_tv
+             FROM people p
+             WHERE p.known_dept = 'Directing'
+           )
+           WHERE film_count > 0 OR tv_count > 0
+           ORDER BY (film_count > 0) DESC, credit_count DESC, peak_weight DESC, name
            LIMIT 60`,
         )
         .all<PersonHubRow>();
@@ -1321,7 +1326,7 @@ async function personHubPage(
       description={
         isActor
           ? "Browse actors we track — ranked by the popularity of their shows, with links to every credit and episode guide."
-          : "Browse directors we track — ranked by the films in our catalogue, with links to every credit."
+          : "Browse directors we track — ranked by the titles in our catalogue, with links to every credit."
       }
       canonical={`${site}${path}`}
       ld={[
@@ -1348,7 +1353,7 @@ async function personHubPage(
         <p class="section-lead">
           {isActor
             ? "The actors behind the shows we track — ranked by the weight of their series, not tabloid fame."
-            : "The directors behind the films we mirror — ranked by catalogue prominence."}
+            : "The directors behind the titles we track — ranked by catalogue prominence."}
         </p>
       </header>
 
@@ -1369,7 +1374,7 @@ async function personHubPage(
                 <div class="cast-tile-body">
                   <strong>{p.name}</strong>
                   <span class="cast-char">
-                    {p.credit_count} {isActor ? "show" : "film"}
+                    {p.credit_count} {isActor ? "show" : p.credit_kind ?? "film"}
                     {p.credit_count === 1 ? "" : "s"}
                   </span>
                 </div>

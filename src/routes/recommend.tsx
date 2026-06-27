@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { Child, FC } from "hono/jsx";
 import { Honeypot, Layout } from "../components/Layout";
-import { ExploreCard } from "../components/cards";
+import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import { KeepExploring, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
 import { IconStar, IconStarBadge } from "../components/icons";
 import { ShareBar } from "../components/share";
 import { TasteProfileShare } from "../components/taste-profile";
@@ -15,9 +17,11 @@ import { foldSql, foldText } from "../lib/search";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { posterDataUri } from "../lib/signal";
 import { TasteProfileCardData, buildOgCard, buildTasteProfileCard, buildTasteProfileOgCard } from "../lib/social";
-import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import { tmdbBackdrop, tmdbMovieBackdrop, tmdbTrendingList } from "../lib/tmdb";
+import { toMovieRow, toShowRow } from "../lib/tmdb-rows";
+import type { ExploreArt } from "../lib/explore-art";
 import type { AppContext } from "../types";
-import { Bindings, HonoEnv } from "../types";
+import { Bindings, HonoEnv, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -771,7 +775,7 @@ app.get("/recommend", async (c) => {
   }
 
   // ----- LANDING -----
-  const picks = await landingPicks(db, 12);
+  const picks = await landingPicks(db, 30);
   c.header("Cache-Control", "public, max-age=1800");
   return c.html(
     <Layout c={c}
@@ -950,49 +954,122 @@ app.get("/loved", async (c) => {
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
 
-  // the podium (top three) wears real backdrops — edge-cached, ambient
-  // poster light when a title has none
-  const podium = board.slice(0, 3);
-  const rest = board.slice(3);
-  const arts: ({ x1: string; x2?: string; ambient?: boolean } | null)[] = await Promise.all(
-    podium.map(async (p) => {
-      if (c.env.TMDB_API_KEY) {
-        const bd = p.tmdbId
-          ? await tmdbBackdrop(c.env.TMDB_API_KEY, p.tmdbId)
-          : p.imdbId
-            ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, p.imdbId)
-            : null;
-        if (bd) return bd;
-      }
-      return p.ambientSrc ? { x1: p.ambientSrc, ambient: true } : null;
-    }),
-  );
+  const apiKey = c.env.TMDB_API_KEY;
+  const communityHrefs = new Set(board.map((b) => b.href));
+  const trendingMovies = apiKey
+    ? (await tmdbTrendingList(apiKey, "movie"))
+        .slice(0, 18)
+        .map(toMovieRow)
+        .filter((m) => !communityHrefs.has(`/movie/${m.slug}`))
+    : [];
+  const trendingShows = apiKey
+    ? (await tmdbTrendingList(apiKey, "tv"))
+        .slice(0, 18)
+        .map(toShowRow)
+        .filter((s) => !communityHrefs.has(`/show/${s.slug}`))
+    : [];
 
-  const pct = (r: { score: number }) => `${Math.round(r.score * 100)}%`;
-  const VerdictBar = ({ r }: { r: { loved: number; liked: number; meh: number; awful: number; total: number } }) => (
-    <span
-      class="loved-bar"
-      role="img"
-      aria-label={`${r.awful} awful, ${r.meh} meh, ${r.liked} good, ${r.loved} loved`}
-    >
-      {r.awful ? <span class="loved-seg seg-awful" style={`flex-grow:${r.awful}`}></span> : null}
-      {r.meh ? <span class="loved-seg seg-meh" style={`flex-grow:${r.meh}`}></span> : null}
-      {r.liked ? <span class="loved-seg seg-liked" style={`flex-grow:${r.liked}`}></span> : null}
-      {r.loved ? <span class="loved-seg seg-loved" style={`flex-grow:${r.loved}`}></span> : null}
-    </span>
-  );
+  const boardMovieRow = (b: (typeof board)[number]): MovieRow =>
+    ({
+      slug: b.href.replace(/^\/movie\//, ""),
+      title: b.label,
+      poster_url: b.poster,
+      year: b.year,
+      tmdb_id: b.tmdbId,
+      imdb_id: b.imdbId ?? "",
+      rating: null,
+    }) as unknown as MovieRow;
+  const boardShowRow = (b: (typeof board)[number]): ShowRow =>
+    ({
+      slug: b.href.replace(/^\/show\//, ""),
+      name: b.label,
+      poster_url: b.poster,
+      image_url: null,
+      tmdb_id: b.tmdbId,
+      rating: null,
+    }) as unknown as ShowRow;
 
+  const movieRail = [
+    ...board.filter((b) => b.kind === "movie").map(boardMovieRow),
+    ...trendingMovies,
+  ].slice(0, 18);
+  const showRail = [
+    ...board.filter((b) => b.kind === "tv").map(boardShowRow),
+    ...trendingShows,
+  ].slice(0, 18);
+
+  const entryBackdrop = async (entry: (typeof board)[number]): Promise<ExploreArt> => {
+    const apiKey = c.env.TMDB_API_KEY;
+    if (apiKey) {
+      if (entry.tmdbId) return await tmdbBackdrop(apiKey, entry.tmdbId);
+      if (entry.imdbId) return await tmdbMovieBackdrop(apiKey, entry.imdbId);
+    }
+    return entry.ambientSrc ? { x1: entry.ambientSrc } : null;
+  };
+  const sidebar = c.get("siteSidebar");
+  const tvEntry = board.find((b) => b.kind === "tv");
+  const movieEntry = board.find((b) => b.kind === "movie");
+  const trendLeadMovie = movieRail[0] ?? null;
+  const trendLeadShow = showRail[0] ?? null;
+  const [fallbackShow, fallbackMovie] = await Promise.all([
+    tvEntry
+      ? Promise.resolve(null)
+      : db
+          .prepare(
+            `SELECT tmdb_id, image_url, COALESCE(poster_url, image_url) AS poster_url
+             FROM shows WHERE rating IS NOT NULL ORDER BY rating DESC, weight DESC LIMIT 1`,
+          )
+          .first<{ tmdb_id: number | null; image_url: string | null; poster_url: string | null }>(),
+    movieEntry
+      ? Promise.resolve(null)
+      : db
+          .prepare(
+            `SELECT imdb_id, poster_url FROM movies WHERE rating IS NOT NULL ORDER BY rating DESC, votes DESC LIMIT 1`,
+          )
+          .first<{ imdb_id: string; poster_url: string | null }>(),
+  ]);
+  const trendMovieArt = (m: MovieRow | null): ExploreArt =>
+    m?.poster_url ? { x1: m.poster_url.replace("/w342/", "/w780/") } : null;
+  const [pickArt, topTvArt, movieArt] = await Promise.all([
+    board[0]
+      ? entryBackdrop(board[0])
+      : trendLeadMovie
+        ? Promise.resolve(trendMovieArt(trendLeadMovie))
+        : trendLeadShow
+          ? showKeepGoingBackdrop(apiKey, trendLeadShow)
+          : fallbackShow
+            ? showKeepGoingBackdrop(apiKey, fallbackShow)
+            : Promise.resolve(null),
+    tvEntry
+      ? entryBackdrop(tvEntry)
+      : trendLeadShow
+        ? showKeepGoingBackdrop(apiKey, trendLeadShow)
+        : fallbackShow
+          ? showKeepGoingBackdrop(apiKey, fallbackShow)
+          : Promise.resolve(null),
+    movieEntry
+      ? entryBackdrop(movieEntry)
+      : trendLeadMovie
+        ? Promise.resolve(trendMovieArt(trendLeadMovie))
+        : fallbackMovie
+          ? movieKeepGoingBackdrop(apiKey, fallbackMovie)
+          : Promise.resolve(null),
+  ]);
   const site = origin(c);
   c.header("Cache-Control", "public, max-age=900");
   return c.html(
     <Layout c={c}
+      sidebarInline
       title="The most loved shows & movies on TV Nightly"
       description="Community charts built from real one-tap verdicts: what TV Nightly's raters love right now."
       canonical={canonical(c)}
       ld={[
         itemListLd(
           "Most loved shows and movies",
-          board.map((r) => ({ name: r.label, url: `${site}${r.href}` })),
+          [
+            ...movieRail.map((m) => ({ name: m.title, url: `${site}/movie/${m.slug}` })),
+            ...showRail.map((s) => ({ name: s.name, url: `${site}/show/${s.slug}` })),
+          ],
         ),
         breadcrumbTrail([
           { name: "TV Nightly", url: site },
@@ -1005,12 +1082,12 @@ app.get("/loved", async (c) => {
           <p class="section-eyebrow">Community</p>
           <h1 class="chart-h1">Most loved shows and movies</h1>
           <p class="section-lead">
-            Ranked from one-tap reader verdicts — loved, good, meh, or awful.
+            What&apos;s hot right now — reader picks slot in as they land.
           </p>
-          {board.length ? (
+          {movieRail.length || showRail.length ? (
             <p class="chart-statline">
               <span class="chart-statline-main">
-                <strong>{board.length}</strong> titles
+                <strong>{movieRail.length + showRail.length}</strong> titles
               </span>
               <span class="chart-statline-links">
                 <a class="chev-after" href="/recommend">
@@ -1026,111 +1103,63 @@ app.get("/loved", async (c) => {
             </p>
           ) : null}
         </header>
-        {board.length === 0 ? (
-          <p class="muted">
-            No titles have enough ratings yet. <a href="/recommend">Rate something first</a>.
-          </p>
-        ) : null}
 
-        {podium.length ? (
-          <div class="loved-podium">
-            {podium.map((p, i) => (
-              <article class={`loved-hero${i === 0 ? " loved-hero-1" : ""}${arts[i]?.ambient ? " loved-ambient" : ""}`}>
-                {arts[i] ? (
-                  <div class="loved-frame" style={heroBg(arts[i]!.x1, arts[i]!.x2)} aria-hidden="true"></div>
-                ) : null}
-                <span class="loved-rank" aria-hidden="true">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <div class="loved-hero-body">
-                  <p class="loved-kicker">
-                    Community no. {i + 1} · {p.kindLabel}
-                  </p>
-                  <h2 class="loved-hero-title">
-                    <a href={p.href}>
-                      {p.label}
-                      {p.year ? <span class="loved-year"> ({p.year})</span> : null}
-                    </a>
-                  </h2>
-                  <p class="loved-score">
-                    <strong>{pct(p)}</strong> positive · {p.total} rating{p.total === 1 ? "" : "s"}
-                  </p>
-                  <VerdictBar r={p} />
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : null}
-
-        {rest.length ? (
-          <section class="loved-board">
-            <h2>The board</h2>
-            <ol class="loved-list" start={4}>
-              {rest.map((r, i) => (
-                <li>
-                  <a class="loved-row" href={r.href}>
-                    <span class="loved-pos" aria-hidden="true">
-                      {String(i + 4).padStart(2, "0")}
-                    </span>
-                    {r.poster ? (
-                      <img src={r.poster} alt={`${r.label} poster`} width="46" height="69" loading="lazy" decoding="async" />
-                    ) : (
-                      <span class="loved-thumb-blank" aria-hidden="true"></span>
-                    )}
-                    <span class="loved-main">
-                      <span class="loved-name">
-                        {r.label}
-                        {r.year ? ` (${r.year})` : ""}
-                      </span>
-                      <span class="loved-meta">{r.kindLabel}</span>
-                    </span>
-                    <span class="loved-tally">
-                      <span class="loved-score">
-                        <strong>{pct(r)}</strong> positive · {r.total}
-                      </span>
-                      <VerdictBar r={r} />
-                    </span>
-                  </a>
-                </li>
+        <div class="home-main-grid">
+          <div class="home-col">
+        {movieRail.length ? (
+          <section class="loved-trending">
+            <h2>Movies</h2>
+            <div class="poster-row poster-row-ranked loved-trend-rail">
+              {movieRail.map((m, i) => (
+                <MovieCard movie={m} eager={i < 4} />
               ))}
-            </ol>
+            </div>
           </section>
         ) : null}
 
-        {board.length ? (
-          <p class="loved-foot muted">
-            Each verdict counts toward the positive score: loved in full, good at half, meh and
-            awful at zero.{" "}
-            <span class="loved-key"><span class="loved-dot seg-awful"></span> awful</span>{" "}
-            <span class="loved-key"><span class="loved-dot seg-meh"></span> meh</span>{" "}
-            <span class="loved-key"><span class="loved-dot seg-liked"></span> good</span>{" "}
-            <span class="loved-key"><span class="loved-dot seg-loved"></span> loved</span>
-          </p>
+        {showRail.length ? (
+          <section class="loved-trending">
+            <h2>TV shows</h2>
+            <div class="poster-row poster-row-ranked loved-trend-rail">
+              {showRail.map((s, i) => (
+                <ShowCard show={s} eager={i < 4} />
+              ))}
+            </div>
+          </section>
         ) : null}
 
-        <section class="wo-doors">
-          <h2>Keep exploring</h2>
-          <div class="explore-grid">
-            <ExploreCard
-              icon="Tailored"
-              title="Rate &amp; get a pick"
-              desc="Rate a few you've seen — we read your taste and hand you your next watch."
-              href="/recommend"
-            />
-            <ExploreCard
-              icon="Charts"
-              title="Top TV shows"
-              desc="The highest-rated series we track — weight and popularity gate the board."
-              href="/top/tv"
-            />
-            <ExploreCard
-              icon="Charts"
-              title="Best movies"
-              desc="The 50 best films of all time, ranked by viewer rating."
-              href="/movies/best"
-            />
+        <KeepExploring
+          cards={[
+            {
+              icon: "Tailored",
+              title: "Rate & get a pick",
+              desc: "Rate a few you've seen — we read your taste and hand you your next watch.",
+              href: "/recommend",
+              backdrop: pickArt,
+            },
+            {
+              icon: "Charts",
+              title: "Top TV shows",
+              desc: "The highest-rated series we track — weight and popularity gate the board.",
+              href: "/top/tv",
+              backdrop: topTvArt,
+            },
+            {
+              icon: "Charts",
+              title: "Best movies",
+              desc: "The 50 best films of all time, ranked by viewer rating.",
+              href: "/movies/best",
+              backdrop: movieArt,
+            },
+          ]}
+        />
           </div>
-        </section>
+          <HomeSidebarRail
+            trailers={sidebar?.trailers ?? []}
+            topSeries={sidebar?.topSeries ?? []}
+            topMovies={sidebar?.topMovies ?? []}
+          />
+        </div>
       </article>
     </Layout>,
   );

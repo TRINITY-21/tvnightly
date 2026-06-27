@@ -634,7 +634,6 @@ app.get("/show/:slug/ratings", async (c) => {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,
@@ -1255,7 +1254,6 @@ app.get("/show/:slug/next-episode", async (c) => {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,
@@ -1647,7 +1645,6 @@ app.get("/show/:slug/release-date", async (c) => {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,

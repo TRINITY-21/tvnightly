@@ -8,28 +8,38 @@
 // keyword H1, ranked list, genre/person cross-links, visible FAQ → FAQPage LD,
 // plus ItemList + BreadcrumbList.
 import { Hono } from "hono";
-import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, ShowCard } from "../components/cards";
+import { ChartFilterBar } from "../components/chart-filters";
+import { ChartHeroHead, ChartSpotlight } from "../components/chart-hero";
+import {
+    ChartRankCard,
+    ChartRankGrid,
+    showChartRankItem,
+} from "../components/chart-rank-card";
 import { FilterSelect } from "../components/forms";
 import { HomeSidebarRail } from "../components/home-sidebar";
+import { IconStar } from "../components/icons";
 import {
-  fillKeepGoingBackdrops,
-  KeepExploring,
-  loadTvGuideDoorArts,
-  movieKeepGoingBackdrop,
-  showKeepGoingBackdrop,
+    KeepExploring,
+    fillKeepGoingBackdrops,
+    loadTvChartDoorArts,
+    loadTvGuideDoorArts,
+    movieKeepGoingBackdrop,
+    showKeepGoingBackdrop,
 } from "../components/keep-going";
+import { parseChartFilters } from "../lib/chart-filters";
+import { CHART_PAGE_SIZE, fetchTvChartResults, fetchTvDecadeChartResults, fetchTvUnderratedResults } from "../lib/chart-results";
+import { parseDecadeSlug } from "../lib/decades";
 import { genreShowArt } from "../lib/explore-art";
 import { headshot, heroBg, hiRes, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
-import { parseDecadeSlug, TV_DECADES } from "../lib/decades";
-import { genreDirectory } from "../lib/queries";
+import { genreDirectory, showSeasonCounts } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
-import { tmdbBackdrop } from "../lib/tmdb";
+import { tmdbBackdrop, tmdbTrailer } from "../lib/tmdb";
 import { resolvePersonProfile } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
-import { AppContext, Bindings, HonoEnv, ShowRow } from "../types";
+import { AppContext, HonoEnv, ShowRow } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -158,100 +168,77 @@ const FaqSection = ({ items }: { items: { q: string; a: string }[] }) => (
 
 async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
   const now = new Date().getFullYear();
-  if (!Number.isInteger(year) || year < YEAR_MIN || year > now + 1) return c.notFound();
-  const db = c.env.DB;
-  const region = visitorRegion(c);
-  const dir = await genreDirectory(db);
+  if (!Number.isInteger(year) || year < YEAR_MIN || year > now) return c.notFound();
 
+  const { tv: tvGenres } = await genreDirectory(c.env.DB);
   let genre = "";
   if (genreSlug) {
-    const match = dir.tv.find((g) => slugifyName(g) === genreSlug);
+    const match = tvGenres.find((g) => slugifyName(g) === genreSlug);
     if (!match) return c.redirect(`/tv/best/${year}`, 301);
     genre = match;
   }
   const lower = genre.toLowerCase();
-
-  // main ranking: recency-weighted (premiered is YYYY-MM-DD, so a string compare
-  // against "2024" works) so the year page leads with newer acclaimed shows
-  const conds = ["rating IS NOT NULL", "weight >= ?"];
-  const binds: (string | number)[] = [SHOW_QUALITY_WEIGHT];
-  if (genre) {
-    conds.push("genres LIKE ?");
-    binds.push(`%"${genre}"%`);
+  if ((c.req.query("year") ?? "").trim()) {
+    const sort = parseChartFilters(c, genre).sort;
+    const qs = sort !== "rated" ? `?sort=${sort}` : "";
+    return c.redirect(`${genreSlug ? `/tv/best/${year}/${genreSlug}` : `/tv/best/${year}`}${qs}`, 301);
   }
-  const { results: rows } = await db
-    .prepare(
-      `SELECT * FROM shows WHERE ${conds.join(" AND ")}
-       ORDER BY rating + (CASE WHEN premiered >= ? THEN 0.6 WHEN premiered >= ? THEN 0.3 ELSE 0 END) DESC,
-                weight DESC LIMIT 40`,
-    )
-    .bind(...binds, `${year - 2}`, `${year - 5}`)
-    .all<ShowRow>();
+  const { sort } = parseChartFilters(c, genre);
+  const filters = { genre, year, sort };
+  const results = await fetchTvChartResults(c, filters);
 
-  // "on the air now" shelf — currently-running acclaimed series, the truest
-  // answer to "what should I watch this year"
-  const freshConds = ["status = 'Running'", "rating IS NOT NULL", "weight >= ?"];
-  const freshBinds: (string | number)[] = [SHOW_QUALITY_WEIGHT];
-  if (genre) {
-    freshConds.push("genres LIKE ?");
-    freshBinds.push(`%"${genre}"%`);
+  const champ = results[0] ?? null;
+  let art: { x1: string; x2?: string } | null = null;
+  if (champ?.tmdb_id && c.env.TMDB_API_KEY) {
+    art = await tmdbBackdrop(c.env.TMDB_API_KEY, champ.tmdb_id);
   }
-  const { results: fresh } = await db
-    .prepare(
-      `SELECT * FROM shows WHERE ${freshConds.join(" AND ")} ORDER BY rating DESC, weight DESC LIMIT 12`,
-    )
-    .bind(...freshBinds)
-    .all<ShowRow>();
+  if (!art && champ) {
+    const p = posterSrc(champ);
+    if (p) art = { x1: p.src };
+  }
+  const champTrailer =
+    champ?.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbTrailer(c.env.TMDB_API_KEY, "tv", champ.tmdb_id)
+      : null;
+  const seasonCounts = await showSeasonCounts(
+    c.env.DB,
+    results.slice(0, CHART_PAGE_SIZE).map((s) => s.id),
+  );
+  const showMeta = (s: ShowRow) => {
+    const n = s.id != null ? seasonCounts.get(s.id) : undefined;
+    if (n && n > 0) return `${n} Season${n === 1 ? "" : "s"}`;
+    if (s.premiered) return s.premiered.slice(0, 4);
+    return s.network ?? s.web_channel ?? "TV Series";
+  };
 
-  const { art, ambient } = await topArt(c, rows[0]);
-  const heading = genre
-    ? `The best ${lower} TV shows to watch in ${year}`
-    : `The best TV shows to watch in ${year}`;
+  const pageTitle = genre
+    ? `Best ${genre} TV shows of ${year}`
+    : `Best TV shows of ${year}`;
   const site = origin(c);
-  const hub = genre ? hubForGenres([genre], null) : null;
-  const siblings = dir.tv.filter((g) => g !== genre);
-
-  const faqs = [
-    {
-      q: genre
-        ? `What are the best ${lower} TV shows to watch in ${year}?`
-        : `What are the best TV shows to watch in ${year}?`,
-      a: rows.length
-        ? `Our top ${genre ? `${lower} ` : ""}picks for ${year} are ${nameList(rows, 3)} — ranked by viewer rating, with where to stream each.`
-        : `We're still ranking ${genre ? `${lower} ` : ""}series for ${year}.`,
-    },
-    {
-      q: `How is this ${year} list ranked?`,
-      a: `By real viewer rating, weighted toward series that are airing now or premiered recently, so the freshest great ${genre ? `${lower} ` : ""}shows rise to the top.`,
-    },
-    {
-      q: `Where can I watch these ${genre ? `${lower} ` : ""}shows?`,
-      a: `Every series links to its page with live streaming availability for your country, so you can jump straight to where it's playing.`,
-    },
-  ];
-
   const sidebar = c.get("siteSidebar");
-  const doorArts = await loadTvGuideDoorArts(c.env.DB, c.env.TMDB_API_KEY, {
-    lead: rows[0] ?? null,
-    genre: genre || null,
-    hubSlug: hub?.slug ?? null,
-  });
+  const [underratedArt, episodesArt, compareArt, chartArt] = await loadTvChartDoorArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    champ,
+    results[1] ?? null,
+  );
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout c={c}
       sidebarInline
-      title={`Best ${genre ? `${genre} ` : ""}TV Shows to Watch in ${year} | TV Nightly`}
-      description={`The best ${genre ? `${lower} ` : ""}TV shows to watch in ${year}, ranked by viewer rating with where to stream${rows.length ? ` — ${nameList(rows, 3)} and more` : ""}.`}
+      title={`${pageTitle} — Top 100 Ranked | TV Nightly`}
+      description={`${pageTitle}, ranked by viewer rating${champ ? ` — led by ${champ.name}` : ""}.`}
       canonical={canonical(c)}
+      noindex={!results.length}
+      scripts={["/js/dropdown.js", "/js/chart-filter.js", "/js/chart-scroll.js"]}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
-      scripts={["/js/dropdown.js"]}
       ld={[
         {
           "@context": "https://schema.org",
           "@type": "ItemList",
-          name: heading,
-          itemListElement: rows.slice(0, 25).map((s, i) => ({
+          name: pageTitle,
+          itemListElement: results.slice(0, 25).map((s, i) => ({
             "@type": "ListItem",
             position: i + 1,
             name: s.name,
@@ -263,126 +250,97 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
           "@type": "BreadcrumbList",
           itemListElement: [
             { "@type": "ListItem", position: 1, name: "TV shows", item: `${site}/top/tv` },
-            { "@type": "ListItem", position: 2, name: heading, item: canonical(c) },
+            { "@type": "ListItem", position: 2, name: pageTitle, item: canonical(c) },
           ],
         },
-        faqLd(faqs),
       ]}
     >
-      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
-        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
-        <div class="wo-hero-body">
-          <p class="section-eyebrow">{year} watch guide</p>
-          <h1>{heading}</h1>
-          <p class="wo-intro">
-            The {genre ? `${lower} ` : ""}series worth your time this year — ranked by real viewer
-            rating, what's airing now first, with where to stream each in your country.
-          </p>
-          <p class="hub-actions">
-            <a
-              class="verdict-btn"
-              href={`/what-to-watch${genre ? `?genre=${encodeURIComponent(genre)}` : ""}`}
-            >
-              Pick me {genre ? `${aOrAn(lower)} ${lower}` : "a"} show
-            </a>
-            <a class="btn-ghost" href={genre ? `/tv/underrated/${genreSlug}` : "/tv/underrated"}>
-              Underrated {genre ? lower : ""} picks
-            </a>
-            <a class="btn-ghost" href="/premieres">
-              Upcoming premieres
-            </a>
-          </p>
-        </div>
-      </header>
+      <ChartHeroHead
+        eyebrow={`${year} watch guide`}
+        title={pageTitle}
+        intro={`The best ${genre ? `${lower} ` : ""}series of ${year}, ranked by viewer rating — what's worth starting this year.`}
+      >
+        <a
+          class="verdict-btn"
+          href={`/what-to-watch?type=tv${genre ? `&genre=${encodeURIComponent(genre)}` : ""}`}
+        >
+          Pick me a show
+        </a>
+        <a class="btn-ghost" href={genre ? `/tv/underrated/${genreSlug}` : "/tv/underrated"}>
+          Underrated picks
+        </a>
+        <a class="btn-ghost" href="/premieres">
+          What&apos;s coming next
+        </a>
+      </ChartHeroHead>
 
       <div class="home-main-grid">
         <div class="home-col">
-      {/* data-submit-on-change: dropdown.js submits on pick; the :year handler
-          turns ?genre=slug into the clean /tv/best/{year}/{slug} path */}
-      <form method="get" action={`/tv/best/${year}`} class="region-line watch-region" data-submit-on-change>
-        <FilterSelect
-          label="Genre"
-          name="genre"
-          current={genre ? slugifyName(genre) : ""}
-          options={[
-            { value: "", text: "All genres" },
-            ...dir.tv.map((g) => ({ value: slugifyName(g), text: g })),
-          ]}
-        />
-      </form>
-
-      {fresh.length ? (
-        <section class="hub-sec">
-          <h2>On the air now</h2>
-          <p class="muted">
-            Currently-airing {genre ? `${lower} ` : ""}series you can start this year.
-          </p>
-          <div class="grid">
-            {fresh.map((s) => (
-              <ShowCard show={s} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section class="hub-sec">
-        <h2>The {year} ranking</h2>
-        {rows.length ? (
-          <ShowRankList rows={rows} region={region} />
-        ) : (
-          <p class="muted">No rated {lower} shows for that filter yet.</p>
-        )}
-      </section>
-
-      <section class="hub-sec">
-        <h2>Best TV shows by genre, for {year}</h2>
-        <div class="footer-picks">
-          {genre ? (
-            <a class="footer-card" href={`/tv/best/${year}`}>
-              All genres
-            </a>
-          ) : null}
-          {siblings.map((g) => (
-            <a class="footer-card" href={`/tv/best/${year}/${slugifyName(g)}`}>
-              {g}
-            </a>
-          ))}
+      {champ ? (
+        <div class="chart-hero-spotlight-wrap">
+          <ChartSpotlight
+            featured={{
+              href: `/show/${champ.slug}`,
+              name: champ.name,
+              poster: posterSrc(champ),
+              trailer: champTrailer,
+              fallbackBackdrop: art,
+              rating: champ.rating,
+            }}
+          />
         </div>
-      </section>
-
-      <FaqSection items={faqs} />
+      ) : null}
+      <ChartFilterBar kind="tv" filters={filters} genres={tvGenres} guideYear={year} />
+      {!results.length ? (
+        <p class="muted">No rated {genre ? `${lower} ` : ""}shows for that filter yet.</p>
+      ) : results.length === 1 ? (
+        <p class="muted">Only one show matches these filters — it&apos;s featured above.</p>
+      ) : (
+        <ChartRankGrid
+          more={{
+            kind: "tv",
+            filters,
+            genreSlug,
+            total: results.length,
+            guideYear: year,
+          }}
+        >
+          {results.slice(1, CHART_PAGE_SIZE + 1).map((s, i) => (
+            <ChartRankCard {...showChartRankItem(s, i + 2, showMeta(s))} />
+          ))}
+        </ChartRankGrid>
+      )}
 
       <KeepExploring
         cards={[
+          {
+            icon: "The chart",
+            title: genre ? `Top ${lower} shows, all time` : "Top TV shows of all time",
+            desc: "The all-time ranking by viewer rating, with where to stream.",
+            href: genre ? `/top/tv/${genreSlug}` : "/top/tv",
+            backdrop: chartArt,
+          },
           {
             icon: "Hidden gems",
             title: genre ? `Underrated ${lower} shows` : "Underrated TV shows",
             desc: "High ratings, low profile — the great series most people have missed.",
             href: genre ? `/tv/underrated/${genreSlug}` : "/tv/underrated",
-            backdrop: doorArts.underrated,
+            backdrop: underratedArt,
           },
           {
-            icon: "The chart",
-            title: genre ? `Top ${lower} shows, ranked` : "Top TV shows of all time",
-            desc: "The all-time ranking by viewer rating, with where to stream.",
-            href: genre ? `/genre/${genreSlug}/shows` : "/top/tv",
-            backdrop: doorArts.chart,
+            icon: "Shortcut",
+            title: "All-time best episodes",
+            desc: "The single greatest hours of television, across every show.",
+            href: "/best-episodes",
+            backdrop: episodesArt,
           },
-          hub
-            ? {
-                icon: "Fandom hub",
-                title: `The ${hub.name} hub`,
-                desc: "News, premieres, and the best of the genre on one page.",
-                href: `/${hub.slug}`,
-                backdrop: doorArts.extra,
-              }
-            : {
-                icon: "Tonight",
-                title: "What's actually on",
-                desc: "Tonight's schedule, in air-time order.",
-                href: "/tonight",
-                backdrop: doorArts.extra,
-              },
+          {
+            icon: "Compare",
+            title: "Compare two shows",
+            desc: "Episode ratings head-to-head on one chart — settle the argument.",
+            href: "/compare",
+            backdrop: compareArt,
+          },
         ]}
       />
         </div>
@@ -390,7 +348,6 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,
@@ -402,87 +359,76 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
 async function bestDecadePage(c: AppContext, decadeSlug: string, genreSlug?: string) {
   const decade = parseDecadeSlug(decadeSlug);
   if (!decade) return c.notFound();
-  const db = c.env.DB;
-  const region = visitorRegion(c);
-  const dir = await genreDirectory(db);
 
+  const { tv: tvGenres } = await genreDirectory(c.env.DB);
   let genre = "";
   if (genreSlug) {
-    const match = dir.tv.find((g) => slugifyName(g) === genreSlug);
+    const match = tvGenres.find((g) => slugifyName(g) === genreSlug);
     if (!match) return c.redirect(`/tv/best/${decade.label}`, 301);
     genre = match;
   }
   const lower = genre.toLowerCase();
-  const premFrom = `${decade.start}-01-01`;
-  const premTo = `${decade.end}-12-31`;
-
-  const conds = ["rating IS NOT NULL", "weight >= ?", "premiered >= ?", "premiered <= ?"];
-  const binds: (string | number)[] = [SHOW_QUALITY_WEIGHT, premFrom, premTo];
-  if (genre) {
-    conds.push("genres LIKE ?");
-    binds.push(`%"${genre}"%`);
+  if ((c.req.query("year") ?? "").trim()) {
+    const sort = parseChartFilters(c, genre).sort;
+    const qs = sort !== "rated" ? `?sort=${sort}` : "";
+    return c.redirect(`${genreSlug ? `/tv/best/${decade.label}/${genreSlug}` : `/tv/best/${decade.label}`}${qs}`, 301);
   }
-  const { results: rows } = await db
-    .prepare(
-      `SELECT * FROM shows WHERE ${conds.join(" AND ")} ORDER BY rating DESC, weight DESC LIMIT 50`,
-    )
-    .bind(...binds)
-    .all<ShowRow>();
+  const { sort } = parseChartFilters(c, genre);
+  const filters = { genre, year: null, sort };
+  const results = await fetchTvDecadeChartResults(c, decade, { genre, sort });
 
-  const { art, ambient } = await topArt(c, rows[0]);
-  const heading = genre
-    ? `The best ${lower} TV shows of the ${decade.label}`
-    : `The best TV shows of the ${decade.label}`;
+  const champ = results[0] ?? null;
+  let art: { x1: string; x2?: string } | null = null;
+  if (champ?.tmdb_id && c.env.TMDB_API_KEY) {
+    art = await tmdbBackdrop(c.env.TMDB_API_KEY, champ.tmdb_id);
+  }
+  if (!art && champ) {
+    const p = posterSrc(champ);
+    if (p) art = { x1: p.src };
+  }
+  const champTrailer =
+    champ?.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbTrailer(c.env.TMDB_API_KEY, "tv", champ.tmdb_id)
+      : null;
+  const seasonCounts = await showSeasonCounts(
+    c.env.DB,
+    results.slice(0, CHART_PAGE_SIZE).map((s) => s.id),
+  );
+  const showMeta = (s: ShowRow) => {
+    const n = s.id != null ? seasonCounts.get(s.id) : undefined;
+    if (n && n > 0) return `${n} Season${n === 1 ? "" : "s"}`;
+    if (s.premiered) return s.premiered.slice(0, 4);
+    return s.network ?? s.web_channel ?? "TV Series";
+  };
+
+  const pageTitle = genre
+    ? `Best ${genre} TV shows of the ${decade.label}`
+    : `Best TV shows of the ${decade.label}`;
   const site = origin(c);
-  const siblings = dir.tv.filter((g) => g !== genre);
-
-  const faqs = [
-    {
-      q: genre
-        ? `What are the best ${lower} TV shows of the ${decade.label}?`
-        : `What are the best TV shows of the ${decade.label}?`,
-      a: rows.length
-        ? `Our top picks are ${nameList(rows, 3)} — ranked by viewer rating among series that premiered between ${decade.start} and ${decade.end}.`
-        : `We're still filling in rated ${genre ? `${lower} ` : ""}shows from the ${decade.label}.`,
-    },
-    {
-      q: `How is this ${decade.label} list ranked?`,
-      a: `By real viewer rating on TVmaze, gated to shows that premiered in the ${decade.label} (${decade.start}–${decade.end}).`,
-    },
-    {
-      q: `Where can I watch these ${genre ? `${lower} ` : ""}shows?`,
-      a: "Every series links to its page with live streaming availability for your country.",
-    },
-  ];
-
   const sidebar = c.get("siteSidebar");
-  const apiKey = c.env.TMDB_API_KEY;
-  const [chartArt, episodesArt, yearArt] = await Promise.all([
-    rows[0] ? showKeepGoingBackdrop(apiKey, rows[0]) : Promise.resolve(null),
-    rows[1] ? showKeepGoingBackdrop(apiKey, rows[1]) : Promise.resolve(null),
-    genre && apiKey ? genreShowArt(db, apiKey, genre) : Promise.resolve(null),
-  ]);
-  const decadeDoors = fillKeepGoingBackdrops([
-    { icon: "", title: "", desc: "", href: "", backdrop: chartArt },
-    { icon: "", title: "", desc: "", href: "", backdrop: episodesArt },
-    { icon: "", title: "", desc: "", href: "", backdrop: yearArt ?? chartArt },
-  ]);
+  const [underratedArt, episodesArt, compareArt, chartArt] = await loadTvChartDoorArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    champ,
+    results[1] ?? null,
+  );
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout c={c}
       sidebarInline
-      title={`Best ${genre ? `${genre} ` : ""}TV Shows of the ${decade.label} | TV Nightly`}
-      description={`The best ${genre ? `${lower} ` : ""}TV shows of the ${decade.label}, ranked by viewer rating${rows.length ? ` — ${nameList(rows, 3)} and more` : ""}.`}
+      title={`${pageTitle} — Top 100 Ranked | TV Nightly`}
+      description={`${pageTitle}, ranked by viewer rating${champ ? ` — led by ${champ.name}` : ""}.`}
       canonical={canonical(c)}
+      noindex={!results.length}
+      scripts={["/js/dropdown.js", "/js/chart-filter.js", "/js/chart-scroll.js"]}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
-      scripts={["/js/dropdown.js"]}
       ld={[
         {
           "@context": "https://schema.org",
           "@type": "ItemList",
-          name: heading,
-          itemListElement: rows.slice(0, 25).map((s, i) => ({
+          name: pageTitle,
+          itemListElement: results.slice(0, 25).map((s, i) => ({
             "@type": "ListItem",
             position: i + 1,
             name: s.name,
@@ -494,109 +440,96 @@ async function bestDecadePage(c: AppContext, decadeSlug: string, genreSlug?: str
           "@type": "BreadcrumbList",
           itemListElement: [
             { "@type": "ListItem", position: 1, name: "TV shows", item: `${site}/top/tv` },
-            { "@type": "ListItem", position: 2, name: heading, item: canonical(c) },
+            { "@type": "ListItem", position: 2, name: pageTitle, item: canonical(c) },
           ],
         },
-        faqLd(faqs),
       ]}
     >
-      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
-        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
-        <div class="wo-hero-body">
-          <p class="section-eyebrow">{decade.label} watch guide</p>
-          <h1>{heading}</h1>
-          <p class="wo-intro">
-            The defining {genre ? `${lower} ` : ""}series of the {decade.label} — ranked by real viewer
-            rating among shows that premiered from {decade.start} through {decade.end}.
-          </p>
-          <p class="hub-actions">
-            <a class="verdict-btn" href={`/what-to-watch${genre ? `?genre=${encodeURIComponent(genre)}` : ""}`}>
-              Pick me {genre ? `${aOrAn(lower)} ${lower}` : "a"} show
-            </a>
-            <a class="btn-ghost" href="/best-episodes">
-              Best episodes ever
-            </a>
-            <a class="btn-ghost" href="/upcoming">
-              Upcoming TV
-            </a>
-          </p>
-        </div>
-      </header>
+      <ChartHeroHead
+        eyebrow={`${decade.label} watch guide`}
+        title={pageTitle}
+        intro={`The defining ${genre ? `${lower} ` : ""}series of the ${decade.label} — ranked by viewer rating among shows that premiered ${decade.start}–${decade.end}.`}
+      >
+        <a
+          class="verdict-btn"
+          href={`/what-to-watch?type=tv${genre ? `&genre=${encodeURIComponent(genre)}` : ""}`}
+        >
+          Pick me a show
+        </a>
+        <a class="btn-ghost" href="/best-episodes">
+          Best episodes ever
+        </a>
+        <a class="btn-ghost" href="/premieres">
+          What&apos;s coming next
+        </a>
+      </ChartHeroHead>
 
       <div class="home-main-grid">
         <div class="home-col">
-      <form method="get" action={`/tv/best/${decade.label}`} class="region-line watch-region" data-submit-on-change>
-        <FilterSelect
-          label="Genre"
-          name="genre"
-          current={genre ? slugifyName(genre) : ""}
-          options={[
-            { value: "", text: "All genres" },
-            ...dir.tv.map((g) => ({ value: slugifyName(g), text: g })),
-          ]}
-        />
-      </form>
-
-      <section class="hub-sec">
-        <h2>The {decade.label} ranking</h2>
-        {rows.length ? (
-          <ShowRankList rows={rows} region={region} />
-        ) : (
-          <p class="muted">No rated {lower || ""} shows for that filter yet.</p>
-        )}
-      </section>
-
-      <section class="hub-sec">
-        <h2>More decades</h2>
-        <div class="footer-picks">
-          {TV_DECADES.filter((d) => d !== decade.label).map((d) => (
-            <a class="footer-card" href={`/tv/best/${d}${genre ? `/${slugifyName(genre)}` : ""}`}>
-              Best of the {d}
-            </a>
-          ))}
+      {champ ? (
+        <div class="chart-hero-spotlight-wrap">
+          <ChartSpotlight
+            featured={{
+              href: `/show/${champ.slug}`,
+              name: champ.name,
+              poster: posterSrc(champ),
+              trailer: champTrailer,
+              fallbackBackdrop: art,
+              rating: champ.rating,
+            }}
+          />
         </div>
-      </section>
-
-      {genre ? (
-        <section class="hub-sec">
-          <h2>Best {decade.label} by genre</h2>
-          <div class="footer-picks">
-            <a class="footer-card" href={`/tv/best/${decade.label}`}>
-              All genres
-            </a>
-            {siblings.map((g) => (
-              <a class="footer-card" href={`/tv/best/${decade.label}/${slugifyName(g)}`}>
-                {g}
-              </a>
-            ))}
-          </div>
-        </section>
       ) : null}
-
-      <FaqSection items={faqs} />
+      <ChartFilterBar kind="tv" filters={filters} genres={tvGenres} guideDecade={decade.label} />
+      {!results.length ? (
+        <p class="muted">No rated {genre ? `${lower} ` : ""}shows for that filter yet.</p>
+      ) : results.length === 1 ? (
+        <p class="muted">Only one show matches these filters — it&apos;s featured above.</p>
+      ) : (
+        <ChartRankGrid
+          more={{
+            kind: "tv",
+            filters,
+            genreSlug,
+            total: results.length,
+            guideDecade: decade.label,
+          }}
+        >
+          {results.slice(1, CHART_PAGE_SIZE + 1).map((s, i) => (
+            <ChartRankCard {...showChartRankItem(s, i + 2, showMeta(s))} />
+          ))}
+        </ChartRankGrid>
+      )}
 
       <KeepExploring
         cards={[
           {
             icon: "The chart",
-            title: "Top TV shows of all time",
-            desc: "The all-time ranking by viewer rating.",
-            href: "/top/tv",
-            backdrop: decadeDoors[0]?.backdrop,
+            title: genre ? `Top ${lower} shows, all time` : "Top TV shows of all time",
+            desc: "The all-time ranking by viewer rating, with where to stream.",
+            href: genre ? `/top/tv/${genreSlug}` : "/top/tv",
+            backdrop: chartArt,
+          },
+          {
+            icon: "Hidden gems",
+            title: genre ? `Underrated ${lower} shows` : "Underrated TV shows",
+            desc: "High ratings, low profile — the great series most people have missed.",
+            href: genre ? `/tv/underrated/${genreSlug}` : "/tv/underrated",
+            backdrop: underratedArt,
           },
           {
             icon: "Shortcut",
-            title: "Best episodes ever",
-            desc: "The single greatest hours of television.",
+            title: "All-time best episodes",
+            desc: "The single greatest hours of television, across every show.",
             href: "/best-episodes",
-            backdrop: decadeDoors[1]?.backdrop,
+            backdrop: episodesArt,
           },
           {
-            icon: "Premieres",
-            title: `Best TV of ${new Date().getFullYear()}`,
-            desc: "What's worth watching this year.",
-            href: `/tv/best/${new Date().getFullYear()}`,
-            backdrop: decadeDoors[2]?.backdrop,
+            icon: "Compare",
+            title: "Compare two shows",
+            desc: "Episode ratings head-to-head on one chart — settle the argument.",
+            href: "/compare",
+            backdrop: compareArt,
           },
         ]}
       />
@@ -605,7 +538,6 @@ async function bestDecadePage(c: AppContext, decadeSlug: string, genreSlug?: str
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,
@@ -632,81 +564,69 @@ app.get("/tv/best/:yearOrDecade", (c) => {
 // --------------------------------------------------- Underrated [genre] shows
 
 async function underratedPage(c: AppContext, genreSlug?: string) {
-  const db = c.env.DB;
-  const region = visitorRegion(c);
-  const dir = await genreDirectory(db);
-
+  const { tv: tvGenres } = await genreDirectory(c.env.DB);
   let genre = "";
   if (genreSlug) {
-    const match = dir.tv.find((g) => slugifyName(g) === genreSlug);
+    const match = tvGenres.find((g) => slugifyName(g) === genreSlug);
     if (!match) return c.redirect("/tv/underrated", 301);
     genre = match;
   }
   const lower = genre.toLowerCase();
+  const { sort } = parseChartFilters(c, genre);
+  const filters = { genre, year: null, sort };
+  const results = await fetchTvUnderratedResults(c, { genre, sort });
 
-  const conds = ["rating >= ?", "weight BETWEEN ? AND ?"];
-  const binds: (string | number)[] = [
-    SHOW_UNDERRATED_MIN_RATING,
-    SHOW_UNDERRATED_MIN_WEIGHT,
-    SHOW_UNDERRATED_MAX_WEIGHT,
-  ];
-  if (genre) {
-    conds.push("genres LIKE ?");
-    binds.push(`%"${genre}"%`);
+  const champ = results[0] ?? null;
+  let art: { x1: string; x2?: string } | null = null;
+  if (champ?.tmdb_id && c.env.TMDB_API_KEY) {
+    art = await tmdbBackdrop(c.env.TMDB_API_KEY, champ.tmdb_id);
   }
-  // best-rated first, and among equals the least-watched first — surfacing gems
-  const { results: rows } = await db
-    .prepare(
-      `SELECT * FROM shows WHERE ${conds.join(" AND ")} ORDER BY rating DESC, weight ASC LIMIT 40`,
-    )
-    .bind(...binds)
-    .all<ShowRow>();
+  if (!art && champ) {
+    const p = posterSrc(champ);
+    if (p) art = { x1: p.src };
+  }
+  const champTrailer =
+    champ?.tmdb_id && c.env.TMDB_API_KEY
+      ? await tmdbTrailer(c.env.TMDB_API_KEY, "tv", champ.tmdb_id)
+      : null;
+  const seasonCounts = await showSeasonCounts(
+    c.env.DB,
+    results.slice(0, CHART_PAGE_SIZE).map((s) => s.id),
+  );
+  const showMeta = (s: ShowRow) => {
+    const n = s.id != null ? seasonCounts.get(s.id) : undefined;
+    if (n && n > 0) return `${n} Season${n === 1 ? "" : "s"}`;
+    if (s.premiered) return s.premiered.slice(0, 4);
+    return s.network ?? s.web_channel ?? "TV Series";
+  };
 
-  const { art, ambient } = await topArt(c, rows[0]);
-  const heading = genre ? `Underrated ${lower} shows` : "Underrated TV shows";
+  const pageTitle = genre ? `Underrated ${genre} shows` : "Underrated TV shows";
   const site = origin(c);
-  const hub = genre ? hubForGenres([genre], null) : null;
-  const siblings = dir.tv.filter((g) => g !== genre);
-
-  const faqs = [
-    {
-      q: "What makes a TV show underrated?",
-      a: `These are series rated ${SHOW_UNDERRATED_MIN_RATING.toFixed(1)} or higher by viewers but parked well outside the most-watched tier — genuinely good ${genre ? `${lower} ` : ""}shows that never got the audience they deserved.`,
-    },
-    {
-      q: `Are these ${genre ? `${lower} ` : ""}shows actually worth watching?`,
-      a: rows.length
-        ? `Every title here clears a ${SHOW_UNDERRATED_MIN_RATING.toFixed(1)}+ rating, so the score is real — just under the radar. Top of the list: ${nameList(rows, 3)}.`
-        : `Each title clears a ${SHOW_UNDERRATED_MIN_RATING.toFixed(1)}+ rating, so the score is real — just under the radar.`,
-    },
-    {
-      q: `Where can I stream these hidden gems?`,
-      a: `Every series links to its page with live streaming availability for your country.`,
-    },
-  ];
-
+  const year = new Date().getFullYear();
   const sidebar = c.get("siteSidebar");
-  const doorArts = await loadTvGuideDoorArts(c.env.DB, c.env.TMDB_API_KEY, {
-    lead: rows[0] ?? null,
-    genre: genre || null,
-    hubSlug: hub?.slug ?? null,
-  });
+  const [chartArt, yearArt, episodesArt, compareArt] = await loadTvChartDoorArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    champ,
+    results[1] ?? null,
+  );
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout c={c}
       sidebarInline
-      title={`Underrated ${genre ? `${genre} ` : ""}Shows — Hidden Gems to Stream | TV Nightly`}
-      description={`Underrated ${genre ? `${lower} ` : ""}TV shows worth discovering — highly rated but overlooked series${rows.length ? ` like ${nameList(rows, 3)}` : ""}, with where to stream each.`}
+      title={`${pageTitle} — Hidden Gems to Stream | TV Nightly`}
+      description={`${pageTitle} — highly rated but overlooked series${champ ? ` like ${champ.name}` : ""}, with where to stream each.`}
       canonical={canonical(c)}
+      noindex={!results.length}
+      scripts={["/js/dropdown.js", "/js/chart-filter.js", "/js/chart-scroll.js"]}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
-      scripts={["/js/dropdown.js"]}
       ld={[
         {
           "@context": "https://schema.org",
           "@type": "ItemList",
-          name: heading,
-          itemListElement: rows.slice(0, 25).map((s, i) => ({
+          name: pageTitle,
+          itemListElement: results.slice(0, 25).map((s, i) => ({
             "@type": "ListItem",
             position: i + 1,
             name: s.name,
@@ -718,107 +638,93 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
           "@type": "BreadcrumbList",
           itemListElement: [
             { "@type": "ListItem", position: 1, name: "TV shows", item: `${site}/top/tv` },
-            { "@type": "ListItem", position: 2, name: heading, item: canonical(c) },
+            { "@type": "ListItem", position: 2, name: pageTitle, item: canonical(c) },
           ],
         },
-        faqLd(faqs),
       ]}
     >
-      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
-        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
-        <div class="wo-hero-body">
-          <p class="section-eyebrow">Hidden gems</p>
-          <h1>{heading}</h1>
-          <p class="wo-intro">
-            Great {lower} series that flew under the radar — high ratings, smaller audience, ranked
-            so the best-kept secrets come first.
-          </p>
-          <p class="hub-actions">
-            <a
-              class="verdict-btn"
-              href={`/what-to-watch${genre ? `?genre=${encodeURIComponent(genre)}` : ""}`}
-            >
-              Surprise me with one
-            </a>
-            <a class="btn-ghost" href={genre ? `/tv/best/${new Date().getFullYear()}/${genreSlug}` : `/tv/best/${new Date().getFullYear()}`}>
-              Best {genre ? lower : ""} of {new Date().getFullYear()}
-            </a>
-          </p>
-        </div>
-      </header>
+      <ChartHeroHead
+        eyebrow="Hidden gems"
+        title={pageTitle}
+        intro={`Great ${genre ? `${lower} ` : ""}series that flew under the radar — high ratings, smaller audience, ranked so the best-kept secrets come first.`}
+      >
+        <a
+          class="verdict-btn"
+          href={`/what-to-watch?type=tv${genre ? `&genre=${encodeURIComponent(genre)}` : ""}`}
+        >
+          Surprise me with one
+        </a>
+        <a class="btn-ghost" href={genre ? `/tv/best/${year}/${genreSlug}` : `/tv/best/${year}`}>
+          Best of {year}
+        </a>
+      </ChartHeroHead>
 
       <div class="home-main-grid">
         <div class="home-col">
-      <form method="get" action="/tv/underrated" class="region-line watch-region" data-submit-on-change>
-        <FilterSelect
-          label="Genre"
-          name="genre"
-          current={genre ? slugifyName(genre) : ""}
-          options={[
-            { value: "", text: "All genres" },
-            ...dir.tv.map((g) => ({ value: slugifyName(g), text: g })),
-          ]}
-        />
-      </form>
-
-      {rows.length ? (
-        <div class="grid">
-          {rows.map((s) => (
-            <ShowCard show={s} />
-          ))}
+      {champ ? (
+        <div class="chart-hero-spotlight-wrap">
+          <ChartSpotlight
+            featured={{
+              href: `/show/${champ.slug}`,
+              name: champ.name,
+              poster: posterSrc(champ),
+              trailer: champTrailer,
+              fallbackBackdrop: art,
+              rating: champ.rating,
+            }}
+          />
         </div>
+      ) : null}
+      <ChartFilterBar kind="tv" filters={filters} genres={tvGenres} guideUnderrated />
+      {!results.length ? (
+        <p class="muted">No underrated {genre ? `${lower} ` : ""}shows match yet — try another genre.</p>
+      ) : results.length === 1 ? (
+        <p class="muted">Only one show matches these filters — it&apos;s featured above.</p>
       ) : (
-        <p class="muted">No underrated {lower} shows match yet — try another genre.</p>
-      )}
-
-      <section class="hub-sec">
-        <h2>Underrated shows by genre</h2>
-        <div class="footer-picks">
-          {genre ? (
-            <a class="footer-card" href="/tv/underrated">
-              All genres
-            </a>
-          ) : null}
-          {siblings.map((g) => (
-            <a class="footer-card" href={`/tv/underrated/${slugifyName(g)}`}>
-              {g}
-            </a>
+        <ChartRankGrid
+          more={{
+            kind: "tv",
+            filters,
+            genreSlug,
+            total: results.length,
+            guideUnderrated: true,
+          }}
+        >
+          {results.slice(1, CHART_PAGE_SIZE + 1).map((s, i) => (
+            <ChartRankCard {...showChartRankItem(s, i + 2, showMeta(s))} />
           ))}
-        </div>
-      </section>
-
-      <FaqSection items={faqs} />
+        </ChartRankGrid>
+      )}
 
       <KeepExploring
         cards={[
           {
-            icon: "Watch guide",
-            title: genre ? `Best ${lower} shows of ${new Date().getFullYear()}` : `Best shows of ${new Date().getFullYear()}`,
-            desc: "The acclaimed series to watch this year, what's airing now first.",
-            href: genre ? `/tv/best/${new Date().getFullYear()}/${genreSlug}` : `/tv/best/${new Date().getFullYear()}`,
-            backdrop: doorArts.chart,
+            icon: "The chart",
+            title: genre ? `Top ${lower} shows, all time` : "Top TV shows of all time",
+            desc: "The all-time ranking by viewer rating, with where to stream.",
+            href: genre ? `/top/tv/${genreSlug}` : "/top/tv",
+            backdrop: chartArt,
           },
-          hub
-            ? {
-                icon: "Fandom hub",
-                title: `The ${hub.name} hub`,
-                desc: "News, premieres, and the best of the genre on one page.",
-                href: `/${hub.slug}`,
-                backdrop: doorArts.extra,
-              }
-            : {
-                icon: "The chart",
-                title: "Top TV shows of all time",
-                desc: "Every series ranked by rating, with where to stream.",
-                href: "/top/tv",
-                backdrop: doorArts.chart,
-              },
           {
-            icon: "Community",
-            title: "Loved by this community",
-            desc: "The chart built from real one-tap reader verdicts.",
-            href: "/loved",
-            backdrop: doorArts.underrated,
+            icon: "Watch guide",
+            title: genre ? `Best ${lower} shows of ${year}` : `Best shows of ${year}`,
+            desc: "The acclaimed series to watch this year.",
+            href: genre ? `/tv/best/${year}/${genreSlug}` : `/tv/best/${year}`,
+            backdrop: yearArt,
+          },
+          {
+            icon: "Shortcut",
+            title: "All-time best episodes",
+            desc: "The single greatest hours of television, across every show.",
+            href: "/best-episodes",
+            backdrop: episodesArt,
+          },
+          {
+            icon: "Compare",
+            title: "Compare two shows",
+            desc: "Episode ratings head-to-head on one chart — settle the argument.",
+            href: "/compare",
+            backdrop: compareArt,
           },
         ]}
       />
@@ -827,7 +733,6 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,
@@ -1026,7 +931,6 @@ app.get("/tv/featuring/:slug", async (c) => {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,

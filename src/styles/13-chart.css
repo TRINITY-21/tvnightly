@@ -4,6 +4,12 @@
    ============================================================ */
 
 .chart-head { margin-top: 1rem; }
+.chart-page .chart-head + .home-main-grid {
+  margin-top: 0.25rem;
+}
+.chart-page .chart-head + .home-main-grid .home-col > :first-child {
+  margin-top: 0;
+}
 .chart-kicker {
   font-family: var(--display);
   font-stretch: 80%;
@@ -80,6 +86,11 @@
 }
 
 @media (max-width: 560px) {
+  .chart-statline-links {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.45rem;
+  }
   li.epreg-plate .epreg-still,
   li.epreg-plate .epreg-still--empty {
     width: 100%;

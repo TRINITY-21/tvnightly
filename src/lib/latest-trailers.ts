@@ -1,28 +1,29 @@
+import { SIDEBAR_TRAILER_LIMIT } from "./sidebar-tops";
 import { tmdbPopular, tmdbTrailer, tmdbTrendingList } from "./tmdb";
 
 export type TrailerItem = { title: string; kind: string; key: string; name: string };
 
 type Seed = { kind: "tv" | "movie"; id: number; title: string; label: string };
 
-const weaveSeeds = (tv: Seed[], movies: Seed[]): Seed[] => {
+const weaveSeeds = (tv: Seed[], movies: Seed[], limit = SIDEBAR_TRAILER_LIMIT): Seed[] => {
   const woven: Seed[] = [];
   for (let i = 0; i < Math.max(tv.length, movies.length); i++) {
     if (tv[i]) woven.push(tv[i]);
     if (movies[i]) woven.push(movies[i]);
   }
-  return woven.slice(0, 8);
+  return woven.slice(0, limit);
 };
 
-const tvSeeds = (rows: { tmdb_id: number | null; name: string }[]): Seed[] =>
+const tvSeeds = (rows: { tmdb_id: number | null; name: string }[], limit = SIDEBAR_TRAILER_LIMIT): Seed[] =>
   rows
     .filter((s): s is { tmdb_id: number; name: string } => s.tmdb_id != null)
-    .slice(0, 6)
+    .slice(0, limit)
     .map((s) => ({ kind: "tv", id: s.tmdb_id, title: s.name, label: "TV" }));
 
-const movieSeeds = (rows: { tmdb_id: number | null; title: string }[]): Seed[] =>
+const movieSeeds = (rows: { tmdb_id: number | null; title: string }[], limit = SIDEBAR_TRAILER_LIMIT): Seed[] =>
   rows
     .filter((m): m is { tmdb_id: number; title: string } => m.tmdb_id != null)
-    .slice(0, 6)
+    .slice(0, limit)
     .map((m) => ({ kind: "movie", id: m.tmdb_id, title: m.title, label: "Movie" }));
 
 /** Build trailer seeds from trending/popular rails (homepage passes its own rails). */
@@ -41,10 +42,11 @@ export const trailerSeedsFromRails = (
 export async function latestTrailers(
   apiKey: string | undefined,
   seeds?: Seed[],
+  limit = SIDEBAR_TRAILER_LIMIT,
 ): Promise<TrailerItem[]> {
   if (!apiKey) return [];
 
-  let woven = seeds?.length ? seeds.slice(0, 8) : null;
+  let woven = seeds?.length ? seeds.slice(0, limit) : null;
   if (!woven?.length) {
     const [trendTv, trendMv, popTv, popMv] = await Promise.all([
       tmdbTrendingList(apiKey, "tv"),
@@ -53,12 +55,12 @@ export async function latestTrailers(
       tmdbPopular(apiKey, "movie"),
     ]);
     const tv = (trendTv.length ? trendTv : popTv)
-      .slice(0, 6)
+      .slice(0, limit)
       .map((h) => ({ tmdb_id: h.tmdbId, name: h.name }));
     const mv = (trendMv.length ? trendMv : popMv)
-      .slice(0, 6)
+      .slice(0, limit)
       .map((h) => ({ tmdb_id: h.tmdbId, title: h.name }));
-    woven = weaveSeeds(tvSeeds(tv), movieSeeds(mv));
+    woven = weaveSeeds(tvSeeds(tv, limit), movieSeeds(mv, limit), limit);
   }
 
   return (
@@ -70,5 +72,5 @@ export async function latestTrailers(
     )
   )
     .filter((x): x is TrailerItem => x !== null)
-    .slice(0, 6);
+    .slice(0, limit);
 }

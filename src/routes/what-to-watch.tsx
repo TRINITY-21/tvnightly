@@ -1,22 +1,25 @@
 import { Hono } from "hono";
-import { Bindings, HonoEnv, ShowRow, MovieRow } from "../types";
+import { Layout } from "../components/Layout";
+import { MovieCard, ShowCard, StatusBadge } from "../components/cards";
+import { FilterSelect, RateInline } from "../components/forms";
+import { HomeSidebarRail } from "../components/home-sidebar";
+import { IconStarBadge } from "../components/icons";
+import { KeepExploring, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
+import { ProviderChips } from "../components/providers";
+import { fmtRuntime, heroBg, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { visitorRegion } from "../lib/providers";
-import { stripHtml, posterSrc, heroBg, fmtRuntime, slugifyName } from "../lib/format";
-import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import { PICKER_MIN_WEIGHT, similarMovies, similarShows } from "../lib/queries";
+import { liveTonight } from "../lib/schedule-live";
 import { servePng } from "../lib/render";
+import { origin } from "../lib/seo";
 import { posterDataUri } from "../lib/signal";
 import { buildShowcaseOgCard, type OgSide } from "../lib/social";
-import { origin, canonical } from "../lib/seo";
-import { PICKER_MIN_WEIGHT } from "../lib/queries";
-import { Layout } from "../components/Layout";
-import { StatusBadge, ExploreCard } from "../components/cards";
-import { HomeSidebarRail } from "../components/home-sidebar";
-import { KeepExploring, fillKeepGoingBackdrops } from "../components/keep-going";
-import { IconStarBadge } from "../components/icons";
-import { ProviderChips } from "../components/providers";
-import { RateInline, FilterSelect } from "../components/forms";
+import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
+import { HonoEnv, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<HonoEnv>();
+
+const SIMILAR_PREVIEW = 12;
 
 // ----------------------------------------------------- what-to-watch picker
 
@@ -188,6 +191,7 @@ app.get("/what-to-watch", async (c) => {
   }
   const PICK_LIMIT = 2;
   const picks: PickView[] = [];
+  const pickRows: (ShowRow | MovieRow)[] = [];
   if (hasSpun) {
     if (type === "movie") {
       const { results } = await db
@@ -195,6 +199,7 @@ app.get("/what-to-watch", async (c) => {
         .bind(...binds)
         .all<MovieRow>();
       for (const m of results) {
+        pickRows.push(m);
         picks.push({
           name: m.year ? `${m.title} (${m.year})` : m.title,
           href: `/movie/${m.slug}`,
@@ -216,6 +221,7 @@ app.get("/what-to-watch", async (c) => {
         .bind(...binds)
         .all<ShowRow>();
       for (const s of results) {
+        pickRows.push(s);
         picks.push({
           name: s.name,
           href: `/show/${s.slug}`,
@@ -247,15 +253,93 @@ app.get("/what-to-watch", async (c) => {
       picks.forEach((p, i) => (p.bd = bds[i]));
     }
   }
+  const pickSlugs = new Set(picks.map((p) => p.slug));
+  let similar: ShowRow[] | MovieRow[] = [];
+  if (picks.length) {
+    if (type === "tv") {
+      const pools = await Promise.all((pickRows as ShowRow[]).map((row) => similarShows(db, row, SIMILAR_PREVIEW)));
+      const merged = new Map<string, ShowRow>();
+      for (const pool of pools) {
+        for (const s of pool) {
+          if (!pickSlugs.has(s.slug)) merged.set(s.slug, s);
+        }
+      }
+      similar = [...merged.values()].slice(0, SIMILAR_PREVIEW);
+    } else {
+      const pools = await Promise.all((pickRows as MovieRow[]).map((row) => similarMovies(db, row, SIMILAR_PREVIEW)));
+      const merged = new Map<string, MovieRow>();
+      for (const pool of pools) {
+        for (const m of pool) {
+          if (!pickSlugs.has(m.slug)) merged.set(m.slug, m);
+        }
+      }
+      similar = [...merged.values()].slice(0, SIMILAR_PREVIEW);
+    }
+  } else if (type === "tv") {
+    const { results } = await db
+      .prepare(`SELECT * FROM shows WHERE ${where} ORDER BY weight DESC, rating DESC LIMIT ${SIMILAR_PREVIEW}`)
+      .bind(...binds)
+      .all<ShowRow>();
+    similar = results;
+  } else {
+    const { results } = await db
+      .prepare(`SELECT * FROM movies WHERE ${where} ORDER BY popularity DESC, rating DESC LIMIT ${SIMILAR_PREVIEW}`)
+      .bind(...binds)
+      .all<MovieRow>();
+    similar = results;
+  }
+  const similarSeeAll = picks.length
+    ? type === "movie"
+      ? `/movie/${picks[0]!.slug}/similar`
+      : `/show/${picks[0]!.slug}/similar`
+    : genre
+      ? `/genre/${slugifyName(genre)}${type === "movie" ? "/movies" : "/shows"}`
+      : type === "movie"
+        ? "/movies/best"
+        : "/top/tv";
   const skipNext = picks.length
     ? [...skip, ...picks.map((p) => p.refId)].slice(-20).join(",")
     : skip.join(",");
   const sidebar = c.get("siteSidebar");
-  const doorArts = fillKeepGoingBackdrops([
-    { icon: "", title: "", desc: "", href: "", backdrop: picks[0]?.bd ?? null },
-    { icon: "", title: "", desc: "", href: "", backdrop: picks[1]?.bd ?? picks[0]?.bd ?? null },
-    { icon: "", title: "", desc: "", href: "", backdrop: picks[0]?.bd ?? null },
-  ]).map((c) => c.backdrop ?? null);
+  const apiKey = c.env.TMDB_API_KEY;
+  const simTv = similar as ShowRow[];
+  const simMovie = similar as MovieRow[];
+  const tonightHead = (await liveTonight(c))[0] ?? null;
+  const [tonightArt, tailoredArt, canonArt] = await Promise.all([
+    picks[0]?.bd
+      ? Promise.resolve(picks[0].bd ?? null)
+      : tonightHead
+        ? showKeepGoingBackdrop(apiKey, {
+            tmdb_id: null,
+            image_url: tonightHead.show_image,
+            poster_url: tonightHead.show_poster,
+          })
+        : type === "tv"
+          ? simTv[0]
+            ? showKeepGoingBackdrop(apiKey, simTv[0])
+            : Promise.resolve(null)
+          : simMovie[0]
+            ? movieKeepGoingBackdrop(apiKey, simMovie[0])
+            : Promise.resolve(null),
+    picks[1]?.bd ?? picks[0]?.bd
+      ? Promise.resolve((picks[1]?.bd ?? picks[0]?.bd) ?? null)
+      : type === "tv"
+        ? (simTv[1] ?? simTv[0])
+          ? showKeepGoingBackdrop(apiKey, (simTv[1] ?? simTv[0])!)
+          : Promise.resolve(null)
+        : (simMovie[1] ?? simMovie[0])
+          ? movieKeepGoingBackdrop(apiKey, (simMovie[1] ?? simMovie[0])!)
+          : Promise.resolve(null),
+    picks[0]?.bd
+      ? Promise.resolve(picks[0].bd ?? null)
+      : type === "tv"
+        ? (simTv[2] ?? simTv[0])
+          ? showKeepGoingBackdrop(apiKey, (simTv[2] ?? simTv[0])!)
+          : Promise.resolve(null)
+        : (simMovie[2] ?? simMovie[0])
+          ? movieKeepGoingBackdrop(apiKey, (simMovie[2] ?? simMovie[0])!)
+          : Promise.resolve(null),
+  ]);
   c.header("Cache-Control", "no-store");
   return c.html(
     <Layout c={c}
@@ -499,6 +583,39 @@ app.get("/what-to-watch", async (c) => {
           )}
         </section>
 
+        {similar.length ? (
+          <section class="watch-similar">
+            <h2>
+              {type === "movie" ? "Similar movies" : "Similar shows"}{" "}
+              <a class="more" href={similarSeeAll}>
+                see all
+              </a>
+            </h2>
+            <p class="dossier-method">
+              {picks.length
+                ? type === "movie"
+                  ? "Genre matches to your contenders — ranked by overlap and rating."
+                  : "Genre matches to your contenders — ranked by overlap and popularity."
+                : type === "movie"
+                  ? "Highly rated films that fit your filters — or spin for a fresh draw."
+                  : "Highly rated series that fit your filters — or spin for a fresh draw."}
+            </p>
+            <ul class="poster-list">
+              {type === "movie"
+                ? (similar as MovieRow[]).map((m) => (
+                    <li>
+                      <MovieCard movie={m} />
+                    </li>
+                  ))
+                : (similar as ShowRow[]).map((s) => (
+                    <li>
+                      <ShowCard show={s} />
+                    </li>
+                  ))}
+            </ul>
+          </section>
+        ) : null}
+
         <KeepExploring
           cards={[
             {
@@ -506,21 +623,21 @@ app.get("/what-to-watch", async (c) => {
               title: "What's actually on tonight",
               desc: "Every episode airing today, in air-time order.",
               href: "/tonight",
-              backdrop: doorArts[0],
+              backdrop: tonightArt,
             },
             {
               icon: "Tailored",
               title: "Rate one thing, get a pick",
               desc: "Tell us one show you love — we'll hand you your next watch.",
               href: "/recommend",
-              backdrop: doorArts[1],
+              backdrop: tailoredArt,
             },
             {
               icon: "Canon",
               title: "The greatest episodes ever aired",
               desc: "Every show's finest hours, ranked on one honest list.",
               href: "/best-episodes",
-              backdrop: doorArts[2],
+              backdrop: canonArt,
             },
           ]}
         />
@@ -530,7 +647,6 @@ app.get("/what-to-watch", async (c) => {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,

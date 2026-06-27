@@ -1,19 +1,29 @@
 import { Hono } from "hono";
 import { raw } from "hono/html";
 import { Bindings, HonoEnv, AppContext, ShowRow, EpisodeRow } from "../types";
-import { comparePathFor, hiRes } from "../lib/format";
+import { comparePathFor, hiRes, movieComparePathFor } from "../lib/format";
 import { origin, canonical, breadcrumbTrail } from "../lib/seo";
+import {
+  involvedMovies,
+  involvedShows,
+  movieMatchPairs,
+  movieSides,
+  showSides,
+  tvMatchPairs,
+} from "../lib/compare-pairs";
 import { similarShows } from "../lib/queries";
 import { servePng } from "../lib/render";
 import { foldSql, foldText } from "../lib/search";
+import { liveTonight } from "../lib/schedule-live";
 import { posterDataUri } from "../lib/signal";
 import { buildCompareOgCard, type OgSide } from "../lib/social";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
+import { HomeSidebarRail } from "../components/home-sidebar";
 import { ShareBar } from "../components/share";
-import { ExploreCard } from "../components/cards";
-import { VsCard, VsSide } from "../components/compare";
+import { KeepExploring, showKeepGoingBackdrop } from "../components/keep-going";
+import { VsCard } from "../components/compare";
 
 const app = new Hono<HonoEnv>();
 
@@ -86,25 +96,6 @@ function episodeChart(epsA: EpisodeRow[], epsB: EpisodeRow[], nameA: string, nam
 
 const showBySlug = (db: D1Database, slug: string) =>
   db.prepare("SELECT * FROM shows WHERE slug = ?").bind(slug).first<ShowRow>();
-
-/** Build a VsCard side per show — real backdrop (down-sized), poster, name —
- *  fetching every backdrop on one round trip (each is 7-day edge-cached). */
-async function showSides(key: string | undefined, shows: ShowRow[]): Promise<Map<string, VsSide>> {
-  const bds = await Promise.all(
-    shows.map((s) => (key && s.tmdb_id ? tmdbBackdrop(key, s.tmdb_id) : Promise.resolve(null))),
-  );
-  const small = (u: string) => u.replace("/w1280/", "/w780/");
-  return new Map(
-    shows.map((s, i): [string, VsSide] => [
-      s.slug,
-      {
-        name: s.name,
-        poster: s.poster_url ?? hiRes(s.image_url),
-        backdrop: bds[i] ? small(bds[i]!.x1) : hiRes(s.image_url),
-      },
-    ]),
-  );
-}
 
 /** Canonical matchup path: slugs in alphabetical order. */
 
@@ -214,9 +205,25 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
   for (const [, s] of morePairs) moreInvolved.set(s.slug, s);
   const moreSides = await showSides(c.env.TMDB_API_KEY, [...moreInvolved.values()]);
 
+  const tonightHead = (await liveTonight(c))[0] ?? null;
+  const [topTvArt, lovedArt, tonightArt] = await Promise.all([
+    showKeepGoingBackdrop(key, showA),
+    showKeepGoingBackdrop(key, showB),
+    tonightHead
+      ? showKeepGoingBackdrop(key, {
+          tmdb_id: null,
+          image_url: tonightHead.show_image,
+          poster_url: tonightHead.show_poster,
+        })
+      : showKeepGoingBackdrop(key, showA),
+  ]);
+
+  const sidebar = c.get("siteSidebar");
+
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout c={c}
+      sidebarInline
       title={`${showA.name} vs ${showB.name} — episode ratings compared | TV Nightly`}
       description={`${showA.name} or ${showB.name}? Both shows' full episode-rating histories on one chart, plus head-to-head stats.`}
       canonical={`${origin(c)}${comparePathFor(showA.slug, showB.slug)}`}
@@ -248,6 +255,8 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
         <a class="vsx-name vsx-name-b" href={`/show/${showB.slug}`}>{showB.name}</a>
       </header>
 
+      <div class="home-main-grid">
+        <div class="home-col">
       <section class="vsx-sec">
         <div class="vsx-sec-head">
           <h2 class="vsx-h2">By the numbers</h2>
@@ -344,6 +353,38 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
           Compare movies instead
         </a>
       </div>
+      <KeepExploring
+        cards={[
+          {
+            icon: "Charts",
+            title: "Top TV shows",
+            desc: "The highest-rated series we track, ranked honestly.",
+            href: "/top/tv",
+            backdrop: topTvArt,
+          },
+          {
+            icon: "Community",
+            title: "Loved by this community",
+            desc: "The chart built from real one-tap reader verdicts.",
+            href: "/loved",
+            backdrop: lovedArt,
+          },
+          {
+            icon: "Tonight",
+            title: "What's actually on",
+            desc: "Tonight's schedule, in air-time order.",
+            href: "/tonight",
+            backdrop: tonightArt,
+          },
+        ]}
+      />
+        </div>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+        />
+      </div>
     </Layout>,
   );
 }
@@ -427,23 +468,31 @@ app.get("/compare", async (c) => {
   // Feature matchups as versus cards: a picked show's closest neighbours, or
   // the most-popular shows paired off when the board is empty.
   const anchor = showA ?? showB ?? null;
-  let pairs: [ShowRow, ShowRow][] = [];
-  if (anchor) {
-    const sims = await similarShows(db, anchor);
-    pairs = sims.slice(0, 6).map((s) => [anchor, s]);
-  } else {
-    const { results: tops } = await db
-      .prepare("SELECT * FROM shows ORDER BY weight DESC LIMIT 7")
-      .all<ShowRow>();
-    pairs = tops.slice(0, 6).map((s, i) => [s, tops[(i + 1) % tops.length]]);
-  }
-  const involved = new Map<string, ShowRow>();
-  for (const [a, b] of pairs) {
-    involved.set(a.slug, a);
-    involved.set(b.slug, b);
-  }
-  const sides = await showSides(c.env.TMDB_API_KEY, [...involved.values()]);
-  const matchHeading = anchor ? `${anchor.name} vs…` : "Popular matchups";
+  const pairs = await tvMatchPairs(db, anchor);
+  const sides = await showSides(c.env.TMDB_API_KEY, [...involvedShows(pairs).values()]);
+  const matchHeading = anchor ? `${anchor.name} vs…` : "Popular TV matchups";
+
+  const moviePairs = await movieMatchPairs(db, null);
+  const movieSideMap = await movieSides(c.env.TMDB_API_KEY, [...involvedMovies(moviePairs).values()]);
+
+  const pairShows = [...involvedShows(pairs).values()];
+  const lead = anchor ?? pairShows[0] ?? null;
+  const runner = pairShows[1] ?? pairShows[0] ?? null;
+  const tonightHead = (await liveTonight(c))[0] ?? null;
+  const apiKey = c.env.TMDB_API_KEY;
+  const [topTvArt, lovedArt, tonightArt] = await Promise.all([
+    lead ? showKeepGoingBackdrop(apiKey, lead) : Promise.resolve(null),
+    runner ? showKeepGoingBackdrop(apiKey, runner) : Promise.resolve(null),
+    tonightHead
+      ? showKeepGoingBackdrop(apiKey, {
+          tmdb_id: null,
+          image_url: tonightHead.show_image,
+          poster_url: tonightHead.show_poster,
+        })
+      : lead
+        ? showKeepGoingBackdrop(apiKey, lead)
+        : Promise.resolve(null),
+  ]);
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
@@ -501,29 +550,46 @@ app.get("/compare", async (c) => {
           </div>
         </section>
       ) : null}
-      <section class="wo-doors">
-        <h2>Keep exploring</h2>
-        <div class="explore-grid">
-          <ExploreCard
-            icon="Charts"
-            title="Top TV shows"
-            desc="The highest-rated series we track, ranked honestly."
-            href="/top/tv"
-          />
-          <ExploreCard
-            icon="Community"
-            title="Loved by this community"
-            desc="The chart built from real one-tap reader verdicts."
-            href="/loved"
-          />
-          <ExploreCard
-            icon="Tonight"
-            title="What's actually on"
-            desc="Tonight's schedule, in air-time order."
-            href="/tonight"
-          />
-        </div>
-      </section>
+      {moviePairs.length ? (
+        <section class="vsx-sec">
+          <h2 class="vsx-h2">Popular movie matchups</h2>
+          <div class="vs-grid">
+            {moviePairs.map(([a, b]) => (
+              <VsCard
+                href={movieComparePathFor(a.slug, b.slug)}
+                a={movieSideMap.get(a.slug)!}
+                b={movieSideMap.get(b.slug)!}
+                cta="Side by side"
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      <KeepExploring
+        cards={[
+          {
+            icon: "Charts",
+            title: "Top TV shows",
+            desc: "The highest-rated series we track, ranked honestly.",
+            href: "/top/tv",
+            backdrop: topTvArt,
+          },
+          {
+            icon: "Community",
+            title: "Loved by this community",
+            desc: "The chart built from real one-tap reader verdicts.",
+            href: "/loved",
+            backdrop: lovedArt,
+          },
+          {
+            icon: "Tonight",
+            title: "What's actually on",
+            desc: "Tonight's schedule, in air-time order.",
+            href: "/tonight",
+            backdrop: tonightArt,
+          },
+        ]}
+      />
     </Layout>,
   );
 });

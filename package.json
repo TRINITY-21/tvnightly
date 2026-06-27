@@ -34,6 +34,10 @@
     "providers:tv:fetch": "node scripts/seed-show-providers.mjs",
     "providers:tv:load:local": "wrangler d1 execute tvnightly --local --file=seed/show-providers.sql",
     "providers:tv:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/show-providers.sql",
+    "providers:events:fetch": "node scripts/seed-provider-events.mjs",
+    "providers:events:load:local": "wrangler d1 execute tvnightly --local --file=seed/provider-events.sql",
+    "renewals:events:fetch": "node scripts/seed-show-events.mjs",
+    "renewals:events:load:local": "wrangler d1 execute tvnightly --local --file=seed/show-events.sql",
     "type:backfill:fetch": "node scripts/backfill-show-type.mjs",
     "type:load:local": "wrangler d1 execute tvnightly --local --file=seed/show-type.sql",
     "type:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/show-type.sql"

@@ -8,8 +8,7 @@
 // Loaded site-wide via Layout, so it self-disables when a page has no triggers.
 (function () {
   var directTriggers = [].slice.call(document.querySelectorAll("[data-video-key]"));
-  var cardTriggers = [].slice.call(document.querySelectorAll("[data-trailer-id]"));
-  if (!directTriggers.length && !cardTriggers.length) return;
+  if (!directTriggers.length && !document.querySelector("[data-trailer-id]")) return;
 
   var modal = null;
   var frameWrap = null;
@@ -106,19 +105,19 @@
       });
   }
 
-  cardTriggers.forEach(function (el) {
-    el.addEventListener("click", function (e) {
-      // the disc lives inside the card's link — stop the navigation + bubbling
-      e.preventDefault();
-      e.stopPropagation();
-      activate(el);
-    });
-    el.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
-        e.preventDefault();
-        e.stopPropagation();
-        activate(el);
-      }
-    });
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest("[data-trailer-id]");
+    if (!el) return;
+    e.preventDefault();
+    e.stopPropagation();
+    activate(el);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+    var el = e.target.closest("[data-trailer-id]");
+    if (!el) return;
+    e.preventDefault();
+    e.stopPropagation();
+    activate(el);
   });
 })();

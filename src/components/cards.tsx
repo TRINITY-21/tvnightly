@@ -34,7 +34,7 @@ export const StatusBadge: FC<{ status: string | null }> = ({ status }) => {
 // homepage never pays for trailers nobody plays. A <span role="button"> (valid
 // inside the card <a>); keyboard-activated by the same script. Rendered only when
 // the row carries a tmdb_id (the key needed to look the trailer up).
-const CardPlay: FC<{ type: "tv" | "movie"; id: number; name: string }> = ({ type, id, name }) => (
+export const CardPlay: FC<{ type: "tv" | "movie"; id: number; name: string }> = ({ type, id, name }) => (
   <span
     class="card-play"
     role="button"

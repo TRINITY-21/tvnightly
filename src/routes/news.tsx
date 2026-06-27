@@ -6,7 +6,7 @@ import { fillKeepGoingBackdrops, finalizeExploreArt } from "../components/keep-g
 import { FilterSelect } from "../components/forms";
 import { NEWS_TABS, SubNav } from "../components/nav";
 import { heroBg, hiRes, longDate, shortDate, stripHtml } from "../lib/format";
-import { PROVIDER_LOGOS, REGIONS, visitorRegion } from "../lib/providers";
+import { PROVIDER_LOGOS, regionOptions, visitorRegion } from "../lib/providers";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { Bindings, HonoEnv, EventRow } from "../types";
@@ -218,7 +218,6 @@ app.get("/renewals", async (c) => {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,
@@ -376,7 +375,7 @@ app.get("/whats-new", async (c) => {
           label="Region"
           name="region"
           current={region}
-          options={REGIONS.map((r) => ({ value: r, text: r }))}
+          options={regionOptions()}
         />
       </form>
       {results.length === 0 ? (
@@ -440,7 +439,6 @@ app.get("/whats-new", async (c) => {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,

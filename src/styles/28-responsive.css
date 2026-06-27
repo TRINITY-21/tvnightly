@@ -1,0 +1,161 @@
+/* ====================================================================
+   Cross-page responsive polish — mobile, tablet, desktop rhythm.
+   Full-bleed heroes, sidebar rails, charts, and door cards.
+   ==================================================================== */
+
+/* full-bleed sections must not introduce horizontal scroll */
+html {
+  overflow-x: clip;
+}
+
+/* ---- page shell ---- */
+@media (max-width: 600px) {
+  main {
+    padding: 0.65rem 0.85rem 1.75rem;
+  }
+  h1 {
+    font-size: 1.45rem;
+    margin-top: 0.85rem;
+  }
+  h2 {
+    font-size: 1.15rem;
+    margin-top: 1.65rem;
+  }
+  .home-col > * + * {
+    margin-top: 2.25rem;
+  }
+  .hub-sec {
+    margin-top: 1.85rem;
+  }
+  .wo-doors {
+    margin-top: 2rem;
+  }
+}
+
+@media (min-width: 601px) and (max-width: 900px) {
+  main {
+    padding: 0.85rem 1.15rem 2rem;
+  }
+}
+
+/* ---- explore / door cards ---- */
+@media (max-width: 480px) {
+  .explore-grid {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+  .explore-card-art {
+    min-height: 8.5rem;
+  }
+  .explore-body {
+    padding: 0.72rem 0.85rem 0.78rem;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 900px) {
+  .explore-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---- poster grids ---- */
+@media (max-width: 380px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+}
+
+/* ---- footer genre picks ---- */
+@media (max-width: 480px) {
+  .footer-picks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+}
+
+/* ---- chart mastheads ---- */
+@media (max-width: 600px) {
+  .chart-h1 {
+    font-size: 1.35rem;
+    line-height: 1.15;
+  }
+  .chart-head {
+    margin-top: 0.35rem;
+  }
+  .section-lead {
+    font-size: 0.85rem;
+  }
+  .chart-statline {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.55rem;
+    padding-bottom: 0.85rem;
+  }
+  .chart-statline-links {
+    margin-left: 0;
+    gap: 0.65rem 0.9rem;
+  }
+}
+
+/* ---- full-bleed hub heroes (seasonal, genre hubs, charts) ---- */
+@media (max-width: 600px) {
+  .wo-hero-bleed {
+    margin-bottom: 1.25rem;
+  }
+  .wo-hero-bleed + .home-main-grid {
+    margin-top: 1.5rem;
+  }
+  .wo-hero-bleed h1 {
+    font-size: 1.35rem;
+    line-height: 1.12;
+  }
+  .wo-hero-bleed .wo-intro {
+    font-size: 0.88rem;
+    max-width: none;
+  }
+  .wo-hero-bleed .wo-hero-body {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+}
+
+/* ---- ranked rows (/movies, charts) ---- */
+@media (max-width: 520px) {
+  .wo-row {
+    gap: 0.5rem;
+    padding: 0.65rem 0.35rem;
+  }
+  .wo-synopsis {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.78rem;
+  }
+  .wo-provs {
+    font-size: 0.72rem;
+  }
+}
+
+/* ---- sidebar follow tiles on narrow phones ---- */
+@media (max-width: 380px) {
+  .follow-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+  }
+  .follow-tile {
+    padding: 0.7rem 0.35rem;
+  }
+  .trailer-thumb {
+    width: 4.75rem;
+  }
+}
+
+/* ---- chart hero spotlight (best movies / top tv) ---- */
+@media (max-width: 900px) {
+  .chart-hero-head + .home-main-grid .home-rail {
+    top: auto;
+  }
+}

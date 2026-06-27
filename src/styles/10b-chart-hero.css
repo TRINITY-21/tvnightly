@@ -1,0 +1,224 @@
+/* ====================================================================
+   Chart hero — /top/tv, /movies/best: head lockup + #1 stage (poster |
+   trailer) inside .home-col; sidebar stays in .home-main-grid.
+   ==================================================================== */
+
+.chart-hero-head {
+  margin: -1rem calc(50% - 50vw) 0;
+  padding: 0 1rem;
+}
+.chart-hero-head-inner {
+  /* same 1200px content rail as .header-inner inside main's 1rem gutters */
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.35rem 0 0.85rem;
+}
+.chart-hero-head-inner h1 {
+  margin: 0.2rem 0 0.55rem;
+}
+.chart-hero-intro {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+@media (min-width: 900px) {
+  .chart-hero-intro {
+    white-space: nowrap;
+  }
+}
+
+.chart-hero-spotlight-wrap {
+  min-width: 0;
+}
+.chart-hero-head + .home-main-grid {
+  margin-top: 0;
+}
+.chart-hero-head + .home-main-grid .home-col > .chart-hero-spotlight-wrap:first-child,
+.chart-hero-head + .home-main-grid .home-col > .chart-hero-spotlight:first-child {
+  margin-top: 0;
+}
+.chart-hero-head + .home-main-grid .home-rail {
+  margin-top: 0;
+}
+/* tighter gap between spotlight and filter bar (override .home-col rhythm) */
+.chart-hero-spotlight-wrap + .chart-filter-bar {
+  margin-top: 1.15rem;
+}
+
+/* ---- #1 spotlight: poster | trailer ---- */
+.chart-hero-spotlight {
+  margin: 0;
+}
+
+.chart-hero-stage {
+  display: grid;
+  grid-template-columns: clamp(200px, 20vw, 280px) minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: stretch;
+  min-height: clamp(220px, 32vw, 400px);
+}
+
+.chart-hero-poster {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  color: inherit;
+  text-decoration: none;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-2);
+}
+.chart-hero-poster:hover {
+  text-decoration: none;
+}
+.chart-hero-poster .poster,
+.chart-hero-poster .card-fallback {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  aspect-ratio: unset;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.chart-hero-player {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.chart-hero-spotlight .chart-hero-video,
+.chart-hero-spotlight .hub-hero-video {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: unset;
+  position: relative;
+  display: block;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background-color: #000;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.chart-hero-spotlight .hub-hero-video:has(.hub-hero-video-frame),
+.chart-hero-spotlight .hub-hero-video:has(.chart-hero-video-frame) {
+  box-shadow: none;
+  background-image: none;
+}
+
+.chart-hero-spotlight .hub-hero-video-frame,
+.chart-hero-spotlight .chart-hero-video-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  z-index: 2;
+  background: #000;
+}
+
+.chart-hero-spotlight .hub-hero-video-backdrop {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.chart-hero-spotlight .hub-hero-video-trailer.is-trailer-unavailable {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.chart-hero-spotlight .hub-hero-video-trailer.is-trailer-unavailable .hub-hero-video-backdrop-layer {
+  aspect-ratio: unset;
+  height: 100%;
+  min-height: 100%;
+}
+
+/* picture-in-picture — trailer docks when scrolled past */
+.chart-hero-spotlight .hub-hero-player.has-pip::after {
+  content: "";
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  background: #0a0a0c;
+  border: 1px solid var(--line);
+}
+.chart-hero-spotlight .hub-hero-video.is-pip,
+.chart-hero-spotlight .chart-hero-video.is-pip {
+  height: auto;
+  min-height: unset;
+  aspect-ratio: 16 / 9;
+}
+
+.chart-hero-rank {
+  position: absolute;
+  top: 0.65rem;
+  left: 0.65rem;
+  z-index: 4;
+  padding: 0.28rem 0.55rem;
+  border-radius: 6px;
+  font-family: var(--display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.chart-hero-poster-fallback {
+  display: flex;
+  align-items: flex-end;
+  padding: 0.75rem;
+  font-family: var(--display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .chart-hero-stage {
+    min-height: 0;
+    grid-template-columns: clamp(150px, 28vw, 210px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .chart-hero-head-inner {
+    padding-top: 0.85rem;
+    padding-bottom: 0.65rem;
+  }
+  .chart-hero-rank {
+    top: 0.5rem;
+    left: 0.5rem;
+    font-size: 0.66rem;
+    padding: 0.22rem 0.45rem;
+  }
+  .chart-hero-head .hub-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .chart-hero-head .hub-actions .verdict-btn,
+  .chart-hero-head .hub-actions .btn-ghost {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding-top: 0.72rem;
+    padding-bottom: 0.72rem;
+  }
+}

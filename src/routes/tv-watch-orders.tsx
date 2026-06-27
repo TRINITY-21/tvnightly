@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
 import { IconStar } from "../components/icons";
+import { HomeSidebarRail } from "../components/home-sidebar";
 import { fmtRuntime, heroBg, posterSrc } from "../lib/format";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
@@ -165,9 +166,11 @@ app.get("/tv-watch-order/:slug", async (c) => {
   };
 
   const site = origin(c);
+  const sidebar = c.get("siteSidebar");
   c.header("Cache-Control", "public, max-age=86400");
   return c.html(
     <Layout c={c}
+      sidebarInline
       title={`${u.name} watch order — how to watch in order | TV Nightly`}
       description={`${u.name} watch order: ${ordered.length} series in the right sequence${u.aka ? ` (${u.aka})` : ""} — with episode rankings and streaming info for each.`}
       canonical={canonical(c)}
@@ -201,6 +204,9 @@ app.get("/tv-watch-order/:slug", async (c) => {
           <p class="wo-intro">{u.intro}</p>
         </div>
       </header>
+
+      <div class="home-main-grid">
+        <div class="home-col">
       <section class="wo-section">
         <h2>Watch in this order</h2>
         <ol class="wo-list">
@@ -212,6 +218,13 @@ app.get("/tv-watch-order/:slug", async (c) => {
       <p class="wo-foot">
         <a class="chev-after" href="/tv-watch-orders">All TV watch-order guides</a>
       </p>
+        </div>
+        <HomeSidebarRail
+          trailers={sidebar?.trailers ?? []}
+          topSeries={sidebar?.topSeries ?? []}
+          topMovies={sidebar?.topMovies ?? []}
+        />
+      </div>
     </Layout>,
   );
 });

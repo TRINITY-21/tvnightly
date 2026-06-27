@@ -19,6 +19,20 @@
   if (window.matchMedia("(pointer: coarse)").matches) return;
   var uid = 0;
 
+  // Region options carry data-cc (ISO code); render a crisp flag chip next to
+  // the abbreviation. The native <select> keeps the emoji glyph for the mobile
+  // OS picker — this combobox only runs on fine-pointer (desktop) devices.
+  function flagImg(cc) {
+    var img = document.createElement("img");
+    img.className = "dd-flag";
+    img.src = "/flags/" + cc + ".png";
+    img.width = 20;
+    img.height = 15;
+    img.alt = "";
+    img.setAttribute("aria-hidden", "true");
+    return img;
+  }
+
   document.querySelectorAll("select[data-fancy]").forEach(function (sel) {
     var id = "dd" + ++uid;
     var wrap = document.createElement("div");
@@ -48,7 +62,18 @@
       var li = document.createElement("li");
       li.setAttribute("role", "option");
       li.id = id + "-opt-" + i;
-      li.textContent = o.textContent;
+      var cc = o.getAttribute("data-cc");
+      // data-label is the plain code (no emoji); fall back to the option text.
+      // Stored on the node so typeahead matches the code, not a leading glyph.
+      li._label = o.getAttribute("data-label") || o.textContent;
+      if (o.title) li.title = o.title;
+      if (cc) {
+        li.classList.add("has-flag");
+        li.appendChild(flagImg(cc));
+        li.appendChild(document.createTextNode(li._label));
+      } else {
+        li.textContent = li._label;
+      }
       if (i === sel.selectedIndex) li.setAttribute("aria-selected", "true");
       li.addEventListener("click", function () {
         choose(i);
@@ -69,7 +94,21 @@
 
     function label() {
       var o = sel.options[sel.selectedIndex];
-      btn.textContent = o ? o.textContent : "";
+      btn.textContent = "";
+      if (!o) return;
+      var cc = o.getAttribute("data-cc");
+      var text = o.getAttribute("data-label") || o.textContent;
+      if (cc) {
+        btn.classList.add("has-flag");
+        btn.appendChild(flagImg(cc));
+        var span = document.createElement("span");
+        span.className = "dd-label";
+        span.textContent = text;
+        btn.appendChild(span);
+      } else {
+        btn.classList.remove("has-flag");
+        btn.textContent = text;
+      }
     }
     function choose(i) {
       sel.selectedIndex = i;
@@ -109,7 +148,7 @@
       }, 500);
       for (var i = 0; i < opts.length; i++) {
         var j = (active + 1 + i) % opts.length;
-        if (opts[j].textContent.toLowerCase().indexOf(buffer) === 0) {
+        if ((opts[j]._label || opts[j].textContent).toLowerCase().indexOf(buffer) === 0) {
           if (!isOpen) openList();
           setActive(j);
           return;

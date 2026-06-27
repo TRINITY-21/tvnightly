@@ -8,7 +8,7 @@
   font-size: clamp(1.75rem, 3.8vw, 2.35rem);
 }
 .nets-grid-sec {
-  margin-top: 1.5rem;
+  margin-top: 0;
 }
 
 /* ---- shared logo ---- */

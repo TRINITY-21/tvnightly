@@ -6,11 +6,12 @@ import { PROVIDER_LOGOS, providerBrand } from "../lib/providers";
 import { RateInline } from "./forms";
 import { IconPlayDisc } from "./icons";
 import { ShareBar } from "./share";
+import { HeroTrailerEmbed } from "./hero-trailer";
 
 type CreditPerson = { name: string; href?: string | null };
 type HeroVideo = { key: string; name: string; type: string };
 
-const PosterRating: FC<{ score: number; label: string }> = ({ score, label }) => {
+export const PosterRating: FC<{ score: number; label: string }> = ({ score, label }) => {
   const pct = Math.min(100, Math.max(0, Math.round(score)));
   const tier = pct >= 75 ? "high" : pct >= 50 ? "mid" : "low";
   return (
@@ -68,6 +69,8 @@ export const DetailHero: FC<{
   rateStat: string | null;
   mediaHref: string;
   fallbackBackdrop?: { x1: string; x2?: string } | null;
+  introExtra?: PropsWithChildren["children"];
+  ariaLabel?: string;
 }> = ({
   kind,
   title,
@@ -98,12 +101,14 @@ export const DetailHero: FC<{
   rateStat,
   mediaHref,
   fallbackBackdrop,
+  introExtra,
+  ariaLabel,
 }) => {
   const posterScore = tmdbScore ?? communityScore ?? null;
   const posterScoreLabel = tmdbScore != null ? "Review score" : "Audience score";
 
   return (
-    <header class="hub-hero" aria-label={`${title} overview`}>
+    <header class="hub-hero" aria-label={ariaLabel ?? `${title} overview`}>
       <div class="hub-hero-inner">
         <div class="hub-hero-head">
           <h1 class="hub-hero-title">
@@ -148,6 +153,7 @@ export const DetailHero: FC<{
               </span>
             ) : null}
           </div>
+          {introExtra ? <div class="hub-hero-extra">{introExtra}</div> : null}
         </div>
 
         <div class="hub-hero-stage">
@@ -157,19 +163,15 @@ export const DetailHero: FC<{
           </div>
           <div class="hub-hero-player" data-hero-pip>
             {trailer ? (
-              <div class="hub-hero-video">
-                <iframe
-                  class="hub-hero-video-frame"
-                  src={`https://www.youtube-nocookie.com/embed/${trailer.key}?autoplay=1&mute=1&loop=1&playlist=${trailer.key}&controls=1&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`}
-                  title={`${title} — ${trailer.name}`}
-                  allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                  loading="eager"
-                  referrerpolicy="strict-origin-when-cross-origin"
-                  allowfullscreen
-                ></iframe>
-              </div>
+              <HeroTrailerEmbed
+                href={mediaHref}
+                title={title}
+                trailerKey={trailer.key}
+                trailerName={trailer.name}
+                fallbackBackdrop={fallbackBackdrop}
+              />
             ) : fallbackBackdrop ? (
-              <a class="hub-hero-video hub-hero-video-empty hub-hero-video-backdrop" href={mediaHref}>
+              <a class="hub-hero-video hub-hero-video-backdrop" href={mediaHref}>
                 <img
                   src={fallbackBackdrop.x1}
                   {...(fallbackBackdrop.x2

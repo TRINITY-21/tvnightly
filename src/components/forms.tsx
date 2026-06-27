@@ -2,6 +2,7 @@
 import { FC } from "hono/jsx";
 import { Honeypot } from "./Layout";
 import { FaceAwful, FaceLike, FaceLove, FaceMeh } from "./icons";
+import { regionFlagEmoji } from "../lib/providers";
 
 /** One-tap verdict buttons + community stat — every title page collects data.
  *  rate.js intercepts the submit and records the verdict in place (no nav). */
@@ -77,18 +78,30 @@ export const FilterSelect: FC<{
   label: string;
   name: string;
   current: string;
-  options: { value: string; text: string }[];
-}> = ({ label, name, current, options }) => {
+  /** Primary chart-bar picker — amber accent (Chart, Network). */
+  primary?: boolean;
+  // `cc` (ISO 3166-1 alpha-2) opts an option into a flag: emoji in the native
+  // <option> (mobile picker), and a crisp /flags/<cc>.png in the desktop combobox
+  // (dropdown.js reads data-cc / data-label). `title` is the hover/a11y name.
+  options: { value: string; text: string; cc?: string; title?: string; slug?: string }[];
+}> = ({ label, name, current, options, primary }) => {
   const id = `${name}-label`;
   return (
-    <div class="watch-field">
+    <div class={primary ? "chart-filter-chart watch-field" : "watch-field"}>
       <span class="watch-field-label" id={id}>
         {label}
       </span>
       <select name={name} data-fancy aria-labelledby={id}>
         {options.map((o) => (
-          <option value={o.value} selected={o.value === current}>
-            {o.text}
+          <option
+            value={o.value}
+            selected={o.value === current}
+            data-cc={o.cc}
+            data-label={o.cc ? o.text : undefined}
+            data-slug={o.slug}
+            title={o.title}
+          >
+            {o.cc ? `${regionFlagEmoji(o.cc)} ${o.text}` : o.text}
           </option>
         ))}
       </select>

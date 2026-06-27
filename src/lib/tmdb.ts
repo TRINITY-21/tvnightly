@@ -161,6 +161,24 @@ export async function tmdbTrailer(
   return v ? { key: v.key, name: v.name } : null;
 }
 
+/** Best YouTube trailer for a movie bundle id — same pick as tmdbTrailer, with a
+ *  media-page fallback when the cached bundle is video-less. */
+export async function movieSpotlightTrailer(
+  key: string,
+  bundleId: string | number,
+): Promise<{ key: string; name: string } | null> {
+  if (!bundleId) return null;
+  const picked = await tmdbTrailer(key, "movie", bundleId);
+  if (picked) return picked;
+  const media = await tmdbMovieMedia(key, String(bundleId));
+  const v =
+    media?.videos.find((x) => x.type === "Trailer") ??
+    media?.videos.find((x) => x.type === "Teaser") ??
+    media?.videos[0] ??
+    null;
+  return v ? { key: v.key, name: v.name } : null;
+}
+
 /** The hero backdrop. NOT TMDB's designated backdrop_path — that's often a
  *  soft frame grab. We take the community's top-voted backdrop, preferring
  *  textless art (iso null) so the still never carries a baked-in title
@@ -369,6 +387,32 @@ export async function tmdbMovieBackdrop(
   return data ? pickBackdrop(data) : null;
 }
 
+/** IMDb bridge for a TMDB film — used when a live chart row only has tmdb_id. */
+export async function tmdbMovieExternalIds(
+  key: string,
+  tmdbId: number,
+): Promise<{ imdb_id: string | null } | null> {
+  const cacheKey = new Request(`https://edge-cache.tvnightly.com/movie-ext/v1/${tmdbId}`);
+  const cache = caches.default;
+  try {
+    let res = await cache.match(cacheKey);
+    if (!res) {
+      const live = await fetch(
+        `https://api.themoviedb.org/3/movie/${tmdbId}/external_ids?api_key=${key}`,
+        { headers: { accept: "application/json" } },
+      );
+      if (!live.ok) return null;
+      res = new Response(live.body, live);
+      res.headers.set("Cache-Control", "public, max-age=604800");
+      await cache.put(cacheKey, res.clone());
+    }
+    const data = (await res.json()) as { imdb_id?: string | null };
+    return { imdb_id: data.imdb_id ?? null };
+  } catch {
+    return null;
+  }
+}
+
 /** Upcoming snapshot titles often lack an IMDb bridge — TMDB numeric id works. */
 export async function tmdbUpcomingBackdrop(
   key: string,
@@ -545,6 +589,49 @@ export type TmdbTaggedStill = {
   imageType: string;
 };
 
+/** Profile headshots from TMDB's person images collection. */
+export type TmdbPersonProfile = {
+  filePath: string;
+  voteCount: number;
+};
+
+export async function tmdbPersonProfileImages(
+  key: string,
+  personId: number,
+): Promise<TmdbPersonProfile[]> {
+  const cacheKey = new Request(`https://edge-cache.tvnightly.com/person-images/v1/${personId}`);
+  const cache = caches.default;
+  try {
+    let res = await cache.match(cacheKey);
+    if (!res) {
+      const live = await fetch(
+        `https://api.themoviedb.org/3/person/${personId}/images?api_key=${key}`,
+        { headers: { accept: "application/json" } },
+      );
+      if (!live.ok) return [];
+      res = new Response(live.body, live);
+      res.headers.set("Cache-Control", "public, max-age=604800");
+      await cache.put(cacheKey, res.clone());
+    }
+    const data = (await res.json()) as {
+      profiles?: { file_path?: string; vote_count?: number }[];
+    };
+    return (data.profiles ?? [])
+      .map((row) => {
+        const filePath = row.file_path;
+        if (!filePath) return null;
+        return {
+          filePath,
+          voteCount: Number(row.vote_count) || 0,
+        } satisfies TmdbPersonProfile;
+      })
+      .filter((x): x is TmdbPersonProfile => x != null)
+      .sort((a, b) => b.voteCount - a.voteCount);
+  } catch {
+    return [];
+  }
+}
+
 /** Stills where TMDB has tagged this person in-frame — the IMDb highlights row. */
 export async function tmdbPersonTaggedStills(
   key: string,
@@ -612,11 +699,8 @@ export async function tmdbPersonTaggedStills(
         } satisfies TmdbTaggedStill;
       })
       .filter((x): x is TmdbTaggedStill => x != null)
-      .sort((a, b) => {
-        const stillRank = (x: TmdbTaggedStill) => (x.imageType === "still" ? 1 : 0);
-        const byKind = stillRank(b) - stillRank(a);
-        return byKind || b.voteCount - a.voteCount;
-      });
+      .filter((x) => x.imageType === "still")
+      .sort((a, b) => b.voteCount - a.voteCount);
   } catch {
     return [];
   }
@@ -730,20 +814,122 @@ const TMDB_MOVIE_GENRES: Record<string, number> = {
 export const tmdbGenreId = (kind: "tv" | "movie", slug: string): number | null =>
   (kind === "tv" ? TMDB_TV_GENRES : TMDB_MOVIE_GENRES)[slug] ?? null;
 
+/** Canonical genre labels for TMDB genre ids — matches TVmaze-style names in D1. */
+const TMDB_TV_GENRE_LABELS: Record<number, string> = {
+  10759: "Action",
+  16: "Animation",
+  35: "Comedy",
+  80: "Crime",
+  99: "Documentary",
+  18: "Drama",
+  10751: "Family",
+  10762: "Kids",
+  9648: "Mystery",
+  10763: "News",
+  10764: "Reality",
+  10765: "Science-Fiction",
+  10766: "Soap",
+  10767: "Talk",
+  10768: "War",
+  37: "Western",
+};
+const TMDB_MOVIE_GENRE_LABELS: Record<number, string> = {
+  28: "Action",
+  12: "Adventure",
+  16: "Animation",
+  35: "Comedy",
+  80: "Crime",
+  99: "Documentary",
+  18: "Drama",
+  10751: "Family",
+  14: "Fantasy",
+  36: "History",
+  27: "Horror",
+  10402: "Music",
+  9648: "Mystery",
+  10749: "Romance",
+  878: "Science-Fiction",
+  10770: "TV Movie",
+  53: "Thriller",
+  10752: "War",
+  37: "Western",
+};
+
+export function tmdbGenreLabelsFromIds(kind: "tv" | "movie", ids: number[]): string[] {
+  const map = kind === "tv" ? TMDB_TV_GENRE_LABELS : TMDB_MOVIE_GENRE_LABELS;
+  const labels: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const label = map[id];
+    if (label && !seen.has(label)) {
+      seen.add(label);
+      labels.push(label);
+    }
+  }
+  return labels;
+}
+
+export type TmdbDiscoverSort = "rated" | "popular" | "new";
+
+export function tmdbDiscoverSortBy(kind: "tv" | "movie", sort: TmdbDiscoverSort): string {
+  if (sort === "new") {
+    return kind === "tv" ? "first_air_date.desc" : "primary_release_date.desc";
+  }
+  if (sort === "popular") return "popularity.desc";
+  return "vote_average.desc";
+}
+
+export type TmdbChartDiscoverOpts = {
+  kind: "tv" | "movie";
+  sort?: TmdbDiscoverSort;
+  genreId?: number | null;
+  year?: number | null;
+  decade?: { start: number; end: number } | null;
+  pages?: number;
+};
+
+const TMDB_CHART_PAGES_MAX = 25;
+
+/** Live /discover for chart lists — TMDB is the source of truth for catalog breadth. */
+export async function tmdbDiscoverChart(
+  key: string,
+  opts: TmdbChartDiscoverOpts,
+): Promise<TmdbSearchHit[]> {
+  const { kind, sort = "rated", genreId, year, decade } = opts;
+  const pages = Math.max(1, Math.min(opts.pages ?? TMDB_CHART_PAGES_MAX, TMDB_CHART_PAGES_MAX));
+  const sortBy = tmdbDiscoverSortBy(kind, sort);
+  let extra = `&sort_by=${sortBy}&vote_count.gte=${kind === "tv" ? 30 : 200}&vote_average.gte=5`;
+  if (genreId) extra += `&with_genres=${genreId}`;
+  if (year != null) {
+    extra +=
+      kind === "tv"
+        ? `&first_air_date_year=${year}`
+        : `&primary_release_year=${year}`;
+  }
+  if (decade) {
+    extra +=
+      kind === "tv"
+        ? `&first_air_date.gte=${decade.start}-01-01&first_air_date.lte=${decade.end}-12-31`
+        : `&primary_release_date.gte=${decade.start}-01-01&primary_release_date.lte=${decade.end}-12-31`;
+  }
+  const batches = await Promise.all(
+    Array.from({ length: pages }, (_, i) =>
+      tmdbList(key, `/discover/${kind}`, kind, i + 1, extra),
+    ),
+  );
+  const seen = new Set<number>();
+  return batches.flat().filter((h) => !seen.has(h.tmdbId) && seen.add(h.tmdbId));
+}
+
 /** Live /discover for a genre (popularity-ranked, rated only). */
 export async function tmdbDiscoverGenre(
   key: string,
   kind: "tv" | "movie",
   genreId: number,
+  pages = 2,
+  year?: number | null,
 ): Promise<TmdbSearchHit[]> {
-  const path = `/discover/${kind}`;
-  const extra = `&with_genres=${genreId}&sort_by=popularity.desc&vote_count.gte=${kind === "tv" ? 50 : 200}&vote_average.gte=6`;
-  const [a, b] = await Promise.all([
-    tmdbList(key, path, kind, 1, extra),
-    tmdbList(key, path, kind, 2, extra),
-  ]);
-  const seen = new Set<number>();
-  return [...a, ...b].filter((h) => !seen.has(h.tmdbId) && seen.add(h.tmdbId));
+  return tmdbDiscoverChart(key, { kind, genreId, year, pages, sort: "popular" });
 }
 
 /** Live /discover for a streaming provider in a region (popularity-ranked). */
@@ -752,14 +938,29 @@ export async function tmdbDiscoverProvider(
   kind: "tv" | "movie",
   providerId: number,
   region: string,
+  pages = 2,
+  opts?: {
+    genreId?: number | null;
+    year?: number | null;
+    sort?: TmdbDiscoverSort;
+  },
 ): Promise<TmdbSearchHit[]> {
-  const extra = `&with_watch_providers=${providerId}&watch_region=${region}&sort_by=popularity.desc&vote_count.gte=${kind === "tv" ? 30 : 100}`;
-  const [a, b] = await Promise.all([
-    tmdbList(key, `/discover/${kind}`, kind, 1, extra),
-    tmdbList(key, `/discover/${kind}`, kind, 2, extra),
-  ]);
+  const sort = opts?.sort ?? "popular";
+  const sortBy = tmdbDiscoverSortBy(kind, sort);
+  let extra = `&with_watch_providers=${providerId}&watch_region=${region}&sort_by=${sortBy}&vote_count.gte=${kind === "tv" ? 30 : 100}`;
+  if (opts?.genreId) extra += `&with_genres=${opts.genreId}`;
+  if (opts?.year != null) {
+    extra +=
+      kind === "tv"
+        ? `&first_air_date_year=${opts.year}`
+        : `&primary_release_year=${opts.year}`;
+  }
+  const n = Math.max(1, Math.min(pages, TMDB_CHART_PAGES_MAX));
+  const batches = await Promise.all(
+    Array.from({ length: n }, (_, i) => tmdbList(key, `/discover/${kind}`, kind, i + 1, extra)),
+  );
   const seen = new Set<number>();
-  return [...a, ...b].filter((h) => !seen.has(h.tmdbId) && seen.add(h.tmdbId));
+  return batches.flat().filter((h) => !seen.has(h.tmdbId) && seen.add(h.tmdbId));
 }
 
 /** TMDB "recommendations" for a title — the live fallback for "Shows/Movies like

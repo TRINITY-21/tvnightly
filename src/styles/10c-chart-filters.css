@@ -1,0 +1,89 @@
+/* ====================================================================
+   Chart filter bar — TMDB-style row of four dropdowns on /top/tv and
+   /movies/best. Uses the shared FilterSelect + dropdown.js combobox.
+   ==================================================================== */
+
+.chart-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem 0.75rem;
+  margin: 0 0 1.75rem;
+  padding: 0 0 1.1rem;
+  border-bottom: 1px solid var(--line);
+}
+.chart-filter-fields {
+  display: contents;
+}
+.chart-filter-chart,
+.chart-filter-fields .watch-field,
+.chart-filter-bar > .watch-field {
+  flex: 1 1 9.5rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.chart-filter-chart {
+  flex: 1.35 1 11rem;
+}
+/* primary chart picker — amber accent (house interactive color) */
+.chart-filter-chart .dd-btn,
+.chart-filter-chart select {
+  border-color: rgba(255, 169, 77, 0.38);
+  background-color: rgba(255, 169, 77, 0.1);
+}
+.chart-filter-chart .dd-btn:hover,
+.chart-filter-chart select:hover {
+  border-color: rgba(255, 169, 77, 0.5);
+  background-color: rgba(255, 169, 77, 0.14);
+}
+.chart-filter-chart .dd-btn[aria-expanded="true"],
+.chart-filter-chart .dd.open .dd-btn,
+.chart-filter-chart .dd-btn:focus-visible {
+  border-color: rgba(255, 169, 77, 0.55);
+  background-color: rgba(255, 169, 77, 0.18);
+  outline: none;
+}
+/* genre / year / sort — amber when open or keyboard-focused */
+.chart-filter-bar .dd.open .dd-btn,
+.chart-filter-bar .dd-btn:focus-visible,
+.chart-filter-bar .watch-field select:focus {
+  border-color: rgba(255, 169, 77, 0.45);
+  background-color: rgba(255, 169, 77, 0.1);
+  outline: none;
+}
+/* hide uppercase micro-labels — the button text is the label */
+.chart-filter-bar .watch-field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.chart-filter-bar .dd-btn,
+.chart-filter-bar .watch-field select {
+  font-size: 0.88rem;
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+.chart-filter-bar .dd-list {
+  max-height: min(18rem, 52vh);
+  overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+  .chart-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.55rem;
+  }
+  .chart-filter-chart,
+  .chart-filter-fields .watch-field,
+  .chart-filter-bar > .watch-field {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}

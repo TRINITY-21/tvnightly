@@ -252,9 +252,26 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
   line-height: 1.25;
   background: var(--surface-2);
 }
+/* portrait headshots + on-screen stills — not 16:9 video thumbs */
+.hub-hero.person-hero .person-highlights .hub-hero-vid {
+  flex: 0 0 5.75rem;
+}
+.hub-hero.person-hero .person-highlights .hub-hero-vid.media-art {
+  border: 0;
+  background: transparent;
+}
+.hub-hero.person-hero .person-highlights .hub-hero-vid-thumb {
+  aspect-ratio: 2 / 3;
+}
+.hub-hero.person-hero .person-highlights .hub-hero-vid-thumb img,
+.hub-hero.person-hero .person-highlights a.media-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
 .person-intro {
   margin-top: 1.25rem;
-  max-width: 48rem;
 }
 /* person hero ends in a full-width rule; drop the grid (and rail) so the
    sidebar isn't flush against that line while the bio keeps its inset */
@@ -263,6 +280,9 @@ a.cast-tile:hover .cast-tile-body strong { color: var(--accent); }
 }
 .show-hub .hub-hero.person-hero + .home-main-grid .person-intro {
   margin-top: 0;
+}
+.person-intro .summary {
+  max-width: none;
 }
 .person-intro .person-genres {
   margin-top: 0.75rem;

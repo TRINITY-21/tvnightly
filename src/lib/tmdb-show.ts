@@ -4,7 +4,7 @@
 import type { Context } from "hono";
 import { Bindings, HonoEnv, EpisodeRow, MovieRow, PersonRow, ShowRow } from "../types";
 import { getShow } from "./queries";
-import { tmdbSearch, liveRating } from "./tmdb";
+import { tmdbSearch, liveRating, tmdbMovieExternalIds } from "./tmdb";
 import { slugifyName } from "./format";
 import { REGIONS } from "./providers";
 
@@ -371,6 +371,39 @@ export async function resolveShow(
   return built
     ? { show: built.show, episodes: built.episodes, ratingRef: `t${built.tmdbId}`, isTmdb: true }
     : null;
+}
+
+/** TMDB movie bundle key — prefer a real IMDb tt-id when we have one. */
+export function movieBundleId(movie: MovieRow): string {
+  const imdb = movie.imdb_id ?? "";
+  if (/^tt\d+$/.test(imdb)) return imdb;
+  if (movie.tmdb_id) return String(movie.tmdb_id);
+  return imdb;
+}
+
+/** Chart / spotlight rows from live TMDB often lack imdb_id — resolve the tt-id. */
+export async function resolveMovieBundleId(
+  c: Context<HonoEnv>,
+  movie: MovieRow,
+): Promise<string> {
+  const direct = movieBundleId(movie);
+  if (/^tt\d+$/.test(direct)) return direct;
+  if (!c.env.TMDB_API_KEY) return direct;
+
+  if (movie.tmdb_id) {
+    const ext = await tmdbMovieExternalIds(c.env.TMDB_API_KEY, movie.tmdb_id);
+    if (ext?.imdb_id && /^tt\d+$/.test(ext.imdb_id)) return ext.imdb_id;
+  }
+
+  if (movie.slug) {
+    const built = await tmdbMovieData(c, movie.slug);
+    if (built) {
+      const enriched = movieBundleId(built.movie);
+      if (/^tt\d+$/.test(enriched)) return enriched;
+    }
+  }
+
+  return direct;
 }
 
 export async function resolveMovie(

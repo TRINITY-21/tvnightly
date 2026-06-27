@@ -50,6 +50,8 @@
   --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.45);
   --ease: cubic-bezier(0.2, 0, 0.2, 1);
   --speed: 0.18s;
+  /* mini trailer player — above sticky bars + page chrome, below modals/loading */
+  --pip-z: 90;
 }
 
 :focus-visible {
@@ -129,6 +131,7 @@ main h2::after {
   background: var(--accent);
 }
 /* the tick is a section voice — never under card titles or panel heads */
+.home-rail h2::after,
 .evening-head h2::after,
 .shortlist-card h2::after,
 .pick-card h2::after,

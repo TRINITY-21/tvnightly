@@ -250,7 +250,9 @@
 .wo-hero-bleed .wo-hero-body {
   position: relative;
   z-index: 1;
-  max-width: 980px;
+  /* same outer box + 1rem gutters as `main` — left edge lines up with
+     .home-col / chart lists below, including when a sidebar rail is present */
+  max-width: 1232px;
   margin: 0 auto;
   padding: 4rem 1rem 1.7rem;
 }
@@ -591,6 +593,12 @@
   margin-top: 1.25rem;
 }
 .wo-hero.wo-hero-bleed + .home-main-grid .home-col > .hub-sec:first-child {
+  margin-top: 0;
+}
+.wo-hero.wo-hero-bleed + .home-main-grid .home-col > .wo-section:first-child {
+  margin-top: 0;
+}
+.wo-hero.wo-hero-bleed + .home-main-grid .home-col > .nets-grid-sec:first-child {
   margin-top: 0;
 }
 

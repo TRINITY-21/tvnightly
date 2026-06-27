@@ -8,21 +8,36 @@ import { Hono } from "hono";
 import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard } from "../components/cards";
+import { ChartFilterBar } from "../components/chart-filters";
+import { ChartHeroHead, ChartSpotlight } from "../components/chart-hero";
+import {
+  ChartRankCard,
+  ChartRankGrid,
+  movieChartRankItem,
+} from "../components/chart-rank-card";
 import { FilterSelect } from "../components/forms";
 import { HomeSidebarRail } from "../components/home-sidebar";
 import {
   fillKeepGoingBackdrops,
   KeepExploring,
+  loadMovieChartDoorArts,
   loadMovieGuideDoorArts,
   movieKeepGoingBackdrop,
   showKeepGoingBackdrop,
 } from "../components/keep-going";
+import { chartBasePath, parseChartFilters } from "../lib/chart-filters";
+import { CHART_PAGE_SIZE, fetchMovieChartResults, fetchMovieUnderratedResults } from "../lib/chart-results";
 import { fmtRuntime, headshot, heroBg, slugifyName } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { genreDirectory } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
-import { tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
-import { resolvePersonProfile } from "../lib/tmdb-show";
+import { movieSpotlightTrailer, tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
+import {
+  movieBundleId,
+  resolveMovie,
+  resolveMovieBundleId,
+  resolvePersonProfile,
+} from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
 import { AppContext, Bindings, HonoEnv, MovieRow } from "../types";
 
@@ -161,96 +176,77 @@ const FaqSection = ({ items }: { items: { q: string; a: string }[] }) => (
 
 async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
   const now = new Date().getFullYear();
-  if (!Number.isInteger(year) || year < YEAR_MIN || year > now + 1) return c.notFound();
-  const db = c.env.DB;
-  const region = visitorRegion(c);
-  const dir = await genreDirectory(db);
+  if (!Number.isInteger(year) || year < YEAR_MIN || year > now) return c.notFound();
 
+  const { movie: movieGenres } = await genreDirectory(c.env.DB);
   let genre = "";
   if (genreSlug) {
-    const match = dir.movie.find((g) => slugifyName(g) === genreSlug);
+    const match = movieGenres.find((g) => slugifyName(g) === genreSlug);
     if (!match) return c.redirect(`/movies/best/${year}`, 301);
     genre = match;
   }
   const lower = genre.toLowerCase();
-
-  // main ranking: recency-weighted so the year page leads with newer acclaimed
-  // films, not the same all-time order as /movies/best
-  const conds = ["rating IS NOT NULL", "votes >= 1000"];
-  const binds: (string | number)[] = [];
-  if (genre) {
-    conds.push("genres LIKE ?");
-    binds.push(`%"${genre}"%`);
+  if ((c.req.query("year") ?? "").trim()) {
+    const sort = parseChartFilters(c, genre).sort;
+    const qs = sort !== "rated" ? `?sort=${sort}` : "";
+    return c.redirect(`${genreSlug ? `/movies/best/${year}/${genreSlug}` : `/movies/best/${year}`}${qs}`, 301);
   }
-  const { results: rows } = await db
-    .prepare(
-      `SELECT * FROM movies WHERE ${conds.join(" AND ")}
-       ORDER BY rating + (CASE WHEN year >= ? THEN 0.6 WHEN year >= ? THEN 0.3 ELSE 0 END) DESC,
-                votes DESC LIMIT 40`,
-    )
-    .bind(...binds, year - 2, year - 5)
-    .all<MovieRow>();
+  const { sort } = parseChartFilters(c, genre);
+  const filters = { genre, year, sort };
+  const results = await fetchMovieChartResults(c, filters);
 
-  // a "new this year" shelf of actual recent releases (lower vote floor: fresh
-  // films haven't accrued votes yet)
-  const freshBinds: (string | number)[] = [year - 1, year];
-  let freshSql =
-    "SELECT * FROM movies WHERE rating IS NOT NULL AND votes >= 100 AND year BETWEEN ? AND ?";
-  if (genre) {
-    freshSql += " AND genres LIKE ?";
-    freshBinds.push(`%"${genre}"%`);
+  const top = results[0] ?? null;
+  const topMovie = top ? (await resolveMovie(c, top.slug))?.movie ?? top : null;
+  const topBundleId =
+    topMovie && c.env.TMDB_API_KEY
+      ? await resolveMovieBundleId(c, topMovie)
+      : topMovie
+        ? movieBundleId(topMovie)
+        : "";
+  let art: { x1: string; x2?: string } | null = null;
+  let topTrailer: { key: string; name: string } | null = null;
+  if (topMovie && c.env.TMDB_API_KEY && topBundleId) {
+    [art, topTrailer] = await Promise.all([
+      tmdbMovieBackdrop(c.env.TMDB_API_KEY, topBundleId),
+      movieSpotlightTrailer(c.env.TMDB_API_KEY, topBundleId),
+    ]);
   }
-  freshSql += " ORDER BY year DESC, rating DESC, votes DESC LIMIT 12";
-  const { results: fresh } = await db.prepare(freshSql).bind(...freshBinds).all<MovieRow>();
+  if (!art && topMovie?.poster_url) {
+    art = { x1: topMovie.poster_url.replace("/t/p/w342/", "/t/p/w780/") };
+  }
+  const moviePoster = (m: MovieRow) => {
+    if (!m.poster_url) return null;
+    const hi = m.poster_url.replace("/t/p/w342/", "/t/p/w500/");
+    return { src: m.poster_url, srcset: `${m.poster_url} 1x, ${hi} 2x` };
+  };
 
-  const { art, ambient } = await topArt(c, rows[0]);
-  const heading = genre
-    ? `The best ${lower} movies to watch in ${year}`
-    : `The best movies to watch in ${year}`;
+  const pageTitle = genre
+    ? `Best ${genre} movies of ${year}`
+    : `Best movies of ${year}`;
   const site = origin(c);
-  const hub = genre ? hubForGenres([genre], null) : null;
-  const siblings = dir.movie.filter((g) => g !== genre);
   const sidebar = c.get("siteSidebar");
-  const doorArts = await loadMovieGuideDoorArts(c.env.DB, c.env.TMDB_API_KEY, {
-    lead: rows[0] ?? null,
-    genre: genre || null,
-    hubSlug: hub?.slug ?? null,
-  });
-
-  const faqs = [
-    {
-      q: genre
-        ? `What are the best ${lower} movies to watch in ${year}?`
-        : `What are the best movies to watch in ${year}?`,
-      a: rows.length
-        ? `Our top ${genre ? `${lower} ` : ""}picks for ${year} are ${titleList(rows, 3)} — ranked by viewer rating, with where to stream each.`
-        : `We're still ranking ${genre ? `${lower} ` : ""}films for ${year}.`,
-    },
-    {
-      q: `How is this ${year} list ranked?`,
-      a: `By real viewer rating with a 1,000-vote minimum, weighted slightly toward recent releases so the freshest great ${genre ? `${lower} ` : ""}films rise to the top.`,
-    },
-    {
-      q: `Where can I watch these ${genre ? `${lower} ` : ""}movies?`,
-      a: `Every film links to its page with live streaming availability for your country, so you can jump straight to where it's playing.`,
-    },
-  ];
+  const [chartArt, underratedArt, ordersArt, lovedArt] = await loadMovieChartDoorArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    top,
+  );
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout c={c}
       sidebarInline
-      title={`Best ${genre ? `${genre} ` : ""}Movies to Watch in ${year} | TV Nightly`}
-      description={`The best ${genre ? `${lower} ` : ""}movies to watch in ${year}, ranked by viewer rating with where to stream${rows.length ? ` — ${titleList(rows, 3)} and more` : ""}.`}
+      title={`${pageTitle} — Top 50 Ranked | TV Nightly`}
+      description={`${pageTitle}, ranked by viewer rating${top ? ` — led by ${top.title}` : ""}.`}
       canonical={canonical(c)}
-      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
-      scripts={["/js/dropdown.js"]}
+      noindex={!results.length}
+      scripts={["/js/dropdown.js", "/js/chart-filter.js", "/js/chart-scroll.js"]}
+      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : art?.x1 ? { x1: art.x1, x2: art.x1 } : undefined}
       ld={[
         {
           "@context": "https://schema.org",
           "@type": "ItemList",
-          name: heading,
-          itemListElement: rows.slice(0, 25).map((m, i) => ({
+          name: pageTitle,
+          itemListElement: results.slice(0, 25).map((m, i) => ({
             "@type": "ListItem",
             position: i + 1,
             name: `${m.title}${m.year ? ` (${m.year})` : ""}`,
@@ -263,126 +259,97 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
           itemListElement: [
             { "@type": "ListItem", position: 1, name: "Movies", item: `${site}/movies` },
             { "@type": "ListItem", position: 2, name: "Best movies", item: `${site}/movies/best` },
-            { "@type": "ListItem", position: 3, name: heading, item: canonical(c) },
+            { "@type": "ListItem", position: 3, name: pageTitle, item: canonical(c) },
           ],
         },
-        faqLd(faqs),
       ]}
     >
-      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
-        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
-        <div class="wo-hero-body">
-          <p class="section-eyebrow">{year} watch guide</p>
-          <h1>{heading}</h1>
-          <p class="wo-intro">
-            The {genre ? `${lower} ` : ""}films worth your time this year — ranked by real viewer
-            rating, newest greats first, with where to stream each in your country.
-          </p>
-          <p class="hub-actions">
-            <a
-              class="verdict-btn"
-              href={`/what-to-watch?type=movie${genre ? `&genre=${encodeURIComponent(genre)}` : ""}`}
-            >
-              Pick me {genre ? `${aOrAn(lower)} ${lower}` : "a"} movie
-            </a>
-            <a class="btn-ghost" href={genre ? `/movies/underrated/${genreSlug}` : "/movies/underrated"}>
-              Underrated {genre ? lower : ""} picks
-            </a>
-            <a class="btn-ghost" href="/premieres?tab=movies">
-              What's coming next
-            </a>
-          </p>
-        </div>
-      </header>
+      <ChartHeroHead
+        eyebrow={`${year} watch guide`}
+        title={pageTitle}
+        intro={`The best ${genre ? `${lower} ` : ""}films of ${year}, ranked by viewer rating — what's worth watching this year.`}
+      >
+        <a
+          class="verdict-btn"
+          href={`/what-to-watch?type=movie${genre ? `&genre=${encodeURIComponent(genre)}` : ""}`}
+        >
+          Pick me a movie
+        </a>
+        <a class="btn-ghost" href={genre ? `/movies/underrated/${genreSlug}` : "/movies/underrated"}>
+          Underrated picks
+        </a>
+        <a class="btn-ghost" href="/premieres?tab=movies">
+          What&apos;s coming next
+        </a>
+      </ChartHeroHead>
 
       <div class="home-main-grid">
         <div class="home-col">
-      {/* data-submit-on-change: dropdown.js submits on pick; the :year handler
-          turns ?genre=slug into the clean /movies/best/{year}/{slug} path */}
-      <form method="get" action={`/movies/best/${year}`} class="region-line watch-region" data-submit-on-change>
-        <FilterSelect
-          label="Genre"
-          name="genre"
-          current={genre ? slugifyName(genre) : ""}
-          options={[
-            { value: "", text: "All genres" },
-            ...dir.movie.map((g) => ({ value: slugifyName(g), text: g })),
-          ]}
-        />
-      </form>
-
-      {fresh.length ? (
-        <section class="hub-sec">
-          <h2>New for {year}</h2>
-          <p class="muted">
-            The latest {genre ? `${lower} ` : ""}releases people are actually rating.
-          </p>
-          <div class="grid">
-            {fresh.map((m) => (
-              <MovieCard movie={m} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section class="hub-sec">
-        <h2>The {year} ranking</h2>
-        {rows.length ? (
-          <RankList rows={rows} region={region} />
-        ) : (
-          <p class="muted">No rated {lower} films for that filter yet.</p>
-        )}
-      </section>
-
-      <section class="hub-sec">
-        <h2>Best movies by genre, for {year}</h2>
-        <div class="footer-picks">
-          {genre ? (
-            <a class="footer-card" href={`/movies/best/${year}`}>
-              All genres
-            </a>
-          ) : null}
-          {siblings.map((g) => (
-            <a class="footer-card" href={`/movies/best/${year}/${slugifyName(g)}`}>
-              {g}
-            </a>
-          ))}
+      {topMovie ? (
+        <div class="chart-hero-spotlight-wrap">
+          <ChartSpotlight
+            featured={{
+              href: `/movie/${topMovie.slug}`,
+              name: topMovie.title,
+              poster: moviePoster(topMovie),
+              trailer: topTrailer,
+              fallbackBackdrop: art,
+              rating: topMovie.rating,
+            }}
+          />
         </div>
-      </section>
-
-      <FaqSection items={faqs} />
+      ) : null}
+      <ChartFilterBar kind="movie" filters={filters} genres={movieGenres} guideYear={year} />
+      {!results.length ? (
+        <p class="muted">No rated {genre ? `${lower} ` : ""}films for that filter yet.</p>
+      ) : results.length === 1 ? (
+        <p class="muted">Only one movie matches these filters — it&apos;s featured above.</p>
+      ) : (
+        <ChartRankGrid
+          more={{
+            kind: "movie",
+            filters,
+            genreSlug,
+            total: results.length,
+            guideYear: year,
+          }}
+        >
+          {results.slice(1, CHART_PAGE_SIZE + 1).map((m, i) => (
+            <ChartRankCard {...movieChartRankItem(m, i + 2)} />
+          ))}
+        </ChartRankGrid>
+      )}
 
       <KeepExploring
         cards={[
+          {
+            icon: "The chart",
+            title: genre ? `Best ${lower} movies of all time` : "Best movies of all time",
+            desc: "The all-time ranking by viewer rating — a thousand-vote minimum.",
+            href: genre ? chartBasePath("movie", genre) : "/movies/best",
+            backdrop: chartArt,
+          },
           {
             icon: "Hidden gems",
             title: genre ? `Underrated ${lower} movies` : "Underrated movies",
             desc: "High ratings, low profile — the great films most people have missed.",
             href: genre ? `/movies/underrated/${genreSlug}` : "/movies/underrated",
-            backdrop: doorArts.underrated,
+            backdrop: underratedArt,
           },
           {
-            icon: "The chart",
-            title: genre ? `Best ${lower} movies of all time` : "Best movies of all time",
-            desc: "The all-time ranking by viewer rating — a thousand-vote minimum.",
-            href: genre ? `/movies/best?genre=${encodeURIComponent(genre)}` : "/movies/best",
-            backdrop: doorArts.chart,
+            icon: "Guides",
+            title: "Watch every saga in order",
+            desc: "Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked.",
+            href: "/watch-orders",
+            backdrop: ordersArt,
           },
-          hub
-            ? {
-                icon: "Fandom hub",
-                title: `The ${hub.name} hub`,
-                desc: "News, premieres, and the best of the genre on one page.",
-                href: `/${hub.slug}`,
-                backdrop: doorArts.extra,
-              }
-            : {
-                icon: "Tailored",
-                title: "Rate one thing, get a pick",
-                desc: "The recommender finds your next watch from one rating.",
-                href: "/recommend",
-                backdrop: doorArts.extra,
-              },
+          {
+            icon: "Community",
+            title: "Loved by this community",
+            desc: "The chart built from real one-tap reader verdicts.",
+            href: "/loved",
+            backdrop: lovedArt,
+          },
         ]}
       />
         </div>
@@ -390,7 +357,6 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,
@@ -410,82 +376,69 @@ app.get("/movies/best/:year", (c) => {
 // --------------------------------------------------- Underrated [genre] movies
 
 async function underratedPage(c: AppContext, genreSlug?: string) {
-  const db = c.env.DB;
-  const region = visitorRegion(c);
-  const dir = await genreDirectory(db);
-
+  const { movie: movieGenres } = await genreDirectory(c.env.DB);
   let genre = "";
   if (genreSlug) {
-    const match = dir.movie.find((g) => slugifyName(g) === genreSlug);
+    const match = movieGenres.find((g) => slugifyName(g) === genreSlug);
     if (!match) return c.redirect("/movies/underrated", 301);
     genre = match;
   }
   const lower = genre.toLowerCase();
+  const { sort } = parseChartFilters(c, genre);
+  const filters = { genre, year: null, sort };
+  const results = await fetchMovieUnderratedResults(c, { genre, sort });
 
-  const maxYear = new Date().getFullYear() - UNDERRATED_MIN_AGE;
-  const conds = ["rating >= ?", "votes BETWEEN ? AND ?", "year IS NOT NULL", "year <= ?"];
-  const binds: (string | number)[] = [
-    UNDERRATED_MIN_RATING,
-    UNDERRATED_MIN_VOTES,
-    UNDERRATED_MAX_VOTES,
-    maxYear,
-  ];
-  if (genre) {
-    conds.push("genres LIKE ?");
-    binds.push(`%"${genre}"%`);
+  const top = results[0] ?? null;
+  const topMovie = top ? (await resolveMovie(c, top.slug))?.movie ?? top : null;
+  const topBundleId =
+    topMovie && c.env.TMDB_API_KEY
+      ? await resolveMovieBundleId(c, topMovie)
+      : topMovie
+        ? movieBundleId(topMovie)
+        : "";
+  let art: { x1: string; x2?: string } | null = null;
+  let topTrailer: { key: string; name: string } | null = null;
+  if (topMovie && c.env.TMDB_API_KEY && topBundleId) {
+    [art, topTrailer] = await Promise.all([
+      tmdbMovieBackdrop(c.env.TMDB_API_KEY, topBundleId),
+      movieSpotlightTrailer(c.env.TMDB_API_KEY, topBundleId),
+    ]);
   }
-  // best-rated first, and among equals the least-seen first — surfacing the gems
-  const { results: rows } = await db
-    .prepare(
-      `SELECT * FROM movies WHERE ${conds.join(" AND ")} ORDER BY rating DESC, votes ASC LIMIT 40`,
-    )
-    .bind(...binds)
-    .all<MovieRow>();
+  if (!art && topMovie?.poster_url) {
+    art = { x1: topMovie.poster_url.replace("/t/p/w342/", "/t/p/w780/") };
+  }
+  const moviePoster = (m: MovieRow) => {
+    if (!m.poster_url) return null;
+    const hi = m.poster_url.replace("/t/p/w342/", "/t/p/w500/");
+    return { src: m.poster_url, srcset: `${m.poster_url} 1x, ${hi} 2x` };
+  };
 
-  const { art, ambient } = await topArt(c, rows[0]);
-  const heading = genre ? `Underrated ${lower} movies` : "Underrated movies";
+  const pageTitle = genre ? `Underrated ${genre} movies` : "Underrated movies";
   const site = origin(c);
-  const hub = genre ? hubForGenres([genre], null) : null;
-  const siblings = dir.movie.filter((g) => g !== genre);
+  const year = new Date().getFullYear();
   const sidebar = c.get("siteSidebar");
-  const doorArts = await loadMovieGuideDoorArts(c.env.DB, c.env.TMDB_API_KEY, {
-    lead: rows[0] ?? null,
-    genre: genre || null,
-    hubSlug: hub?.slug ?? null,
-  });
-
-  const faqs = [
-    {
-      q: "What makes a movie underrated?",
-      a: `These are films rated ${UNDERRATED_MIN_RATING.toFixed(1)} or higher by viewers but with far fewer votes than the blockbusters, and out long enough to count as overlooked rather than just new — genuinely good ${genre ? `${lower} ` : ""}movies most people have missed.`,
-    },
-    {
-      q: `Are these ${genre ? `${lower} ` : ""}movies actually worth watching?`,
-      a: rows.length
-        ? `Every title here clears a ${UNDERRATED_MIN_RATING.toFixed(1)}+ rating on a verified vote count, so the score is real — just under the radar. Top of the list: ${titleList(rows, 3)}.`
-        : `Each title clears a ${UNDERRATED_MIN_RATING.toFixed(1)}+ rating on a verified vote count, so the score is real — just under the radar.`,
-    },
-    {
-      q: `Where can I stream these hidden gems?`,
-      a: `Every film links to its page with live streaming availability for your country.`,
-    },
-  ];
+  const [chartArt, yearArt, ordersArt, lovedArt] = await loadMovieChartDoorArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    top,
+  );
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
     <Layout c={c}
       sidebarInline
-      title={`Underrated ${genre ? `${genre} ` : ""}Movies — Hidden Gems to Stream | TV Nightly`}
-      description={`Underrated ${genre ? `${lower} ` : ""}movies worth discovering — highly rated but overlooked films${rows.length ? ` like ${titleList(rows, 3)}` : ""}, with where to stream each.`}
+      title={`${pageTitle} — Hidden Gems to Stream | TV Nightly`}
+      description={`${pageTitle} — highly rated but overlooked films${top ? ` like ${top.title}` : ""}, with where to stream each.`}
       canonical={canonical(c)}
-      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
-      scripts={["/js/dropdown.js"]}
+      noindex={!results.length}
+      scripts={["/js/dropdown.js", "/js/chart-filter.js", "/js/chart-scroll.js"]}
+      preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : art?.x1 ? { x1: art.x1, x2: art.x1 } : undefined}
       ld={[
         {
           "@context": "https://schema.org",
           "@type": "ItemList",
-          name: heading,
-          itemListElement: rows.slice(0, 25).map((m, i) => ({
+          name: pageTitle,
+          itemListElement: results.slice(0, 25).map((m, i) => ({
             "@type": "ListItem",
             position: i + 1,
             name: `${m.title}${m.year ? ` (${m.year})` : ""}`,
@@ -497,107 +450,93 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
           "@type": "BreadcrumbList",
           itemListElement: [
             { "@type": "ListItem", position: 1, name: "Movies", item: `${site}/movies` },
-            { "@type": "ListItem", position: 2, name: heading, item: canonical(c) },
+            { "@type": "ListItem", position: 2, name: pageTitle, item: canonical(c) },
           ],
         },
-        faqLd(faqs),
       ]}
     >
-      <header class={`wo-hero wo-hero-bleed${ambient ? " hub-ambient" : ""}`}>
-        {art ? <div class="wo-frame" style={heroBg(art.x1, art.x2)} aria-hidden="true"></div> : null}
-        <div class="wo-hero-body">
-          <p class="section-eyebrow">Hidden gems</p>
-          <h1>{heading}</h1>
-          <p class="wo-intro">
-            Great {lower} films that flew under the radar — high ratings, low profile, ranked so the
-            best-kept secrets come first.
-          </p>
-          <p class="hub-actions">
-            <a
-              class="verdict-btn"
-              href={`/what-to-watch?type=movie${genre ? `&genre=${encodeURIComponent(genre)}` : ""}`}
-            >
-              Surprise me with one
-            </a>
-            <a class="btn-ghost" href={genre ? `/movies/best/${new Date().getFullYear()}/${genreSlug}` : `/movies/best/${new Date().getFullYear()}`}>
-              Best {genre ? lower : ""} of {new Date().getFullYear()}
-            </a>
-          </p>
-        </div>
-      </header>
+      <ChartHeroHead
+        eyebrow="Hidden gems"
+        title={pageTitle}
+        intro={`Great ${genre ? `${lower} ` : ""}films that flew under the radar — high ratings, low profile, ranked so the best-kept secrets come first.`}
+      >
+        <a
+          class="verdict-btn"
+          href={`/what-to-watch?type=movie${genre ? `&genre=${encodeURIComponent(genre)}` : ""}`}
+        >
+          Surprise me with one
+        </a>
+        <a class="btn-ghost" href={genre ? `/movies/best/${year}/${genreSlug}` : `/movies/best/${year}`}>
+          Best of {year}
+        </a>
+      </ChartHeroHead>
 
       <div class="home-main-grid">
         <div class="home-col">
-      <form method="get" action="/movies/underrated" class="region-line watch-region" data-submit-on-change>
-        <FilterSelect
-          label="Genre"
-          name="genre"
-          current={genre ? slugifyName(genre) : ""}
-          options={[
-            { value: "", text: "All genres" },
-            ...dir.movie.map((g) => ({ value: slugifyName(g), text: g })),
-          ]}
-        />
-      </form>
-
-      {rows.length ? (
-        <div class="grid">
-          {rows.map((m) => (
-            <MovieCard movie={m} />
-          ))}
+      {topMovie ? (
+        <div class="chart-hero-spotlight-wrap">
+          <ChartSpotlight
+            featured={{
+              href: `/movie/${topMovie.slug}`,
+              name: topMovie.title,
+              poster: moviePoster(topMovie),
+              trailer: topTrailer,
+              fallbackBackdrop: art,
+              rating: topMovie.rating,
+            }}
+          />
         </div>
+      ) : null}
+      <ChartFilterBar kind="movie" filters={filters} genres={movieGenres} guideUnderrated />
+      {!results.length ? (
+        <p class="muted">No underrated {genre ? `${lower} ` : ""}films match yet — try another genre.</p>
+      ) : results.length === 1 ? (
+        <p class="muted">Only one movie matches these filters — it&apos;s featured above.</p>
       ) : (
-        <p class="muted">No underrated {lower} films match yet — try another genre.</p>
-      )}
-
-      <section class="hub-sec">
-        <h2>Underrated movies by genre</h2>
-        <div class="footer-picks">
-          {genre ? (
-            <a class="footer-card" href="/movies/underrated">
-              All genres
-            </a>
-          ) : null}
-          {siblings.map((g) => (
-            <a class="footer-card" href={`/movies/underrated/${slugifyName(g)}`}>
-              {g}
-            </a>
+        <ChartRankGrid
+          more={{
+            kind: "movie",
+            filters,
+            genreSlug,
+            total: results.length,
+            guideUnderrated: true,
+          }}
+        >
+          {results.slice(1, CHART_PAGE_SIZE + 1).map((m, i) => (
+            <ChartRankCard {...movieChartRankItem(m, i + 2)} />
           ))}
-        </div>
-      </section>
-
-      <FaqSection items={faqs} />
+        </ChartRankGrid>
+      )}
 
       <KeepExploring
         cards={[
           {
-            icon: "Watch guide",
-            title: genre ? `Best ${lower} movies of ${new Date().getFullYear()}` : `Best movies of ${new Date().getFullYear()}`,
-            desc: "The acclaimed films to watch this year, newest greats first.",
-            href: genre ? `/movies/best/${new Date().getFullYear()}/${genreSlug}` : `/movies/best/${new Date().getFullYear()}`,
-            backdrop: doorArts.chart,
+            icon: "The chart",
+            title: genre ? `Best ${lower} movies of all time` : "Best movies of all time",
+            desc: "The all-time ranking by viewer rating — a thousand-vote minimum.",
+            href: genre ? chartBasePath("movie", genre) : "/movies/best",
+            backdrop: chartArt,
           },
-          hub
-            ? {
-                icon: "Fandom hub",
-                title: `The ${hub.name} hub`,
-                desc: "News, premieres, and the best of the genre on one page.",
-                href: `/${hub.slug}`,
-                backdrop: doorArts.extra,
-              }
-            : {
-                icon: "The chart",
-                title: "Best movies of all time",
-                desc: "Every movie ranked by rating, with where to stream.",
-                href: "/movies/best",
-                backdrop: doorArts.chart,
-              },
+          {
+            icon: "Watch guide",
+            title: genre ? `Best ${lower} movies of ${year}` : `Best movies of ${year}`,
+            desc: "The acclaimed films to watch this year, newest greats first.",
+            href: genre ? `/movies/best/${year}/${genreSlug}` : `/movies/best/${year}`,
+            backdrop: yearArt,
+          },
+          {
+            icon: "Guides",
+            title: "Watch every saga in order",
+            desc: "Marvel, Star Wars, Middle-earth — release vs chronological, fact-checked.",
+            href: "/watch-orders",
+            backdrop: ordersArt,
+          },
           {
             icon: "Community",
             title: "Loved by this community",
             desc: "The chart built from real one-tap reader verdicts.",
             href: "/loved",
-            backdrop: doorArts.underrated,
+            backdrop: lovedArt,
           },
         ]}
       />
@@ -606,7 +545,6 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,
@@ -801,7 +739,6 @@ app.get("/movies/featuring/:slug", async (c) => {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,

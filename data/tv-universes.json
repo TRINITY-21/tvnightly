@@ -128,5 +128,126 @@
     "entries": [
       { "showSlug": "the-lord-of-the-rings-the-rings-of-power", "order": 1, "note": "Amazon prequel series" }
     ]
+  },
+  {
+    "slug": "star-trek-classic",
+    "name": "Star Trek (original era)",
+    "aka": "Kirk to Archer",
+    "intro": "The pre-2017 saga in broadcast order: Kirk's original five-year mission, then Picard's Next Generation and its two concurrent spin-offs, capped by the Enterprise prequel. The Animated Series is an optional canon coda.",
+    "entries": [
+      { "showSlug": "star-trek", "order": 1, "note": "The Original Series — start here" },
+      { "showSlug": "star-trek-the-animated-series", "order": 2, "note": "Optional — animated TOS coda" },
+      { "showSlug": "star-trek-the-next-generation", "order": 3, "note": "The 24th-century relaunch" },
+      { "showSlug": "star-trek-deep-space-nine", "order": 4, "note": "Runs concurrent with TNG and Voyager" },
+      { "showSlug": "star-trek-voyager", "order": 5, "note": "Lost in the Delta Quadrant" },
+      { "showSlug": "star-trek-enterprise", "order": 6, "note": "Prequel — 22nd century" }
+    ]
+  },
+  {
+    "slug": "stargate",
+    "name": "Stargate",
+    "aka": "SG-1 & spin-offs",
+    "intro": "Start with the decade-long flagship SG-1, pick up Atlantis as it spins off from SG-1's eighth season, then finish with the darker, serialized Universe.",
+    "entries": [
+      { "showSlug": "stargate-sg-1", "order": 1, "note": "The flagship — 10 seasons" },
+      { "showSlug": "stargate-atlantis", "order": 2, "note": "Spins off from SG-1 season 8" },
+      { "showSlug": "stargate-universe", "order": 3, "note": "Darker, serialized finale" }
+    ]
+  },
+  {
+    "slug": "buffyverse",
+    "name": "Buffy & the Buffyverse",
+    "aka": "Sunnydale & Angel",
+    "intro": "Watch Buffy straight through and interleave Angel alongside it from Buffy's fourth season — the spin-off runs in parallel and the two trade crossovers.",
+    "entries": [
+      { "showSlug": "buffy-the-vampire-slayer", "order": 1, "note": "Start here" },
+      { "showSlug": "angel", "order": 2, "note": "Spin-off — interleave from Buffy season 4" }
+    ]
+  },
+  {
+    "slug": "x-files",
+    "name": "The X-Files universe",
+    "aka": "Mulder, Scully & Chris Carter",
+    "intro": "The conspiracy saga plus Chris Carter's two sibling series set in the same world — the apocalyptic Millennium and the short-lived spin-off The Lone Gunmen.",
+    "entries": [
+      { "showSlug": "the-x-files", "order": 1, "note": "The mothership" },
+      { "showSlug": "millennium", "order": 2, "note": "Sister series — shares a crossover" },
+      { "showSlug": "the-lone-gunmen", "order": 3, "note": "Spin-off — comic relief" }
+    ]
+  },
+  {
+    "slug": "avatar",
+    "name": "Avatar: The Last Airbender & Korra",
+    "aka": "The animated Avatar saga",
+    "intro": "The animated saga in order — Aang's complete journey, then the next Avatar a generation later in The Legend of Korra.",
+    "entries": [
+      { "showSlug": "avatar-the-last-airbender", "order": 1, "note": "Aang's story" },
+      { "showSlug": "the-legend-of-korra", "order": 2, "note": "The next Avatar, 70 years on" }
+    ]
+  },
+  {
+    "slug": "battlestar-galactica",
+    "name": "Battlestar Galactica (reimagined)",
+    "aka": "Ron Moore's BSG",
+    "intro": "The 2003 miniseries opens the reimagined saga; watch the series through, then the prequel Caprica for how the Cylons began. (The 1978 original is a separate classic.)",
+    "entries": [
+      { "showSlug": "battlestar-galactica", "order": 1, "note": "Begin with the 2003 miniseries" },
+      { "showSlug": "caprica", "order": 2, "note": "Prequel — 58 years earlier" }
+    ]
+  },
+  {
+    "slug": "vampire-diaries",
+    "name": "The Vampire Diaries universe",
+    "aka": "Mystic Falls",
+    "intro": "Start in Mystic Falls with The Vampire Diaries, then follow the Mikaelsons to New Orleans in The Originals, which spins off from the parent show's third season. (Legacies continues the story afterward.)",
+    "entries": [
+      { "showSlug": "the-vampire-diaries", "order": 1, "note": "Start here" },
+      { "showSlug": "the-originals", "order": 2, "note": "Spin-off — from TVD season 3" }
+    ]
+  },
+  {
+    "slug": "one-chicago",
+    "name": "One Chicago (Dick Wolf)",
+    "aka": "Fire, P.D. & Med",
+    "intro": "Dick Wolf's interlocking Chicago shows in launch order — Fire first, then the P.D. and Med spin-offs it seeded, all sharing frequent crossovers.",
+    "entries": [
+      { "showSlug": "chicago-fire", "order": 1, "note": "The original" },
+      { "showSlug": "chicago-pd", "order": 2, "note": "Spin-off — backdoor-piloted in Fire" },
+      { "showSlug": "chicago-med", "order": 3, "note": "Spin-off" }
+    ]
+  },
+  {
+    "slug": "law-and-order",
+    "name": "Law & Order",
+    "aka": "Dick Wolf's New York",
+    "intro": "The mothership and its New York siblings in launch order — the original ripped-from-the-headlines procedural, the long-running SVU, and Criminal Intent, with regular crossovers.",
+    "entries": [
+      { "showSlug": "law-and-order", "order": 1, "note": "The original" },
+      { "showSlug": "law-and-order-special-victims-unit", "order": 2, "note": "SVU" },
+      { "showSlug": "law-and-order-criminal-intent", "order": 3, "note": "Criminal Intent" }
+    ]
+  },
+  {
+    "slug": "ncis",
+    "name": "NCIS",
+    "aka": "Naval crime universe",
+    "intro": "The NCIS franchise in launch order — the flagship (itself a JAG spin-off), then its coastal offshoots, each backdoor-piloted from the show before it.",
+    "entries": [
+      { "showSlug": "ncis", "order": 1, "note": "The flagship" },
+      { "showSlug": "ncis-los-angeles", "order": 2 },
+      { "showSlug": "ncis-new-orleans", "order": 3 }
+    ]
+  },
+  {
+    "slug": "csi",
+    "name": "CSI: Crime Scene Investigation",
+    "aka": "The forensic franchise",
+    "intro": "The forensic franchise in order — the Las Vegas original, then the Miami and New York spin-offs, and the short-lived Cyber.",
+    "entries": [
+      { "showSlug": "csi-crime-scene-investigation", "order": 1, "note": "Las Vegas — the original" },
+      { "showSlug": "csi-miami", "order": 2 },
+      { "showSlug": "csi-ny", "order": 3 },
+      { "showSlug": "csi-cyber", "order": 4, "note": "Final spin-off" }
+    ]
   }
 ]

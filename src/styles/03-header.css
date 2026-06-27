@@ -476,6 +476,76 @@ body.browse-open { overflow: hidden; }
   border-color: rgba(255, 255, 255, 0.18);
   text-decoration: none;
 }
+.nav-mega-trending {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.35rem 1rem 1.6rem;
+  min-width: 0;
+}
+.nav-mega-trending .nav-mega-kicker {
+  margin-bottom: 0.55rem;
+}
+.nav-mega-trending-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0.6rem;
+  min-width: 0;
+  width: 100%;
+}
+.nav-mega-panel .nm-trend-tile {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: none;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 1;
+  color: var(--text);
+  text-decoration: none;
+}
+.nav-mega-panel .nm-trend-tile::after { content: none; }
+.nav-mega-panel .nm-trend-tile:hover { text-decoration: none; }
+.nm-trend-poster,
+.nm-trend-fallback {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 6px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: border-color var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+.nm-trend-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  font-size: 0.62rem;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--muted);
+}
+.nav-mega-panel .nm-trend-tile:hover .nm-trend-poster,
+.nav-mega-panel .nm-trend-tile:hover .nm-trend-fallback {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+.nm-trend-label {
+  display: block;
+  min-width: 0;
+  font-family: var(--display);
+  font-stretch: 100%;
+  font-size: 0.72rem;
+  font-weight: 550;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .nm-all {
   display: inline-block;
   margin-top: 0.6rem;
@@ -494,7 +564,7 @@ body.browse-open { overflow: hidden; }
   display: block;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0.6rem 1rem 1.8rem;
+  padding: 0.6rem 1rem 0.85rem;
   text-align: center;
   font-family: var(--display);
   font-stretch: 80%;

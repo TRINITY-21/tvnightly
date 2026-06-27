@@ -416,23 +416,22 @@
   gap: 1.1rem;
   min-width: 0;
 }
+.spot-trailer-wrap {
+  width: 100%;
+  flex-direction: column;
+}
 .spot-trailer {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
   border-radius: 14px;
   overflow: hidden;
-  /* the show's own backdrop sits behind the player — never an empty black box
-     while the trailer loads, or if a trailer turns out to be unavailable */
   background-color: #000;
-  background-size: cover;
-  background-position: center;
-  /* clip the poster to the padding box so it never bleeds UNDER the 1px border
-     (the default border-box clip let the amber art show through the translucent
-     border → a colored rim around the card) */
-  background-clip: padding-box;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.6), 0 6px 18px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+}
+.spot-trailer:has(.spot-trailer-frame) {
+  box-shadow: none;
 }
 .spot-trailer-frame {
   position: absolute;
@@ -1824,8 +1823,8 @@
    ==================================================================== */
 .home-main-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 17.5rem;
-  gap: 2rem;
+  grid-template-columns: minmax(0, 1fr) 18.75rem;
+  gap: 1.75rem;
   align-items: start;
   width: 100%;
 }
@@ -1841,20 +1840,34 @@
 .home-rail {
   display: flex;
   flex-direction: column;
-  gap: 1.4rem;
+  gap: 1.25rem;
   position: sticky;
   top: 5rem; /* clears the sticky site header */
   align-self: start;
-  width: 17.5rem;
+  width: 18.75rem;
   max-width: 100%;
+  min-width: 0;
 }
 @media (max-width: 900px) {
-  .home-main-grid { grid-template-columns: 1fr; gap: 2.4rem; }
-  .home-rail { position: static; flex-direction: row; flex-wrap: wrap; }
-  .home-rail > * { flex: 1 1 280px; }
+  .home-main-grid { grid-template-columns: 1fr; gap: 2rem; }
+  .home-rail {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    width: 100%;
+    max-width: none;
+  }
+  .home-rail > * { flex: unset; min-width: 0; }
+  /* promo + trailer list need the full rail width */
+  .home-rail > .side-follow,
+  .home-rail > .side-newsletter,
+  .home-rail > .side-trailers {
+    grid-column: 1 / -1;
+  }
 }
-@media (max-width: 560px) {
-  .home-rail { flex-direction: column; }
+@media (max-width: 640px) {
+  .home-rail { grid-template-columns: 1fr; gap: 1.15rem; }
 }
 
 /* sidebar card shell */
@@ -1872,8 +1885,21 @@
   font-weight: 800;
   font-size: 1.06rem;
   letter-spacing: 0.01em;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--line);
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.home-rail .side-title,
+.home-rail .side-newsletter-title {
+  margin-top: 0;
+}
+.side-title::after {
+  content: "";
+  display: block;
+  width: 2.1rem;
+  height: 3px;
+  margin-top: 0.5rem;
+  border-radius: 2px;
+  background: var(--accent);
 }
 
 /* Sidebar newsletter — compact capture card above Latest trailers */
@@ -1881,6 +1907,7 @@
   overflow: hidden;
   border-radius: var(--radius-lg);
   background: var(--surface);
+  border: 1px solid var(--line);
   box-shadow: var(--shadow-1);
 }
 .side-newsletter-head {
@@ -1913,6 +1940,15 @@
   letter-spacing: 0.01em;
   color: var(--text);
 }
+.side-newsletter-title::after {
+  content: "";
+  display: block;
+  width: 2.1rem;
+  height: 3px;
+  margin-top: 0.4rem;
+  border-radius: 2px;
+  background: var(--accent);
+}
 .side-newsletter-body {
   padding: 0.9rem 0.95rem 0.85rem;
 }
@@ -1924,39 +1960,45 @@
 }
 .side-newsletter-form {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
-  border-radius: var(--radius);
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background: var(--surface-2);
-  transition:
-    border-color var(--speed) var(--ease),
-    box-shadow var(--speed) var(--ease);
+  gap: 0.45rem;
+  border: 0;
+  background: transparent;
+  overflow: visible;
 }
 .side-newsletter-form:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: transparent;
+  box-shadow: none;
 }
 .side-newsletter-form input[type="email"] {
   flex: 1;
   min-width: 0;
-  border: none;
-  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
   color: var(--text);
   font: inherit;
   font-size: 0.82rem;
   padding: 0.58rem 0.65rem;
+  transition:
+    border-color var(--speed) var(--ease),
+    box-shadow var(--speed) var(--ease);
+}
+.side-newsletter-form input[type="email"]:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .side-newsletter-form input[type="email"]::placeholder {
   color: color-mix(in srgb, var(--muted) 85%, transparent);
 }
-.side-newsletter-form input[type="email"]:focus {
-  outline: none;
-}
 .side-newsletter-form button {
   flex: none;
+  width: 100%;
   border: none;
-  padding: 0 0.85rem;
+  border-radius: var(--radius);
+  padding: 0.58rem 0.85rem;
   font: inherit;
   font-size: 0.78rem;
   font-weight: 700;
@@ -1991,21 +2033,29 @@
 }
 .trailer-item {
   display: flex;
-  gap: 0.7rem;
-  align-items: center;
+  gap: 0.65rem;
+  align-items: flex-start;
+  min-width: 0;
   color: var(--text);
 }
 .trailer-item:hover { text-decoration: none; }
 .trailer-thumb {
   position: relative;
   flex: none;
-  width: 116px;
+  width: 5.25rem;
   aspect-ratio: 16 / 9;
   border-radius: var(--radius);
   overflow: hidden;
   background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
-.trailer-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.trailer-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+}
 .trailer-play {
   position: absolute;
   inset: 0;
@@ -2115,10 +2165,13 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Follow grid — labeled social tiles, three across */
-.follow-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.55rem; }
+.follow-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.55rem; }
 .follow-tile {
   display: flex;
   flex-direction: column;
@@ -2159,17 +2212,17 @@
   border-bottom: 1px solid rgba(28, 20, 7, 0.14);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 10px 28px rgba(0, 0, 0, 0.22);
+    0 4px 14px rgba(0, 0, 0, 0.18);
 }
 .home > .home-newsbar + section { margin-top: 0; }
 .home-newsbar-inner {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0.62rem 1.25rem;
+  padding: 0.38rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem 2rem;
+  gap: 0.85rem 1.75rem;
   flex-wrap: nowrap;
 }
 .home-newsbar-copy {
@@ -2183,8 +2236,8 @@
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 1.85rem;
-  height: 1.85rem;
+  width: 1.55rem;
+  height: 1.55rem;
   border-radius: 50%;
   background: rgba(28, 20, 7, 0.1);
   color: #2a1f0d;
@@ -2203,13 +2256,13 @@
 .home-newsbar-title-main {
   font-stretch: 108%;
   font-weight: 800;
-  font-size: 1.02rem;
+  font-size: 0.94rem;
   letter-spacing: -0.01em;
 }
 .home-newsbar-title-sub {
   font-stretch: 100%;
   font-weight: 500;
-  font-size: 0.94rem;
+  font-size: 0.88rem;
   color: rgba(28, 20, 7, 0.72);
 }
 /* joined pill — input flush against the button, like footer-sub but inverted */
@@ -2236,24 +2289,24 @@
 .home-newsbar-form input[type="email"] {
   flex: 1;
   min-width: 0;
-  padding: 0.52rem 0.9rem;
+  padding: 0.38rem 0.8rem;
   border: 0;
   background: transparent;
   color: #1c1407;
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 0.82rem;
 }
 .home-newsbar-form input[type="email"]::placeholder { color: rgba(28, 20, 7, 0.42); }
 .home-newsbar-form input[type="email"]:focus { outline: none; }
 .home-newsbar-form button {
   flex: none;
-  padding: 0.52rem 1.2rem;
+  padding: 0.38rem 1rem;
   border: 0;
   border-radius: 0;
   background: #1c1407;
   color: #ffd9a0;
   font: inherit;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   cursor: pointer;
@@ -2266,8 +2319,8 @@
   .home-newsbar-inner {
     justify-content: center;
     flex-wrap: wrap;
-    gap: 0.55rem 1rem;
-    padding: 0.58rem 1rem;
+    gap: 0.45rem 0.85rem;
+    padding: 0.4rem 1rem;
   }
   .home-newsbar-copy { justify-content: center; }
   .home-newsbar-title { justify-content: center; text-align: center; }

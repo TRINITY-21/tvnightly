@@ -234,6 +234,8 @@ export const Layout: FC<
     !props.bare && !props.sidebarInline && !props.noSidebar
       ? (props.sidebar ?? props.c?.get("siteSidebar") ?? undefined)
       : undefined;
+  const browseTrendingMovies =
+    props.c?.get("siteSidebar")?.browseTrendingMovies ?? props.sidebar?.browseTrendingMovies ?? [];
   const mainBody = sidebarData ? (
     <div class="home-main-grid">
       <div class="home-col">{props.children}</div>
@@ -241,7 +243,6 @@ export const Layout: FC<
         trailers={sidebarData.trailers}
         topSeries={sidebarData.topSeries}
         topMovies={sidebarData.topMovies}
-        newsletterHref="/#home-email-title"
       />
     </div>
   ) : (
@@ -499,6 +500,33 @@ export const Layout: FC<
           <a class="nav-mega-all chev-after" href="/lists">
             Browse everything
           </a>
+          {browseTrendingMovies.length ? (
+            <div class="nav-mega-trending">
+              <p class="nav-mega-kicker">Trending movies</p>
+              <div class="nav-mega-trending-row">
+                {browseTrendingMovies.map((m) => (
+                  <a class="nm-trend-tile" href={m.href} title={m.title}>
+                    {m.poster ? (
+                      <img
+                        class="nm-trend-poster"
+                        src={m.poster}
+                        alt=""
+                        width="120"
+                        height="180"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <span class="nm-trend-fallback" aria-hidden="true">
+                        {m.title}
+                      </span>
+                    )}
+                    <span class="nm-trend-label">{m.title}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
       <main>{mainBody}</main>
@@ -617,7 +645,7 @@ export const Layout: FC<
           <span class="back-to-top-label">Back to top</span>
         </button>
       )}
-      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", "/js/localtime.js", "/js/media-video.js", "/js/hero-pip.js", "/js/photo-gallery.js", "/js/back-to-top.js", ...(props.scripts ?? [])].map((s) => (
+      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", "/js/localtime.js", "/js/media-video.js", "/js/hero-trailer-fallback.js", "/js/hero-pip.js", "/js/photo-gallery.js", "/js/back-to-top.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>
       ))}
     </body>

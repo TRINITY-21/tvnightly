@@ -8,6 +8,7 @@ import { KeepExploring, loadTvChartDoorArts, showKeepGoingBackdrop, fillKeepGoin
 import { IconStar } from "../components/icons";
 import { emmySeason, goldenGlobeSeason, type AwardsSeason } from "../lib/awards";
 import { heroBg, hiRes, posterSrc } from "../lib/format";
+import { showsLikeSlate } from "../lib/queries";
 import { breadcrumbTrail, canonical, faqLd, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { AppContext, Bindings, HonoEnv, ShowRow } from "../types";
@@ -52,6 +53,9 @@ async function awardsTrackerPage(
     .filter((cat) => cat.shows.length > 0);
 
   const lead = categories[0]?.shows[0];
+  // "Shows like the nominees" — same-genre series we rate highly, not themselves
+  // nominated. Shared by the Emmy and Golden Globe trackers.
+  const likeNominees = await showsLikeSlate(c.env.DB, shows, 8);
   const { art, ambient } = await heroForShow(c, lead);
   const site = origin(c);
   const path = opts.path;
@@ -155,6 +159,20 @@ async function awardsTrackerPage(
         </section>
       ))}
 
+      {likeNominees.length ? (
+        <section class="hub-sec">
+          <h2>Shows like the nominees</h2>
+          <p class="muted">
+            Same-genre series we rate highly — if this year's contenders are your taste, start here.
+          </p>
+          <div class="grid">
+            {likeNominees.map((s) => (
+              <ShowCard show={s} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section class="hub-sec guide-faq">
         <h2>Good to know</h2>
         {faqs.map((f) => (
@@ -197,7 +215,6 @@ async function awardsTrackerPage(
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,
@@ -454,7 +471,6 @@ app.get("/upcoming", async (c) => {
           trailers={sidebar?.trailers ?? []}
           topSeries={sidebar?.topSeries ?? []}
           topMovies={sidebar?.topMovies ?? []}
-          newsletterHref="/#home-email-title"
         />
       </div>
     </Layout>,

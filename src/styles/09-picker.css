@@ -254,6 +254,33 @@
   color: var(--accent);
   font-weight: 600;
 }
+/* region picker: a flag chip beside the country code. dropdown.js injects the
+   <img.dd-flag>; the native <select> keeps an emoji glyph for the mobile OS
+   picker (this combobox only runs on fine-pointer devices). */
+.dd-flag {
+  flex: none;
+  width: 1.35em;
+  aspect-ratio: 4 / 3;
+  height: auto;
+  object-fit: cover;
+  border-radius: 2px;
+  /* a hairline edge so white-heavy flags (JP, NL) don't bleed into the dark surface */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+.dd-btn.has-flag,
+.dd-list li.has-flag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.dd-btn.has-flag {
+  gap: 0.45rem;
+}
+.dd-btn.has-flag .dd-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .watch-bar-actions {
   display: flex;
   align-items: center;
@@ -690,6 +717,113 @@
     padding-top: 0;
   }
   .watch-ghost .watch-ghost-btn { width: 100%; }
+}
+
+.watch-similar {
+  margin-top: 2.75rem;
+}
+.watch-similar h2 {
+  margin-bottom: 0.35rem;
+}
+.watch-similar .dossier-method {
+  margin-bottom: 0.85rem;
+}
+
+.poster-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 1rem;
+}
+.poster-list > li {
+  margin: 0;
+  min-width: 0;
+}
+.poster-list > li > .card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
+  color: inherit;
+  text-decoration: none;
+}
+.poster-list > li > .card:hover {
+  z-index: 2;
+  transform: none;
+  text-decoration: none;
+}
+.poster-list .card-media {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-2);
+  transition: transform var(--speed) var(--ease), border-color var(--speed) var(--ease),
+    box-shadow var(--speed) var(--ease);
+}
+.poster-list > li > .card:hover .card-media {
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.poster-list > li > .card:active .card-media {
+  transform: translateY(-2px);
+}
+.poster-list .card img,
+.poster-list .card-fallback {
+  aspect-ratio: 2 / 3;
+  width: 100%;
+}
+.poster-list .card-body {
+  padding: 0.5rem 0.15rem 0;
+  background: transparent;
+}
+.poster-list .card-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.poster-list .card-rating {
+  top: 0;
+  left: 0;
+  bottom: auto;
+  right: auto;
+  gap: 0.2rem;
+  font-size: 0.68rem;
+  padding: 0.24rem 0.4rem;
+  border-top-left-radius: 0;
+  border-bottom-right-radius: var(--radius);
+}
+.poster-list .card-hover-title {
+  font-size: 0.86rem;
+  padding: 0.55rem;
+  border-radius: var(--radius-lg);
+}
+
+@media (max-width: 520px) {
+  .poster-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+  }
+}
+@media (min-width: 900px) {
+  .poster-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .provs { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; }

@@ -14,7 +14,7 @@ import type { MovieRow, ShowRow } from "../types";
 import { ExploreCard } from "./cards";
 
 /** Every door gets art — cascade the first available backdrop across null slots. */
-const spreadExploreArts = <T extends Record<string, ExploreArt>>(arts: T): T => {
+export const spreadExploreArts = <T extends Record<string, ExploreArt>>(arts: T): T => {
   const base = Object.values(arts).find((a) => a != null) ?? null;
   if (!base) return arts;
   return Object.fromEntries(Object.entries(arts).map(([k, v]) => [k, v ?? base])) as T;
@@ -277,3 +277,53 @@ export async function loadMovieChartDoorArts(
   ]);
   return filled.map((c) => c.backdrop ?? null) as [ExploreArt, ExploreArt, ExploreArt, ExploreArt];
 }
+
+/** Four-door /movies index: best chart, watch orders, compare, community loved. */
+export async function loadMoviesHubDoorArts(
+  db: D1Database,
+  apiKey: string | undefined,
+  popular: MovieRow[],
+): Promise<[ExploreArt, ExploreArt, ExploreArt, ExploreArt]> {
+  const [bestRow, lovedRow] = await Promise.all([
+    db
+      .prepare(
+        `SELECT imdb_id, poster_url FROM movies
+         WHERE rating IS NOT NULL AND votes >= 1000
+         ORDER BY rating DESC, votes DESC LIMIT 1`,
+      )
+      .first<{ imdb_id: string; poster_url: string | null }>(),
+    db
+      .prepare(
+        `SELECT m.imdb_id, m.poster_url FROM title_ratings tr
+         JOIN movies m ON tr.kind = 'movie' AND tr.ref = m.imdb_id
+         WHERE (tr.loved + tr.liked + tr.meh + tr.awful) >= 2
+         ORDER BY (tr.loved + 0.5 * tr.liked) / CAST(tr.loved + tr.liked + tr.meh + tr.awful AS REAL) DESC,
+                  (tr.loved + tr.liked + tr.meh + tr.awful) DESC
+         LIMIT 1`,
+      )
+      .first<{ imdb_id: string; poster_url: string | null }>(),
+  ]);
+
+  const [bestArt, ordersArt, compareArt, lovedArt] = await Promise.all([
+    bestRow ? movieKeepGoingBackdrop(apiKey, bestRow) : Promise.resolve(null),
+    apiKey ? franchiseArt(db, apiKey, "marvel") : Promise.resolve(null),
+    popular[1]
+      ? movieKeepGoingBackdrop(apiKey, popular[1])
+      : bestRow
+        ? movieKeepGoingBackdrop(apiKey, bestRow)
+        : Promise.resolve(null),
+    lovedRow
+      ? movieKeepGoingBackdrop(apiKey, lovedRow)
+      : popular[0]
+        ? movieKeepGoingBackdrop(apiKey, popular[0])
+        : Promise.resolve(null),
+  ]);
+
+  const filled = fillKeepGoingBackdrops([
+    { icon: "", title: "", desc: "", href: "", backdrop: bestArt },
+    { icon: "", title: "", desc: "", href: "", backdrop: ordersArt },
+    { icon: "", title: "", desc: "", href: "", backdrop: compareArt },
+    { icon: "", title: "", desc: "", href: "", backdrop: lovedArt },
+  ]);
+  return filled.map((c) => c.backdrop ?? null) as [ExploreArt, ExploreArt, ExploreArt, ExploreArt];
+};

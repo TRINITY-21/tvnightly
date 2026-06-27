@@ -447,18 +447,18 @@ export async function enrichDeck(db: D1Database, rated: RatedEntry[], n = 4): Pr
 }
 
 /** A diverse, recognizable poster set for the landing's zero-typing tap row. */
-export async function landingPicks(db: D1Database, n = 12): Promise<DeckCard[]> {
+export async function landingPicks(db: D1Database, n = 30): Promise<DeckCard[]> {
   const [{ results: shows }, { results: movies }] = await Promise.all([
     db
       .prepare(
         `SELECT id, name, premiered, genres, COALESCE(poster_url, image_url) AS poster
-         FROM shows WHERE weight >= 90 AND poster_url IS NOT NULL ORDER BY weight DESC LIMIT 30`,
+         FROM shows WHERE weight >= 90 AND poster_url IS NOT NULL ORDER BY weight DESC LIMIT 80`,
       )
       .all<{ id: number; name: string; premiered: string | null; genres: string | null; poster: string | null }>(),
     db
       .prepare(
         `SELECT imdb_id, title, year, genres, poster_url AS poster
-         FROM movies WHERE rating >= 7.8 AND poster_url IS NOT NULL ORDER BY popularity DESC LIMIT 20`,
+         FROM movies WHERE rating >= 7.8 AND poster_url IS NOT NULL ORDER BY popularity DESC LIMIT 50`,
       )
       .all<{ imdb_id: string; title: string; year: number | null; genres: string | null; poster: string | null }>(),
   ]);
@@ -467,11 +467,12 @@ export async function landingPicks(db: D1Database, n = 12): Promise<DeckCard[]> 
     ...movies.map((m) => ({ kind: "movie" as const, ref: m.imdb_id, name: m.title, year: m.year ? String(m.year) : null, poster: m.poster, genres: parseGenres(m.genres) })),
   ];
   // spread across lead genres so the rail isn't ten dramas
+  const perGenre = n > 20 ? 3 : 2;
   const out: DeckCard[] = [];
   const seen = new Map<string, number>();
   for (const c of all) {
     const lead = c.genres[0] ?? "_";
-    if ((seen.get(lead) ?? 0) >= 2) continue;
+    if ((seen.get(lead) ?? 0) >= perGenre) continue;
     seen.set(lead, (seen.get(lead) ?? 0) + 1);
     out.push(c);
     if (out.length >= n) break;

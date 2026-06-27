@@ -1,32 +1,43 @@
 // Detail hero trailer: when the inline player scrolls off screen, keep it
 // playing in a fixed mini-player (picture-in-picture style) bottom-right.
+// Reparent to <body> while docked so overflow/transform ancestors can't bury it.
 (function () {
-  var anchor = document.querySelector("[data-hero-pip]");
-  if (!anchor) return;
+  document.querySelectorAll("[data-hero-pip]").forEach(function (anchor) {
+    var video = anchor.querySelector(".hub-hero-video, .chart-hero-video");
+    if (!video || anchor.classList.contains("is-trailer-unavailable")) return;
 
-  var video = anchor.querySelector(".hub-hero-video");
-  if (!video) return;
+    var slot = null;
 
-  function setPip(on) {
-    video.classList.toggle("is-pip", on);
-    anchor.classList.toggle("has-pip", on);
-  }
-
-  if (!("IntersectionObserver" in window)) return;
-
-  var observer = new IntersectionObserver(
-    function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          setPip(false);
-          return;
+    function setPip(on) {
+      video.classList.toggle("is-pip", on);
+      anchor.classList.toggle("has-pip", on);
+      if (on) {
+        if (!slot) {
+          slot = document.createComment("hero-pip-slot");
+          video.parentNode.insertBefore(slot, video);
         }
-        // only dock once the hero has scrolled up past the viewport
-        if (entry.boundingClientRect.top < 0) setPip(true);
-      });
-    },
-    { threshold: 0 },
-  );
+        document.body.appendChild(video);
+      } else if (slot && slot.parentNode) {
+        slot.parentNode.insertBefore(video, slot);
+      }
+    }
 
-  observer.observe(anchor);
+    if (!("IntersectionObserver" in window)) return;
+
+    var observer = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            setPip(false);
+            return;
+          }
+          // only dock once the hero has scrolled up past the viewport
+          if (entry.boundingClientRect.top < 0) setPip(true);
+        });
+      },
+      { threshold: 0 },
+    );
+
+    observer.observe(anchor);
+  });
 })();

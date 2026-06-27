@@ -23,6 +23,7 @@ import home from "./routes/home";
 import hubs from "./routes/hubs";
 import legal from "./routes/legal";
 import movies from "./routes/movies";
+import chartMore from "./routes/chart-more";
 import news from "./routes/news";
 import people from "./routes/people";
 import recommend from "./routes/recommend";
@@ -134,6 +135,7 @@ app.use("/r/*", async (c, next) => {
 
 app.route("/", home);
 app.route("/", bestEpisodes);
+app.route("/", chartMore);
 app.route("/", show);
 app.route("/", showSubpages);
 app.route("/", episode);

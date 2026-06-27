@@ -16,13 +16,14 @@ import { VideoGallery } from "../components/video-gallery";
 import { buildDossier } from "../lib/dossier";
 import { fetchShowExploreArts } from "../lib/explore-art";
 import { comparePathFor, epCode, epHref, fmtRuntime, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml } from "../lib/format";
-import { PROVIDER_LOGOS, providerBrand, providersFor, REGIONS, visitorRegion } from "../lib/providers";
+import { PROVIDER_LOGOS, providerBrand, providersFor, REGIONS, regionOptions, visitorRegion } from "../lib/providers";
 import { crewLinkMap, getShow, similarShows } from "../lib/queries";
 import { aggregateRatingLd, titleRaterCount, titleStat } from "../lib/ratings";
 import { breadcrumbLd, breadcrumbTrail, canonical, faqLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMedia, tmdbRecommendations, tmdbShowCreators, tmdbShowCrew } from "../lib/tmdb";
 import { toShowRow } from "../lib/tmdb-rows";
 import { d1OrLiveEpisodes, resolveShow, tmdbShowCast, tmdbShowData } from "../lib/tmdb-show";
+import { loadShowDetailHeroContext } from "../lib/show-detail-hero";
 import { hubForGenres } from "../lib/verticals";
 import { EpisodeRow, HonoEnv, ShowRow } from "../types";
 
@@ -721,7 +722,6 @@ app.get("/show/:slug", async (c) => {
             trailers={sidebar?.trailers ?? []}
             topSeries={sidebar?.topSeries ?? []}
             topMovies={sidebar?.topMovies ?? []}
-            newsletterHref="/#home-email-title"
           />
         </div>
       </article>
@@ -781,7 +781,7 @@ app.get("/show/:slug/calendar.ics", async (c) => {
 app.get("/show/:slug/where-to-watch", async (c) => {
   const r = await resolveShow(c, c.req.param("slug"));
   if (!r) return c.notFound();
-  const show = r.show;
+  const { show, episodes, ratingRef } = r;
   const base = `/show/${show.slug}/where-to-watch`;
   const reqRegion = (c.req.query("region") ?? "").trim().toUpperCase();
   if (reqRegion && !REGIONS.includes(reqRegion)) return c.redirect(base, 301);
@@ -793,22 +793,35 @@ app.get("/show/:slug/where-to-watch", async (c) => {
   const names = intl[region] ?? [];
   const elsewhere = REGIONS.filter((r) => r !== region && intl[r]?.length);
 
-  const backdrop =
-    show.tmdb_id && c.env.TMDB_API_KEY
-      ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id)
-      : null;
-  const posterBg = hiRes(show.image_url);
-  const heroFrame = backdrop
-    ? heroBg(backdrop.x1, backdrop.x2)
-    : posterBg
-      ? heroBg(posterBg)
-      : null;
+  const [hero, d1Similar] = await Promise.all([
+    loadShowDetailHeroContext(c, show, episodes, ratingRef, region, {
+      metaBadge: "Streaming guide",
+    }),
+    similarShows(c.env.DB, show, 6),
+  ]);
+  let similar = d1Similar;
+  if (!similar.length && show.tmdb_id && c.env.TMDB_API_KEY) {
+    similar = (await tmdbRecommendations(c.env.TMDB_API_KEY, "tv", show.tmdb_id))
+      .slice(0, 6)
+      .map(toShowRow);
+  }
+  const watchProv =
+    heroWatchProvider(names, show.name, region) ??
+    (hero.watchProv ? { ...hero.watchProv, href: base } : null);
 
   const site = origin(c);
-  const keepGoingArts = await loadShowKeepGoingArts(c.env.DB, c.env.TMDB_API_KEY, show);
+  const sidebar = c.get("siteSidebar");
+  const keepGoingArts = await loadShowKeepGoingArts(
+    c.env.DB,
+    c.env.TMDB_API_KEY,
+    show,
+    similar[0]?.tmdb_id,
+  );
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(
-    <Layout c={c}
+    <Layout
+      c={c}
+      sidebarInline
       title={`Where to watch ${show.name} — streaming options | TV Nightly`}
       description={
         names.length
@@ -818,9 +831,9 @@ app.get("/show/:slug/where-to-watch", async (c) => {
       canonical={`${site}${base}`}
       ogImage={`${site}/show/${show.slug}/og.png`}
       ogImageLarge
+      preloadImage={hero.backdrop?.x2 ? { x1: hero.backdrop.x1, x2: hero.backdrop.x2 } : undefined}
       ld={[
         breadcrumbLd(site, show, "Where to watch", base),
-        // service names are visible in the list below, so this answer is on-page
         ...(names.length
           ? [
               faqLd([
@@ -832,37 +845,58 @@ app.get("/show/:slug/where-to-watch", async (c) => {
             ]
           : []),
       ]}
-      scripts={["/js/dropdown.js"]}
+      scripts={["/js/dropdown.js", "/js/share.js"]}
     >
-      <article class={`show-hub${backdrop ? " hub-backdrop" : ""}`}>
-        <header class="detail-hero frame-hero">
-          {heroFrame ? (
-            <div class="hero-backdrop" style={heroFrame}></div>
-          ) : null}
-          <div class="detail-head">
-            <div class="detail-side">
-              {HeroPoster(show)}
-            </div>
-            <div class="detail-info">
-              <p class="ep-eyebrow">
-                <a href={`/show/${show.slug}`}>{show.name}</a>
-                <span class="sep">·</span> Streaming guide
-              </p>
-              <h1>Where to watch {show.name}</h1>
-              <p class="summary">{stripHtml(show.summary).slice(0, 180)}</p>
-              {/* data-submit-on-change: dropdown.js submits on pick (no Go button) */}
-              <form method="get" action={base} class="region-line watch-region" data-submit-on-change>
-                <FilterSelect
-                  label="Showing options for"
-                  name="region"
-                  current={region}
-                  options={REGIONS.map((r) => ({ value: r, text: r }))}
-                />
-              </form>
-            </div>
-          </div>
-        </header>
+      <article class="show-hub">
+        <DetailHero
+          kind="tv"
+          title={show.name}
+          yearLabel={hero.yearLabel}
+          shareTitle={`Where to watch ${show.name}`}
+          shareUrl={`${site}${base}`}
+          typeLabel="TV Show"
+          typeHref={`/show/${show.slug}`}
+          network={watchProv ? null : hero.netName}
+          networkHref={hero.netHref}
+          tmdbScore={tmdbRingScore(show.rating)}
+          communityScore={communityRingScore(hero.communityCounts)}
+          poster={HeroPoster(show)}
+          trailer={hero.trailerVid}
+          highlights={hero.highlights}
+          starring={hero.starring}
+          directors={hero.directors}
+          writers={hero.writers}
+          watchProvider={
+            watchProv
+              ? { ...watchProv, href: watchProv.href ?? base }
+              : null
+          }
+          metaBadge={hero.metaBadge}
+          genres={hero.genres}
+          metaExtra={hero.metaExtra}
+          metaExtraHref={hero.metaExtraHref}
+          plot={show.summary ? stripHtml(show.summary) : null}
+          blurb={show.blurb ?? null}
+          rateKind="tv"
+          rateRef={ratingRef}
+          rateStat={hero.stat}
+          mediaHref={`/show/${show.slug}/media`}
+          fallbackBackdrop={hero.backdrop}
+          ariaLabel={`Where to watch ${show.name}`}
+          introExtra={
+            <form method="get" action={base} class="region-line watch-region" data-submit-on-change>
+              <FilterSelect
+                label="Showing options for"
+                name="region"
+                current={region}
+                options={regionOptions()}
+              />
+            </form>
+          }
+        />
         <ShowTabs slug={show.slug} current="watch" />
+        <div class="home-main-grid">
+          <div class="home-col">
         <section>
           <h2>Streaming in {region}</h2>
           {names.length ? (
@@ -913,6 +947,35 @@ app.get("/show/:slug/where-to-watch", async (c) => {
             </>
           )}
         </section>
+        {similar.length ? (
+          <section>
+            <h2>
+              <span class="h2-label">Shows like {show.name}</span>{" "}
+              <a class="more" href={`/show/${show.slug}/similar`}>
+                all similar shows
+              </a>
+            </h2>
+            <p class="dossier-method">
+              The closest matches on shared genres, ranked by match strength and popularity.
+            </p>
+            <ol class="dossier-board">
+              {similar.map((s, i) => (
+                <DossierRow
+                  i={i}
+                  href={`/show/${s.slug}`}
+                  name={s.name}
+                  d={buildDossier(show, s, region)}
+                  rating={s.rating}
+                  poster={posterSrc(s)}
+                  compare={{
+                    href: comparePathFor(show.slug, s.slug),
+                    label: `Compare ${s.name} with ${show.name}`,
+                  }}
+                />
+              ))}
+            </ol>
+          </section>
+        ) : null}
         <KeepGoing
           cards={[
             {
@@ -939,6 +1002,13 @@ app.get("/show/:slug/where-to-watch", async (c) => {
           ]}
         />
         <SubscribeForm showId={show.id} label={`Email me when ${show.name} has news:`} />
+          </div>
+          <HomeSidebarRail
+            trailers={sidebar?.trailers ?? []}
+            topSeries={sidebar?.topSeries ?? []}
+            topMovies={sidebar?.topMovies ?? []}
+          />
+        </div>
       </article>
     </Layout>,
   );
@@ -1071,7 +1141,6 @@ app.get("/show/:slug/similar", async (c) => {
             trailers={sidebar?.trailers ?? []}
             topSeries={sidebar?.topSeries ?? []}
             topMovies={sidebar?.topMovies ?? []}
-            newsletterHref="/#home-email-title"
           />
         </div>
       </article>
@@ -1292,7 +1361,6 @@ app.get("/show/:slug/media", async (c) => {
             trailers={sidebar?.trailers ?? []}
             topSeries={sidebar?.topSeries ?? []}
             topMovies={sidebar?.topMovies ?? []}
-            newsletterHref="/#home-email-title"
           />
         </div>
       </article>
@@ -1481,7 +1549,6 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
             trailers={sidebar?.trailers ?? []}
             topSeries={sidebar?.topSeries ?? []}
             topMovies={sidebar?.topMovies ?? []}
-            newsletterHref="/#home-email-title"
           />
         </div>
       </article>

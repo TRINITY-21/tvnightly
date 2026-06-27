@@ -103,6 +103,8 @@ app.get("/sitemaps/:file", async (c) => {
       "/guides",
       "/lists",
       "/top/tv",
+      ...movieGenreSlugs.map((g) => `/movies/${g}`),
+      ...tvGenreSlugs.map((g) => `/top/tv/${g}`),
       "/top/seasons",
       "/top/networks",
       "/compare",

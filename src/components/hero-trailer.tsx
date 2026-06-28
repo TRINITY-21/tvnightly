@@ -1,28 +1,36 @@
-// Inline hero trailer with a backdrop fallback when the embed cannot play.
+// Inline hero trailer. Carries the full ordered list of trailer candidates so
+// the client player (hero-trailer-fallback.js) can advance past any that won't
+// play in the viewer's country, and only falls back to the title's backdrop
+// once every candidate has been exhausted.
 import { FC } from "hono/jsx";
 
 export type HeroTrailerBackdrop = { x1: string; x2?: string };
+export type HeroTrailerCandidate = { key: string; name: string };
 
 export const HeroTrailerEmbed: FC<{
   href: string;
   title: string;
-  trailerKey: string;
-  trailerName: string;
+  /** Ordered, playable-first. The player tries each in turn; [0] is embedded. */
+  candidates: HeroTrailerCandidate[];
   fallbackBackdrop?: HeroTrailerBackdrop | null;
   videoClass?: string;
   frameClass?: string;
 }> = ({
   href,
   title,
-  trailerKey,
-  trailerName,
+  candidates,
   fallbackBackdrop,
   videoClass = "hub-hero-video",
   frameClass = "hub-hero-video-frame",
 }) => {
+  const first = candidates[0];
+  if (!first) return null;
+  // Only ever embed real 11-char YouTube ids (defense-in-depth) and hand the
+  // client a clean key list to walk on error.
+  const keys = candidates.map((v) => v.key).filter((k) => /^[\w-]{11}$/.test(k));
   const trailerSrc =
-    `https://www.youtube-nocookie.com/embed/${trailerKey}` +
-    `?autoplay=1&mute=1&loop=1&playlist=${trailerKey}` +
+    `https://www.youtube-nocookie.com/embed/${first.key}` +
+    `?autoplay=1&mute=1&loop=1&playlist=${first.key}` +
     `&controls=1&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`;
 
   return (
@@ -30,6 +38,7 @@ export const HeroTrailerEmbed: FC<{
       class={`${videoClass} hub-hero-video-trailer`}
       data-hero-trailer
       data-trailer-href={href}
+      data-trailer-candidates={JSON.stringify(keys)}
     >
       {fallbackBackdrop ? (
         <a
@@ -53,7 +62,7 @@ export const HeroTrailerEmbed: FC<{
       <iframe
         class={frameClass}
         src={trailerSrc}
-        title={`${title} — ${trailerName}`}
+        title={`${title} — ${first.name}`}
         allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
         loading="eager"
         referrerpolicy="strict-origin-when-cross-origin"

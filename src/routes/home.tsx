@@ -14,10 +14,11 @@ import { communityVerdictTotal } from "../lib/ratings";
 import { liveTonight } from "../lib/schedule-live";
 import { canonical, origin, siteIdentityLd } from "../lib/seo";
 import { SIDEBAR_TRAILER_LIMIT } from "../lib/sidebar-tops";
-import { tmdbBackdrop, tmdbMovieBackdrop, tmdbPopular, tmdbTrailer, tmdbTrendingList, tmdbUpcomingMovies } from "../lib/tmdb";
+import { tmdbBackdrop, tmdbMovieBackdrop, tmdbPopular, tmdbTrendingList, tmdbUpcomingMovies } from "../lib/tmdb";
+import { playableTrailer, playableTrailerList } from "../lib/youtube";
 import { toMovieRow, toShowRow } from "../lib/tmdb-rows";
 import { tmdbHeroShow, tmdbShowCast } from "../lib/tmdb-show";
-import { Bindings, HonoEnv, MovieRow, ShowRow } from "../types";
+import { AppContext, Bindings, HonoEnv, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -36,7 +37,7 @@ app.get("/api/trailer", async (c) => {
   const bundleId =
     type === "movie" && /^tt\d+$/.test(id) ? id : /^\d+$/.test(id) ? Number(id) : null;
   if (bundleId == null) return c.json({ key: null }, 400);
-  const t = await tmdbTrailer(key, type, bundleId);
+  const t = await playableTrailer(c, type, bundleId);
   c.header("Cache-Control", "public, max-age=604800");
   return c.json(t ?? { key: null });
 });
@@ -164,12 +165,12 @@ async function popularMovieRail(c: { env: Bindings }): Promise<MovieRow[]> {
 }
 async function trendingShowRail(c: { env: Bindings }): Promise<ShowRow[]> {
   return c.env.TMDB_API_KEY
-    ? (await tmdbTrendingList(c.env.TMDB_API_KEY, "tv")).slice(0, 18).map(toShowRow)
+    ? (await tmdbTrendingList(c.env.TMDB_API_KEY, "tv", "day")).slice(0, 18).map(toShowRow)
     : [];
 }
 async function trendingMovieRail(c: { env: Bindings }): Promise<MovieRow[]> {
   return c.env.TMDB_API_KEY
-    ? (await tmdbTrendingList(c.env.TMDB_API_KEY, "movie")).slice(0, 18).map(toMovieRow)
+    ? (await tmdbTrendingList(c.env.TMDB_API_KEY, "movie", "day")).slice(0, 18).map(toMovieRow)
     : [];
 }
 
@@ -213,22 +214,329 @@ async function upcomingMovieRail(c: { env: Bindings }): Promise<ComingMovie[]> {
 // soap/talk genres the hero has always kept out (no AGT, no broadcast news),
 // then build the full row (genres, network, providers) for the rich treatment.
 const HERO_SKIP_GENRES = new Set([10763, 10764, 10766, 10767]); // news, reality, soap, talk
-async function trendingHeroShow(c: { env: Bindings }): Promise<ShowRow | null> {
+async function trendingHeroPick(
+  c: AppContext,
+): Promise<{
+  show: ShowRow;
+  trailer: { key: string; name: string } | null;
+  candidates: { key: string; name: string }[];
+  rank: number;
+} | null> {
   const key = c.env.TMDB_API_KEY;
   if (!key) return null;
-  const list = await tmdbTrendingList(key, "tv");
-  const top = list.find((h) => !(h.genreIds ?? []).some((g) => HERO_SKIP_GENRES.has(g)));
-  return top ? await tmdbHeroShow(key, top.tmdbId) : null;
+  const list = await tmdbTrendingList(key, "tv", "day");
+  // the marquee autoplays a trailer, so feature the highest-ranked trending
+  // series whose trailer actually PLAYS for this viewer (region-aware) — skip
+  // reality/news/soap/talk, check the top few in parallel, take the first that
+  // plays; if none do, keep #1 and show its backdrop (trailer: null).
+  const candidates = list
+    .filter((h) => !(h.genreIds ?? []).some((g) => HERO_SKIP_GENRES.has(g)))
+    .slice(0, 6);
+  if (!candidates.length) return null;
+  const trailers = await Promise.all(candidates.map((h) => playableTrailer(c, "tv", h.tmdbId)));
+  const idx = trailers.findIndex((t) => t);
+  let pick = idx >= 0 ? idx : 0;
+  // full ordered candidate list for the chosen show so the inline player can fall
+  // through to the next trailer if its first pick won't play (cached call).
+  let cands = await playableTrailerList(c, "tv", candidates[pick].tmdbId);
+  // if the chosen #1 has NO trailers at all, the inline player has nothing to
+  // drive — advance to the next trending show that does, so cross-show fallthrough
+  // still kicks in (matches the /api/hero contract).
+  if (!cands.length) {
+    for (let k = pick + 1; k < candidates.length; k++) {
+      const list = await playableTrailerList(c, "tv", candidates[k].tmdbId);
+      if (list.length) {
+        pick = k;
+        cands = list;
+        break;
+      }
+    }
+  }
+  const show = await tmdbHeroShow(key, candidates[pick].tmdbId);
+  if (!show) return null;
+  return { show, trailer: cands[0] ?? null, candidates: cands, rank: pick };
 }
 
+// A hero row is just a show row with the optional "what's airing tonight" episode
+// fields nulled out — trending heroes carry no specific episode.
+type SpotRow = ShowRow & {
+  ep_name: string | null;
+  ep_season: number | null;
+  ep_number: number | null;
+  ep_airdate: string | null;
+  ep_airstamp: string | null;
+};
+const asSpot = (s: ShowRow): SpotRow => ({
+  ...s,
+  ep_name: null,
+  ep_season: null,
+  ep_number: null,
+  ep_airdate: null,
+  ep_airstamp: null,
+});
+
+// The marquee spotlight — rendered inline on "/" AND, for cross-show fallthrough,
+// by GET /api/hero so the client can swap the WHOLE hero to the next trending
+// show when the featured one's trailers are all region-blocked. `rank` (trending
+// position) is stamped as data-hero-rank; the client requests /api/hero?i=rank+1
+// for the next show. A null rank means no client switching (tonight/premiere hero).
+const Spotlight: FC<{
+  spot: SpotRow;
+  heroBackdrop: { x1: string; x2?: string } | null;
+  spotFrame: string | null;
+  candidates: { key: string; name: string }[];
+  cast: Awaited<ReturnType<typeof tmdbShowCast>>;
+  region: string;
+  eyebrow: string;
+  isTonight: boolean;
+  airTimeText: string | null;
+  airIso: string | null;
+  genres: string[];
+  net: string | null;
+  showProof: boolean;
+  verdictTotal: number;
+  rank: number | null;
+}> = ({
+  spot,
+  heroBackdrop,
+  spotFrame,
+  candidates,
+  cast,
+  region,
+  eyebrow,
+  isTonight,
+  airTimeText,
+  airIso,
+  genres,
+  net,
+  showProof,
+  verdictTotal,
+  rank,
+}) => {
+  const heroTrailer = candidates[0] ?? null;
+  return (
+    <section
+      class={`spotlight${heroBackdrop ? "" : " spot-ambient"}${heroTrailer ? " spot-cinema" : ""}`}
+      aria-labelledby="spot-title"
+      data-hero-rank={rank != null ? String(rank) : undefined}
+      data-hero-tmdb={rank != null && spot.tmdb_id != null ? String(spot.tmdb_id) : undefined}
+    >
+      {spotFrame ? <div class="hero-backdrop" style={spotFrame}></div> : null}
+      {showProof ? (
+        <div class="home-proof">
+          <span class="home-proof-chip">
+            {verdictTotal.toLocaleString()} community ratings
+          </span>
+        </div>
+      ) : null}
+      <div class={heroTrailer ? "spot-head spot-head-video" : "spot-head"}>
+        {(() => {
+          const p = posterSrc(spot);
+          return p ? (
+            <img
+              class="spot-poster"
+              src={p.src}
+              srcset={p.srcset}
+              alt={spot.name}
+              width="172"
+              height="258"
+              fetchpriority="high"
+              decoding="async"
+            />
+          ) : null;
+        })()}
+        <div class="spot-info">
+          <p class="eyebrow">
+            {isTonight ? <span class="live-dot"></span> : null}
+            {homeDateline()}
+            {eyebrow ? (
+              <>
+                <span class="eyebrow-sep">·</span>
+                {eyebrow}
+              </>
+            ) : null}
+            {airTimeText ? (
+              <span class="eyebrow-time">
+                <span class="eyebrow-sep">·</span>
+                <time data-localtime datetime={airIso ?? undefined}>
+                  {airTimeText} UTC
+                </time>
+              </span>
+            ) : null}
+          </p>
+          <h1 class="spot-title" id="spot-title">
+            <a href={`/show/${spot.slug}`}>{spot.name}</a>
+          </h1>
+          <p class="meta-strip">
+            <span>
+              <a href="/top/tv" title="The top TV shows, ranked">TV</a>
+            </span>
+            <span class="sep">·</span>
+            <StatusBadge status={spot.status} />
+            {spot.premiered ? <span>{spot.premiered.slice(0, 4)}</span> : null}
+            {genres.length ? (
+              <span class="mi-genres">
+                <span class="sep sep-genres">·</span>
+                <span class="mi-genres-list">
+                  {genres.slice(0, 3).map((g, i) => (
+                    <>
+                      {i > 0 ? ", " : ""}
+                      <a href={`/genre/${slugifyName(g)}/shows`}>{g}</a>
+                    </>
+                  ))}
+                </span>
+              </span>
+            ) : null}
+            {spot.rating != null ? (
+              <>
+                <span class="sep">·</span>
+                <span class="rating"><IconStar class="rating-star" />{spot.rating.toFixed(1)}</span>
+              </>
+            ) : isNewYear(spot.premiered ? Number(spot.premiered.slice(0, 4)) : null) ? (
+              <>
+                <span class="sep">·</span>
+                <span class="meta-new">NEW</span>
+              </>
+            ) : null}
+          </p>
+          {spot.summary ? <p class="spot-dek">{stripHtml(spot.summary)}</p> : null}
+          {spot.ep_season != null ? (
+            <p class="spot-ep">
+              S{String(spot.ep_season).padStart(2, "0")}E
+              {String(spot.ep_number ?? 0).padStart(2, "0")}
+              {spot.ep_name ? ` — ${spot.ep_name}` : ""}
+              {net ? (
+                <span class="muted">
+                  {" · "}
+                  <a href={`/network/${slugifyName(net)}`}>{net}</a>
+                </span>
+              ) : null}
+            </p>
+          ) : null}
+          <ProviderLine row={spot} region={region} title={spot.name} pickerType="tv" />
+          <div class="spot-actions">
+            <a class="verdict-btn chev-after" href="/recommend">
+              Rate my taste
+            </a>
+            <a class="btn-ghost chev-after" href={`/show/${spot.slug}`}>
+              Episode guide & ratings
+            </a>
+          </div>
+        </div>
+        {heroTrailer ? (
+          <div class="spot-aside">
+            <div class="hub-hero-player spot-trailer-wrap" data-hero-pip>
+              <HeroTrailerEmbed
+                href={`/show/${spot.slug}`}
+                title={spot.name}
+                candidates={candidates}
+                fallbackBackdrop={heroBackdrop}
+                videoClass="spot-trailer hub-hero-video"
+                frameClass="spot-trailer-frame hub-hero-video-frame"
+              />
+            </div>
+            {cast.length ? (
+              <div class="spot-cast" aria-label={`${spot.name} cast`}>
+                {cast.map((p) => {
+                  const href = personHref(p);
+                  const face = (
+                    <>
+                      <span class="spot-cast-face">
+                        <img
+                          src={p.img!}
+                          alt={p.n}
+                          width="60"
+                          height="60"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </span>
+                      <span class="spot-cast-name">{p.n}</span>
+                    </>
+                  );
+                  const label = p.c ? `${p.n} — ${p.c}` : p.n;
+                  return href ? (
+                    <a class="spot-cast-member" href={href} title={label}>
+                      {face}
+                    </a>
+                  ) : (
+                    <span class="spot-cast-member" title={label}>
+                      {face}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+};
+
+// Cross-show fallthrough fragment: the Nth trending show's spotlight (the first
+// at rank >= i that has trailers). The client swaps this in when the current
+// hero's trailers are all unplayable. 204 once the trending list is exhausted.
+app.get("/api/hero", async (c) => {
+  const key = c.env.TMDB_API_KEY;
+  if (!key) return c.body(null, 204);
+  const start = Math.max(0, parseInt(c.req.query("i") ?? "0", 10) || 0);
+  // shows already shown+failed on the client — skip them so a cf-cache reshuffle
+  // of the trending order can't re-surface a dud the viewer just saw fail
+  const skip = new Set(
+    (c.req.query("not") ?? "")
+      .split(",")
+      .map((s) => parseInt(s, 10))
+      .filter((n) => !Number.isNaN(n)),
+  );
+  const list = await tmdbTrendingList(key, "tv", "day");
+  const candidates = list
+    .filter((h) => !(h.genreIds ?? []).some((g) => HERO_SKIP_GENRES.has(g)))
+    .slice(0, 6);
+  for (let rank = start; rank < candidates.length; rank++) {
+    if (skip.has(candidates[rank].tmdbId)) continue;
+    const cands = await playableTrailerList(c, "tv", candidates[rank].tmdbId);
+    if (!cands.length) continue; // no trailers at all — skip to the next show
+    const show = await tmdbHeroShow(key, candidates[rank].tmdbId);
+    if (!show) continue;
+    const [backdrop, castRaw] = await Promise.all([
+      tmdbBackdrop(key, candidates[rank].tmdbId),
+      tmdbShowCast(key, candidates[rank].tmdbId, 12),
+    ]);
+    const spot = asSpot(show);
+    const poster = hiRes(show.image_url);
+    const spotFrame = backdrop
+      ? heroBg(backdrop.x1, backdrop.x2)
+      : poster
+        ? heroBg(poster)
+        : null;
+    // keep the site-wide social-proof chip on the swapped hero (page-level value)
+    const verdictTotal = await communityVerdictTotal(c.env.DB);
+    c.header("Cache-Control", "public, max-age=900");
+    return c.html(
+      <Spotlight
+        spot={spot}
+        heroBackdrop={backdrop}
+        spotFrame={spotFrame}
+        candidates={cands}
+        cast={(castRaw ?? []).filter((p) => p.img).slice(0, 7)}
+        region={visitorRegion(c)}
+        eyebrow="Trending today"
+        isTonight={false}
+        airTimeText={null}
+        airIso={null}
+        genres={spot.genres ? JSON.parse(spot.genres) : []}
+        net={spot.network ?? spot.web_channel ?? null}
+        showProof={verdictTotal >= 50}
+        verdictTotal={verdictTotal}
+        rank={rank}
+      />,
+    );
+  }
+  return c.body(null, 204); // trending list exhausted
+});
+
 app.get("/", async (c) => {
-  type SpotRow = ShowRow & {
-    ep_name: string | null;
-    ep_season: number | null;
-    ep_number: number | null;
-    ep_airdate: string | null;
-    ep_airstamp: string | null;
-  };
   type BackRow = {
     slug: string;
     name: string;
@@ -291,7 +599,7 @@ app.get("/", async (c) => {
        WHERE image_url IS NOT NULL AND rating IS NOT NULL
        ORDER BY rating DESC LIMIT 1`,
     ).first<{ image_url: string }>(),
-    trendingHeroShow(c),
+    trendingHeroPick(c),
     trendingMovieRail(c),
     trendingShowRail(c),
     laneArts(c),
@@ -327,19 +635,10 @@ app.get("/", async (c) => {
       .all<BackRow>(),
   ]);
 
-  // wrap a plain show row as a hero row (no specific episode attached)
-  const asSpot = (s: ShowRow): SpotRow => ({
-    ...s,
-    ep_name: null,
-    ep_season: null,
-    ep_number: null,
-    ep_airdate: null,
-    ep_airstamp: null,
-  });
   // the marquee always leads with the week's #1 trending series — the genuine
   // chart-topper, live from TMDB (mirrored or not), reality/news/soap/talk kept
   // out. Falls back to tonight's premium airing, a premiere, then a top series.
-  const trendingHero = heroTop;
+  const trendingHero = heroTop?.show ?? null;
   const spot: SpotRow | null = trendingHero
     ? asSpot(trendingHero)
     : spotTonight ?? spotPremiere ?? (heroFallback ? asSpot(heroFallback) : null);
@@ -348,7 +647,7 @@ app.get("/", async (c) => {
   const heroIsTonight = spot != null && spot === spotTonight;
   const heroIsTrending = !!trendingHero;
   const spotEyebrow = heroIsTrending
-    ? "Trending this week"
+    ? "Trending today"
     : spotTonight
       ? "On tonight"
       : spotPremiere
@@ -374,14 +673,21 @@ app.get("/", async (c) => {
   // edge-cached call); falls back to its poster blurred into ambient light.
   // Fetched alongside the hero's trailer (the autoplay panel on the right) —
   // both ride the same cached bundle, so this is one burst of cache hits.
-  const [backdrop, heroTrailer, heroCastRaw] =
+  // reuse the trailer we already region-checked for the trending marquee;
+  // for a tonight/premiere fallback spot, check its trailer's playability now.
+  const spotIsTrendingHero = !!trendingHero && spot?.tmdb_id === trendingHero.tmdb_id;
+  const [backdrop, heroTrailerList, heroCastRaw] =
     spot?.tmdb_id && c.env.TMDB_API_KEY
       ? await Promise.all([
           tmdbBackdrop(c.env.TMDB_API_KEY, spot.tmdb_id),
-          tmdbTrailer(c.env.TMDB_API_KEY, "tv", spot.tmdb_id),
+          // reuse the candidate list already region-checked for the trending
+          // marquee; otherwise build it now for the tonight/premiere fallback spot
+          spotIsTrendingHero
+            ? Promise.resolve(heroTop?.candidates ?? [])
+            : playableTrailerList(c, "tv", spot.tmdb_id),
           tmdbShowCast(c.env.TMDB_API_KEY, spot.tmdb_id, 12),
         ])
-      : [null, null, [] as Awaited<ReturnType<typeof tmdbShowCast>>];
+      : [null, [] as { key: string; name: string }[], [] as Awaited<ReturnType<typeof tmdbShowCast>>];
   // the billed cast that actually has a headshot — the faces under the trailer
   const heroCast = (heroCastRaw ?? []).filter((p) => p.img).slice(0, 7);
   const spotPosterBg = spot ? hiRes(spot.image_url) : null;
@@ -444,167 +750,23 @@ app.get("/", async (c) => {
             section has no chrome — the scrim resolves to --bg, so it melts
             into the page. Data-driven, never a marketing banner. */}
         {spot ? (
-          <section
-            class={`spotlight${backdrop ? "" : " spot-ambient"}${heroTrailer ? " spot-cinema" : ""}`}
-            aria-labelledby="spot-title"
-          >
-            {spotFrame ? <div class="hero-backdrop" style={spotFrame}></div> : null}
-            {showProof ? (
-              <div class="home-proof">
-                <span class="home-proof-chip">
-                  {verdictTotal.toLocaleString()} community ratings
-                </span>
-              </div>
-            ) : null}
-            <div class={heroTrailer ? "spot-head spot-head-video" : "spot-head"}>
-              {(() => {
-                const p = posterSrc(spot);
-                return p ? (
-                  <img
-                    class="spot-poster"
-                    src={p.src}
-                    srcset={p.srcset}
-                    alt={spot.name}
-                    width="172"
-                    height="258"
-                    fetchpriority="high"
-                    decoding="async"
-                  />
-                ) : null;
-              })()}
-              <div class="spot-info">
-                <p class="eyebrow">
-                  {heroIsTonight ? <span class="live-dot"></span> : null}
-                  {homeDateline()}
-                  {spotEyebrow ? (
-                    <>
-                      <span class="eyebrow-sep">·</span>
-                      {spotEyebrow}
-                    </>
-                  ) : null}
-                  {spotAirTime ? (
-                    <span class="eyebrow-time">
-                      <span class="eyebrow-sep">·</span>
-                      <time data-localtime datetime={spotAirIso ?? undefined}>
-                        {spotAirTime} UTC
-                      </time>
-                    </span>
-                  ) : null}
-                </p>
-                <h1 class="spot-title" id="spot-title">
-                  <a href={`/show/${spot.slug}`}>{spot.name}</a>
-                </h1>
-                <p class="meta-strip">
-                  {/* lead with the media type so it's unmistakable what the
-                      spotlight is — the hero is always a TV title here */}
-                  <span>
-                    <a href="/top/tv" title="The top TV shows, ranked">TV</a>
-                  </span>
-                  <span class="sep">·</span>
-                  <StatusBadge status={spot.status} />
-                  {spot.premiered ? <span>{spot.premiered.slice(0, 4)}</span> : null}
-                  {spotGenres.length ? (
-                    <span class="mi-genres">
-                      <span class="sep sep-genres">·</span>
-                      <span class="mi-genres-list">
-                        {spotGenres.slice(0, 3).map((g, i) => (
-                          <>
-                            {i > 0 ? ", " : ""}
-                            <a href={`/genre/${slugifyName(g)}/shows`}>{g}</a>
-                          </>
-                        ))}
-                      </span>
-                    </span>
-                  ) : null}
-                  {spot.rating != null ? (
-                    <>
-                      <span class="sep">·</span>
-                      <span class="rating"><IconStar class="rating-star" />{spot.rating.toFixed(1)}</span>
-                    </>
-                  ) : isNewYear(spot.premiered ? Number(spot.premiered.slice(0, 4)) : null) ? (
-                    <>
-                      <span class="sep">·</span>
-                      <span class="meta-new">NEW</span>
-                    </>
-                  ) : null}
-                </p>
-                {spot.summary ? <p class="spot-dek">{stripHtml(spot.summary)}</p> : null}
-                {spot.ep_season != null ? (
-                  <p class="spot-ep">
-                    S{String(spot.ep_season).padStart(2, "0")}E
-                    {String(spot.ep_number ?? 0).padStart(2, "0")}
-                    {spot.ep_name ? ` — ${spot.ep_name}` : ""}
-                    {spotNet ? (
-                      <span class="muted">
-                        {" · "}
-                        <a href={`/network/${slugifyName(spotNet)}`}>{spotNet}</a>
-                      </span>
-                    ) : null}
-                  </p>
-                ) : null}
-                <ProviderLine row={spot} region={visitorRegion(c)} title={spot.name} pickerType="tv" />
-                <div class="spot-actions">
-                  <a class="verdict-btn chev-after" href="/recommend">
-                    Rate my taste
-                  </a>
-                  <a class="btn-ghost chev-after" href={`/show/${spot.slug}`}>
-                    Episode guide & ratings
-                  </a>
-                </div>
-              </div>
-              {/* RIGHT column: the autoplaying trailer up top, the cast faces
-                  beneath it. The left column keeps the backdrop + meta to itself,
-                  so the video never covers the art. loading=lazy means a hidden
-                  frame never loads. */}
-              {heroTrailer ? (
-                <div class="spot-aside">
-                  <div class="hub-hero-player spot-trailer-wrap" data-hero-pip>
-                    <HeroTrailerEmbed
-                      href={`/show/${spot.slug}`}
-                      title={spot.name}
-                      trailerKey={heroTrailer.key}
-                      trailerName="Trailer"
-                      fallbackBackdrop={backdrop}
-                      videoClass="spot-trailer hub-hero-video"
-                      frameClass="spot-trailer-frame hub-hero-video-frame"
-                    />
-                  </div>
-                  {heroCast.length ? (
-                    <div class="spot-cast" aria-label={`${spot.name} cast`}>
-                      {heroCast.map((p) => {
-                        const href = personHref(p);
-                        const face = (
-                          <>
-                            <span class="spot-cast-face">
-                              <img
-                                src={p.img!}
-                                alt={p.n}
-                                width="60"
-                                height="60"
-                                loading="lazy"
-                                decoding="async"
-                              />
-                            </span>
-                            <span class="spot-cast-name">{p.n}</span>
-                          </>
-                        );
-                        const label = p.c ? `${p.n} — ${p.c}` : p.n;
-                        return href ? (
-                          <a class="spot-cast-member" href={href} title={label}>
-                            {face}
-                          </a>
-                        ) : (
-                          <span class="spot-cast-member" title={label}>
-                            {face}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </section>
+          <Spotlight
+            spot={spot}
+            heroBackdrop={backdrop}
+            spotFrame={spotFrame}
+            candidates={heroTrailerList}
+            cast={heroCast}
+            region={visitorRegion(c)}
+            eyebrow={spotEyebrow}
+            isTonight={heroIsTonight}
+            airTimeText={spotAirTime}
+            airIso={spotAirIso}
+            genres={spotGenres}
+            net={spotNet}
+            showProof={showProof}
+            verdictTotal={verdictTotal}
+            rank={heroIsTrending ? (heroTop?.rank ?? null) : null}
+          />
         ) : null}
 
         {/* two cards, and the CTA stack floats centered over their curved
@@ -854,7 +1016,7 @@ app.get("/", async (c) => {
                 </>
               ) : null}
               <div class="discover-head">
-                <h2>Trending this week</h2>
+                <h2>Trending today</h2>
                 <p class="section-lead muted">What the world is watching.</p>
               </div>
               {hasTrendTv && hasTrendMovies ? (

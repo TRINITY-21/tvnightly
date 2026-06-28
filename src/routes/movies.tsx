@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
+import { playableFromVideos, playableTrailerList, playableVideoList } from "../lib/youtube";
 import { ExploreCard } from "../components/cards";
 import { ChartFilterBar } from "../components/chart-filters";
 import { ChartHeroHead, ChartSpotlight } from "../components/chart-hero";
@@ -350,11 +351,11 @@ async function bestMoviesChart(c: AppContext, genreSlug?: string) {
         ? movieBundleId(topMovie)
         : "";
   let art: { x1: string; x2?: string } | null = null;
-  let topTrailer: { key: string; name: string } | null = null;
+  let topTrailerList: { key: string; name: string }[] = [];
   if (topMovie && c.env.TMDB_API_KEY && topBundleId) {
-    [art, topTrailer] = await Promise.all([
+    [art, topTrailerList] = await Promise.all([
       tmdbMovieBackdrop(c.env.TMDB_API_KEY, topBundleId),
-      movieSpotlightTrailer(c.env.TMDB_API_KEY, topBundleId),
+      playableTrailerList(c, "movie", topBundleId),
     ]);
   }
   if (!art && topMovie?.poster_url) {
@@ -424,7 +425,8 @@ async function bestMoviesChart(c: AppContext, genreSlug?: string) {
               href: `/movie/${topMovie.slug}`,
               name: topMovie.title,
               poster: moviePoster(topMovie),
-              trailer: topTrailer,
+              trailer: topTrailerList[0] ?? null,
+              trailerCandidates: topTrailerList,
               fallbackBackdrop: art,
               rating: topMovie.rating,
             }}
@@ -605,16 +607,14 @@ app.get("/movie/:slug", async (c) => {
   const writerLinks = writers.length ? await crewLinkMap(c.env.DB, writers) : new Map<number, number>();
   const prov = providersFor(movie, region);
   const watchProv = heroWatchProvider(prov.names, movie.title, prov.region, "movie");
-  let trailerVid =
-    facts?.trailer ??
-    media?.videos.find((v) => v.type === "Trailer") ??
-    media?.videos[0] ??
-    null;
-  if (!trailerVid && c.env.TMDB_API_KEY && bundleId) {
-    const spotlight = await movieSpotlightTrailer(c.env.TMDB_API_KEY, bundleId);
-    // the spotlight helper carries no publish date; the hero only needs key/name
-    if (spotlight) trailerVid = { ...spotlight, published: null };
+  let trailerVids = await playableVideoList(c, media?.videos ?? []);
+  if (!trailerVids.length && bundleId) {
+    // no bundle trailers played — fall back to the movie spotlight list (carries
+    // no publish date; the hero only needs key/name/type)
+    const spotlight = await playableTrailerList(c, "movie", bundleId);
+    trailerVids = spotlight.map((s) => ({ ...s, published: null }));
   }
+  const trailerVid = trailerVids[0] ?? null;
   const highlights = (media?.videos ?? [])
     .filter((v) => v.key !== trailerVid?.key)
     .slice(0, 14);
@@ -777,6 +777,11 @@ app.get("/movie/:slug", async (c) => {
               ? { key: trailerVid.key, name: trailerVid.name, type: "Trailer" }
               : null
           }
+          trailerCandidates={trailerVids.map((v) => ({
+            key: v.key,
+            name: v.name,
+            type: v.type ?? "Trailer",
+          }))}
           highlights={highlights}
           starring={cast.slice(0, 4).map((p) => {
             const id =
@@ -1171,7 +1176,7 @@ app.get("/movie/:slug/media", async (c) => {
   const base = `/movie/${movie.slug}/media`;
   const site = origin(c);
 
-  const trailer = media?.videos.find((v) => v.type === "Trailer") ?? media?.videos[0] ?? null;
+  const trailer = await playableFromVideos(c, media?.videos ?? []);
   const clips = (media?.videos ?? []).filter((v) => v !== trailer).slice(0, 9);
   const backdrops = (media?.backdrops ?? []).slice(0, 12);
   const posters = (media?.posters ?? []).slice(0, 12);

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { FC } from "hono/jsx";
+import { playableTrailerList } from "../lib/youtube";
 import type { Child } from "hono/jsx";
 import { Layout } from "../components/Layout";
 import { MovieCard, ShowCard } from "../components/cards";
@@ -969,10 +970,10 @@ async function topTvChart(
     const p = posterSrc(champ);
     if (p) art = { x1: p.src };
   }
-  const champTrailer =
+  const champTrailerList =
     champ?.tmdb_id && c.env.TMDB_API_KEY
-      ? await tmdbTrailer(c.env.TMDB_API_KEY, "tv", champ.tmdb_id)
-      : null;
+      ? await playableTrailerList(c, "tv", champ.tmdb_id)
+      : [];
   const seasonCounts = await showSeasonCounts(
     c.env.DB,
     results.slice(0, CHART_PAGE_SIZE).map((s) => s.id),
@@ -1056,7 +1057,8 @@ async function topTvChart(
               href: `/show/${champ.slug}`,
               name: champ.name,
               poster: posterSrc(champ),
-              trailer: champTrailer,
+              trailer: champTrailerList[0] ?? null,
+              trailerCandidates: champTrailerList,
               fallbackBackdrop: art,
               rating: champ.rating,
             }}
@@ -1174,11 +1176,11 @@ async function genreMovieChart(
         ? movieBundleId(topMovie)
         : "";
   let art: { x1: string; x2?: string } | null = null;
-  let topTrailer: { key: string; name: string } | null = null;
+  let topTrailerList: { key: string; name: string }[] = [];
   if (topMovie && c.env.TMDB_API_KEY && topBundleId) {
-    [art, topTrailer] = await Promise.all([
+    [art, topTrailerList] = await Promise.all([
       tmdbMovieBackdrop(c.env.TMDB_API_KEY, topBundleId),
-      movieSpotlightTrailer(c.env.TMDB_API_KEY, topBundleId),
+      playableTrailerList(c, "movie", topBundleId),
     ]);
   }
   if (!art && topMovie?.poster_url) {
@@ -1261,7 +1263,8 @@ async function genreMovieChart(
               href: `/movie/${topMovie.slug}`,
               name: topMovie.title,
               poster: moviePoster(topMovie),
-              trailer: topTrailer,
+              trailer: topTrailerList[0] ?? null,
+              trailerCandidates: topTrailerList,
               fallbackBackdrop: art,
               rating: topMovie.rating,
             }}
@@ -1364,10 +1367,10 @@ async function networkTvChart(c: AppContext, slug: string) {
     const p = posterSrc(champ);
     if (p) art = { x1: p.src };
   }
-  const champTrailer =
+  const champTrailerList =
     champ?.tmdb_id && c.env.TMDB_API_KEY
-      ? await tmdbTrailer(c.env.TMDB_API_KEY, "tv", champ.tmdb_id)
-      : null;
+      ? await playableTrailerList(c, "tv", champ.tmdb_id)
+      : [];
   const seasonCounts = await showSeasonCounts(
     c.env.DB,
     results.slice(0, CHART_PAGE_SIZE).map((s) => s.id),
@@ -1440,7 +1443,8 @@ async function networkTvChart(c: AppContext, slug: string) {
                   href: `/show/${champ.slug}`,
                   name: champ.name,
                   poster: posterSrc(champ),
-                  trailer: champTrailer,
+                  trailer: champTrailerList[0] ?? null,
+                  trailerCandidates: champTrailerList,
                   fallbackBackdrop: art,
                   rating: champ.rating,
                 }}
@@ -1546,11 +1550,11 @@ async function networkMovieChart(c: AppContext, slug: string) {
         ? movieBundleId(topMovie)
         : "";
   let art: { x1: string; x2?: string } | null = null;
-  let topTrailer: { key: string; name: string } | null = null;
+  let topTrailerList: { key: string; name: string }[] = [];
   if (topMovie && c.env.TMDB_API_KEY && topBundleId) {
-    [art, topTrailer] = await Promise.all([
+    [art, topTrailerList] = await Promise.all([
       tmdbMovieBackdrop(c.env.TMDB_API_KEY, topBundleId),
-      movieSpotlightTrailer(c.env.TMDB_API_KEY, topBundleId),
+      playableTrailerList(c, "movie", topBundleId),
     ]);
   }
   if (!art && topMovie?.poster_url) {
@@ -1624,7 +1628,8 @@ async function networkMovieChart(c: AppContext, slug: string) {
                   href: `/movie/${topMovie.slug}`,
                   name: topMovie.title,
                   poster: moviePoster(topMovie),
-                  trailer: topTrailer,
+                  trailer: topTrailerList[0] ?? null,
+                  trailerCandidates: topTrailerList,
                   fallbackBackdrop: art,
                   rating: topMovie.rating,
                 }}

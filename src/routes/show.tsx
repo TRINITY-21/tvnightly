@@ -21,6 +21,7 @@ import { crewLinkMap, getShow, similarShows } from "../lib/queries";
 import { aggregateRatingLd, titleRaterCount, titleStat } from "../lib/ratings";
 import { breadcrumbLd, breadcrumbTrail, canonical, faqLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMedia, tmdbRecommendations, tmdbShowCreators, tmdbShowCrew } from "../lib/tmdb";
+import { playableFromVideos, playableVideoList } from "../lib/youtube";
 import { toShowRow } from "../lib/tmdb-rows";
 import { d1OrLiveEpisodes, resolveShow, tmdbShowCast, tmdbShowData } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
@@ -160,8 +161,9 @@ app.get("/show/:slug", async (c) => {
           tmdbShowCrew(c.env.TMDB_API_KEY, show.tmdb_id, 12),
         ])
       : [null, []];
-  const trailerVid = media?.videos.find((v) => v.type === "Trailer") ?? media?.videos[0] ?? null;
-  const highlights = (media?.videos ?? []).filter((v) => v !== trailerVid).slice(0, 14);
+  const trailerVids = await playableVideoList(c, media?.videos ?? []);
+  const trailerVid = trailerVids[0] ?? null;
+  const highlights = (media?.videos ?? []).filter((v) => v.key !== trailerVid?.key).slice(0, 14);
   const galleryPhotos = mergeGalleryImages(media?.posters ?? [], media?.backdrops ?? [], 12);
   const galleryVideos = (media?.videos ?? []).slice(0, 12);
   const writers = crew
@@ -277,6 +279,7 @@ app.get("/show/:slug", async (c) => {
           communityScore={communityRingScore(communityCounts ?? null)}
           poster={HeroPoster(show)}
           trailer={trailerVid}
+          trailerCandidates={trailerVids}
           highlights={highlights}
           starring={cast.slice(0, 4).map((p) => ({
             name: p.n,
@@ -1143,7 +1146,7 @@ app.get("/show/:slug/media", async (c) => {
   const base = `/show/${show.slug}/media`;
   const site = origin(c);
 
-  const trailer = media?.videos.find((v) => v.type === "Trailer") ?? media?.videos[0] ?? null;
+  const trailer = await playableFromVideos(c, media?.videos ?? []);
   const clips = (media?.videos ?? []).filter((v) => v !== trailer).slice(0, 9);
   const backdrops = (media?.backdrops ?? []).slice(0, 12);
   const posters = (media?.posters ?? []).slice(0, 12);

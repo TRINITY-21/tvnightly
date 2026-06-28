@@ -1,5 +1,7 @@
 import { Context, Hono } from "hono";
 import { Child, FC } from "hono/jsx";
+import { playableTrailerList } from "../lib/youtube";
+import { HeroTrailerEmbed } from "../components/hero-trailer";
 import { Layout } from "../components/Layout";
 import { ClampSummary, ExploreCard } from "../components/cards";
 import { DossierRow } from "../components/dossier";
@@ -13,7 +15,7 @@ import { ageOf, headshot, longDate, posterImg, posterSrc, slugifyName, stripHtml
 import { visitorRegion } from "../lib/providers";
 import { crewLinkMap, similarShows } from "../lib/queries";
 import { breadcrumbLd, breadcrumbTrail, canonical, origin } from "../lib/seo";
-import { tmdbPersonProfileImages, tmdbPersonTaggedStills, tmdbTrailer } from "../lib/tmdb";
+import { tmdbPersonProfileImages, tmdbPersonTaggedStills } from "../lib/tmdb";
 import { TMDB_PERSON_OFFSET, resolvePersonProfile, resolveShow, tmdbShowCast } from "../lib/tmdb-show";
 import { hubForGenres } from "../lib/verticals";
 import { HonoEnv, PersonRow, ShowRow } from "../types";
@@ -771,7 +773,9 @@ app.get("/person/:slug", async (c) => {
   ].sort((a, b) => b.score - a.score);
 
   let spotlight: PersonSpot | null = rankedCredits[0] ?? null;
-  let featureVideo: { key: string; name: string; href: string; title: string } | null = null;
+  let featureVideo:
+    | { key: string; name: string; href: string; title: string; candidates: { key: string; name: string }[] }
+    | null = null;
   if (apiKey && rankedCredits.length) {
     const trailerHits = await Promise.all(
       rankedCredits.slice(0, 12).map(async (credit) => {
@@ -779,21 +783,22 @@ app.get("/person/:slug", async (c) => {
           credit.kind === "tv"
             ? credit.row.tmdb_id
             : credit.row.tmdb_id ?? credit.row.imdb_id;
-        if (id == null) return { credit, trailer: null as { key: string; name: string } | null };
-        const trailer = await tmdbTrailer(
-          apiKey,
+        if (id == null) return { credit, candidates: [] as { key: string; name: string }[] };
+        const candidates = await playableTrailerList(
+          c,
           credit.kind === "tv" ? "tv" : "movie",
           id,
         );
-        return { credit, trailer };
+        return { credit, candidates };
       }),
     );
-    const hit = trailerHits.find((x) => x.trailer);
-    if (hit?.trailer) {
+    const hit = trailerHits.find((x) => x.candidates.length);
+    if (hit) {
       spotlight = hit.credit;
       featureVideo = {
-        key: hit.trailer.key,
-        name: hit.trailer.name,
+        key: hit.candidates[0].key,
+        name: hit.candidates[0].name,
+        candidates: hit.candidates,
         title: hit.credit.kind === "tv" ? hit.credit.row.name : hit.credit.row.title,
         href:
           hit.credit.kind === "tv"
@@ -808,12 +813,14 @@ app.get("/person/:slug", async (c) => {
       ? `/show/${spotlight.row.slug}`
       : `/movie/${spotlight.row.slug}`
     : null;
-  const featureBackdrop =
-    !featureVideo && spotlight
-      ? spotlight.kind === "tv"
-        ? await showKeepGoingBackdrop(apiKey, spotlight.row)
-        : await movieKeepGoingBackdrop(apiKey, spotlight.row)
-      : null;
+  // compute the spotlight backdrop even when a trailer is featured, so the
+  // autoplayer has something to cover swaps with and to fall back to once every
+  // candidate is exhausted (matches the show/movie hero behaviour)
+  const featureBackdrop = spotlight
+    ? spotlight.kind === "tv"
+      ? await showKeepGoingBackdrop(apiKey, spotlight.row)
+      : await movieKeepGoingBackdrop(apiKey, spotlight.row)
+    : null;
 
   const highlights: { label: string; thumb: string; view: string }[] = [];
   const personTmdbId =
@@ -950,17 +957,12 @@ app.get("/person/:slug", async (c) => {
               </div>
               <div class="hub-hero-player" data-hero-pip>
                 {featureVideo ? (
-                  <div class="hub-hero-video">
-                    <iframe
-                      class="hub-hero-video-frame"
-                      src={`https://www.youtube-nocookie.com/embed/${featureVideo.key}?autoplay=1&mute=1&loop=1&playlist=${featureVideo.key}&controls=1&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`}
-                      title={`${person.name} — ${featureVideo.name}`}
-                      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                      loading="eager"
-                      referrerpolicy="strict-origin-when-cross-origin"
-                      allowfullscreen
-                    ></iframe>
-                  </div>
+                  <HeroTrailerEmbed
+                    href={featureVideo.href}
+                    title={person.name}
+                    candidates={featureVideo.candidates}
+                    fallbackBackdrop={featureBackdrop}
+                  />
                 ) : featureBackdrop && featureHref ? (
                   <a class="hub-hero-video hub-hero-video-backdrop" href={featureHref}>
                     <img

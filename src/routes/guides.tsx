@@ -1,4 +1,5 @@
 // SEO guide pages — three programmatic templates over the movie catalog:
+import { playableTrailerList } from "../lib/youtube";
 //   /movies/best/:year[/:genre]   "Best [genre] movies to watch in {year}"
 //   /movies/underrated[/:genre]    "Underrated [genre] movies" (hidden gems)
 //   /movies/featuring/:slug        "Best movies featuring [actor]"
@@ -29,7 +30,7 @@ import { fmtRuntime, headshot, heroBg, posterImg, slugifyName } from "../lib/for
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { genreDirectory } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
-import { movieSpotlightTrailer, tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
+import { tmdbMovieBackdrop, tmdbUpcomingBackdrop } from "../lib/tmdb";
 import {
     movieBundleId,
     resolveMovie,
@@ -202,11 +203,11 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
         ? movieBundleId(topMovie)
         : "";
   let art: { x1: string; x2?: string } | null = null;
-  let topTrailer: { key: string; name: string } | null = null;
+  let topTrailerList: { key: string; name: string }[] = [];
   if (topMovie && c.env.TMDB_API_KEY && topBundleId) {
-    [art, topTrailer] = await Promise.all([
+    [art, topTrailerList] = await Promise.all([
       tmdbMovieBackdrop(c.env.TMDB_API_KEY, topBundleId),
-      movieSpotlightTrailer(c.env.TMDB_API_KEY, topBundleId),
+      playableTrailerList(c, "movie", topBundleId),
     ]);
   }
   if (!art && topMovie?.poster_url) {
@@ -290,7 +291,8 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
               href: `/movie/${topMovie.slug}`,
               name: topMovie.title,
               poster: moviePoster(topMovie),
-              trailer: topTrailer,
+              trailer: topTrailerList[0] ?? null,
+              trailerCandidates: topTrailerList,
               fallbackBackdrop: art,
               rating: topMovie.rating,
             }}
@@ -395,11 +397,11 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
         ? movieBundleId(topMovie)
         : "";
   let art: { x1: string; x2?: string } | null = null;
-  let topTrailer: { key: string; name: string } | null = null;
+  let topTrailerList: { key: string; name: string }[] = [];
   if (topMovie && c.env.TMDB_API_KEY && topBundleId) {
-    [art, topTrailer] = await Promise.all([
+    [art, topTrailerList] = await Promise.all([
       tmdbMovieBackdrop(c.env.TMDB_API_KEY, topBundleId),
-      movieSpotlightTrailer(c.env.TMDB_API_KEY, topBundleId),
+      playableTrailerList(c, "movie", topBundleId),
     ]);
   }
   if (!art && topMovie?.poster_url) {
@@ -478,7 +480,8 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
               href: `/movie/${topMovie.slug}`,
               name: topMovie.title,
               poster: moviePoster(topMovie),
-              trailer: topTrailer,
+              trailer: topTrailerList[0] ?? null,
+              trailerCandidates: topTrailerList,
               fallbackBackdrop: art,
               rating: topMovie.rating,
             }}

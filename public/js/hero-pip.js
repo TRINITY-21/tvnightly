@@ -27,6 +27,13 @@
     var observer = new IntersectionObserver(
       function (entries) {
         entries.forEach(function (entry) {
+          // the trailer can fail ASYNC (all candidates region-blocked) after we
+          // set this up — never dock a now backdrop-only hero into a mini-player
+          if (anchor.classList.contains("is-trailer-unavailable")) {
+            setPip(false);
+            observer.disconnect();
+            return;
+          }
           if (entry.isIntersecting) {
             setPip(false);
             return;

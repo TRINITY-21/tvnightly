@@ -22,6 +22,10 @@ export type Bindings = SyncEnv & {
   EMAIL_REPLY_TO?: string;
   // Basic-auth password for /admin/* (username "admin"). Unset = admin disabled.
   ADMIN_KEY?: string;
+  // YouTube Data API v3 key — lets us check a trailer's regionRestriction +
+  // embeddable status so we only surface trailers that actually PLAY for the
+  // viewer's country (else we fall back to the backdrop). Unset = best-effort.
+  GCP_API_KEY?: string;
   // Workers Rate Limiting (account-local, best-effort, per-colo; see wrangler.jsonc).
   // FEEDBACK_LIMIT throttles the public /feedback write+email; ADMIN_LIMIT throttles
   // failed /admin auth. Optional so an unconfigured env degrades quietly.

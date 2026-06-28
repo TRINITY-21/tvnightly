@@ -8,6 +8,9 @@ export type ChartHeroFeatured = {
   name: string;
   poster: { src: string; srcset?: string } | null;
   trailer: { key: string; name: string } | null;
+  /** Full ordered candidate list for the autoplayer to fall through; main = [0].
+   *  Defaults to just `trailer` when omitted. */
+  trailerCandidates?: { key: string; name: string }[];
   /** Shown behind the trailer iframe while it loads, or when no trailer exists. */
   fallbackBackdrop: { x1: string; x2?: string } | null;
   /** Viewer rating on a 0–10 scale (TMDB-style). */
@@ -63,8 +66,7 @@ export const ChartSpotlight: FC<{ featured: ChartHeroFeatured }> = ({ featured }
             <HeroTrailerEmbed
               href={featured.href}
               title={featured.name}
-              trailerKey={featured.trailer.key}
-              trailerName={featured.trailer.name}
+              candidates={featured.trailerCandidates ?? [featured.trailer]}
               fallbackBackdrop={featured.fallbackBackdrop}
               videoClass="chart-hero-video hub-hero-video"
               frameClass="chart-hero-video-frame hub-hero-video-frame"

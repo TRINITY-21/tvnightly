@@ -161,6 +161,21 @@ export async function tmdbTrailer(
   return v ? { key: v.key, name: v.name } : null;
 }
 
+/** A title's YouTube trailer/teaser candidates in preference order (official
+ *  Trailer first) — so a caller can fall through to one that actually plays for
+ *  the viewer when the top pick is region-blocked. */
+export async function tmdbTrailerKeys(
+  key: string,
+  kind: "tv" | "movie",
+  id: number | string,
+): Promise<{ key: string; name: string; type: string }[]> {
+  const data = await bundle(key, kind, id);
+  if (!data) return [];
+  return mapMedia(data)
+    .videos.filter((v) => v.type === "Trailer" || v.type === "Teaser")
+    .map((v) => ({ key: v.key, name: v.name, type: v.type }));
+}
+
 /** Best YouTube trailer for a movie bundle id — same pick as tmdbTrailer, with a
  *  media-page fallback when the cached bundle is video-less. */
 export async function movieSpotlightTrailer(
@@ -1057,9 +1072,14 @@ export async function tmdbRecommendations(
 ): Promise<TmdbSearchHit[]> {
   return tmdbList(key, `/${kind}/${tmdbId}/recommendations`, kind);
 }
-/** This week's trending (tv|movie) with full title data — the trending rails. */
-export async function tmdbTrendingList(key: string, kind: "tv" | "movie"): Promise<TmdbSearchHit[]> {
-  return tmdbList(key, `/trending/${kind}/week`, kind);
+/** Trending (tv|movie) with full title data — the trending rails. `window`
+ *  defaults to "week"; the homepage uses "day" for faster day-to-day movement. */
+export async function tmdbTrendingList(
+  key: string,
+  kind: "tv" | "movie",
+  window: "day" | "week" = "week",
+): Promise<TmdbSearchHit[]> {
+  return tmdbList(key, `/trending/${kind}/${window}`, kind);
 }
 
 export type TmdbUpcoming = {

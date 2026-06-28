@@ -401,6 +401,21 @@ a.hub-hero-chip-logo:hover { color: var(--accent); text-decoration: none; }
   opacity: 0;
   visibility: hidden;
 }
+/* While the player verifies a candidate actually plays (walking the trailer list
+   past any region-blocked ones), keep the backdrop ON TOP so a blocked first pick
+   never flashes its "unavailable" card. Removed the moment a trailer plays. */
+.hub-hero-video-trailer.is-trailer-loading .hub-hero-video-backdrop-layer {
+  opacity: 1;
+  visibility: visible;
+  z-index: 3;
+}
+/* overscan the cover image so no hairline of the iframe shows at the rounded
+   corners while we swap candidates (same trick as the unavailable state) */
+.hub-hero-video-trailer.is-trailer-loading .hub-hero-video-backdrop-layer img {
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+}
 .hub-hero-video-trailer.is-trailer-unavailable .hub-hero-video-frame,
 .hub-hero-video-trailer.is-trailer-unavailable .chart-hero-video-frame,
 .hub-hero-video-trailer.is-trailer-unavailable .spot-trailer-frame {

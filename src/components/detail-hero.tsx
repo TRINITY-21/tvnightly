@@ -54,6 +54,9 @@ export const DetailHero: FC<{
   communityScore?: number | null;
   poster: PropsWithChildren["children"];
   trailer: HeroVideo | null;
+  /** Full ordered candidate list for the autoplayer to fall through; main = [0].
+   *  Defaults to just `trailer` when omitted. */
+  trailerCandidates?: HeroVideo[];
   highlights: HeroVideo[];
   starring: CreditPerson[];
   directors: CreditPerson[];
@@ -86,6 +89,7 @@ export const DetailHero: FC<{
   communityScore,
   poster,
   trailer,
+  trailerCandidates,
   highlights,
   starring,
   directors,
@@ -178,8 +182,7 @@ export const DetailHero: FC<{
               <HeroTrailerEmbed
                 href={mediaHref}
                 title={title}
-                trailerKey={trailer.key}
-                trailerName={trailer.name}
+                candidates={trailerCandidates ?? [trailer]}
                 fallbackBackdrop={fallbackBackdrop}
               />
             ) : fallbackBackdrop ? (

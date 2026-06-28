@@ -1,4 +1,5 @@
 // SEO guide pages for TV — the show counterparts of src/routes/guides.tsx:
+import { playableTrailerList } from "../lib/youtube";
 //   /tv/best/:year[/:genre]   "Best [genre] TV shows to watch in {year}"
 //   /tv/underrated[/:genre]    "Underrated [genre] shows" (cult / overlooked)
 //   /tv/featuring/:slug        "Best TV shows featuring [actor]"
@@ -33,7 +34,7 @@ import { headshot, heroBg, hiRes, posterSrc, slugifyName } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { genreDirectory, showSeasonCounts } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
-import { tmdbBackdrop, tmdbTrailer } from "../lib/tmdb";
+import { tmdbBackdrop } from "../lib/tmdb";
 import { resolvePersonProfile } from "../lib/tmdb-show";
 import { AppContext, HonoEnv, ShowRow } from "../types";
 
@@ -192,10 +193,10 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
     const p = posterSrc(champ);
     if (p) art = { x1: p.src };
   }
-  const champTrailer =
+  const champTrailerList =
     champ?.tmdb_id && c.env.TMDB_API_KEY
-      ? await tmdbTrailer(c.env.TMDB_API_KEY, "tv", champ.tmdb_id)
-      : null;
+      ? await playableTrailerList(c, "tv", champ.tmdb_id)
+      : [];
   const seasonCounts = await showSeasonCounts(
     c.env.DB,
     results.slice(0, CHART_PAGE_SIZE).map((s) => s.id),
@@ -279,7 +280,8 @@ async function bestYearPage(c: AppContext, year: number, genreSlug?: string) {
               href: `/show/${champ.slug}`,
               name: champ.name,
               poster: posterSrc(champ),
-              trailer: champTrailer,
+              trailer: champTrailerList[0] ?? null,
+              trailerCandidates: champTrailerList,
               fallbackBackdrop: art,
               rating: champ.rating,
             }}
@@ -382,10 +384,10 @@ async function bestDecadePage(c: AppContext, decadeSlug: string, genreSlug?: str
     const p = posterSrc(champ);
     if (p) art = { x1: p.src };
   }
-  const champTrailer =
+  const champTrailerList =
     champ?.tmdb_id && c.env.TMDB_API_KEY
-      ? await tmdbTrailer(c.env.TMDB_API_KEY, "tv", champ.tmdb_id)
-      : null;
+      ? await playableTrailerList(c, "tv", champ.tmdb_id)
+      : [];
   const seasonCounts = await showSeasonCounts(
     c.env.DB,
     results.slice(0, CHART_PAGE_SIZE).map((s) => s.id),
@@ -469,7 +471,8 @@ async function bestDecadePage(c: AppContext, decadeSlug: string, genreSlug?: str
               href: `/show/${champ.slug}`,
               name: champ.name,
               poster: posterSrc(champ),
-              trailer: champTrailer,
+              trailer: champTrailerList[0] ?? null,
+              trailerCandidates: champTrailerList,
               fallbackBackdrop: art,
               rating: champ.rating,
             }}
@@ -581,10 +584,10 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
     const p = posterSrc(champ);
     if (p) art = { x1: p.src };
   }
-  const champTrailer =
+  const champTrailerList =
     champ?.tmdb_id && c.env.TMDB_API_KEY
-      ? await tmdbTrailer(c.env.TMDB_API_KEY, "tv", champ.tmdb_id)
-      : null;
+      ? await playableTrailerList(c, "tv", champ.tmdb_id)
+      : [];
   const seasonCounts = await showSeasonCounts(
     c.env.DB,
     results.slice(0, CHART_PAGE_SIZE).map((s) => s.id),
@@ -664,7 +667,8 @@ async function underratedPage(c: AppContext, genreSlug?: string) {
               href: `/show/${champ.slug}`,
               name: champ.name,
               poster: posterSrc(champ),
-              trailer: champTrailer,
+              trailer: champTrailerList[0] ?? null,
+              trailerCandidates: champTrailerList,
               fallbackBackdrop: art,
               rating: champ.rating,
             }}

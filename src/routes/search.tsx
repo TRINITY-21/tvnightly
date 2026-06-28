@@ -1,14 +1,14 @@
 import { Hono } from "hono";
-import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard, StatusBadge } from "../components/cards";
-import { heroBg, hiRes, posterSrc, retinaSet, slugifyName, stripHtml } from "../lib/format";
+import { IconStar } from "../components/icons";
+import { headshot, heroBg, hiRes, posterImg, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { diceSimilarity, foldSql, foldText } from "../lib/search";
 import { origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMovieBackdrop, tmdbSearch, tmdbSearchPeople } from "../lib/tmdb";
 import { toMovieRow as tmdbMovieRow, toShowRow as tmdbShowRow } from "../lib/tmdb-rows";
 import { TMDB_PERSON_OFFSET } from "../lib/tmdb-show";
-import { Bindings, HonoEnv, MovieRow, ShowRow } from "../types";
+import { HonoEnv, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -522,7 +522,12 @@ app.get("/search", async (c) => {
               {personResults.map((p) => (
                 <a class="cast-tile" href={`/person/${slugifyName(p.name)}-${p.id}`}>
                   {p.image_url ? (
-                    <img src={p.image_url} srcset={retinaSet(p.image_url)} alt={p.name} loading="lazy" />
+                    (() => {
+                      const h = headshot(p.image_url);
+                      return h ? (
+                        <img src={h.src} srcset={h.srcset} alt={p.name} loading="lazy" decoding="async" />
+                      ) : null;
+                    })()
                   ) : (
                     <div class="cast-fallback">{p.name}</div>
                   )}
@@ -548,7 +553,14 @@ app.get("/search", async (c) => {
                 <li>
                   <a class="shelf-tile" href={`/show/${s.slug}`} title={s.name}>
                     {s.poster ? (
-                      <img src={s.poster} alt={`${s.name} poster`} width="92" height="138" loading="lazy" decoding="async" />
+                      <img
+                        {...posterImg(s.poster, "shelf")!}
+                        alt={`${s.name} poster`}
+                        width="92"
+                        height="138"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     ) : (
                       <span class="shelf-fallback">{s.name}</span>
                     )}

@@ -6,11 +6,11 @@ import { ShowBlurb } from "../components/editorial";
 import { ChevDown, ChevUp, IconStar } from "../components/icons";
 import { ShowTabs } from "../components/nav";
 import { EPISODE_GUIDES, EPISODE_GUIDE_BY_SLUG } from "../lib/episode-guides";
-import { epCode, epHref, fmtRuntime, heroBg, largeStill, longDate, posterSrc, stripHtml } from "../lib/format";
+import { epCode, epHref, epregStill, epregStillPreload, fmtRuntime, heroBg, longDate, posterSrc, stripHtml } from "../lib/format";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
 import { resolveShow } from "../lib/tmdb-show";
-import { Bindings, HonoEnv, EpisodeRow } from "../types";
+import { EpisodeRow, HonoEnv } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -131,9 +131,7 @@ app.get("/guide/:slug", async (c) => {
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       scripts={["/js/votes.js"]}
       preloadImage={
-        eps[0]?.image_url
-          ? { x1: eps[0].image_url, x2: largeStill(eps[0].image_url) }
-          : undefined
+        eps[0]?.image_url ? epregStillPreload(eps[0].image_url, plates > 0) : undefined
       }
       ld={[
         {
@@ -168,8 +166,7 @@ app.get("/guide/:slug", async (c) => {
                   {e.image_url ? (
                     <img
                       class="epreg-still"
-                      src={e.image_url}
-                      srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
+                      {...epregStill(e.image_url, i < plates)}
                       width={i < plates ? "256" : "168"}
                       height={i < plates ? "144" : "95"}
                       alt={`${show.name} ${epCode(e)}`}

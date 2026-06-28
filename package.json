@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "npm run css && wrangler dev",
+    "dev:all": "npm run css && node scripts/dev-all.mjs",
+    "render": "node tools/countdown/render-server.mjs",
     "deploy": "npm run css && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "css": "node scripts/build-css.mjs",

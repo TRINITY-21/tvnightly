@@ -8,12 +8,13 @@ import type { SiteSidebarData } from "../lib/site-sidebar";
 import { VERTICALS } from "../lib/verticals";
 import type { AppContext } from "../types";
 import { HomeSidebarRail } from "./home-sidebar";
-import { IconFacebook, IconInstagram, IconTikTok, IconX } from "./icons";
+import { IconFacebook, IconInstagram, IconTikTok, IconX, IconYouTube } from "./icons";
 
 // Social handles — one place to update. Same @handle across platforms keeps the
 // brand findable and matches the tvnightly.com domain.
 const SOCIAL_HANDLE = "tvnightly";
 const SOCIALS: { label: string; url: string; Icon: FC<{ size?: number }> }[] = [
+  { label: "YouTube", url: `https://www.youtube.com/@${SOCIAL_HANDLE}`, Icon: IconYouTube },
   { label: "TikTok", url: `https://www.tiktok.com/@${SOCIAL_HANDLE}`, Icon: IconTikTok },
   { label: "Instagram", url: `https://www.instagram.com/${SOCIAL_HANDLE}`, Icon: IconInstagram },
   { label: "X", url: `https://x.com/${SOCIAL_HANDLE}`, Icon: IconX },

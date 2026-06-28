@@ -3,10 +3,10 @@
 // classic episodes, new-on-streaming) and turn each into a ready-to-post package
 // — a branded card (see buildPromoCard) + platform captions.
 import type { AppContext } from "../types";
-import { origin } from "./seo";
 import { pad2, slugifyName } from "./format";
-import { tmdbTrendingList } from "./tmdb";
 import { liveTonight } from "./schedule-live";
+import { origin } from "./seo";
+import { tmdbTrendingList } from "./tmdb";
 import { shortLink, utmCampaignFromPath, type UtmSource } from "./utm";
 
 const tmdbImg = (path: string | null | undefined, size = "w342") =>
@@ -276,12 +276,13 @@ const camel = (s: string) => s.replace(/[^a-zA-Z0-9]+/g, "");
 /** Platform-flavored captions for a moment: a hook + the link + hashtags. The
  *  founder copies one and posts it. Links include UTMs per platform. */
 export interface CaptionSet {
-  x: string;
-  instagram: string;
   tiktok: string;
-  facebook: string;
+  youtube: string;
+  instagram: string;
+  x: string;
   pinterest: string;
   whatsapp: string;
+  facebook: string;
   path: string;
 }
 
@@ -306,18 +307,13 @@ function composeCaptions(o: {
   const sub = o.sub ? ` ${o.sub}` : "";
   const igBody = o.igLead ? ` ${o.igLead}` : sub;
   return {
-    // X / Twitter — punchy, link inline, fewer tags
-    x: `${o.emoji} ${o.title} — ${o.hook}${dot}\n\n${link("x")}\n\n${three}`,
-    // Instagram — caption-style, full tag block (link not tappable, but copy-ready)
-    instagram: `${o.emoji} ${o.igTitle ?? o.title}\n\n${o.hook}${dot}${igBody}\n\n${link("instagram")}\n\n${all} #StreamingTV #BingeWatch`,
-    // TikTok — hook-first, short
     tiktok: `${o.title} ${o.emoji}\n${o.hook} 👀\n${link("tiktok")}\n\n${all} #fyp #TVTok`,
-    // Facebook — link auto-builds a preview card; light tags
-    facebook: `${o.emoji} ${o.title} — ${o.hook}${dot}${sub}\n\n${link("facebook")}\n\n${three}`,
-    // Pinterest — keyword-rich description for pin search + the link
+    youtube: `${o.title} ${o.emoji}\n${o.hook} 👀\n${link("youtube")}\n\n${all} #Shorts #TVShows #WhatToWatch`,
+    instagram: `${o.emoji} ${o.igTitle ?? o.title}\n\n${o.hook}${dot}${igBody}\n\n${link("instagram")}\n\n${all} #StreamingTV #BingeWatch`,
+    x: `${o.emoji} ${o.title} — ${o.hook}${dot}\n\n${link("x")}\n\n${three}`,
     pinterest: `${o.title} — ${o.hook}${dot}${sub}\n\n${link("pinterest")}\n\n${all}`,
-    // WhatsApp — conversational, link unfurls to the OG card, no hashtags
     whatsapp: `${o.emoji} ${o.title} — ${o.hook}${dot}${sub}\n\n${link("whatsapp")}`,
+    facebook: `${o.emoji} ${o.title}\n\n${o.hook}${dot}${sub}\n\n👉 ${link("facebook")}\n\n${three}`,
     path: o.path,
   };
 }

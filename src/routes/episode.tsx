@@ -2,22 +2,22 @@
 // of television. Guest cast comes live from TVmaze (free, keyless) through
 // the edge cache so the D1 mirror stays lean.
 import { Hono } from "hono";
+import { Layout } from "../components/Layout";
 import { DossierRow } from "../components/dossier";
 import { HomeSidebarRail } from "../components/home-sidebar";
 import { ChevDown, ChevUp, IconStar } from "../components/icons";
-import { episodeKeepGoingBackdrop, KeepGoing, loadShowKeepGoingArts } from "../components/keep-going";
-import { Layout } from "../components/Layout";
+import { KeepGoing, episodeKeepGoingBackdrop, loadShowKeepGoingArts } from "../components/keep-going";
 import { ProviderLine } from "../components/providers";
 import { ShareBar } from "../components/share";
 import { buildDossier } from "../lib/dossier";
-import { epCode, epHref, fmtRuntime, hiRes, longDate, posterSrc, slugifyName, stripHtml } from "../lib/format";
+import { epCode, epHref, fmtRuntime, headshot, hiRes, longDate, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { visitorRegion } from "../lib/providers";
 import { similarShows } from "../lib/queries";
 import { servePng } from "../lib/render";
 import { canonical, origin } from "../lib/seo";
 import { posterDataUri } from "../lib/signal";
 import { buildOgCard } from "../lib/social";
-import { resolveShow, TMDB_PERSON_OFFSET } from "../lib/tmdb-show";
+import { TMDB_PERSON_OFFSET, resolveShow } from "../lib/tmdb-show";
 import { EpisodeRow, HonoEnv } from "../types";
 
 const app = new Hono<HonoEnv>();
@@ -407,11 +407,11 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             <h2>Guest stars</h2>
             <div class="guest-list">
               {guests.map((g) => {
-                const img = g.person.image?.medium ?? null;
+                const h = g.person.image?.medium ? headshot(g.person.image.medium) : null;
                 const inner = (
                   <>
-                    {img ? (
-                      <img src={img} alt={g.person.name} loading="lazy" />
+                    {h ? (
+                      <img src={h.src} srcset={h.srcset} alt={g.person.name} loading="lazy" decoding="async" />
                     ) : (
                       <span class="guest-fallback" aria-hidden="true">
                         {g.person.name.slice(0, 1)}
@@ -444,14 +444,14 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
             <h2>Crew</h2>
             <div class="guest-list">
               {crew.map((x) => {
-                const img = x.person.image?.medium ?? null;
+                const h = x.person.image?.medium ? headshot(x.person.image.medium) : null;
                 const pid =
                   crewLink.get(x.person.id) ??
                   (x.person.id >= TMDB_PERSON_OFFSET ? x.person.id : undefined);
                 const inner = (
                   <>
-                    {img ? (
-                      <img src={img} alt={x.person.name} loading="lazy" />
+                    {h ? (
+                      <img src={h.src} srcset={h.srcset} alt={x.person.name} loading="lazy" decoding="async" />
                     ) : (
                       <span class="guest-fallback" aria-hidden="true">
                         {x.person.name.slice(0, 1)}

@@ -15,8 +15,8 @@ import { ShareBar } from "../components/share";
 import { VideoGallery } from "../components/video-gallery";
 import { buildDossier } from "../lib/dossier";
 import { fetchShowExploreArts } from "../lib/explore-art";
-import { comparePathFor, epCode, epHref, fmtRuntime, heroBg, hiRes, largeStill, longDate, personHref, posterSrc, slugifyName, stripHtml } from "../lib/format";
-import { PROVIDER_LOGOS, providerBrand, providersFor, REGIONS, regionOptions, visitorRegion } from "../lib/providers";
+import { comparePathFor, epCode, epHref, epregStill, epregStillPreload, fmtRuntime, heroBg, hiRes, inlineStill, longDate, personHref, posterSrc, slugifyName, stripHtml } from "../lib/format";
+import { PROVIDER_LOGOS, providerBrand, providersFor, regionOptions, REGIONS, visitorRegion } from "../lib/providers";
 import { crewLinkMap, getShow, similarShows } from "../lib/queries";
 import { aggregateRatingLd, titleRaterCount, titleStat } from "../lib/ratings";
 import { breadcrumbLd, breadcrumbTrail, canonical, faqLd, origin } from "../lib/seo";
@@ -352,7 +352,13 @@ app.get("/show/:slug", async (c) => {
                     <li>
                       <span class="top3-num">{String(i + 1).padStart(2, "0")}</span>
                       {e.image_url ? (
-                        <img class="top3-still" src={e.image_url} alt={`${show.name} ${epCode(e)}`} loading="lazy" />
+                        <img
+                          class="top3-still"
+                          {...inlineStill(e.image_url)}
+                          alt={`${show.name} ${epCode(e)}`}
+                          loading="lazy"
+                          decoding="async"
+                        />
                       ) : null}
                       <span class="top3-main">
                         <span class="top3-name">
@@ -498,7 +504,7 @@ app.get("/show/:slug", async (c) => {
                                 <span class="still-wrap">
                                   {e.image_url ? (
                                     <img
-                                      src={e.image_url}
+                                      {...inlineStill(e.image_url)}
                                       width="84"
                                       height="47"
                                       alt={`${show.name} ${epCode(e)}`}
@@ -1393,7 +1399,7 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
       ld={[breadcrumbLd(site, show, `Season ${n}`, path)]}
       preloadImage={
         eps[0]?.image_url
-          ? { x1: eps[0].image_url, x2: largeStill(eps[0].image_url) }
+          ? epregStillPreload(eps[0].image_url, false)
           : undefined
       }
     >
@@ -1432,8 +1438,7 @@ app.get("/show/:slug/season/:n{[0-9]+}", async (c) => {
                     {e.image_url ? (
                       <img
                         class="epreg-still"
-                        src={e.image_url}
-                        srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
+                        {...epregStill(e.image_url, false)}
                         width="168"
                         height="95"
                         alt={`${show.name} ${epCode(e)}`}

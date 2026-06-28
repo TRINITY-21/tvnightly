@@ -1,0 +1,15 @@
+# Sample countdown lineup for manual `make_countdown_depth.sh` runs.
+# (The /admin/shorts Export overwrites this automatically — this is just a template.)
+# TAB-separated:  rank <TAB> title <TAB> accentHex(optional) <TAB> posterPath(optional)
+#   accentHex blank  -> uses the brand accent ($ACCENT)
+#   posterPath blank -> looks for posters/<rank>.{jpg,jpeg,png,webp}
+10	Forrest Gump
+9	The Shining	0xff5a3c
+8	American Beauty	0xff4d6d
+7	The Joker	0x39d98a
+6	The Prestige
+5	The Godfather	0xe7c46a
+4	Shutter Island
+3	The Departed
+2	Interstellar
+1	Inception	0x6cc6ff

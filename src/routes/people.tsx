@@ -9,7 +9,7 @@ import { KeepGoing, fillKeepGoingBackdrops, loadPersonHubDoorArts, loadShowKeepG
 import { SeasonTabs, ShowTabs } from "../components/nav";
 import { buildDossier } from "../lib/dossier";
 import { genreShowArt, hubArt } from "../lib/explore-art";
-import { ageOf, headshot, longDate, posterSrc, slugifyName, stripHtml } from "../lib/format";
+import { ageOf, headshot, longDate, posterImg, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { visitorRegion } from "../lib/providers";
 import { crewLinkMap, similarShows } from "../lib/queries";
 import { breadcrumbLd, breadcrumbTrail, canonical, origin } from "../lib/seo";
@@ -147,14 +147,14 @@ const CrewGrid = ({
       <h2>Crew</h2>
       <div class="guest-list">
         {crew.map((p) => {
-          const img = p.profile_path ? `https://image.tmdb.org/t/p/w185${p.profile_path}` : null;
+          const h = p.profile_path ? headshot(`https://image.tmdb.org/t/p/w185${p.profile_path}`) : null;
           // a mirrored crew member links to their canonical page; everyone else
           // resolves live via the TMDB person fallback (10M + their TMDB id)
           const pid = links?.get(p.id) ?? (p.id ? TMDB_PERSON_OFFSET + p.id : null);
           const inner = (
             <>
-              {img ? (
-                <img src={img} alt={p.name} loading="lazy" />
+              {h ? (
+                <img src={h.src} srcset={h.srcset} alt={p.name} loading="lazy" decoding="async" />
               ) : (
                 <span class="guest-fallback" aria-hidden="true">
                   {p.name.slice(0, 1)}
@@ -1155,7 +1155,13 @@ app.get("/person/:slug", async (c) => {
                 <li class="rank-row">
                   <span class="rank-num">{i + 1}</span>
                   {(r.poster_url ?? r.image_url) ? (
-                    <img class="rank-thumb" src={r.poster_url ?? r.image_url!} alt={`${r.name} poster`} loading="lazy" />
+                    <img
+                      class="rank-thumb"
+                      {...posterImg(r.poster_url ?? r.image_url, "thumb")!}
+                      alt={`${r.name} poster`}
+                      loading="lazy"
+                      decoding="async"
+                    />
                   ) : (
                     <span class="rank-thumb rank-thumb-empty" aria-hidden="true"></span>
                   )}
@@ -1202,7 +1208,13 @@ app.get("/person/:slug", async (c) => {
                 <li class="rank-row">
                   <span class="rank-num">{i + 1}</span>
                   {m.poster_url ? (
-                    <img class="rank-thumb" src={m.poster_url} alt={`${m.title} poster`} loading="lazy" />
+                    <img
+                      class="rank-thumb"
+                      {...posterImg(m.poster_url, "thumb")!}
+                      alt={`${m.title} poster`}
+                      loading="lazy"
+                      decoding="async"
+                    />
                   ) : (
                     <span class="rank-thumb rank-thumb-empty" aria-hidden="true"></span>
                   )}

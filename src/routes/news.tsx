@@ -1,15 +1,15 @@
 import { Hono } from "hono";
-import { Layout, Honeypot } from "../components/Layout";
+import { Honeypot, Layout } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
+import { FilterSelect } from "../components/forms";
 import { HomeSidebarRail } from "../components/home-sidebar";
 import { fillKeepGoingBackdrops, finalizeExploreArt } from "../components/keep-going";
-import { FilterSelect } from "../components/forms";
 import { NEWS_TABS, SubNav } from "../components/nav";
-import { heroBg, hiRes, longDate, shortDate, stripHtml } from "../lib/format";
+import { heroBg, hiRes, longDate, posterImg, shortDate, stripHtml } from "../lib/format";
 import { PROVIDER_LOGOS, regionOptions, visitorRegion } from "../lib/providers";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
-import { Bindings, HonoEnv, EventRow } from "../types";
+import { EventRow, HonoEnv } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -110,7 +110,14 @@ app.get("/renewals", async (c) => {
       <a class="sched-row" href={`/show/${r.slug}/release-date`}>
         <span class="sched-rail">{shortDate(r.detected_at)}</span>
         {r.poster ? (
-          <img src={r.poster} alt={`${r.name} poster`} width="46" height="69" loading="lazy" decoding="async" />
+          <img
+            {...posterImg(r.poster, "thumb")!}
+            alt={`${r.name} poster`}
+            width="46"
+            height="69"
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <span class="sched-thumb-blank" aria-hidden="true"></span>
         )}
@@ -311,7 +318,14 @@ app.get("/whats-new", async (c) => {
               aria-label={`${r.title} — ${r.kind === "movie" ? "movie" : "TV show"}`}
             >
               {posterOf(r) ? (
-                <img src={posterOf(r)!} alt={`${r.title} poster`} width="92" height="138" loading="lazy" decoding="async" />
+                <img
+                  {...posterImg(posterOf(r), "shelf")!}
+                  alt={`${r.title} poster`}
+                  width="92"
+                  height="138"
+                  loading="lazy"
+                  decoding="async"
+                />
               ) : (
                 <span class="shelf-fallback">{r.title}</span>
               )}

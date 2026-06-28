@@ -1,0 +1,299 @@
+/* ============================================================
+   Admin console — shared chrome for feedback, subscribers, studio.
+   Same Standby Glow grammar: dark surfaces, amber accent spine.
+   ============================================================ */
+
+main:has(.admin--wide) {
+  max-width: 1340px;
+}
+
+.admin {
+  --admin-pad: 0;
+}
+
+/* ── masthead ───────────────────────────────────────────── */
+.admin-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.15rem 0 1.15rem;
+  margin-bottom: 1.35rem;
+  border-bottom: 1px solid var(--line);
+}
+.admin-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.admin-mark {
+  width: 36px;
+  height: auto;
+  flex: none;
+  filter: drop-shadow(0 0 10px rgba(255, 169, 77, 0.22));
+}
+.admin-lockup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  line-height: 1.1;
+}
+.admin-kicker {
+  font-family: var(--display);
+  font-stretch: 110%;
+  font-weight: 700;
+  font-size: 0.58rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.admin-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--display);
+  font-stretch: 120%;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 1.45rem;
+  color: var(--text);
+}
+.admin-wordmark .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--glow);
+}
+.admin-tagline {
+  margin-top: 0.28rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.admin-nav {
+  display: inline-flex;
+  gap: 0.28rem;
+  padding: 0.2rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.admin-nav-link {
+  padding: 0.38rem 0.85rem;
+  border-radius: 5px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: all var(--speed) var(--ease);
+}
+.admin-nav-link:hover {
+  color: var(--text);
+  text-decoration: none;
+  background: var(--surface-2);
+}
+.admin-nav-link.on {
+  color: #16130d;
+  background: var(--accent);
+}
+
+/* ── page chrome ────────────────────────────────────────── */
+.admin-page-head {
+  margin-bottom: 1.25rem;
+}
+.admin-page-title {
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 115%;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 1.65rem;
+  line-height: 1.1;
+}
+.admin-page-lead {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  max-width: 52ch;
+}
+.admin-count {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 0.72em;
+}
+
+/* stat row (subscribers) */
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+.admin-stat {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  box-shadow: var(--shadow-1);
+}
+.admin-stat-n {
+  font-family: var(--display);
+  font-stretch: 110%;
+  font-weight: 900;
+  font-size: 1.55rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.admin-stat-l {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.admin-stat.is-accent .admin-stat-n {
+  color: var(--accent);
+}
+
+/* lists */
+.admin-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.admin-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-1);
+}
+.admin-card:has(.admin-remove) {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.admin-card:has(.admin-remove) .admin-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.admin-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.85rem;
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin-bottom: 0.45rem;
+  font-variant-numeric: tabular-nums;
+}
+.admin-card-meta a {
+  color: var(--accent);
+  font-weight: 600;
+}
+.admin-card-path {
+  word-break: break-all;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.72rem;
+  opacity: 0.9;
+}
+.admin-card-msg {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.55;
+  font-size: 0.92rem;
+}
+.admin-badge {
+  display: inline-block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.14rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.admin-badge.is-ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--line));
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+.admin-badge.is-pending {
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.admin-remove {
+  margin: 0;
+  flex: none;
+}
+.admin-remove-btn {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  padding: 0.42rem 0.8rem;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color var(--speed) var(--ease),
+    color var(--speed) var(--ease),
+    background var(--speed) var(--ease);
+}
+.admin-remove-btn:hover,
+.admin-remove-btn:focus-visible {
+  border-color: var(--bad);
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+
+.admin-empty {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  max-width: 36rem;
+  margin: 0 auto;
+}
+.admin-empty-title {
+  margin: 0 0 0.35rem;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.admin-empty-lead {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 720px) {
+  .admin-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .admin-nav {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .admin-card:has(.admin-remove) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .admin-remove-btn {
+    width: 100%;
+  }
+}

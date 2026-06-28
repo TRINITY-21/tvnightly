@@ -3,26 +3,26 @@ import { Child, FC } from "hono/jsx";
 import { Honeypot, Layout } from "../components/Layout";
 import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
 import { HomeSidebarRail } from "../components/home-sidebar";
-import { KeepExploring, loadRecDoorArts, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
 import { IconStar, IconStarBadge } from "../components/icons";
+import { KeepExploring, loadRecDoorArts, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
 import { ShareBar } from "../components/share";
 import { TasteProfileShare } from "../components/taste-profile";
 import { ipHash } from "../lib/crypto";
-import { heroBg, hiRes, retinaSet } from "../lib/format";
+import type { ExploreArt } from "../lib/explore-art";
+import { heroBg, hiRes, posterImg, posterRetinaSrcset } from "../lib/format";
 import { isTmdbRef, materializeTmdbTitle } from "../lib/materialize";
 import { RatedEntry, VERDICTS, VERDICT_SCALE, fmtRated, getRatedTitle, parseRated } from "../lib/ratings";
 import { DeckCard, Pick, WhySignal, buildRecommendation, enrichDeck, landingPicks } from "../lib/recommend";
 import { servePng } from "../lib/render";
-import { foldSql, foldText } from "../lib/search";
 import { liveTonight } from "../lib/schedule-live";
+import { foldSql, foldText } from "../lib/search";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { posterDataUri } from "../lib/signal";
 import { TasteProfileCardData, buildOgCard, buildTasteProfileCard, buildTasteProfileOgCard } from "../lib/social";
 import { tmdbBackdrop, tmdbMovieBackdrop, tmdbTrendingList } from "../lib/tmdb";
 import { toMovieRow, toShowRow } from "../lib/tmdb-rows";
-import type { ExploreArt } from "../lib/explore-art";
 import type { AppContext } from "../types";
-import { Bindings, HonoEnv, MovieRow, ShowRow } from "../types";
+import { HonoEnv, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -62,17 +62,8 @@ async function loadTasteShare(c: AppContext, rated: RatedEntry[]) {
   return { ...rec, cardData };
 }
 
-// Hi-res 1x/2x srcset for a poster — keeps the big rate/deck cards sharp on
-// retina phones (the bare w342 / medium_portrait source scaled up was blurry).
-// Handles both a TVmaze (medium_*) and a TMDB (w342) URL.
-const posterSet = (url: string | null | undefined): string | undefined =>
-  !url
-    ? undefined
-    : /\/medium_(portrait|landscape)\//.test(url)
-      ? retinaSet(url)
-      : url.includes("/w342/")
-        ? `${url} 1x, ${url.replace("/w342/", "/w780/")} 2x`
-        : undefined;
+// Hi-res 1x/2x srcset for deck-scale posters — see posterRetinaSrcset in format.ts.
+const posterSet = posterRetinaSrcset;
 
 // ---- shared bits ----------------------------------------------------------
 
@@ -100,7 +91,12 @@ const PosterCard: FC<{ c: DeckCard; href: string }> = ({ c, href }) => (
   <a class="card" href={href}>
     <div class="card-media">
       {c.poster ? (
-        <img src={c.poster} alt={c.name} loading="lazy" decoding="async" />
+        <img
+          {...posterImg(c.poster, "card")!}
+          alt={c.name}
+          loading="lazy"
+          decoding="async"
+        />
       ) : (
         <div class="card-fallback">{c.name}</div>
       )}
@@ -200,7 +196,7 @@ const MatchHero: FC<{
       <div class="detail-side">
         <div class="rec-poster-wrap">
           {primary.poster ? (
-            <img class="poster" src={primary.poster} alt={primary.name} />
+            <img class="poster" {...posterImg(primary.poster, "shortlist")!} alt={primary.name} />
           ) : (
             <div class="poster card-fallback">{primary.name}</div>
           )}
@@ -748,7 +744,18 @@ app.get("/recommend", async (c) => {
                 <li>
                   <a href={`/recommend?kind=tv&ref=${s.id}${ratedQS}`}>
                     <span class="rec-pick-thumb">
-                      {s.poster ? <img src={s.poster} alt={`${s.name} poster`} width="40" height="60" loading="lazy" /> : <span class="rec-pick-blank"></span>}
+                      {s.poster ? (
+                        <img
+                          {...posterImg(s.poster, "thumb")!}
+                          alt={`${s.name} poster`}
+                          width="40"
+                          height="60"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <span class="rec-pick-blank"></span>
+                      )}
                     </span>
                     <span class="rec-pick-main">
                       <span class="rec-pick-name">{s.name}{s.premiered ? ` (${s.premiered.slice(0, 4)})` : ""}</span>
@@ -762,7 +769,18 @@ app.get("/recommend", async (c) => {
                 <li>
                   <a href={`/recommend?kind=movie&ref=${m.imdb_id}${ratedQS}`}>
                     <span class="rec-pick-thumb">
-                      {m.poster ? <img src={m.poster} alt={`${m.title} poster`} width="40" height="60" loading="lazy" /> : <span class="rec-pick-blank"></span>}
+                      {m.poster ? (
+                        <img
+                          {...posterImg(m.poster, "thumb")!}
+                          alt={`${m.title} poster`}
+                          width="40"
+                          height="60"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <span class="rec-pick-blank"></span>
+                      )}
                     </span>
                     <span class="rec-pick-main">
                       <span class="rec-pick-name">{m.title}{m.year ? ` (${m.year})` : ""}</span>

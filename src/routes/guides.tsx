@@ -25,7 +25,7 @@ import {
 } from "../components/keep-going";
 import { chartBasePath, parseChartFilters } from "../lib/chart-filters";
 import { CHART_PAGE_SIZE, fetchMovieChartResults, fetchMovieUnderratedResults } from "../lib/chart-results";
-import { fmtRuntime, headshot, heroBg, slugifyName } from "../lib/format";
+import { fmtRuntime, headshot, heroBg, posterImg, slugifyName } from "../lib/format";
 import { providerBrand, providersFor, visitorRegion } from "../lib/providers";
 import { genreDirectory } from "../lib/queries";
 import { canonical, faqLd, origin } from "../lib/seo";
@@ -112,7 +112,7 @@ const RankList = ({
           {m.poster_url ? (
             <img
               class="wo-poster"
-              src={m.poster_url}
+              {...posterImg(m.poster_url, "thumb")!}
               alt=""
               width="46"
               height="69"

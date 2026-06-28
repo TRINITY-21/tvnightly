@@ -364,6 +364,18 @@ export const IconFacebook: FC<{ size?: number }> = ({ size = 18 }) => (
     />
   </svg>
 );
+export const IconYouTube: FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+    {/* even-odd: the play triangle is a hole, so it reads on any tile bg and
+        inherits the amber hover from currentColor like the other socials */}
+    <path
+      fill-rule="evenodd"
+      clip-rule="evenodd"
+      d="M21.58 7.19a2.5 2.5 0 0 0-1.76-1.77C18.25 5 12 5 12 5s-6.25 0-7.82.42A2.5 2.5 0 0 0 2.42 7.2 26 26 0 0 0 2 12a26 26 0 0 0 .42 4.81 2.5 2.5 0 0 0 1.76 1.77C5.75 19 12 19 12 19s6.25 0 7.82-.42a2.5 2.5 0 0 0 1.76-1.77A26 26 0 0 0 22 12a26 26 0 0 0-.42-4.81zM10 15.2V8.8l5.2 3.2-5.2 3.2z"
+      fill="currentColor"
+    />
+  </svg>
+);
 export const IconGlobe: FC<{ size?: number }> = ({ size = 20 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />

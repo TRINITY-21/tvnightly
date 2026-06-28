@@ -1,16 +1,15 @@
 import { Hono } from "hono";
 import { FC } from "hono/jsx";
 import { Layout } from "../components/Layout";
-import { ExploreCard } from "../components/cards";
 import { HomeSidebarRail } from "../components/home-sidebar";
 import { KeepExploring, fillKeepGoingBackdrops, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
-import type { ExploreArt } from "../lib/explore-art";
 import { SCHEDULE_TABS, SubNav } from "../components/nav";
-import { MONTHS, airTime, epCode, heroBg, hiRes, homeDateline, longDate, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
+import type { ExploreArt } from "../lib/explore-art";
+import { MONTHS, airTime, epCode, heroBg, hiRes, homeDateline, longDate, posterImg, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
+import { liveTonight } from "../lib/schedule-live";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbUpcomingMovies } from "../lib/tmdb";
-import { liveTonight } from "../lib/schedule-live";
-import { Bindings, HonoEnv, TonightRow } from "../types";
+import { HonoEnv, TonightRow } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -71,7 +70,7 @@ const SchedRow: FC<{
       </span>
       {(e.show_poster ?? e.show_image) ? (
         <img
-          src={(e.show_poster ?? e.show_image)!}
+          {...posterImg((e.show_poster ?? e.show_image)!, "thumb")!}
           alt={`${e.show_name} poster`}
           width="46"
           height="69"
@@ -562,7 +561,7 @@ app.get("/premieres", async (c) => {
                           <span class="sched-rail">{mon ? `${mon} ${day}` : "TBA"}</span>
                           {m.poster_url ? (
                             <img
-                              src={m.poster_url}
+                              {...posterImg(m.poster_url, "thumb")!}
                               alt={`${m.title} poster`}
                               width="46"
                               height="69"

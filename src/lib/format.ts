@@ -1,5 +1,5 @@
 // Pure formatting helpers: text, dates, slugs, episode codes.
-import { EpisodeRow, CastEntry } from "../types";
+import { CastEntry, EpisodeRow } from "../types";
 
 export const stripHtml = (s: string | null) => (s ?? "").replace(/<[^>]*>/g, "").trim();
 
@@ -81,15 +81,135 @@ export const retinaSet = (_url: string | null): string | undefined => undefined;
 export const largeStill = (url: string): string =>
   url.replace("/medium_landscape/", "/large_landscape/");
 
+const tmdbStillAt = (url: string, size: string) =>
+  url.replace(/\/t\/p\/w\d+\//, `/t/p/${size}/`);
+
 /** Episode still for slate-scale slots (~300–400w). TMDB mirrors store w300;
  *  upgrade to w500/w780 so the next-episode hero stays sharp on retina. */
 export const stillSrc = (url: string): { src: string; srcset: string } => {
   if (/\/t\/p\/w\d+\//.test(url)) {
-    const at = (s: string) => url.replace(/\/t\/p\/w\d+\//, `/t/p/${s}/`);
-    return { src: at("w500"), srcset: `${at("w500")} 1x, ${at("w780")} 2x` };
+    const w500 = tmdbStillAt(url, "w500");
+    const w780 = tmdbStillAt(url, "w780");
+    return { src: w500, srcset: `${w500} 1x, ${w780} 2x` };
   }
   const large = largeStill(url);
   return { src: url, srcset: `${url} 1x, ${large} 2x` };
+};
+
+/** Episode still for the ranked register (.epreg): width-descriptor srcset +
+ *  sizes so full-width mobile rows and top-3 plates never upscale w300 mush. */
+export const epregStill = (
+  url: string,
+  plate = false,
+): { src: string; srcset: string; sizes: string } => {
+  const sizes = plate
+    ? "(max-width: 560px) 100vw, (max-width: 700px) 224px, 256px"
+    : "(max-width: 560px) 100vw, (max-width: 700px) 136px, 168px";
+
+  if (/\/t\/p\/w\d+\//.test(url)) {
+    return {
+      src: tmdbStillAt(url, plate ? "w780" : "w500"),
+      srcset: [
+        `${tmdbStillAt(url, "w300")} 300w`,
+        `${tmdbStillAt(url, "w500")} 500w`,
+        `${tmdbStillAt(url, "w780")} 780w`,
+        `${tmdbStillAt(url, "w1280")} 1280w`,
+      ].join(", "),
+      sizes,
+    };
+  }
+  const medium = url;
+  const large = largeStill(url);
+  const orig = url.replace("/medium_landscape/", "/original_untouched/");
+  return {
+    src: large,
+    srcset: `${medium} 250w, ${large} 480w, ${orig} 1280w`,
+    sizes,
+  };
+};
+
+/** Preload the sharpest still likely needed for LCP on an epreg row. */
+export const epregStillPreload = (url: string, plate = false): { x1: string; x2: string } => {
+  if (/\/t\/p\/w\d+\//.test(url)) {
+    return plate
+      ? { x1: tmdbStillAt(url, "w780"), x2: tmdbStillAt(url, "w1280") }
+      : { x1: tmdbStillAt(url, "w500"), x2: tmdbStillAt(url, "w780") };
+  }
+  return { x1: largeStill(url), x2: url.replace("/medium_landscape/", "/original_untouched/") };
+};
+
+/** Small episode still (~84px, 16:9) — show hub top-3, season episode rows. */
+export const inlineStill = (url: string): { src: string; srcset: string; sizes: string } => {
+  const sizes = "(max-width: 560px) 64px, 84px";
+  if (/\/t\/p\/w\d+\//.test(url)) {
+    return {
+      src: tmdbStillAt(url, "w300"),
+      srcset: [
+        `${tmdbStillAt(url, "w300")} 300w`,
+        `${tmdbStillAt(url, "w500")} 500w`,
+        `${tmdbStillAt(url, "w780")} 780w`,
+      ].join(", "),
+      sizes,
+    };
+  }
+  const large = largeStill(url);
+  const orig = url.replace("/medium_landscape/", "/original_untouched/");
+  return {
+    src: url,
+    srcset: `${url} 250w, ${large} 480w, ${orig} 1280w`,
+    sizes,
+  };
+};
+
+export type PosterSlot = "thumb" | "shelf" | "card" | "shortlist";
+
+/** Poster at the right resolution for its slot — TMDB w342 sources upscale to mush
+ *  in shelves, sidebars, and shortlist cards without a retina ladder. */
+export const posterImg = (
+  url: string | null | undefined,
+  slot: PosterSlot = "card",
+): { src: string; srcset?: string; sizes?: string } | null => {
+  if (!url) return null;
+  if (/\/t\/p\/w\d+\//.test(url)) {
+    if (slot === "thumb") {
+      const lo = tmdbStillAt(url, "w185");
+      const hi = tmdbStillAt(url, "w342");
+      return { src: lo, srcset: `${lo} 1x, ${hi} 2x` };
+    }
+    if (slot === "shelf") {
+      const lo = tmdbStillAt(url, "w342");
+      const hi = tmdbStillAt(url, "w500");
+      return { src: lo, srcset: `${lo} 1x, ${hi} 2x` };
+    }
+    if (slot === "shortlist") {
+      const lo = tmdbStillAt(url, "w500");
+      const hi = tmdbStillAt(url, "w780");
+      return { src: lo, srcset: `${lo} 1x, ${hi} 2x` };
+    }
+    const w342 = tmdbStillAt(url, "w342");
+    return {
+      src: w342,
+      srcset: [
+        `${tmdbStillAt(url, "w342")} 342w`,
+        `${tmdbStillAt(url, "w500")} 500w`,
+        `${tmdbStillAt(url, "w780")} 780w`,
+      ].join(", "),
+      sizes: "(max-width: 560px) 45vw, 200px",
+    };
+  }
+  if (url.includes("/medium_portrait/")) {
+    const orig = url.replace("/medium_portrait/", "/original_untouched/");
+    if (slot === "thumb" || slot === "shelf") return { src: url, srcset: `${url} 1x, ${orig} 2x` };
+    if (slot === "shortlist") return { src: orig, srcset: `${url} 1x, ${orig} 2x` };
+    return { src: url };
+  }
+  return { src: url };
+};
+
+/** 1x/2x srcset string for deck-scale posters (recommend flow, etc.). */
+export const posterRetinaSrcset = (url: string | null | undefined): string | undefined => {
+  const p = posterImg(url, "shortlist");
+  return p?.srcset;
 };
 
 /** A person headshot at the right resolution for its slot. Both sources cap low

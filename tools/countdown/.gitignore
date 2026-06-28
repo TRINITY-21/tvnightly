@@ -1,0 +1,11 @@
+# user-supplied assets + render artifacts (not source)
+posters/
+music.mp3
+font.ttf
+logo_lockup.png
+out/
+work/
+exports/
+render_short.sh
+*.mp4
+.DS_Store

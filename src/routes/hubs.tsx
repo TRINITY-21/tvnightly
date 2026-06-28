@@ -1,16 +1,16 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
-import { ExploreCard, MovieCard, ShowCard } from "../components/cards";
+import { MovieCard, ShowCard } from "../components/cards";
 import { HomeSidebarRail } from "../components/home-sidebar";
 import { KeepExploring, fillKeepGoingBackdrops, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
 import { hubArt } from "../lib/explore-art";
-import { heroBg, hiRes, premiereDateParts, shortDate, slugifyName } from "../lib/format";
+import { heroBg, hiRes, posterImg, premiereDateParts, shortDate, slugifyName } from "../lib/format";
 import { FRANCHISE_BY_SLUG } from "../lib/franchises";
 import { PROVIDER_LOGOS, visitorRegion } from "../lib/providers";
 import { breadcrumbTrail, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbMovieBackdrop } from "../lib/tmdb";
 import { VERTICALS, Vertical, genreBinds, genreOr } from "../lib/verticals";
-import { AppContext, Bindings, HonoEnv, MovieRow, ShowRow } from "../types";
+import { AppContext, HonoEnv, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -249,7 +249,14 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
                   aria-label={`${r.title} — new on ${r.service}`}
                 >
                   {r.poster ? (
-                    <img src={r.poster} alt="" width="92" height="138" loading="lazy" decoding="async" />
+                    <img
+                      {...posterImg(r.poster, "shelf")!}
+                      alt=""
+                      width="92"
+                      height="138"
+                      loading="lazy"
+                      decoding="async"
+                    />
                   ) : (
                     <span class="shelf-fallback">{r.title}</span>
                   )}
@@ -281,7 +288,14 @@ const hubHandler = (v: Vertical) => async (c: AppContext) => {
                   <a class="sched-row" href={`/show/${p.show_slug}/release-date`}>
                     <span class="sched-rail">{month ? `${month} ${day}` : "Soon"}</span>
                     {p.poster ? (
-                      <img src={p.poster} alt="" width="46" height="69" loading="lazy" decoding="async" />
+                      <img
+                        {...posterImg(p.poster, "thumb")!}
+                        alt=""
+                        width="46"
+                        height="69"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     ) : (
                       <span class="sched-thumb-blank" aria-hidden="true"></span>
                     )}

@@ -7,7 +7,7 @@ import { HomeSidebarRail } from "../components/home-sidebar";
 import { IconCal, IconClapper, IconDial, IconHearts, IconMail, IconReel, IconRoute, IconSparkle, IconStar, IconTvPlay, IconVs } from "../components/icons";
 import { NewsletterBand } from "../components/newsletter";
 import { ProviderLine } from "../components/providers";
-import { airTime, epCode, heroBg, hiRes, homeDateline, isNewYear, longDate, personHref, posterSrc, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
+import { airTime, epCode, heroBg, hiRes, homeDateline, isNewYear, longDate, personHref, posterImg, posterSrc, premiereDateParts, slugifyName, stripHtml } from "../lib/format";
 import { latestTrailers, trailerSeedsFromRails } from "../lib/latest-trailers";
 import { PROVIDER_LOGOS, visitorRegion } from "../lib/providers";
 import { communityVerdictTotal } from "../lib/ratings";
@@ -647,7 +647,7 @@ app.get("/", async (c) => {
                       >
                         {(e.show_poster ?? e.show_image) ? (
                           <img
-                            src={(e.show_poster ?? e.show_image)!}
+                            {...posterImg((e.show_poster ?? e.show_image)!, "shelf")!}
                             alt={`${e.show_name} poster`}
                             width="92"
                             height="138"
@@ -707,7 +707,7 @@ app.get("/", async (c) => {
                         >
                           {m.poster_url ? (
                             <img
-                              src={m.poster_url}
+                              {...posterImg(m.poster_url, "shelf")!}
                               alt={`${m.title} poster`}
                               width="92"
                               height="138"

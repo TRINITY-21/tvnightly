@@ -1,11 +1,13 @@
 import { FC, PropsWithChildren } from "hono/jsx";
+import { posterImg } from "../lib/format";
 import type { TrailerItem } from "../lib/latest-trailers";
 import type { SideRankItem } from "../lib/sidebar-tops";
 import type { AppContext } from "../types";
 import { Honeypot } from "./Layout";
-import { IconFacebook, IconInstagram, IconMail, IconPlayDisc, IconTikTok, IconX } from "./icons";
+import { IconFacebook, IconInstagram, IconMail, IconPlayDisc, IconTikTok, IconX, IconYouTube } from "./icons";
 
 const FOLLOW: { label: string; url: string; Icon: FC<{ size?: number }> }[] = [
+  { label: "YouTube", url: "https://www.youtube.com/@tvnightly", Icon: IconYouTube },
   { label: "Facebook", url: "https://www.facebook.com/profile.php?id=61591022677323", Icon: IconFacebook },
   { label: "X", url: "https://x.com/tvnightly", Icon: IconX },
   { label: "Instagram", url: "https://www.instagram.com/tvnightly", Icon: IconInstagram },
@@ -121,7 +123,14 @@ const SideRankList: FC<{ title: string; id: string; items: SideRankItem[] }> = (
             <a class="side-rank-item" href={item.href}>
               <span class="side-rank-thumb">
                 {item.poster ? (
-                  <img src={item.poster} alt="" width="52" height="78" loading="lazy" decoding="async" />
+                  <img
+                    {...posterImg(item.poster, "thumb")!}
+                    alt=""
+                    width="52"
+                    height="78"
+                    loading="lazy"
+                    decoding="async"
+                  />
                 ) : (
                   <span class="side-rank-fallback" aria-hidden="true"></span>
                 )}

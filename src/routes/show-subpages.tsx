@@ -13,7 +13,7 @@ import { SeasonTabs, ShowTabs } from "../components/nav";
 import { ShareBar } from "../components/share";
 import { ShowKeepExploring, loadShowKeepExploring } from "../components/show-keep-exploring";
 import { buildDossier } from "../lib/dossier";
-import { epCode, epHref, fmtRuntime, largeStill, longDate, posterSrc, stillSrc, stripHtml } from "../lib/format";
+import { epCode, epHref, epregStill, epregStillPreload, fmtRuntime, longDate, posterSrc, stillSrc, stripHtml } from "../lib/format";
 import { freshEpoch } from "../lib/freshness";
 import { providersFor, visitorRegion } from "../lib/providers";
 import { similarShows } from "../lib/queries";
@@ -152,7 +152,7 @@ app.get("/show/:slug/essential", async (c) => {
       ogImage={show.poster_url ?? show.image_url ?? undefined}
       preloadImage={
         picks[0]?.ep.image_url
-          ? { x1: picks[0].ep.image_url, x2: largeStill(picks[0].ep.image_url) }
+          ? epregStillPreload(picks[0].ep.image_url, false)
           : undefined
       }
       ld={[breadcrumbLd(site, show, `Essential${seasonLabel} episodes`, path)]}
@@ -201,8 +201,7 @@ app.get("/show/:slug/essential", async (c) => {
                       {ep.image_url ? (
                         <img
                           class="epreg-still"
-                          src={ep.image_url}
-                          srcset={`${ep.image_url} 1x, ${largeStill(ep.image_url)} 2x`}
+                          {...epregStill(ep.image_url, false)}
                           width="168"
                           height="95"
                           alt={`${show.name} ${epCode(ep)}`}
@@ -761,9 +760,7 @@ const rankedPage =
         ogImage={show.poster_url ?? show.image_url ?? undefined}
         scripts={["/js/votes.js"]}
         preloadImage={
-          eps[0]?.image_url
-            ? { x1: eps[0].image_url, x2: largeStill(eps[0].image_url) }
-            : undefined
+          eps[0]?.image_url ? epregStillPreload(eps[0].image_url, plates > 0) : undefined
         }
         ld={ld}
       >
@@ -813,8 +810,7 @@ const rankedPage =
                     {e.image_url ? (
                       <img
                         class="epreg-still"
-                        src={e.image_url}
-                        srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
+                        {...epregStill(e.image_url, i < plates)}
                         width={i < plates ? "256" : "168"}
                         height={i < plates ? "144" : "95"}
                         alt={`${show.name} ${epCode(e)}`}
@@ -1185,8 +1181,7 @@ app.get("/show/:slug/next-episode", async (c) => {
                     {e.image_url ? (
                       <img
                         class="epreg-still"
-                        src={e.image_url}
-                        srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
+                        {...epregStill(e.image_url, false)}
                         width="168"
                         height="95"
                         alt={`${show.name} ${epCode(e)}`}

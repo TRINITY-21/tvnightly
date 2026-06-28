@@ -3,21 +3,21 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
 import { MovieCard, ShowCard } from "../components/cards";
-import {
-  KeepExploring,
-  episodeKeepGoingBackdrop,
-  fillKeepGoingBackdrops,
-  showKeepGoingBackdrop,
-} from "../components/keep-going";
 import { SidebarPageGrid } from "../components/home-sidebar";
 import { IconStar } from "../components/icons";
+import {
+    KeepExploring,
+    episodeKeepGoingBackdrop,
+    fillKeepGoingBackdrops,
+    showKeepGoingBackdrop,
+} from "../components/keep-going";
 import type { ExploreArt } from "../lib/explore-art";
 import { genreShowArt } from "../lib/explore-art";
-import { epCode, epHref, heroBg, hiRes, largeStill, longDate } from "../lib/format";
+import { epCode, epHref, epregStill, epregStillPreload, heroBg, hiRes, longDate } from "../lib/format";
 import { breadcrumbTrail, canonical, faqLd, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop, tmdbTopRated } from "../lib/tmdb";
 import { toMovieRow } from "../lib/tmdb-rows";
-import { Bindings, HonoEnv, EpisodeRow, MovieRow, ShowRow } from "../types";
+import { Bindings, EpisodeRow, HonoEnv, MovieRow, ShowRow } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -383,7 +383,7 @@ app.get("/best-thanksgiving-episodes", async (c) => {
       title={`Best Thanksgiving TV Episodes ${year} — Ranked | TV Nightly`}
       description={`The best Thanksgiving TV episodes of all time — Friends, The West Wing, Bob's Burgers, and every Turkey Day classic ranked by viewer rating.`}
       canonical={canonical(c)}
-      ogImage={results[0]?.image_url ? largeStill(results[0].image_url) : undefined}
+      ogImage={results[0]?.image_url ? epregStillPreload(results[0].image_url, true).x2 : undefined}
       ld={[
         {
           "@context": "https://schema.org",
@@ -423,7 +423,15 @@ app.get("/best-thanksgiving-episodes", async (c) => {
                 {anyStill ? (
                   <a class="epreg-still-link" href={epHref(e.show_slug, e)} tabindex={-1} aria-hidden="true">
                     {e.image_url ? (
-                      <img class="epreg-still" src={largeStill(e.image_url)} alt="" loading="lazy" />
+                      <img
+                        class="epreg-still"
+                        {...epregStill(e.image_url, i < 3)}
+                        width={i < 3 ? 256 : 168}
+                        height={i < 3 ? 144 : 95}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                      />
                     ) : (
                       <span class="epreg-still epreg-still-empty" aria-hidden="true"></span>
                     )}

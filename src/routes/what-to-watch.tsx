@@ -6,11 +6,11 @@ import { HomeSidebarRail } from "../components/home-sidebar";
 import { IconStarBadge } from "../components/icons";
 import { KeepExploring, movieKeepGoingBackdrop, showKeepGoingBackdrop } from "../components/keep-going";
 import { ProviderChips } from "../components/providers";
-import { fmtRuntime, heroBg, posterSrc, slugifyName, stripHtml } from "../lib/format";
+import { fmtRuntime, heroBg, posterImg, posterSrc, slugifyName, stripHtml } from "../lib/format";
 import { visitorRegion } from "../lib/providers";
 import { PICKER_MIN_WEIGHT, similarMovies, similarShows } from "../lib/queries";
-import { liveTonight } from "../lib/schedule-live";
 import { servePng } from "../lib/render";
+import { liveTonight } from "../lib/schedule-live";
 import { origin } from "../lib/seo";
 import { posterDataUri } from "../lib/signal";
 import { buildShowcaseOgCard, type OgSide } from "../lib/social";
@@ -470,7 +470,12 @@ app.get("/what-to-watch", async (c) => {
                       ) : null}
                       <a class="shortlist-poster" href={pick.href}>
                         {pick.image ? (
-                          <img src={pick.image} alt={pick.name} loading="lazy" />
+                          <img
+                            {...posterImg(pick.image, "shortlist")!}
+                            alt={pick.name}
+                            loading="lazy"
+                            decoding="async"
+                          />
                         ) : (
                           <div class="card-fallback">{pick.name}</div>
                         )}

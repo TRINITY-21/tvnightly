@@ -1,10 +1,10 @@
 import { Hono } from "hono";
-import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard } from "../components/cards";
-import { epCode, epHref, largeStill, longDate, stripHtml } from "../lib/format";
+import { IconStar } from "../components/icons";
+import { epCode, epHref, epregStill, epregStillPreload, longDate, stripHtml } from "../lib/format";
 import { canonical, origin } from "../lib/seo";
-import { Bindings, HonoEnv, EpisodeRow } from "../types";
+import { EpisodeRow, HonoEnv } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -35,7 +35,7 @@ app.get("/best-episodes", async (c) => {
         results[0] ? ` — led by ${results[0].show_name}'s "${results[0].name ?? epCode(results[0])}"` : ""
       }. At most three episodes per series.`}
       canonical={canonical(c)}
-      ogImage={results[0]?.image_url ? largeStill(results[0].image_url) : undefined}
+      ogImage={results[0]?.image_url ? epregStillPreload(results[0].image_url, true).x2 : undefined}
       ogImageLarge={!!results[0]?.image_url}
       ld={[
         {
@@ -98,10 +98,7 @@ app.get("/best-episodes", async (c) => {
                       {e.image_url ? (
                         <img
                           class="epreg-still"
-                          src={e.image_url}
-                          // medium for 1x, the bounded large_landscape sibling for
-                          // 2x — never TVmaze's unbounded original for a ≤256px slot.
-                          srcset={`${e.image_url} 1x, ${largeStill(e.image_url)} 2x`}
+                          {...epregStill(e.image_url, i < plates)}
                           width={i < plates ? 256 : 168}
                           height={i < plates ? 144 : 95}
                           alt={`${e.show_name} ${epCode(e)}`}

@@ -2172,6 +2172,8 @@
 
 /* Follow grid — labeled social tiles, three across */
 .follow-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.55rem; }
+/* odd count (5 socials) — the last tile spans the row so there's no lonely gap */
+.follow-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .follow-tile {
   display: flex;
   flex-direction: column;

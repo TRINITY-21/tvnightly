@@ -344,7 +344,139 @@ function magazineRow(e: CardEntry, i: number, y0: number, rowH: number, last: bo
   return out.join("");
 }
 
-/** "If you liked X, watch these next" — cinematic hero + three-up poster grid. */
+/** "If you liked" — cinematic hero + three-column pick gallery (no overlap). */
+const likedDefs = (fontCss: string | null) =>
+  studioDefs(fontCss).replace(
+    "</defs>",
+    `<linearGradient id="lkHeroScrim" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.92"/><stop offset="0.55" stop-color="${PLATE}" stop-opacity="0.45"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.15"/></linearGradient>` +
+      `<linearGradient id="lkHeroFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0"/><stop offset="0.55" stop-color="${PLATE}" stop-opacity="0.35"/><stop offset="1" stop-color="#070709"/></linearGradient>` +
+      `<linearGradient id="lkPanel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c0c10"/><stop offset="1" stop-color="#050506"/></linearGradient>` +
+      `<linearGradient id="lkFrame" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${AMBER}" stop-opacity="0.7"/><stop offset="0.5" stop-color="rgba(255,255,255,0.22)"/><stop offset="1" stop-color="${AMBER}" stop-opacity="0.45"/></linearGradient>` +
+      `<radialGradient id="lkBloom" cx="0.78" cy="0.32" r="0.45"><stop offset="0" stop-color="${AMBER}" stop-opacity="0.14"/><stop offset="1" stop-color="${AMBER}" stop-opacity="0"/></radialGradient>` +
+      `</defs>`,
+  );
+
+/** Cinematic hero band — backdrop, floating poster, left editorial type. */
+const likedHeroBand = (
+  backdropUri: string | null,
+  posterUri: string | null,
+  hero: CardEntry,
+  heroH: number,
+  cr: number,
+) => {
+  const out: string[] = [];
+  if (backdropUri) {
+    out.push(`<image href="${backdropUri}" x="0" y="0" width="${SW}" height="${heroH + 80}" preserveAspectRatio="xMidYMid slice"/>`);
+  } else {
+    out.push(`<rect x="0" y="0" width="${SW}" height="${heroH + 80}" fill="${PLATE}"/>`);
+  }
+  out.push(`<rect x="0" y="0" width="${SW}" height="${heroH + 80}" fill="url(#lkHeroScrim)"/>`);
+  out.push(`<rect x="0" y="0" width="${SW}" height="${heroH + 80}" fill="url(#lkHeroFade)"/>`);
+  out.push(`<rect x="0" y="0" width="${SW}" height="${heroH + 80}" fill="url(#lkBloom)"/>`);
+
+  const floatW = cr < 900 ? 168 : 212;
+  const floatH = Math.round(floatW * 1.48);
+  const floatX = cr - floatW - 24;
+  const floatY = heroH - floatH - (cr < 900 ? 72 : 96);
+  if (posterUri || hero.posterUri) {
+    const uri = posterUri ?? hero.posterUri;
+    out.push(`<g filter="url(#posterShadow)">`);
+    out.push(`<rect x="${floatX - 4}" y="${floatY - 4}" width="${floatW + 8}" height="${floatH + 8}" rx="16" fill="none" stroke="url(#lkFrame)" stroke-width="2.5"/>`);
+    out.push(poster(uri, hero.name, floatX, floatY, floatW, floatH, "lk-float"));
+    out.push(`</g>`);
+  }
+
+  out.push(studioBrand(76, true));
+  const baseY = heroH - (cr < 900 ? 40 : 52);
+  const titleLines = wrap(hero.name.toUpperCase(), cr < 900 ? 11 : 13, 2);
+  const sz = titleLines.length > 1 ? (cr < 900 ? 62 : 78) : cr < 900 ? 80 : 100;
+  const lead = sz + 6;
+  const metaY = baseY;
+  const firstTitleY = metaY - 40 - (titleLines.length - 1) * lead;
+  const eyebrowY = firstTitleY - sz * 0.7 - 20;
+
+  out.push(`<g filter="url(#textGlow)">`);
+  out.push(`<rect x="${SM - 4}" y="${eyebrowY - 28}" width="72" height="4" rx="2" fill="${AMBER}"/>`);
+  out.push(txt(SM, eyebrowY, "IF YOU LOVED", { size: 26, fill: AMBER, wght: 800, wdth: 114, ls: 10 }));
+  titleLines.forEach((ln, i) => {
+    out.push(txt(SM, firstTitleY + i * lead, ln, { size: sz, fill: TEXT, wght: 900, wdth: 108 }));
+  });
+  out.push(txt(SM, metaY, metaLine(hero), { size: 26, fill: "#ddd8cf", wght: 600 }));
+  if (hero.rating != null) {
+    const mw = metaLine(hero).length * 13 + 24;
+    out.push(studioRatingMark(SM + mw, metaY, 26, hero.rating, GOLD, "start"));
+  }
+  out.push(`</g>`);
+  return out.join("");
+};
+
+/** Three fixed columns — poster, title, rating; each in its own lane (no overlap). */
+const likedPickGallery = (
+  picks: CardEntry[],
+  y0: number,
+  bottom: number,
+  cr: number,
+  compact: boolean,
+) => {
+  const n = Math.min(3, picks.length);
+  if (!n) return "";
+  const gap = compact ? 28 : 40;
+  const colW = Math.floor((cr - SM - gap * (n - 1)) / n);
+  const out: string[] = [];
+  out.push(
+    txt(SM, y0, "YOUR NEXT WATCH", { size: compact ? 24 : 30, fill: TEXT, wght: 800, wdth: 108, ls: 6 }) +
+      `<rect x="${SM}" y="${y0 + 12}" width="${compact ? 56 : 72}" height="4" rx="2" fill="${AMBER}"/>`,
+  );
+
+  const py = y0 + (compact ? 44 : 56);
+  const maxPh = bottom - py - (compact ? 88 : 104);
+  let pw = Math.min(colW - 4, compact ? 200 : 248);
+  let ph = Math.round(pw * 1.5);
+  if (ph > maxPh) {
+    ph = Math.max(compact ? 120 : 150, maxPh);
+    pw = Math.round(ph / 1.5);
+  }
+
+  picks.slice(0, n).forEach((e, i) => {
+    const colCx = SM + colW / 2 + i * (colW + gap);
+    const px = colCx - pw / 2;
+
+    out.push(`<g filter="url(#posterShadow)">`);
+    out.push(`<rect x="${px - 3}" y="${py - 3}" width="${pw + 6}" height="${ph + 6}" rx="14" fill="none" stroke="url(#lkFrame)" stroke-width="1.8"/>`);
+    out.push(poster(e.posterUri, e.name, px, py, pw, ph, `lk-col-${i}`, { rank: i + 1, rating: null }));
+    out.push(`</g>`);
+
+    const titleY = py + ph + (compact ? 32 : 38);
+    const nameLines = wrap(e.name, compact ? 11 : 13, 2);
+    const ns = nameLines.length > 1 ? (compact ? 20 : 24) : compact ? 24 : 28;
+    nameLines.forEach((ln, k) => {
+      out.push(
+        txt(colCx, titleY + k * (ns + 4), trunc(ln, compact ? 13 : 15), {
+          size: ns,
+          fill: TEXT,
+          anchor: "middle",
+          wght: 800,
+          wdth: 104,
+        }),
+      );
+    });
+    const metaY = titleY + nameLines.length * (ns + 4) + 6;
+    out.push(
+      txt(colCx, metaY, trunc(metaLine(e), compact ? 16 : 18), {
+        size: compact ? 16 : 19,
+        fill: MUTED,
+        anchor: "middle",
+        wght: 600,
+      }),
+    );
+    if (e.rating != null) {
+      out.push(studioRatingMark(colCx, metaY + (compact ? 28 : 32), compact ? 20 : 24, e.rating, GOLD, "middle"));
+    }
+  });
+  return out.join("");
+};
+
+/** "If you liked X" — cinematic hero + clean three-column gallery. */
 export function buildLikedCard(
   hero: CardEntry,
   picks: CardEntry[],
@@ -353,18 +485,15 @@ export function buildLikedCard(
   square: boolean = false,
 ): string {
   const f = frame(square);
-  const heroH = square ? Math.round(f.H * 0.5) : 900;
+  const heroH = square ? Math.round(f.H * 0.44) : 820;
   const p: string[] = [];
   p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SW} ${f.H}" font-family="Archivo, ${SYS}">`);
-  p.push(studioDefs(fontCss));
-  p.push(`<rect width="${SW}" height="${f.H}" fill="url(#bg)"/>`);
-  p.push(heroBackdrop(backdropUri, hero.posterUri, hero.name, heroH, "ph-hero"));
-  p.push(studioBrand());
-  p.push(heroTitle("IF YOU LIKED", hero.name, metaLine(hero), hero.rating, heroH - 36));
-  // 1:1 has no room for poster captions under a hero, so cap poster height to the
-  // space left and drop the captions (compact); 9:16 keeps the full captioned row.
-  const maxPh = f.fy - 24 - (heroH + 44 + 52);
-  p.push(picksGrid(picks, heroH + 44, f.cw, square ? maxPh : Infinity, square));
+  p.push(likedDefs(fontCss));
+  p.push(`<rect width="${SW}" height="${f.H}" fill="#050506"/>`);
+  p.push(likedHeroBand(backdropUri, hero.posterUri, hero, heroH, f.cr));
+  p.push(`<rect x="0" y="${heroH - 8}" width="${SW}" height="${f.fy - heroH + 48}" fill="url(#lkPanel)"/>`);
+  const galleryTop = heroH + (square ? 24 : 36);
+  p.push(likedPickGallery(picks, galleryTop, f.fy - 8, f.cr, square));
   p.push(studioFooter("Full ranked list & where to stream at", f.fy, f.H));
   p.push(`</svg>`);
   return p.join("");

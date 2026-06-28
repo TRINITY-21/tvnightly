@@ -223,50 +223,348 @@
     });
   }
 
-  // record a cinematic 9:16 clip — a designed motion sequence composited live on a
-  // canvas (brand sting → focus-pull reveal → film-grain drift with a light sweep
-  // → animated brand lower-third), captured by MediaRecorder. Prefers mp4 (what
-  // TikTok/IG want); falls back to webm where the browser can't encode mp4.
-  var vid = document.getElementById("studio-vid");
-  if (vid && card) {
-    // dimensions come from the button (9:16 = 1080×1920, 1:1 = 1080×1080) so the
-    // clip adapts to whichever format is on screen. Bottom clearance scales with H.
-    var W = parseInt(vid.getAttribute("data-w"), 10) || 1080,
-      H = parseInt(vid.getAttribute("data-h"), 10) || 1920,
-      SM = 56,
-      SR = 168,
-      CR = W - SR,
-      CW = CR - SM,
-      SB = Math.round(H * 0.156),
-      FOOT_Y = H - SB;
-    var PLATE = "#0e0e11",
-      AMBER = "#FFA94D",
-      INK = "#F2F5FA";
+  // --- studio controls: camera / lighting / mood (single-select) + FX (multi) ---
+  function wireSingle(groupId, attr, onPick) {
+    var w = document.getElementById(groupId);
+    if (!w) return;
+    var btns = w.querySelectorAll("[data-" + attr + "]");
+    Array.prototype.forEach.call(btns, function (b) {
+      b.addEventListener("click", function () {
+        Array.prototype.forEach.call(btns, function (x) { x.classList.remove("on"); });
+        b.classList.add("on");
+        if (onPick) onPick(b);
+      });
+    });
+  }
+  wireSingle("studio-cams", "cam", function (b) {
+    var h = document.getElementById("studio-cam-hint");
+    if (h) h.textContent = b.getAttribute("data-hint") || "";
+  });
+  wireSingle("studio-lights", "light");
+  wireSingle("studio-moods", "mood");
+  (function () {
+    var fxBtns = document.querySelectorAll(".studio-fx-btn");
+    var count = document.getElementById("studio-fx-count");
+    function sync() { if (count) count.textContent = document.querySelectorAll(".studio-fx-btn.on").length + " active"; }
+    Array.prototype.forEach.call(fxBtns, function (b) {
+      b.addEventListener("click", function () { b.classList.toggle("on"); sync(); });
+    });
+    var clr = document.getElementById("studio-fx-clear");
+    if (clr) clr.addEventListener("click", function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".studio-fx-btn.on"), function (b) { b.classList.remove("on"); });
+      sync();
+    });
+    var range = document.getElementById("studio-intensity");
+    var rval = document.getElementById("studio-int-val");
+    if (range && rval) range.addEventListener("input", function () { rval.textContent = range.value + "%"; });
+  })();
 
-    // --- easing ---
-    function clamp01(x) {
-      return x < 0 ? 0 : x > 1 ? 1 : x;
+  // read the current control state into a render config (live — re-read per frame)
+  function readConfig() {
+    function pick(id, attr, dflt) {
+      var w = document.getElementById(id);
+      var on = w && w.querySelector(".on");
+      return on ? on.getAttribute(attr) : dflt;
     }
-    function seg(t, a, b) {
-      return clamp01((t - a) / (b - a));
+    var fx = new Set();
+    Array.prototype.forEach.call(document.querySelectorAll(".studio-fx-btn.on"), function (b) {
+      fx.add(b.getAttribute("data-fx"));
+    });
+    var durSel = document.getElementById("studio-dur");
+    var DUR = (durSel ? parseInt(durSel.value, 10) || 0 : 0) * 1000 || 10000;
+    var intEl = document.getElementById("studio-intensity");
+    var INT = intEl ? (parseInt(intEl.value, 10) || 100) / 100 : 1;
+    var beatSel = document.getElementById("studio-beat");
+    var BPM = beatSel ? parseInt(beatSel.value, 10) || 0 : 0;
+    return {
+      camera: pick("studio-cams", "data-cam", "dolly-fwd"),
+      lighting: pick("studio-lights", "data-light", "golden-hour"),
+      mood: pick("studio-moods", "data-mood", "emotional"),
+      fx: fx,
+      DUR: DUR,
+      INT: INT,
+      BEAT: BPM > 0 ? 60000 / BPM : 0,
+    };
+  }
+
+  // Build a resolution-independent frame renderer for a canvas context. The same
+  // factory powers both the live preview (small canvas, rAF loop) and the MP4
+  // export (full-res canvas, frame-by-frame encode) — one source of truth.
+  function makeRenderer(ctx, W, H, base) {
+    var PLATE = "#0e0e11", AMBER = "#FFA94D", INK = "#F2F5FA";
+    var SM = Math.round(W * 0.052), SB = Math.round(H * 0.156), FOOT_Y = H - SB;
+    function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+    function seg(t, a, b) { return clamp01((t - a) / (b - a)); }
+    function outCubic(x) { return 1 - Math.pow(1 - x, 3); }
+    function inOutCubic(x) { return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
+    function outBack(x) { var c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+    function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+    var grains = [];
+    for (var gi = 0; gi < 6; gi++) {
+      var g = document.createElement("canvas"); g.width = g.height = 140;
+      var gx = g.getContext("2d"), gid = gx.createImageData(140, 140), gd = gid.data;
+      for (var i = 0; i < gd.length; i += 4) { var vv = (Math.random() * 255) | 0; gd[i] = gd[i + 1] = gd[i + 2] = vv; gd[i + 3] = 255; }
+      gx.putImageData(gid, 0, 0); grains.push(ctx.createPattern(g, "repeat"));
     }
-    function outCubic(x) {
-      return 1 - Math.pow(1 - x, 3);
-    }
-    function inCubic(x) {
-      return x * x * x;
-    }
-    function inOutCubic(x) {
-      return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-    }
-    function outBack(x) {
-      var c1 = 1.70158,
-        c3 = c1 + 1;
-      return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+    var vig = (function () {
+      var v = document.createElement("canvas"); v.width = W; v.height = H; var vx = v.getContext("2d");
+      var gr = vx.createRadialGradient(W / 2, H * 0.44, H * 0.18, W / 2, H * 0.5, H * 0.74);
+      gr.addColorStop(0, "rgba(0,0,0,0)"); gr.addColorStop(1, "rgba(0,0,0,0.55)");
+      vx.fillStyle = gr; vx.fillRect(0, 0, W, H); return v;
+    })();
+    function mark(cx, cy, s, alpha) {
+      ctx.save(); ctx.globalAlpha = alpha; ctx.translate(cx, cy); ctx.scale(s, s);
+      var w = 128, h = 86, r = 22; ctx.lineWidth = 9; ctx.strokeStyle = INK; ctx.lineJoin = "round";
+      rr(-w / 2, -h / 2, w, h, r); ctx.stroke();
+      ctx.shadowColor = "rgba(255,169,77,0.8)"; ctx.shadowBlur = 26; ctx.fillStyle = AMBER;
+      ctx.beginPath(); ctx.arc(w / 2 - 26, h / 2 - 23, 12.5, 0, 7); ctx.fill(); ctx.restore();
     }
 
-    // rounded-rect path
-    function rr(ctx, x, y, w, h, r) {
+    // ---- camera movement → transform ----
+    function camera(id, t, DUR, INT) {
+      var p = inOutCubic(seg(t, 1000, DUR - 900)), s = 1, dx = 0, dy = 0, rot = 0;
+      switch (id) {
+        case "zoom-in": s = 1 + 0.18 * p * INT; break;
+        case "zoom-out": s = 1 + 0.18 * (1 - p) * INT; break;
+        case "pan-left": s = 1.12; dx = W * 0.06 * INT * (0.5 - p) * 2; break;
+        case "pan-right": s = 1.12; dx = -W * 0.06 * INT * (0.5 - p) * 2; break;
+        case "tilt-up": s = 1.12; dy = H * 0.05 * INT * (0.5 - p) * 2; break;
+        case "tilt-down": s = 1.12; dy = -H * 0.05 * INT * (0.5 - p) * 2; break;
+        case "orbit": s = 1.14; dx = W * 0.045 * INT * Math.sin(p * Math.PI); rot = (p - 0.5) * 2 * 1.6 * INT * Math.PI / 180; break;
+        case "crane": s = 1.16 - 0.12 * p * INT; dy = H * (0.06 - 0.09 * p) * INT; break;
+        case "drone": s = 1.2 - 0.13 * p * INT; dx = W * 0.04 * INT * (p - 0.5) * 2; dy = H * 0.03 * INT * (0.5 - p) * 2; break;
+        case "fpv": var pf = clamp01(p * 1.5); s = 1 + 0.24 * outCubic(pf) * INT; rot = Math.sin(t / 280) * 0.7 * INT * Math.PI / 180; dx = Math.sin(t / 210) * W * 0.006 * INT; break;
+        case "dolly-fwd": s = 1 + 0.22 * p * INT; break;
+        case "dolly-back": s = 1 + 0.22 * (1 - p) * INT; break;
+        case "handheld": s = 1.12; dx = (Math.sin(t / 140) + 0.5 * Math.sin(t / 53)) * W * 0.008 * INT; dy = (Math.cos(t / 120) + 0.5 * Math.cos(t / 61)) * H * 0.006 * INT; rot = Math.sin(t / 200) * 0.3 * INT * Math.PI / 180; break;
+        case "steadicam": s = 1.12; dx = Math.sin(t / 2600) * W * 0.04 * INT; dy = Math.cos(t / 3000) * H * 0.02 * INT; break;
+        default: s = 1 + 0.035 * p * INT; break; // static
+      }
+      return { s: s, dx: dx, dy: dy, rot: rot };
+    }
+
+    // ---- lighting & mood → ctx.filter fragments ----
+    function lightingFilter(id) {
+      switch (id) {
+        case "golden-hour": return "saturate(1.12) brightness(1.04) sepia(0.14)";
+        case "sunset": return "saturate(1.16) sepia(0.22) brightness(0.99) contrast(1.05)";
+        case "sunrise": return "saturate(1.08) sepia(0.1) brightness(1.08)";
+        case "studio": return "brightness(1.05) contrast(1.03)";
+        case "soft": return "brightness(1.06) contrast(0.93) saturate(0.98)";
+        case "blue-hour": return "brightness(0.9) saturate(1.08) contrast(1.04)";
+        case "neon": return "saturate(1.5) contrast(1.1) brightness(1.02)";
+        case "moonlight": return "brightness(0.82) saturate(0.88) contrast(1.06)";
+        case "dramatic": return "contrast(1.22) saturate(1.05) brightness(0.95)";
+        default: return "";
+      }
+    }
+    function moodFilter(id) {
+      switch (id) {
+        case "inspirational": return "brightness(1.06) saturate(1.04)";
+        case "peaceful": return "saturate(0.94) contrast(0.96)";
+        case "spiritual": return "brightness(1.06) saturate(1.05)";
+        case "epic": return "contrast(1.1) saturate(1.05)";
+        case "romantic": return "saturate(1.08) brightness(1.03)";
+        case "hopeful": return "brightness(1.07) contrast(0.98)";
+        case "dark": return "brightness(0.85) contrast(1.08)";
+        case "joyful": return "saturate(1.14) brightness(1.04)";
+        default: return "saturate(0.99) brightness(1.02)"; // emotional
+      }
+    }
+    function moodVig(id) { return id === "dark" ? 1.5 : id === "epic" ? 1.3 : id === "peaceful" || id === "hopeful" ? 0.7 : 1; }
+    function lightingOverlay(id, rev) {
+      ctx.save();
+      if (id === "golden-hour" || id === "sunset" || id === "sunrise") {
+        ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = (id === "sunset" ? 0.24 : 0.16) * rev;
+        var c = id === "sunset" ? "255,120,40" : "255,180,90";
+        var gg = ctx.createLinearGradient(0, 0, 0, H);
+        gg.addColorStop(0, "rgba(" + c + ",0)"); gg.addColorStop(0.6, "rgba(" + c + ",0.5)"); gg.addColorStop(1, "rgba(" + c + ",0)");
+        ctx.fillStyle = gg; ctx.fillRect(0, 0, W, H);
+      } else if (id === "blue-hour" || id === "moonlight") {
+        ctx.globalCompositeOperation = "multiply"; ctx.globalAlpha = (id === "moonlight" ? 0.3 : 0.22) * rev;
+        ctx.fillStyle = "rgba(70,110,200,1)"; ctx.fillRect(0, 0, W, H);
+      } else if (id === "neon") {
+        ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.16 * rev;
+        var g1 = ctx.createRadialGradient(W * 0.2, H * 0.2, 0, W * 0.2, H * 0.2, W * 0.7);
+        g1.addColorStop(0, "rgba(255,40,170,0.8)"); g1.addColorStop(1, "rgba(255,40,170,0)"); ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H);
+        var g2 = ctx.createRadialGradient(W * 0.8, H * 0.85, 0, W * 0.8, H * 0.85, W * 0.7);
+        g2.addColorStop(0, "rgba(0,220,255,0.7)"); g2.addColorStop(1, "rgba(0,220,255,0)"); ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
+      } else if (id === "studio" || id === "soft") {
+        ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.06 * rev;
+        var g3 = ctx.createLinearGradient(0, 0, 0, H * 0.5); g3.addColorStop(0, "rgba(255,255,255,0.7)"); g3.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g3; ctx.fillRect(0, 0, W, H * 0.5);
+      } else if (id === "dramatic") {
+        ctx.globalCompositeOperation = "multiply"; ctx.globalAlpha = 0.12 * rev; ctx.fillStyle = "rgba(40,50,80,1)"; ctx.fillRect(0, 0, W, H);
+      }
+      ctx.restore();
+    }
+    function moodWash(id, rev) {
+      var warm = id === "romantic" ? 0.1 : id === "emotional" || id === "spiritual" ? 0.06 : 0;
+      if (warm > 0) { ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = warm * rev; ctx.fillStyle = id === "romantic" ? "rgba(255,120,160,1)" : "rgba(255,180,120,1)"; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    }
+
+    // ---- atmosphere & FX ----
+    function drawFog(t, rev, fx) {
+      var n = 0; ["fog", "mist", "smoke", "clouds"].forEach(function (k) { if (fx.has(k)) n++; });
+      if (!n) return;
+      ctx.save(); ctx.globalCompositeOperation = "screen";
+      for (var i = 0; i < 2 + n; i++) {
+        var px = 0.2 + 0.3 * i + 0.15 * Math.sin(t / (3000 + i * 900) + i);
+        var py = 0.55 + 0.18 * Math.sin(t / (4200 + i * 700) + i * 2);
+        var gg = ctx.createRadialGradient(W * px, H * py, 0, W * px, H * py, W * (0.4 + 0.12 * i));
+        gg.addColorStop(0, "rgba(220,225,235," + (0.1 + 0.03 * n) + ")"); gg.addColorStop(1, "rgba(220,225,235,0)");
+        ctx.globalAlpha = rev; ctx.fillStyle = gg; ctx.fillRect(0, 0, W, H);
+      }
+      ctx.restore();
+    }
+    function drawRays(t, rev, fx) {
+      if (fx.has("godrays")) {
+        ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.16 * rev;
+        var cx = W * (0.5 + 0.1 * Math.sin(t / 4000));
+        for (var i = -3; i <= 3; i++) {
+          ctx.save(); ctx.translate(cx, -H * 0.1); ctx.rotate((i * 7 + 8 * Math.sin(t / 3000)) * Math.PI / 180);
+          var gg = ctx.createLinearGradient(0, 0, 0, H * 1.3); gg.addColorStop(0, "rgba(255,230,170,0.5)"); gg.addColorStop(1, "rgba(255,230,170,0)");
+          ctx.fillStyle = gg; ctx.fillRect(-W * 0.012, 0, W * 0.024, H * 1.3); ctx.restore();
+        }
+        ctx.restore();
+      }
+      if (fx.has("bloom")) { ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.14 * rev; var gb = ctx.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H * 0.4, H * 0.5); gb.addColorStop(0, "rgba(255,250,235,0.7)"); gb.addColorStop(1, "rgba(255,250,235,0)"); ctx.fillStyle = gb; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+      if (fx.has("glow")) { ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.1 * rev * (0.7 + 0.3 * Math.sin(t / 700)); var gw = ctx.createRadialGradient(W / 2, H * 0.45, H * 0.1, W / 2, H * 0.45, H * 0.55); gw.addColorStop(0, "rgba(255,200,140,0.5)"); gw.addColorStop(1, "rgba(255,200,140,0)"); ctx.fillStyle = gw; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    }
+    function drawLeak(t, rev, fx) {
+      if (fx.has("lightleak")) {
+        ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = (0.35 + 0.25 * Math.sin(t / 900)) * rev;
+        var g1 = ctx.createRadialGradient(W * 0.92, H * 0.12, 0, W * 0.92, H * 0.12, W * 0.5); g1.addColorStop(0, "rgba(255,120,80,0.5)"); g1.addColorStop(1, "rgba(255,120,80,0)"); ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H);
+        var g2 = ctx.createRadialGradient(W * 0.06, H * 0.9, 0, W * 0.06, H * 0.9, W * 0.5); g2.addColorStop(0, "rgba(120,140,255,0.4)"); g2.addColorStop(1, "rgba(120,140,255,0)"); ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H); ctx.restore();
+      }
+      if (fx.has("lensflare")) {
+        ctx.save(); ctx.globalCompositeOperation = "screen"; var cx = W * (0.5 + 0.4 * Math.sin(t / 2200)), cy = H * 0.3;
+        ctx.globalAlpha = 0.5 * rev; var gf = ctx.createRadialGradient(cx, cy, 0, cx, cy, W * 0.16); gf.addColorStop(0, "rgba(255,245,220,0.9)"); gf.addColorStop(1, "rgba(255,245,220,0)"); ctx.fillStyle = gf; ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 0.16 * rev; ctx.fillStyle = "rgba(255,230,200,1)"; ctx.fillRect(0, cy - 2, W, 4); ctx.restore();
+      }
+    }
+    var PCFG = {
+      dust: { c: "rgba(255,240,200,0.7)", sz: [1, 3], vy: [-0.04, -0.02], n: 18 },
+      embers: { c: "rgba(255,150,60,0.95)", sz: [1, 3], vy: [-0.12, -0.06], n: 16 },
+      snow: { c: "rgba(255,255,255,0.92)", sz: [2, 5], vy: [0.05, 0.12], n: 22 },
+      rain: { c: "rgba(190,210,255,0.6)", sz: [1, 2], vy: [0.4, 0.7], n: 26, streak: 1 },
+      leaves: { c: "rgba(190,140,70,0.9)", sz: [3, 6], vy: [0.06, 0.12], n: 14 },
+      floating: { c: "rgba(255,255,255,0.8)", sz: [1, 3], vy: [-0.02, 0.02], n: 18 },
+    };
+    function drawParticles(t, rev, fx) {
+      ["dust", "embers", "snow", "rain", "leaves", "floating"].forEach(function (k) {
+        if (!fx.has(k)) return; var p = PCFG[k];
+        ctx.save(); ctx.globalAlpha = rev; ctx.fillStyle = p.c;
+        for (var i = 0; i < p.n; i++) {
+          var rnd = function (s) { return ((i * 1009 + s * 9301) % 233280) / 233280; };
+          var sz = p.sz[0] + rnd(1) * (p.sz[1] - p.sz[0]);
+          var vy = p.vy[0] + rnd(2) * (p.vy[1] - p.vy[0]);
+          var sway = Math.sin(t / 700 + i) * 0.02 * (k === "leaves" ? 2 : 1);
+          var x = (((rnd(3) + sway + (k === "floating" ? Math.sin(t / 2000 + i) * 0.05 : 0)) % 1) + 1) % 1 * W;
+          var y = (((rnd(4) + (t / 1000) * vy) % 1) + 1) % 1 * H;
+          if (p.streak) ctx.fillRect(x, y, sz, sz * 6);
+          else { ctx.beginPath(); ctx.arc(x, y, sz, 0, 7); ctx.fill(); }
+        }
+        ctx.restore();
+      });
+    }
+    function drawWater(t, rev) { ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.06 * rev; for (var i = 0; i < 5; i++) { var y = H * (0.72 + i * 0.05) + Math.sin(t / 600 + i) * 4; ctx.fillStyle = "rgba(180,200,255,0.4)"; ctx.fillRect(0, y, W, 2); } ctx.restore(); }
+    function grain(t, a) { ctx.save(); ctx.globalCompositeOperation = "overlay"; ctx.globalAlpha = a; ctx.fillStyle = grains[Math.floor(t / 55) % grains.length]; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    function vignette(a) { ctx.save(); ctx.globalAlpha = Math.min(1, a); ctx.drawImage(vig, 0, 0); ctx.restore(); }
+    function gradeWash(rev) { ctx.save(); ctx.globalCompositeOperation = "soft-light"; ctx.globalAlpha = 0.4 * rev; var gg = ctx.createRadialGradient(W / 2, H * 0.45, H * 0.15, W / 2, H * 0.5, H * 0.75); gg.addColorStop(0, "rgba(255,180,120,1)"); gg.addColorStop(1, "rgba(40,110,140,1)"); ctx.fillStyle = gg; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    function beatFlash(t, BEAT, INT) { if (!BEAT || t < 700) return; var k = Math.max(0, 1 - (t % BEAT) / 110); if (k <= 0) return; ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.08 * k * Math.min(1.4, INT); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    function sting(t) {
+      var iA = outCubic(seg(t, 0, 340)) * (1 - inOutCubic(seg(t, 640, 980))); if (iA <= 0.001) return;
+      var iS = 0.84 + 0.16 * outBack(seg(t, 0, 520)); mark(W / 2, H * 0.43, iS, iA);
+      ctx.save(); ctx.globalAlpha = iA; ctx.fillStyle = INK; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = "900 " + Math.round(W * 0.061) + "px Archivo, sans-serif"; var ty = H * 0.43 + H * 0.054;
+      ctx.fillText("TV NIGHTLY", W / 2, ty); var tw = ctx.measureText("TV NIGHTLY").width;
+      ctx.fillStyle = AMBER; ctx.beginPath(); ctx.arc(W / 2 + tw / 2 + 18, ty + H * 0.011, W * 0.007, 0, 7); ctx.fill(); ctx.restore();
+    }
+    function signoff(t, DUR) {
+      var oRise = outBack(seg(t, DUR - 1700, DUR - 1200)); if (oRise <= 0.001) return;
+      var prog = clamp01(oRise), slabTop = FOOT_Y - H * 0.05 + (1 - prog) * H * 0.036;
+      ctx.save(); ctx.globalAlpha = prog;
+      var sg = ctx.createLinearGradient(0, slabTop - H * 0.068, 0, slabTop); sg.addColorStop(0, "rgba(14,14,17,0)"); sg.addColorStop(1, "rgba(14,14,17,1)");
+      ctx.fillStyle = sg; ctx.fillRect(0, slabTop - H * 0.068, W, H * 0.068);
+      ctx.fillStyle = PLATE; ctx.fillRect(0, slabTop, W, H - slabTop);
+      ctx.fillStyle = AMBER; ctx.fillRect(SM, slabTop + H * 0.028, W * 0.082, 5);
+      var ly = slabTop + H * 0.078; mark(SM + W * 0.03, ly - H * 0.008, 0.5, 1);
+      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillStyle = AMBER; ctx.font = "900 " + Math.round(W * 0.043) + "px Archivo, sans-serif";
+      ctx.fillText("tvnightly.com", SM + W * 0.076, ly);
+      ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.font = "600 " + Math.round(W * 0.022) + "px Archivo, sans-serif";
+      ctx.fillText("Best episodes · release dates · where to stream", SM, ly + H * 0.024); ctx.restore();
+    }
+
+    return function renderFrame(t, cfg) {
+      var DUR = cfg.DUR, INT = cfg.INT, BEAT = cfg.BEAT, fx = cfg.fx;
+      ctx.globalCompositeOperation = "source-over"; ctx.filter = "none"; ctx.globalAlpha = 1;
+      ctx.fillStyle = PLATE; ctx.fillRect(0, 0, W, H);
+      var rev = outCubic(seg(t, 300, 1500));
+      if (rev <= 0) { sting(t); return; }
+      var cam = camera(cfg.camera, t, DUR, INT);
+      if (fx.has("parallax")) {
+        ctx.save(); ctx.globalAlpha = rev * 0.5; ctx.filter = "blur(" + (W * 0.02).toFixed(1) + "px) brightness(0.5)";
+        ctx.translate(W / 2 - cam.dx * 1.6, H / 2 - cam.dy * 1.6); ctx.scale(1.5, 1.5); ctx.translate(-W / 2, -H / 2);
+        ctx.drawImage(base, 0, 0, W, H); ctx.restore(); ctx.filter = "none";
+      }
+      var bl = (1 - rev) * (W * 0.014);
+      if (fx.has("dof")) bl += W * 0.004;
+      if (fx.has("rackfocus")) bl += Math.max(0, 1 - seg(t, 800, 2200)) * (W * 0.02);
+      if (fx.has("motionblur")) bl += Math.abs(cam.dx) * 0.02 + Math.abs(Math.sin(t / 200)) * W * 0.002;
+      ctx.save(); ctx.globalAlpha = rev;
+      ctx.filter = "blur(" + bl.toFixed(2) + "px) brightness(" + (0.55 + 0.45 * rev).toFixed(3) + ") " + lightingFilter(cfg.lighting) + " " + moodFilter(cfg.mood);
+      ctx.translate(W / 2 + cam.dx, H / 2 + cam.dy); if (cam.rot) ctx.rotate(cam.rot); ctx.scale(cam.s, cam.s); ctx.translate(-W / 2, -H / 2);
+      ctx.drawImage(base, 0, 0, W, H); ctx.restore(); ctx.filter = "none";
+      lightingOverlay(cfg.lighting, rev);
+      moodWash(cfg.mood, rev);
+      drawRays(t, rev, fx);
+      drawFog(t, rev, fx);
+      drawLeak(t, rev, fx);
+      drawParticles(t, rev, fx);
+      if (fx.has("water")) drawWater(t, rev);
+      if (fx.has("grade")) gradeWash(rev);
+      if (fx.has("grain")) grain(t, 0.05 * Math.min(1.6, INT));
+      vignette(rev * (fx.has("vignette") ? 1 : 0.45) * moodVig(cfg.mood));
+      beatFlash(t, BEAT, INT);
+      sting(t); signoff(t, DUR);
+    };
+  }
+
+  // --- live preview: loops the actual renderer so the studio shows the result ---
+  (function previewSetup() {
+    var pv = document.getElementById("studio-preview");
+    var v = document.getElementById("studio-vid");
+    if (!pv || !card) return;
+    var VW = v ? parseInt(v.getAttribute("data-w"), 10) || 1080 : 1080;
+    var VH = v ? parseInt(v.getAttribute("data-h"), 10) || 1920 : 1920;
+    var ph = 600, pw = Math.round((ph * VW) / VH);
+    if (pw > 760) { pw = 760; ph = Math.round((pw * VH) / VW); }
+    pv.width = pw; pv.height = ph;
+    var pctx = pv.getContext("2d");
+    var pbase = new Image(), renderFrame = null, raf = null, t0 = 0, playing = false;
+    var toggle = document.getElementById("studio-preview-toggle");
+    function setLabel() { if (toggle) toggle.textContent = playing ? "❚❚ Pause" : "▶ Preview"; }
+    function loop(now) {
+      if (!playing) return;
+      var cfg = readConfig();
+      try { renderFrame((now - t0) % (cfg.DUR + 250), cfg); }
+      catch (e) { console.error(e); stop(); return; }
+      raf = requestAnimationFrame(loop);
+    }
+    function play() { if (playing || !renderFrame) return; playing = true; pv.classList.add("is-live"); t0 = performance.now(); raf = requestAnimationFrame(loop); setLabel(); }
+    function stop() { playing = false; if (raf) cancelAnimationFrame(raf); setLabel(); }
+    pbase.onload = function () { renderFrame = makeRenderer(pctx, pw, ph, pbase); play(); };
+    pbase.onerror = function () {};
+    pbase.src = card.src;
+    if (toggle) toggle.addEventListener("click", function () { playing ? stop() : play(); });
+  })();
+
+  // --- still-image exports for image-first platforms (WhatsApp, Pinterest …) ---
+  // Composes the current card onto a platform-sized, branded canvas: a blurred
+  // "cover" backdrop fills any letterbox, with the sharp card contained on top.
+  if (card) {
+    function irr(ctx, x, y, w, h, r) {
       ctx.beginPath();
       ctx.moveTo(x + r, y);
       ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -275,59 +573,111 @@
       ctx.arcTo(x, y, x + w, y, r);
       ctx.closePath();
     }
-
-    // a grayscale-noise pattern (mean ~128 so it reads as neutral grain in overlay)
-    function grainPattern(ctx, size) {
-      var g = document.createElement("canvas");
-      g.width = g.height = size;
-      var gx = g.getContext("2d"),
-        id = gx.createImageData(size, size),
-        d = id.data;
-      for (var i = 0; i < d.length; i += 4) {
-        var v = (Math.random() * 255) | 0;
-        d[i] = d[i + 1] = d[i + 2] = v;
-        d[i + 3] = 255;
+    function withCardBitmap(cb, err) {
+      if (/card\.svg/.test(card.src)) {
+        fetch(card.src)
+          .then(function (r) { return r.text(); })
+          .then(function (svg) {
+            var vb = svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+            var iw = vb ? Math.round(+vb[1]) : 1080;
+            var ih = vb ? Math.round(+vb[2]) : 1920;
+            var url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+            var im = new Image();
+            im.onload = function () { cb(im, iw, ih); URL.revokeObjectURL(url); };
+            im.onerror = function () { URL.revokeObjectURL(url); err && err(); };
+            im.src = url;
+          })
+          .catch(function () { err && err(); });
+      } else if (card.complete && card.naturalWidth) {
+        cb(card, card.naturalWidth, card.naturalHeight);
+      } else {
+        var im = new Image();
+        im.onload = function () { cb(im, im.naturalWidth || 1080, im.naturalHeight || 1920); };
+        im.onerror = function () { err && err(); };
+        im.src = card.src;
       }
-      gx.putImageData(id, 0, 0);
-      return ctx.createPattern(g, "repeat");
     }
+    Array.prototype.forEach.call(document.querySelectorAll(".studio-img-btn"), function (btn) {
+      btn.addEventListener("click", function () {
+        var tw = parseInt(btn.getAttribute("data-w"), 10) || 1080;
+        var th = parseInt(btn.getAttribute("data-h"), 10) || 1920;
+        var plat = btn.getAttribute("data-platform") || "image";
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.classList.add("is-rendering");
+        function done() {
+          btn.disabled = false;
+          btn.classList.remove("is-rendering");
+        }
+        withCardBitmap(function (img, iw, ih) {
+          try {
+            var cv = document.createElement("canvas");
+            cv.width = tw;
+            cv.height = th;
+            var x = cv.getContext("2d");
+            x.fillStyle = "#0e0e11";
+            x.fillRect(0, 0, tw, th);
+            // blurred cover backdrop
+            var cs = Math.max(tw / iw, th / ih);
+            var cw = iw * cs, ch = ih * cs;
+            x.save();
+            x.filter = "blur(48px) brightness(0.55) saturate(1.1)";
+            x.drawImage(img, (tw - cw) / 2, (th - ch) / 2, cw, ch);
+            x.restore();
+            x.fillStyle = "rgba(8,8,11,0.5)";
+            x.fillRect(0, 0, tw, th);
+            // contained, rounded, shadowed card
+            var pad = Math.round(Math.min(tw, th) * 0.055);
+            var fs = Math.min((tw - pad * 2) / iw, (th - pad * 2) / ih);
+            var fw = iw * fs, fh = ih * fs;
+            var fx = (tw - fw) / 2, fy = (th - fh) / 2;
+            var r = Math.round(Math.min(fw, fh) * 0.035);
+            x.save();
+            x.shadowColor = "rgba(0,0,0,0.6)";
+            x.shadowBlur = 48;
+            x.shadowOffsetY = 22;
+            irr(x, fx, fy, fw, fh, r);
+            x.fillStyle = "#000";
+            x.fill();
+            x.restore();
+            x.save();
+            irr(x, fx, fy, fw, fh, r);
+            x.clip();
+            x.drawImage(img, fx, fy, fw, fh);
+            x.restore();
+            x.save();
+            irr(x, fx, fy, fw, fh, r);
+            x.lineWidth = 2;
+            x.strokeStyle = "rgba(255,255,255,0.08)";
+            x.stroke();
+            x.restore();
+            cv.toBlob(function (b) {
+              if (b) {
+                var fm = card.src.match(/[?&](?:cat|format)=([^&]+)/);
+                var a = document.createElement("a");
+                a.href = URL.createObjectURL(b);
+                a.download = "tvnightly-" + (fm ? fm[1] : "card") + "-" + plat + ".png";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(function () { URL.revokeObjectURL(a.href); }, 1200);
+              }
+              done();
+            }, "image/png");
+          } catch (e) {
+            console.error(e);
+            done();
+          }
+        }, done);
+      });
+    });
+  }
 
-    function vignetteCanvas() {
-      var v = document.createElement("canvas");
-      v.width = W;
-      v.height = H;
-      var vx = v.getContext("2d");
-      var g = vx.createRadialGradient(W / 2, H * 0.44, H * 0.18, W / 2, H * 0.5, H * 0.72);
-      g.addColorStop(0, "rgba(0,0,0,0)");
-      g.addColorStop(1, "rgba(0,0,0,0.52)");
-      vx.fillStyle = g;
-      vx.fillRect(0, 0, W, H);
-      return v;
-    }
-
-    // brand lockup: rounded TV frame + glowing amber dot
-    function mark(ctx, cx, cy, s, alpha) {
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(cx, cy);
-      ctx.scale(s, s);
-      var w = 128,
-        h = 86,
-        r = 22;
-      ctx.lineWidth = 9;
-      ctx.strokeStyle = INK;
-      ctx.lineJoin = "round";
-      rr(ctx, -w / 2, -h / 2, w, h, r);
-      ctx.stroke();
-      ctx.shadowColor = "rgba(255,169,77,0.8)";
-      ctx.shadowBlur = 26;
-      ctx.fillStyle = AMBER;
-      ctx.beginPath();
-      ctx.arc(w / 2 - 26, h / 2 - 23, 12.5, 0, 7);
-      ctx.fill();
-      ctx.restore();
-    }
-
+  // ---- MP4 export: frame-by-frame via the shared renderer + the current config ----
+  var vid = document.getElementById("studio-vid");
+  if (vid && card) {
+    var VW = parseInt(vid.getAttribute("data-w"), 10) || 1080,
+      VH = parseInt(vid.getAttribute("data-h"), 10) || 1920;
     vid.addEventListener("click", function () {
       if (!window.MediaRecorder && !window.VideoEncoder) {
         alert("This browser can't render video — try Chrome.");
@@ -353,8 +703,6 @@
             return false;
           }
         })[0] || "video/webm";
-
-      // make sure the brand font is rasterizable on the canvas before we record
       var fontReady =
         document.fonts && document.fonts.load
           ? Promise.all([
@@ -363,26 +711,25 @@
               document.fonts.load("600 26px Archivo"),
             ]).catch(function () {})
           : Promise.resolve();
-
       fontReady
         .then(function () {
-          // same-origin card source (no canvas taint): load directly so both the
-          // promo PNG and the composer SVG work as the base layer.
           var base = new Image();
           base.onload = function () {
             var canvas = document.createElement("canvas");
-            canvas.width = W;
-            canvas.height = H;
+            canvas.width = VW;
+            canvas.height = VH;
             var ctx = canvas.getContext("2d");
-            var grains = [];
-            for (var gi = 0; gi < 7; gi++) grains.push(grainPattern(ctx, 150));
-            var vig = vignetteCanvas();
-
-            var DUR = 7000,
+            var cfg = readConfig();
+            var DUR = cfg.DUR,
               FPS = 30;
+            var renderFrame = makeRenderer(ctx, VW, VH, base);
+            function render(t) {
+              renderFrame(t, cfg);
+            }
             var fm = card.src.match(/format=([^&]+)/);
             var fmtM = card.src.match(/[?&]fmt=([^&]+)/);
-            var fname = "tvnightly-" + (fm ? fm[1] : "clip") + (fmtM ? "-" + fmtM[1] : "");
+            var fname =
+              "tvnightly-" + (fm ? fm[1] : "clip") + (fmtM ? "-" + fmtM[1] : "") + "-" + cfg.camera;
             function download(blob, ext) {
               var a = document.createElement("a");
               a.href = URL.createObjectURL(blob);
@@ -394,140 +741,6 @@
                 URL.revokeObjectURL(a.href);
               }, 1500);
             }
-
-            function render(t) {
-              ctx.globalCompositeOperation = "source-over";
-              ctx.filter = "none";
-              ctx.globalAlpha = 1;
-              ctx.fillStyle = PLATE;
-              ctx.fillRect(0, 0, W, H);
-
-              // card: focus-pull reveal, then a slow cinematic push-in + drift
-              var rev = outCubic(seg(t, 500, 1600));
-              if (rev > 0) {
-                var drift = inOutCubic(seg(t, 1600, DUR - 1200));
-                var scale = 1.08 - 0.08 * rev + 0.04 * drift;
-                var blur = 16 * (1 - rev);
-                var bright = 0.5 + 0.5 * rev;
-                var yd = -20 * drift;
-                var xd = 8 * Math.sin(drift * Math.PI);
-                ctx.save();
-                ctx.globalAlpha = rev;
-                ctx.filter = "blur(" + blur.toFixed(2) + "px) brightness(" + bright.toFixed(3) + ")";
-                ctx.translate(W / 2 + xd, H / 2 + yd);
-                ctx.scale(scale, scale);
-                ctx.translate(-W / 2, -H / 2);
-                ctx.drawImage(base, 0, 0, W, H);
-                ctx.restore();
-                ctx.filter = "none";
-
-                // subtle amber edge vignette during reveal
-                if (rev > 0.4 && rev < 0.95) {
-                  ctx.save();
-                  ctx.globalCompositeOperation = "screen";
-                  ctx.globalAlpha = 0.04 * Math.sin(rev * Math.PI);
-                  var eg = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.72);
-                  eg.addColorStop(0, "rgba(255,169,77,0)");
-                  eg.addColorStop(1, "rgba(255,169,77,1)");
-                  ctx.fillStyle = eg;
-                  ctx.fillRect(0, 0, W, H);
-                  ctx.restore();
-                }
-              }
-
-              // a single diagonal light sheen sweeping across the card
-              var sh = seg(t, 1700, 3000);
-              if (sh > 0 && sh < 1 && rev > 0.65) {
-                var cxs = -W * 0.5 + W * 1.9 * inOutCubic(sh);
-                ctx.save();
-                ctx.globalCompositeOperation = "screen";
-                ctx.globalAlpha = Math.sin(sh * Math.PI) * 0.16;
-                var grd = ctx.createLinearGradient(cxs - 200, 0, cxs + 200, H);
-                grd.addColorStop(0, "rgba(255,255,255,0)");
-                grd.addColorStop(0.5, "rgba(255,238,205,1)");
-                grd.addColorStop(1, "rgba(255,255,255,0)");
-                ctx.fillStyle = grd;
-                ctx.fillRect(cxs - 240, 0, 480, H);
-                ctx.restore();
-              }
-
-              // animated film grain
-              if (rev > 0.55) {
-                ctx.save();
-                ctx.globalCompositeOperation = "overlay";
-                ctx.globalAlpha = 0.055;
-                ctx.fillStyle = grains[Math.floor(t / 55) % grains.length];
-                ctx.fillRect(0, 0, W, H);
-                ctx.restore();
-              }
-
-              // vignette
-              if (rev > 0.25) {
-                ctx.save();
-                ctx.globalAlpha = rev;
-                ctx.drawImage(vig, 0, 0);
-                ctx.restore();
-              }
-
-              // intro brand sting (on the dark, before the card resolves under it)
-              var iA = outCubic(seg(t, 0, 340)) * (1 - inOutCubic(seg(t, 640, 980)));
-              if (iA > 0.001) {
-                var iS = 0.84 + 0.16 * outBack(seg(t, 0, 520));
-                mark(ctx, W / 2, H * 0.43, iS, iA);
-                ctx.save();
-                ctx.globalAlpha = iA;
-                ctx.fillStyle = INK;
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.font = "900 66px Archivo, sans-serif";
-                var ty = H * 0.43 + 104;
-                ctx.fillText("TV NIGHTLY", W / 2, ty);
-                var tw = ctx.measureText("TV NIGHTLY").width;
-                ctx.fillStyle = AMBER;
-                ctx.beginPath();
-                ctx.arc(W / 2 + tw / 2 + 20, ty + 22, 7.5, 0, 7);
-                ctx.fill();
-                ctx.restore();
-              }
-
-              // brand sign-off: a SOLID slab fully covers the card's own baked
-              // footer (no ghost wordmark, no double line), then one amber tick +
-              // the lockup fade/slide in. Single accent — clean.
-              var oRise = outBack(seg(t, 5200, 5700));
-              if (oRise > 0.001) {
-                var prog = clamp01(oRise);
-                var slabTop = FOOT_Y - 96 + (1 - prog) * 70;
-                ctx.save();
-                ctx.globalAlpha = prog;
-                var sg = ctx.createLinearGradient(0, slabTop - 130, 0, slabTop);
-                sg.addColorStop(0, "rgba(14,14,17,0)");
-                sg.addColorStop(1, "rgba(14,14,17,1)");
-                ctx.fillStyle = sg;
-                ctx.fillRect(0, slabTop - 130, W, 130);
-                ctx.fillStyle = PLATE;
-                ctx.fillRect(0, slabTop, W, H - slabTop);
-                // one amber tick — the brand section marker
-                ctx.fillStyle = AMBER;
-                ctx.fillRect(SM, slabTop + 54, 88, 5);
-                // lockup: mark + wordmark on a line, tagline beneath
-                var ly = slabTop + 150;
-                mark(ctx, SM + 34, ly - 16, 0.5, 1);
-                ctx.textAlign = "left";
-                ctx.textBaseline = "alphabetic";
-                ctx.fillStyle = AMBER;
-                ctx.font = "900 46px Archivo, sans-serif";
-                ctx.fillText("tvnightly.com", SM + 82, ly);
-                ctx.fillStyle = "rgba(255,255,255,0.6)";
-                ctx.font = "600 24px Archivo, sans-serif";
-                ctx.fillText("Best episodes · release dates · where to stream", SM, ly + 46);
-                ctx.restore();
-              }
-            }
-
-            // --- Primary: frame-perfect H.264 via WebCodecs, muxed to real MP4.
-            // Each frame is rendered then encoded (not realtime), so the motion is
-            // buttery at exactly FPS no matter how loaded the machine is — the
-            // professional path. Falls back to realtime MediaRecorder elsewhere. ---
             function recordMediaRecorder() {
               var rec;
               try {
@@ -562,18 +775,16 @@
               }
               requestAnimationFrame(loop);
             }
-
             var didFallback = false;
             function fallbackRecord() {
               if (didFallback) return;
               didFallback = true;
               recordMediaRecorder();
             }
-
             function encodeWebCodecs(codec) {
               var muxer = new Mp4Muxer.Muxer({
                 target: new Mp4Muxer.ArrayBufferTarget(),
-                video: { codec: "avc", width: W, height: H, frameRate: FPS },
+                video: { codec: "avc", width: VW, height: VH, frameRate: FPS },
                 fastStart: "in-memory",
               });
               var enc = new VideoEncoder({
@@ -586,13 +797,13 @@
                 },
               });
               try {
-                enc.configure({ codec: codec, width: W, height: H, bitrate: 12000000, framerate: FPS });
+                enc.configure({ codec: codec, width: VW, height: VH, bitrate: 12000000, framerate: FPS });
               } catch (e) {
                 fallbackRecord();
                 return;
               }
-              var total = Math.round((DUR / 1000) * FPS);
-              var i = 0;
+              var total = Math.round((DUR / 1000) * FPS),
+                i = 0;
               function step() {
                 try {
                   for (var k = 0; k < 3 && i < total; k++, i++) {
@@ -630,27 +841,26 @@
               vid.textContent = "Rendering… 0%";
               step();
             }
-
             if (window.VideoEncoder && window.VideoFrame && window.Mp4Muxer) {
               var cands = ["avc1.640034", "avc1.640033", "avc1.640032", "avc1.4d0034", "avc1.42e034"];
-              (function pick(idx) {
+              (function pickCodec(idx) {
                 if (idx >= cands.length) {
                   recordMediaRecorder();
                   return;
                 }
                 VideoEncoder.isConfigSupported({
                   codec: cands[idx],
-                  width: W,
-                  height: H,
+                  width: VW,
+                  height: VH,
                   bitrate: 12000000,
                   framerate: FPS,
                 })
                   .then(function (s) {
                     if (s && s.supported) encodeWebCodecs(cands[idx]);
-                    else pick(idx + 1);
+                    else pickCodec(idx + 1);
                   })
                   .catch(function () {
-                    pick(idx + 1);
+                    pickCodec(idx + 1);
                   });
               })(0);
             } else {
@@ -666,7 +876,15 @@
     });
   }
 
-  // copy a caption or hook template to the clipboard
+  // copy a caption to the clipboard + tick checklist steps
+  function markCheck(id) {
+    var el = document.querySelector('[data-check="' + id + '"]');
+    if (el) el.classList.add("is-done");
+  }
+  document.addEventListener("click", function (e) {
+    var dl = e.target.closest && e.target.closest("[data-check-trigger='download']");
+    if (dl) markCheck("download");
+  });
   document.addEventListener("click", function (e) {
     var btn = e.target.closest && e.target.closest(".studio-copy");
     if (!btn) return;
@@ -694,14 +912,19 @@
     var ta = box && box.querySelector(".studio-cap-text");
     if (!ta) return;
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(ta.value).then(done).catch(function () {
+      navigator.clipboard.writeText(ta.value).then(function () {
+        markCheck("caption");
+        done();
+      }).catch(function () {
         ta.select();
         document.execCommand("copy");
+        markCheck("caption");
         done();
       });
     } else {
       ta.select();
       document.execCommand("copy");
+      markCheck("caption");
       done();
     }
   });

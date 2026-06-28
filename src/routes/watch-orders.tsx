@@ -1,17 +1,17 @@
 import { Hono } from "hono";
-import { IconStar } from "../components/icons";
 import { Layout } from "../components/Layout";
 import { ExploreCard, MovieCard } from "../components/cards";
 import { HomeSidebarRail } from "../components/home-sidebar";
+import { IconStar } from "../components/icons";
 import { KeepExploring, movieKeepGoingBackdrop } from "../components/keep-going";
-import { fmtMarathon, fmtRuntime, heroBg, slugifyName } from "../lib/format";
-import { FRANCHISES, FRANCHISE_BY_SLUG, FranchiseEntry } from "../lib/franchises";
 import { hubArt } from "../lib/explore-art";
-import { providersFor, PROVIDER_LOGOS, providerBrand } from "../lib/providers";
+import { fmtMarathon, fmtRuntime, heroBg, posterImg, slugifyName } from "../lib/format";
+import { FRANCHISES, FRANCHISE_BY_SLUG, FranchiseEntry } from "../lib/franchises";
+import { PROVIDER_LOGOS, providerBrand, providersFor } from "../lib/providers";
 import { similarMovies } from "../lib/queries";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbMovieBackdrop } from "../lib/tmdb";
-import { Bindings, HonoEnv, MovieRow } from "../types";
+import { HonoEnv, MovieRow } from "../types";
 
 const app = new Hono<HonoEnv>();
 
@@ -278,7 +278,7 @@ app.get("/watch-order/:slug", async (c) => {
         </span>
         {m?.poster_url ? (
           <a class="wo-poster-link" href={`/movie/${m.slug}`} tabindex={-1} aria-hidden="true">
-            <img class="wo-poster" src={m.poster_url} alt="" width="46" height="69" loading="lazy" decoding="async" />
+            <img class="wo-poster" {...posterImg(m.poster_url, "thumb")!} alt="" width="46" height="69" loading="lazy" decoding="async" />
           </a>
         ) : (
           <span class="wo-poster wo-poster-blank" aria-hidden="true"></span>

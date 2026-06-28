@@ -1,7 +1,7 @@
 // Poster cards, badges, explore tiles, the 3-line synopsis clamp.
 import { FC, PropsWithChildren } from "hono/jsx";
 import type { ExploreArt } from "../lib/explore-art";
-import { heroBg, posterSrc } from "../lib/format";
+import { heroBg, posterImg, posterSrc } from "../lib/format";
 import { MovieRow, ShowRow } from "../types";
 import { IconPlayDisc, IconStar, IconStarBadge } from "./icons";
 
@@ -91,19 +91,22 @@ export const ShowCard: FC<{ show: ShowRow; eager?: boolean }> = ({ show, eager }
 export const MovieCard: FC<{ movie: MovieRow; eager?: boolean }> = ({ movie, eager }) => (
   <a class={movie.tmdb_id != null ? "card has-play" : "card"} href={`/movie/${movie.slug}`}>
     <div class="card-media">
-      {movie.poster_url ? (
-        <img
-          src={movie.poster_url}
-          alt={movie.title}
-          width="200"
-          height="280"
-          loading={eager ? "eager" : "lazy"}
-          decoding="async"
-          {...(eager ? { fetchpriority: "high" } : {})}
-        />
-      ) : (
-        <div class="card-fallback">{movie.title}</div>
-      )}
+      {(() => {
+        const p = posterImg(movie.poster_url, "card");
+        return p ? (
+          <img
+            {...p}
+            alt={movie.title}
+            width="200"
+            height="280"
+            loading={eager ? "eager" : "lazy"}
+            decoding="async"
+            {...(eager ? { fetchpriority: "high" } : {})}
+          />
+        ) : (
+          <div class="card-fallback">{movie.title}</div>
+        );
+      })()}
       {movie.tmdb_id != null ? <CardPlay type="movie" id={movie.tmdb_id} name={movie.title} /> : null}
       {movie.rating != null ? (
         <span class="card-rating">

@@ -2,6 +2,7 @@
 // middle, posters lean toward each other around the VS badge. Shared by the
 // show and movie head-to-head sections and the movie compare hub.
 import { FC } from "hono/jsx";
+import { posterImg } from "../lib/format";
 
 // No ratings on the card: printing both scores would settle the matchup
 // before the click — the chart is the payoff.
@@ -28,11 +29,11 @@ export const VsCard: FC<{ href: string; a: VsSide; b: VsSide; cta: string }> = (
     </span>
     <span class="vs-posters" aria-hidden="true">
       {a.poster ? (
-        <img class="vs-p vs-p-a" src={a.poster} alt="" width="64" height="96" loading="lazy" />
+        <img class="vs-p vs-p-a" {...posterImg(a.poster, "thumb")!} alt="" width="64" height="96" loading="lazy" decoding="async" />
       ) : null}
       <span class="vs-badge">VS</span>
       {b.poster ? (
-        <img class="vs-p vs-p-b" src={b.poster} alt="" width="64" height="96" loading="lazy" />
+        <img class="vs-p vs-p-b" {...posterImg(b.poster, "thumb")!} alt="" width="64" height="96" loading="lazy" decoding="async" />
       ) : null}
     </span>
     <span class="vs-names">

@@ -40,7 +40,7 @@ import {
 } from "../lib/compare-pairs";
 import { buildMovieDossier } from "../lib/dossier";
 import { fetchMovieExploreArts, franchiseArt } from "../lib/explore-art";
-import { comparePathFor, fmtRuntime, heroBg, isNewYear, movieComparePathFor, slugifyName, stripHtml } from "../lib/format";
+import { comparePathFor, fmtRuntime, heroBg, isNewYear, movieComparePathFor, posterImg, slugifyName } from "../lib/format";
 import { franchiseOfMovie } from "../lib/franchises";
 import { PROVIDER_LOGOS, REGIONS, providerBrand, providersFor, regionOptions, visitorRegion } from "../lib/providers";
 import { crewLinkMap, genreDirectory, similarMovies } from "../lib/queries";
@@ -251,7 +251,7 @@ app.get("/movies", async (c) => {
                   {m.poster_url ? (
                     <img
                       class="wo-poster"
-                      src={m.poster_url}
+                      {...posterImg(m.poster_url, "thumb")!}
                       alt={`${m.title} poster`}
                       width="46"
                       height="69"

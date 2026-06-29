@@ -48,7 +48,7 @@ async function fetchBrowseTrendingMovies(
 }
 
 /** Shared right-rail data for content pages (trailers + top charts). */
-export async function fetchSiteSidebar(
+async function computeSiteSidebar(
   db: D1Database,
   apiKey: string | undefined,
 ): Promise<SiteSidebarData> {
@@ -63,6 +63,43 @@ export async function fetchSiteSidebar(
     topMovies: tops.movies,
     browseTrendingMovies,
   };
+}
+
+// The right-rail is identical for every visitor and changes ~daily, yet it was
+// recomputed (top-charts D1 queries + TMDB calls) on EVERY page. Cache the whole
+// payload at the edge so it touches D1/TMDB at most once per hour per colo. Bump
+// the key suffix to bust after a shape change.
+const SIDEBAR_CACHE_KEY = "https://edge-cache.tvnightly.com/site-sidebar-v1";
+const SIDEBAR_CACHE_TTL = 3600;
+
+/** Shared right-rail data for content pages (trailers + top charts), edge-cached. */
+export async function fetchSiteSidebar(
+  db: D1Database,
+  apiKey: string | undefined,
+): Promise<SiteSidebarData> {
+  const cache = caches.default;
+  const cacheKey = new Request(SIDEBAR_CACHE_KEY);
+  try {
+    const hit = await cache.match(cacheKey);
+    if (hit) return (await hit.json()) as SiteSidebarData;
+  } catch {
+    /* cache miss / parse error → recompute */
+  }
+  const data = await computeSiteSidebar(db, apiKey);
+  try {
+    await cache.put(
+      cacheKey,
+      new Response(JSON.stringify(data), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": `public, max-age=${SIDEBAR_CACHE_TTL}`,
+        },
+      }),
+    );
+  } catch {
+    /* caching is best-effort */
+  }
+  return data;
 }
 
 const EXCLUDED_PREFIXES = ["/admin", "/go", "/r/"];

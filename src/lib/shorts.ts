@@ -383,7 +383,18 @@ export function shorts10Captions(p: {
   ctaUrl: string;
 }): CaptionSet {
   const base = origin(p.c);
-  const link = `${base}/${(p.ctaUrl || "").replace(/^https?:\/\/[^/]+\/?/, "").replace(/^\/+/, "")}` || base;
+  // p.ctaUrl is the brand line shown IN the video ("tvnightly.com") — a display
+  // string, not a path. Strip protocol + host to a real on-site path. A bare
+  // domain leaves nothing, and the /r/ redirect needs a non-root path, so land
+  // on the ranked page that matches the short: Top TV / the Movies hub.
+  const landingPath =
+    (p.ctaUrl || "")
+      .trim()
+      .replace(/^https?:\/\//i, "") // protocol
+      .replace(/^[^/]*\.[^/]*?(?=\/|$)/, "") // a leading host token ("x.y")
+      .replace(/^\/+/, "") || // leading slashes
+    (p.kind === "movie" ? "movies" : "top/tv");
+  const link = `${base}/${landingPath}`;
   return buildCaptions({
     emoji: "🏆",
     title: `Top 10 ${p.title}`,

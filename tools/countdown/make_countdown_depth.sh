@@ -161,13 +161,13 @@ if [[ "$INTRO" == "1" ]]; then
     while (( j % 3 != 0 || j < 12 )); do cp "work/wall/c$(printf %02d $((j % N))).png" "work/wall/c$(printf %02d $j).png"; j=$((j+1)); done
     rows=$(( j / 3 ))
     magick montage work/wall/c*.png -tile 3x${rows} -geometry +0+0 -background black -font "$FONT" work/wall_raw.png
-    ffmpeg -hide_banner -loglevel error -y -i work/wall_raw.png -vf "scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},gblur=sigma=3,eq=brightness=-0.40:saturation=1.05,vignette=PI/4" work/wall.png
+    ffmpeg -hide_banner -loglevel error -y -i work/wall_raw.png -vf "scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},gblur=sigma=3,eq=brightness=-0.15:saturation=1.05,vignette=PI/6" work/wall.png
   else
     WP="${posters[0]}"; [[ -z "$WP" ]] && WP="$(find_poster "${ranks[0]}")"
-    ffmpeg -hide_banner -loglevel error -y -loop 1 -i "$WP" -frames:v 1 -vf "scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},gblur=sigma=46,eq=brightness=-0.34,vignette=PI/5" work/wall.png
+    ffmpeg -hide_banner -loglevel error -y -loop 1 -i "$WP" -frames:v 1 -vf "scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},gblur=sigma=46,eq=brightness=-0.14,vignette=PI/6" work/wall.png
   fi
   # soft center scrim (gaussian dark band so the title pops over the wall)
-  ffmpeg -hide_banner -loglevel error -y -f lavfi -i "color=c=black:s=${W}x${H}" -frames:v 1 -vf "format=rgba,geq=r='0':g='0':b='0':a='215*exp(-((Y-980)/350)^2)'" work/scrim.png
+  ffmpeg -hide_banner -loglevel error -y -f lavfi -i "color=c=black:s=${W}x${H}" -frames:v 1 -vf "format=rgba,geq=r='0':g='0':b='0':a='130*exp(-((Y-980)/350)^2)'" work/scrim.png
   # kinetic intro: wall zoom + scrim + line-by-line title pops + logo + end-dip
   fit "$INTRO_LINE1" 108 980 50 0; I1S="$FIT_SIZE"; I1T="$FIT_TEXT"
   fit "$INTRO_LINE2" 108 980 50 0; I2S="$FIT_SIZE"; I2T="$FIT_TEXT"

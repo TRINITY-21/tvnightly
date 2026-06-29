@@ -17,7 +17,21 @@ const app = new Hono<HonoEnv>();
 app.get("/r/:src/:path{.+}", (c) => {
   // collapse any leading slashes so the redirect can never become protocol-
   // relative (//evil.com) — it's always a same-origin path.
-  const path = `/${c.req.param("path").replace(/^\/+/, "")}`;
+  let path = `/${c.req.param("path").replace(/^\/+/, "")}`;
+  // salvage legacy share links that baked the bare brand domain in as the path
+  // (…/r/tt/tvnightly.com → /tvnightly.com 404): drop a leading host segment so
+  // an already-posted caption lands on the homepage instead of a dead page.
+  const host = (() => {
+    try {
+      return new URL(c.req.url).host.toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+  const seg = path.slice(1).split("/", 1)[0].toLowerCase();
+  if (seg && (seg === host || seg === "tvnightly.com" || seg === "www.tvnightly.com")) {
+    path = `/${path.slice(1).split("/").slice(1).join("/")}`;
+  }
   const source = SRC_FROM_CODE[c.req.param("src")];
   if (!source) return c.redirect(path, 302); // unknown source → page, untagged
   const campaign = c.req.query("c") || utmCampaignFromPath(path);

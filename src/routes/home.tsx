@@ -704,7 +704,10 @@ app.get("/", async (c) => {
     SIDEBAR_TRAILER_LIMIT,
   );
 
-  c.header("Cache-Control", "public, max-age=300");
+  // Short edge cache: the homepage is the highest-traffic page and was rendering
+  // (with its D1 queries) on every single hit. 120s lets the edge serve it while
+  // staying fresh for time-sensitive "on tonight" content.
+  c.header("Cache-Control", "public, max-age=120");
   return c.html(
     <Layout
       c={c}

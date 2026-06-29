@@ -203,10 +203,11 @@ function htmlStoreable(res: Response): boolean {
 
 async function cachedFetch(req: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
   const path = new URL(req.url).pathname;
-  // "/" carries time-sensitive "on tonight" + daily trending — keep it always
-  // fresh (its D1 is now cheap thanks to the rating indexes). Everything else
-  // that opts in via Cache-Control is edge-cached.
-  if (req.method !== "GET" || path === "/" || HTML_CACHE_SKIP.test(path)) {
+  // The homepage opts into a short 120s cache (see its Cache-Control) — it's the
+  // highest-traffic page and was hitting D1 on every request. It's country-keyed
+  // like every other page, so region-specific content stays correct. Only the
+  // dynamic prefixes below (admin/api/redirects) bypass the edge cache outright.
+  if (req.method !== "GET" || HTML_CACHE_SKIP.test(path)) {
     return app.fetch(req, env, ctx);
   }
   try {

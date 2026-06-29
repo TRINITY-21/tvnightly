@@ -108,52 +108,91 @@ async function fetchMovieChartLive(
   return hits.map((h) => withGenreLabel(toMovieRow(h), filters.genre || null));
 }
 
+// Chart rankings are region-independent and change ~daily, so cache the computed
+// (TMDB + D1-enriched) result per filter combo for an hour. This covers chart
+// pages on an HTML-cache miss AND the uncached "load more" endpoint, which used
+// to recompute the full TMDB+D1 chart on every page of infinite scroll. Empty
+// results (transient upstream failures) are never cached.
+const CHART_CACHE_TTL = 3600;
+const chartFilterKey = (f: ChartFilters): string => `${f.genre ?? ""}|${f.year ?? ""}|${f.sort}`;
+async function cachedChart<T>(tag: string, compute: () => Promise<T[]>): Promise<T[]> {
+  const cache = caches.default;
+  const cacheKey = new Request(`https://edge-cache.tvnightly.com/chart/${encodeURIComponent(tag)}`);
+  try {
+    const hit = await cache.match(cacheKey);
+    if (hit) return (await hit.json()) as T[];
+  } catch {
+    /* cache miss / parse error → recompute */
+  }
+  const data = await compute();
+  if (data.length) {
+    try {
+      await cache.put(
+        cacheKey,
+        new Response(JSON.stringify(data), {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public, max-age=${CHART_CACHE_TTL}`,
+          },
+        }),
+      );
+    } catch {
+      /* caching is best-effort */
+    }
+  }
+  return data;
+}
+
 export async function fetchMovieChartResults(
   c: Context<HonoEnv>,
   filters: ChartFilters,
 ): Promise<MovieRow[]> {
-  const key = c.env.TMDB_API_KEY;
-  if (!key) {
-    return sortMovies(await fetchMovieChartResultsD1(c, filters), filters.sort).slice(
-      0,
-      MOVIE_CHART_MAX,
-    );
-  }
+  return cachedChart(`movie|${chartFilterKey(filters)}`, async () => {
+    const key = c.env.TMDB_API_KEY;
+    if (!key) {
+      return sortMovies(await fetchMovieChartResultsD1(c, filters), filters.sort).slice(
+        0,
+        MOVIE_CHART_MAX,
+      );
+    }
 
-  const live = await fetchMovieChartLive(c, filters);
-  if (!live.length) {
-    return sortMovies(await fetchMovieChartResultsD1(c, filters), filters.sort).slice(
-      0,
-      MOVIE_CHART_MAX,
-    );
-  }
+    const live = await fetchMovieChartLive(c, filters);
+    if (!live.length) {
+      return sortMovies(await fetchMovieChartResultsD1(c, filters), filters.sort).slice(
+        0,
+        MOVIE_CHART_MAX,
+      );
+    }
 
-  const enriched = await enrichMoviesFromD1(c.env.DB, live);
-  return sortMovies(
-    enriched.filter((m) => m.rating != null),
-    filters.sort,
-  ).slice(0, MOVIE_CHART_MAX);
+    const enriched = await enrichMoviesFromD1(c.env.DB, live);
+    return sortMovies(
+      enriched.filter((m) => m.rating != null),
+      filters.sort,
+    ).slice(0, MOVIE_CHART_MAX);
+  });
 }
 
 export async function fetchTvChartResults(
   c: Context<HonoEnv>,
   filters: ChartFilters,
 ): Promise<ShowRow[]> {
-  const key = c.env.TMDB_API_KEY;
-  if (!key) {
-    return sortShows(await fetchTvChartResultsD1(c, filters), filters.sort).slice(0, TV_CHART_MAX);
-  }
+  return cachedChart(`tv|${chartFilterKey(filters)}`, async () => {
+    const key = c.env.TMDB_API_KEY;
+    if (!key) {
+      return sortShows(await fetchTvChartResultsD1(c, filters), filters.sort).slice(0, TV_CHART_MAX);
+    }
 
-  const live = await fetchTvChartLive(c, filters);
-  if (!live.length) {
-    return sortShows(await fetchTvChartResultsD1(c, filters), filters.sort).slice(0, TV_CHART_MAX);
-  }
+    const live = await fetchTvChartLive(c, filters);
+    if (!live.length) {
+      return sortShows(await fetchTvChartResultsD1(c, filters), filters.sort).slice(0, TV_CHART_MAX);
+    }
 
-  const enriched = await enrichShowsFromD1(c.env.DB, live);
-  return sortShows(
-    enriched.filter((s) => s.rating != null),
-    filters.sort,
-  ).slice(0, TV_CHART_MAX);
+    const enriched = await enrichShowsFromD1(c.env.DB, live);
+    return sortShows(
+      enriched.filter((s) => s.rating != null),
+      filters.sort,
+    ).slice(0, TV_CHART_MAX);
+  });
 }
 
 /** TV chart for a premiere decade (e.g. 2010–2019). */
@@ -162,28 +201,30 @@ export async function fetchTvDecadeChartResults(
   decade: { start: number; end: number },
   filters: Pick<ChartFilters, "genre" | "sort">,
 ): Promise<ShowRow[]> {
-  const fullFilters: ChartFilters = { genre: filters.genre, year: null, sort: filters.sort };
-  const key = c.env.TMDB_API_KEY;
-  if (!key) {
-    return sortShows(await fetchTvChartResultsD1(c, fullFilters, decade), filters.sort).slice(
-      0,
-      TV_CHART_MAX,
-    );
-  }
+  return cachedChart(`tvdecade|${decade.start}-${decade.end}|${filters.genre ?? ""}|${filters.sort}`, async () => {
+    const fullFilters: ChartFilters = { genre: filters.genre, year: null, sort: filters.sort };
+    const key = c.env.TMDB_API_KEY;
+    if (!key) {
+      return sortShows(await fetchTvChartResultsD1(c, fullFilters, decade), filters.sort).slice(
+        0,
+        TV_CHART_MAX,
+      );
+    }
 
-  const live = await fetchTvChartLive(c, fullFilters, decade);
-  if (!live.length) {
-    return sortShows(await fetchTvChartResultsD1(c, fullFilters, decade), filters.sort).slice(
-      0,
-      TV_CHART_MAX,
-    );
-  }
+    const live = await fetchTvChartLive(c, fullFilters, decade);
+    if (!live.length) {
+      return sortShows(await fetchTvChartResultsD1(c, fullFilters, decade), filters.sort).slice(
+        0,
+        TV_CHART_MAX,
+      );
+    }
 
-  const enriched = await enrichShowsFromD1(c.env.DB, live);
-  return sortShows(
-    enriched.filter((s) => s.rating != null),
-    filters.sort,
-  ).slice(0, TV_CHART_MAX);
+    const enriched = await enrichShowsFromD1(c.env.DB, live);
+    return sortShows(
+      enriched.filter((s) => s.rating != null),
+      filters.sort,
+    ).slice(0, TV_CHART_MAX);
+  });
 }
 
 const TV_UNDERRATED_MIN_RATING = 7.8;
@@ -201,22 +242,24 @@ export async function fetchTvUnderratedResults(
   c: Context<HonoEnv>,
   filters: Pick<ChartFilters, "genre" | "sort">,
 ): Promise<ShowRow[]> {
-  const conds = ["rating >= ?", "weight BETWEEN ? AND ?"];
-  const binds: (string | number)[] = [
-    TV_UNDERRATED_MIN_RATING,
-    TV_UNDERRATED_MIN_WEIGHT,
-    TV_UNDERRATED_MAX_WEIGHT,
-  ];
-  if (filters.genre) {
-    conds.push("genres LIKE ?");
-    binds.push(`%"${filters.genre}"%`);
-  }
-  const { results } = await c.env.DB.prepare(
-    `SELECT * FROM shows WHERE ${conds.join(" AND ")} ORDER BY ${tvUnderratedSqlOrder(filters.sort)} LIMIT ${TV_CHART_MAX}`,
-  )
-    .bind(...binds)
-    .all<ShowRow>();
-  return results;
+  return cachedChart(`tvunder|${filters.genre ?? ""}|${filters.sort}`, async () => {
+    const conds = ["rating >= ?", "weight BETWEEN ? AND ?"];
+    const binds: (string | number)[] = [
+      TV_UNDERRATED_MIN_RATING,
+      TV_UNDERRATED_MIN_WEIGHT,
+      TV_UNDERRATED_MAX_WEIGHT,
+    ];
+    if (filters.genre) {
+      conds.push("genres LIKE ?");
+      binds.push(`%"${filters.genre}"%`);
+    }
+    const { results } = await c.env.DB.prepare(
+      `SELECT * FROM shows WHERE ${conds.join(" AND ")} ORDER BY ${tvUnderratedSqlOrder(filters.sort)} LIMIT ${TV_CHART_MAX}`,
+    )
+      .bind(...binds)
+      .all<ShowRow>();
+    return results;
+  });
 }
 
 const MOVIE_UNDERRATED_MIN_RATING = 7.0;
@@ -235,24 +278,26 @@ export async function fetchMovieUnderratedResults(
   c: Context<HonoEnv>,
   filters: Pick<ChartFilters, "genre" | "sort">,
 ): Promise<MovieRow[]> {
-  const maxYear = new Date().getFullYear() - MOVIE_UNDERRATED_MIN_AGE;
-  const conds = ["rating >= ?", "votes BETWEEN ? AND ?", "year IS NOT NULL", "year <= ?"];
-  const binds: (string | number)[] = [
-    MOVIE_UNDERRATED_MIN_RATING,
-    MOVIE_UNDERRATED_MIN_VOTES,
-    MOVIE_UNDERRATED_MAX_VOTES,
-    maxYear,
-  ];
-  if (filters.genre) {
-    conds.push("genres LIKE ?");
-    binds.push(`%"${filters.genre}"%`);
-  }
-  const { results } = await c.env.DB.prepare(
-    `SELECT * FROM movies WHERE ${conds.join(" AND ")} ORDER BY ${movieUnderratedSqlOrder(filters.sort)} LIMIT ${MOVIE_CHART_MAX}`,
-  )
-    .bind(...binds)
-    .all<MovieRow>();
-  return results;
+  return cachedChart(`movieunder|${filters.genre ?? ""}|${filters.sort}`, async () => {
+    const maxYear = new Date().getFullYear() - MOVIE_UNDERRATED_MIN_AGE;
+    const conds = ["rating >= ?", "votes BETWEEN ? AND ?", "year IS NOT NULL", "year <= ?"];
+    const binds: (string | number)[] = [
+      MOVIE_UNDERRATED_MIN_RATING,
+      MOVIE_UNDERRATED_MIN_VOTES,
+      MOVIE_UNDERRATED_MAX_VOTES,
+      maxYear,
+    ];
+    if (filters.genre) {
+      conds.push("genres LIKE ?");
+      binds.push(`%"${filters.genre}"%`);
+    }
+    const { results } = await c.env.DB.prepare(
+      `SELECT * FROM movies WHERE ${conds.join(" AND ")} ORDER BY ${movieUnderratedSqlOrder(filters.sort)} LIMIT ${MOVIE_CHART_MAX}`,
+    )
+      .bind(...binds)
+      .all<MovieRow>();
+    return results;
+  });
 }
 
 export function parseChartPageOffset(c: Context<HonoEnv>): number {

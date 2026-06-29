@@ -1153,17 +1153,11 @@ app.get("/show/:slug/media", async (c) => {
   const hasAny = Boolean(trailer || clips.length || backdrops.length || posters.length);
   const sidebar = c.get("siteSidebar");
 
+  // No VideoObject here: the trailer is a thumbnail that links out to YouTube
+  // (not an inline player), so this isn't a "watch page" by Google's definition.
+  // Declaring VideoObject only earns a "Video isn't on a watch page" indexing
+  // failure — the canonical video result belongs to YouTube anyway.
   const ld: unknown[] = [breadcrumbLd(site, show, "Media", base)];
-  if (trailer) {
-    ld.push({
-      "@context": "https://schema.org",
-      "@type": "VideoObject",
-      name: trailer.name,
-      thumbnailUrl: `https://img.youtube.com/vi/${trailer.key}/hqdefault.jpg`,
-      embedUrl: `https://www.youtube-nocookie.com/embed/${trailer.key}`,
-      ...(trailer.published ? { uploadDate: trailer.published } : {}),
-    });
-  }
 
   const similarPick = await similarShows(c.env.DB, show, 1);
   const keepGoingArts = await loadShowKeepGoingArts(

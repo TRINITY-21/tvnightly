@@ -694,16 +694,11 @@ app.get("/movie/:slug", async (c) => {
     facts?.originalTitle && facts.originalTitle.toLowerCase() !== movie.title.toLowerCase()
       ? facts.originalTitle
       : null;
-  const trailerNode = facts?.trailer
-    ? {
-        "@type": "VideoObject",
-        name: `${movie.title} — Official Trailer`,
-        description: `Official trailer for ${movie.title}.`,
-        thumbnailUrl: `https://img.youtube.com/vi/${facts.trailer.key}/hqdefault.jpg`,
-        embedUrl: `https://www.youtube-nocookie.com/embed/${facts.trailer.key}`,
-        ...(facts.trailer.published ? { uploadDate: facts.trailer.published } : {}),
-      }
-    : null;
+  // No VideoObject/`trailer` node: this is a movie *info* page, not a dedicated
+  // video watch page, so Google flags the embed as "Video isn't on a watch page"
+  // and never indexes it. We keep the inline trailer for visitors but don't claim
+  // it as structured video (kept consistent with the show detail page, which
+  // emits none either).
   const ld: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": "Movie",
@@ -720,7 +715,6 @@ app.get("/movie/:slug", async (c) => {
     ...(actorNodes.length ? { actor: actorNodes } : {}),
     ...(facts?.studio ? { productionCompany: { "@type": "Organization", name: facts.studio } } : {}),
     ...(aggRating ? { aggregateRating: aggRating } : {}),
-    ...(trailerNode ? { trailer: trailerNode } : {}),
   };
   const breadcrumb = breadcrumbTrail([
     { name: "TV Nightly", url: site },
@@ -1208,16 +1202,8 @@ app.get("/movie/:slug/media", async (c) => {
       ],
     },
   ];
-  if (trailer) {
-    ld.push({
-      "@context": "https://schema.org",
-      "@type": "VideoObject",
-      name: trailer.name,
-      thumbnailUrl: `https://img.youtube.com/vi/${trailer.key}/hqdefault.jpg`,
-      embedUrl: `https://www.youtube-nocookie.com/embed/${trailer.key}`,
-      ...(trailer.published ? { uploadDate: trailer.published } : {}),
-    });
-  }
+  // No VideoObject: the trailer links out to YouTube rather than playing inline,
+  // so this isn't a "watch page" (see the matching note on the show /media route).
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.html(

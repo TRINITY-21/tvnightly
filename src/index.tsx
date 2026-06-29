@@ -202,7 +202,11 @@ function htmlStoreable(res: Response): boolean {
 }
 
 async function cachedFetch(req: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
-  if (req.method !== "GET" || HTML_CACHE_SKIP.test(new URL(req.url).pathname)) {
+  const path = new URL(req.url).pathname;
+  // "/" carries time-sensitive "on tonight" + daily trending — keep it always
+  // fresh (its D1 is now cheap thanks to the rating indexes). Everything else
+  // that opts in via Cache-Control is edge-cached.
+  if (req.method !== "GET" || path === "/" || HTML_CACHE_SKIP.test(path)) {
     return app.fetch(req, env, ctx);
   }
   try {

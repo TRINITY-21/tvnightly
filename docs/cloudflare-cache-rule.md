@@ -53,10 +53,13 @@ Cloudflare → **tvnightly.com** zone → **Caching → Cache Rules → Create r
 ## Or apply via API
 
 Needs an API token with **Zone → Cache Rules → Edit** (create at
-*My Profile → API Tokens*), plus the **Zone ID** (zone Overview page, right rail).
+*My Profile → API Tokens*). The zone id is filled in below.
+
+(Your wrangler CLI login is `zone (read)` only, so it can't create this — hence
+the separate token / dashboard.)
 
 ```bash
-ZONE_ID=<your-zone-id>
+ZONE_ID=47b970b8d3f90e5c4e2c6bf33cc7b6b2   # tvnightly.com
 CF_TOKEN=<token-with-cache-rules-edit>
 
 curl -sS -X PUT \

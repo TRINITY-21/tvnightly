@@ -7,3 +7,8 @@ seed/
 
 # generated brand exports (scripts/gen-logo-png.mjs)
 /tvnightly-*.png
+
+# countdown/shorts render artifacts (tools/countdown)
+/video.mp4
+/video_audio.mp3
+tools/countdown/cards.tsv

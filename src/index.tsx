@@ -43,11 +43,12 @@ import whatToWatch from "./routes/what-to-watch";
 
 const app = new Hono<HonoEnv>();
 
-// NOTE: HTML edge-caching is deliberately NOT done in the Worker. caches.default
-// + Hono's post-handler response rewriting proved unreliable to verify, and it's
-// a no-op win at low traffic. When traffic justifies it, add a Cloudflare Cache
-// Rule (cache text/html on GET, honor Cache-Control, key incl. cf-ipcountry) —
-// it's monitorable via CF cache analytics and carries no Worker-code risk.
+// HTML edge-caching is done at the OUTER fetch layer (see the wrapped export at
+// the bottom) — not in Hono middleware, which is what proved fiddly before. On a
+// cache HIT the Hono app never runs, so the page's D1 queries + render are
+// skipped entirely; we only ever store responses the route itself marked
+// cacheable (public, max-age>0, no Set-Cookie). Verify with the x-edge-cache
+// response header (HIT/MISS).
 
 // Baseline security headers on every response (set before the canonical redirect
 // below so 301s and error pages carry them too). No CSP/script-src: the site uses
@@ -175,8 +176,59 @@ app.onError((err, c) => {
   return c.html(<ErrorPage />, 500);
 });
 
+// ---- HTML edge cache (Cache API) ---------------------------------------------
+// Tracking params don't change the page, so strip them from the cache key; pages
+// vary by streaming region, so key by cf-ipcountry. /admin /api /r are never
+// cached (dynamic / redirects); everything else is gated by the route's own
+// Cache-Control so no-store pages (recommend results etc.) bypass automatically.
+const HTML_CACHE_TRACKING = /^(utm_|fbclid$|gclid$|mc_|_ga$|ref$|__cc$)/i;
+const HTML_CACHE_SKIP = /^\/(admin|api|r)(\/|$)/;
+
+function htmlCacheKey(req: Request): Request {
+  const url = new URL(req.url);
+  const params = [...url.searchParams.entries()]
+    .filter(([k]) => !HTML_CACHE_TRACKING.test(k))
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  const cc = (req.headers.get("cf-ipcountry") || "XX").toUpperCase();
+  const qs = params.map(([k, v]) => `${k}=${v}`);
+  qs.push(`__cc=${cc}`);
+  return new Request(`${url.origin}${url.pathname}?${qs.join("&")}`, { method: "GET" });
+}
+
+function htmlStoreable(res: Response): boolean {
+  if (res.status !== 200 || res.headers.has("set-cookie")) return false;
+  const cc = res.headers.get("cache-control") || "";
+  return /max-age=\d/.test(cc) && !/no-store|private/i.test(cc);
+}
+
+async function cachedFetch(req: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
+  if (req.method !== "GET" || HTML_CACHE_SKIP.test(new URL(req.url).pathname)) {
+    return app.fetch(req, env, ctx);
+  }
+  try {
+    const cache = caches.default;
+    const key = htmlCacheKey(req);
+    const hit = await cache.match(key);
+    if (hit) {
+      const r = new Response(hit.body, hit);
+      r.headers.set("x-edge-cache", "HIT");
+      return r;
+    }
+    const res = await app.fetch(req, env, ctx);
+    if (htmlStoreable(res)) {
+      ctx.waitUntil(cache.put(key, res.clone()));
+      const r = new Response(res.body, res);
+      r.headers.set("x-edge-cache", "MISS");
+      return r;
+    }
+    return res;
+  } catch {
+    return app.fetch(req, env, ctx); // cache layer must never break a request
+  }
+}
+
 export default {
-  fetch: app.fetch,
+  fetch: cachedFetch,
   scheduled(event: ScheduledController, env: Bindings, ctx: ExecutionContext) {
     // :30 = provider patrol; 22:00 = daily digest; :00 (and manual) = sync, then
     // ping IndexNow with whatever changed so Bing/Yandex index it within minutes.

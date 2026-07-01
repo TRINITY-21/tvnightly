@@ -13,16 +13,49 @@ const IconShare: FC = () => (
   </svg>
 );
 
+// pushpin — signals "pin to Pinterest" in the same stroke voice as IconShare
+const IconPin: FC = () => (
+  <svg class="icon" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M9 3.5h6M10 3.6l-.6 6a3.2 3.2 0 0 1-1.2 2.2L6.6 13.4h10.8l-1.6-1.6a3.2 3.2 0 0 1-1.2-2.2l-.6-6M12 13.5V20"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+);
+
 export const ShareBar: FC<{
   /** Absolute URL to share. */
   url: string;
   /** Share title / text. */
   title: string;
-}> = ({ url, title }) => (
+  /** When set, adds a "Pin" button that saves this specific tall image to
+   *  Pinterest (a 2:3 "shows like X" pin) instead of the page's og:image. */
+  pinMedia?: string;
+  /** Description Pinterest pre-fills on the pin (defaults to the title). */
+  pinDescription?: string;
+}> = ({ url, title, pinMedia, pinDescription }) => (
   <div class="share-bar" hidden data-share-url={url} data-share-title={title}>
     <button type="button" class="share-btn share-native" data-copied="Link copied">
       <IconShare />
       <span class="share-btn-t">Share</span>
     </button>
+    {pinMedia ? (
+      <a
+        class="share-btn share-pin"
+        href={`https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(
+          pinMedia,
+        )}&description=${encodeURIComponent(pinDescription ?? title)}`}
+        target="_blank"
+        rel="noopener nofollow"
+        aria-label="Save to Pinterest"
+      >
+        <IconPin />
+        <span class="share-btn-t">Pin</span>
+      </a>
+    ) : null}
   </div>
 );

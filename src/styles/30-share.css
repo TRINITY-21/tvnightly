@@ -44,6 +44,10 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+/* Pinterest "Pin" — an anchor in the same chassis; kill the default underline */
+.share-pin {
+  text-decoration: none;
+}
 /* clipboard-fallback confirmation ("Link copied") */
 .share-btn.is-copied,
 .share-btn.is-copied:hover {

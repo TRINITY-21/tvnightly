@@ -50,7 +50,7 @@ import { servePng } from "../lib/render";
 import { foldSql, foldText } from "../lib/search";
 import { breadcrumbTrail, canonical, faqLd, origin } from "../lib/seo";
 import { posterDataUri } from "../lib/signal";
-import { buildCompareOgCard, buildOgCard, buildSimilarOgCard, type OgSide } from "../lib/social";
+import { buildCompareOgCard, buildOgCard, buildSimilarOgCard, buildSimilarPin, type OgSide } from "../lib/social";
 import {
     movieSpotlightTrailer,
     tmdbMovieBackdrop,
@@ -582,6 +582,43 @@ app.get("/movie/:slug/similar/og.png", async (c) => {
       picks: top.map((m, i) => ({ name: m.title, posterUri: pickUris[i] ?? null, rating: m.rating })),
     });
   });
+});
+
+// 1000×1500 (2:3) Pinterest pin — the tall branded artifact a pinner saves for a
+// "movies like X" search. Same picks as the page; wired to the ShareBar Pin button.
+app.get("/movie/:slug/similar/pin.png", async (c) => {
+  const slug = c.req.param("slug");
+  return servePng(
+    c,
+    `similar-movie-pin/${slug}`,
+    async () => {
+      const r = await resolveMovie(c, slug);
+      if (!r) return null;
+      const movie = r.movie;
+      let simMovies = await similarMovies(c.env.DB, movie, 18);
+      if (!simMovies.length && movie.tmdb_id && c.env.TMDB_API_KEY) {
+        simMovies = (await tmdbRecommendations(c.env.TMDB_API_KEY, "movie", movie.tmdb_id))
+          .slice(0, 18)
+          .map(toMovieRow);
+      }
+      if (!simMovies.length) return null;
+      const featured = simMovies.slice(0, 3);
+      const bd =
+        c.env.TMDB_API_KEY && movie.imdb_id ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id) : null;
+      const [backdropUri, ...posterUris] = await Promise.all([
+        posterDataUri(bd?.x1 ?? movie.poster_url ?? null),
+        ...featured.map((m) => posterDataUri(m.poster_url?.replace("/t/p/w342/", "/t/p/w500/") ?? null)),
+      ]);
+      return buildSimilarPin({
+        sourceTitle: movie.title,
+        totalCount: simMovies.length,
+        backdropUri,
+        featured: featured.map((m, i) => ({ name: m.title, posterUri: posterUris[i] ?? null, rating: m.rating })),
+        rest: simMovies.slice(3, 8).map((m) => ({ name: m.title, rating: m.rating })),
+      });
+    },
+    1000,
+  );
 });
 
 app.get("/movie/:slug", async (c) => {
@@ -1124,7 +1161,12 @@ app.get("/movie/:slug/similar", async (c) => {
               </p>
               <div class="detail-title-row">
                 <h1>Movies like {movie.title}</h1>
-                <ShareBar url={`${site}${base}`} title={`Movies like ${movie.title}`} />
+                <ShareBar
+                  url={`${site}${base}`}
+                  title={`Movies like ${movie.title}`}
+                  pinMedia={`${site}${base}/pin.png`}
+                  pinDescription={`Movies like ${movie.title} — ${simMovies.length} similar movies ranked by match strength, with ratings & where to stream.`}
+                />
               </div>
               <p class="summary">
                 The {simMovies.length} closest matches on shared genres, ranked by match strength

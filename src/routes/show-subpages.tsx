@@ -20,7 +20,7 @@ import { similarShows } from "../lib/queries";
 import { servePng } from "../lib/render";
 import { breadcrumbLd, canonical, eventLd, faqLd, origin } from "../lib/seo";
 import { archivoFontCss, buildSignalSvg, posterDataUri } from "../lib/signal";
-import { buildOgCard, buildRatingsOgCard, buildSimilarOgCard, type OgCardData, type RatingsEp } from "../lib/social";
+import { buildOgCard, buildRatingsOgCard, buildSimilarOgCard, buildSimilarPin, type OgCardData, type RatingsEp } from "../lib/social";
 import { tmdbBackdrop, tmdbRecommendations } from "../lib/tmdb";
 import { toShowRow } from "../lib/tmdb-rows";
 import { buildTmdbShow, resolveShow } from "../lib/tmdb-show";
@@ -487,6 +487,41 @@ app.get("/show/:slug/similar/og.png", async (c) => {
       picks: top.map((s, i) => ({ name: s.name, posterUri: pickUris[i] ?? null, rating: s.rating })),
     });
   });
+});
+
+// 1000×1500 (2:3) Pinterest pin — the tall branded artifact a pinner saves for a
+// "shows like X" search. Same picks as the page; wired to the ShareBar Pin button.
+app.get("/show/:slug/similar/pin.png", async (c) => {
+  const slug = c.req.param("slug");
+  return servePng(
+    c,
+    `similar-pin/${slug}`,
+    async () => {
+      const r = await resolveShow(c, slug);
+      if (!r) return null;
+      const show = r.show;
+      let similar = await similarShows(c.env.DB, show, 18);
+      if (!similar.length && show.tmdb_id && c.env.TMDB_API_KEY) {
+        similar = (await tmdbRecommendations(c.env.TMDB_API_KEY, "tv", show.tmdb_id)).slice(0, 18).map(toShowRow);
+      }
+      if (!similar.length) return null;
+      const featured = similar.slice(0, 3);
+      const bd =
+        show.tmdb_id && c.env.TMDB_API_KEY ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id) : null;
+      const [backdropUri, ...posterUris] = await Promise.all([
+        posterDataUri(bd?.x1 ?? show.poster_url ?? show.image_url ?? null),
+        ...featured.map((s) => posterDataUri((s.poster_url ?? s.image_url)?.replace("/w342/", "/w500/") ?? null)),
+      ]);
+      return buildSimilarPin({
+        sourceTitle: show.name,
+        totalCount: similar.length,
+        backdropUri,
+        featured: featured.map((s, i) => ({ name: s.name, posterUri: posterUris[i] ?? null, rating: s.rating })),
+        rest: similar.slice(3, 8).map((s) => ({ name: s.name, rating: s.rating })),
+      });
+    },
+    1000,
+  );
 });
 
 app.get("/show/:slug/ratings", async (c) => {

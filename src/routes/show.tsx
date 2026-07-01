@@ -1064,7 +1064,12 @@ app.get("/show/:slug/similar", async (c) => {
               </p>
               <div class="detail-title-row">
                 <h1>Shows like {show.name}</h1>
-                <ShareBar url={`${site}${base}`} title={`Shows like ${show.name}`} />
+                <ShareBar
+                  url={`${site}${base}`}
+                  title={`Shows like ${show.name}`}
+                  pinMedia={`${site}${base}/pin.png`}
+                  pinDescription={`Shows like ${show.name} — ${similar.length} similar shows ranked by match strength, with ratings & where to stream.`}
+                />
               </div>
               <p class="summary">
                 The {similar.length} closest matches on shared genres, ranked by match strength

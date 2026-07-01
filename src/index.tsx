@@ -183,6 +183,11 @@ app.onError((err, c) => {
 // Cache-Control so no-store pages (recommend results etc.) bypass automatically.
 const HTML_CACHE_TRACKING = /^(utm_|fbclid$|gclid$|mc_|_ga$|ref$|__cc$)/i;
 const HTML_CACHE_SKIP = /^\/(admin|api|r)(\/|$)/;
+// Rasterized images (og.png/pin.png) + assets are NOT HTML — they carry their own
+// content-keyed edge cache (servePng's caches.default, versioned by cache key), so
+// they must bypass this HTML cache entirely. Otherwise a design change is masked:
+// the content key bumps but this path-keyed layer keeps serving the stale PNG.
+const HTML_CACHE_ASSET = /\.(png|jpe?g|gif|svg|webp|avif|ico|xml|txt|json|ics|woff2?|css|js|map)$/i;
 
 function htmlCacheKey(req: Request): Request {
   const url = new URL(req.url);
@@ -207,7 +212,7 @@ async function cachedFetch(req: Request, env: Bindings, ctx: ExecutionContext): 
   // highest-traffic page and was hitting D1 on every request. It's country-keyed
   // like every other page, so region-specific content stays correct. Only the
   // dynamic prefixes below (admin/api/redirects) bypass the edge cache outright.
-  if (req.method !== "GET" || HTML_CACHE_SKIP.test(path)) {
+  if (req.method !== "GET" || HTML_CACHE_SKIP.test(path) || HTML_CACHE_ASSET.test(path)) {
     return app.fetch(req, env, ctx);
   }
   try {

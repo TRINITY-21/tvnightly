@@ -1067,7 +1067,7 @@ app.get("/show/:slug/similar", async (c) => {
                 <ShareBar
                   url={`${site}${base}`}
                   title={`Shows like ${show.name}`}
-                  pinMedia={`${site}${base}/pin.png`}
+                  pinMedia={`${site}${base}/og.png`}
                   pinDescription={`Shows like ${show.name} — ${similar.length} similar shows ranked by match strength, with ratings & where to stream.`}
                 />
               </div>

@@ -1312,100 +1312,110 @@ export function buildSimilarPin(d: SimilarPinData): string {
   return p.join("");
 }
 
-export interface SimilarOgEntry {
+const SIMP_W = 1080;
+const SIMP_H = 1350; // 4:5 — poster-forward, renders large in iMessage/WhatsApp/FB
+
+export interface SimilarPosterEntry {
   name: string;
   posterUri: string | null; // inlined data-URI; null falls back to an initial tile
   rating: number | null;
 }
-export interface SimilarOgData {
-  eyebrow: string; // "SHOWS LIKE" | "MOVIES LIKE"
+export interface SimilarPosterData {
+  kicker: string; // "Shows like" | "Movies like"
   sourceTitle: string; // the show/movie the page is "more like"
-  metaLine?: string | null; // "18 ranked · Thriller · Drama"
   totalCount: number;
-  footerRight?: string | null; // CTA count, e.g. "Full list & where to stream"
-  backdropUri: string | null; // ambient source art (backdrop preferred)
-  posterUri: string | null; // source poster — ambient fallback when no backdrop
-  picks: SimilarOgEntry[]; // top 3 matches, shown as ranked posters
+  posterUri: string | null; // SOURCE poster — the full-bleed hero
+  backdropUri?: string | null; // fallback hero when no poster art
+  picks: SimilarPosterEntry[]; // up to 4 ranked matches, overlaid at the foot
 }
 
-/** "Shows/Movies like X" LANDSCAPE share card (1200×630): editorial title on the
- *  left, the three closest ranked matches as posters on the right. The posters
- *  ARE the hook — a link unfurl that shows the payoff (what you'll get) instead
- *  of a bare source poster, pulling the click through to the full ranked list. */
-export function buildSimilarOgCard(d: SimilarOgData): string {
+/** "Shows/Movies like X" POSTER card (1080×1350). The source poster IS the hero,
+ *  full-bleed — the recognizable art people expect — with a row of the closest
+ *  ranked matches as smaller posters overlaid across the bottom. The teaser is
+ *  literal: "here's the poster you know, and here's what's like it." */
+export function buildSimilarPosterCard(d: SimilarPosterData): string {
+  const W = SIMP_W;
+  const H = SIMP_H;
+  const M = 52;
   const p: string[] = [];
   p.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_W}" height="${OG_H}" viewBox="0 0 ${OG_W} ${OG_H}" font-family="Archivo, ${SYS}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`,
   );
-  p.push(ogDefs());
-  p.push(`<rect width="${OG_W}" height="${OG_H}" fill="url(#bg)"/>`);
 
-  // ambient: the source's backdrop (or poster), dimmed under a left→right + bottom
-  // scrim so the left title column and the brand lockup stay legible.
-  const ambient = d.backdropUri ?? d.posterUri;
-  if (ambient) {
-    p.push(
-      `<image href="${ambient}" x="0" y="0" width="${OG_W}" height="${OG_H}" preserveAspectRatio="xMidYMid slice" opacity="0.5"/>`,
-    );
-    p.push(`<rect width="${OG_W}" height="${OG_H}" fill="url(#vscrim)"/>`);
-    p.push(`<rect width="${OG_W}" height="${OG_H}" fill="url(#hscrim)"/>`);
-  }
-  p.push(ogBrand());
-
-  // ---- right: the three ranked pick posters (the payoff) ----
-  const n = Math.min(3, d.picks.length) || 1;
-  const gap = 26;
-  const regionRight = OG_W - OG_M; // 1136
-  const regionLeft = 556;
-  let pw = Math.floor((regionRight - regionLeft - gap * (n - 1)) / n);
+  // ---- geometry (compute first so the amber bloom can be centered on the row) ----
+  const n = Math.min(4, d.picks.length) || 1;
+  const gap = 24;
+  let pw = Math.floor((W - 2 * M - gap * (n - 1)) / n);
   let ph = Math.round(pw * 1.5);
-  const maxPh = 300;
+  const maxPh = 306;
   if (ph > maxPh) {
     ph = maxPh;
     pw = Math.round(ph / 1.5);
   }
   const rowW = n * pw + (n - 1) * gap;
-  const x0 = regionRight - rowW; // right-align the poster row
-  const py = Math.round((OG_H - ph) / 2) - 4;
+  const x0 = Math.round((W - rowW) / 2);
+  const rowBottom = H - 56;
+  const py = rowBottom - ph;
+  const labelY = py - 40;
+  const bandTop = labelY - 96;
+  const bloomCy = (py + ph / 2 - 40) / H;
+
+  p.push(
+    `<defs>` +
+      `<linearGradient id="spbg" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#17171c"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+      // cinematic vignette — darken the frame edges so the hero art centers the eye
+      `<radialGradient id="spvig" cx="0.5" cy="0.4" r="0.75"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.5"/></radialGradient>` +
+      // top scrim so the brand lockup holds over bright art
+      `<linearGradient id="sptop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.85"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0"/></linearGradient>` +
+      // deep bottom band — a premium dark shelf the row sits on
+      `<linearGradient id="spbot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0"/><stop offset="0.34" stop-color="${PLATE}" stop-opacity="0.72"/><stop offset="0.62" stop-color="#08080b" stop-opacity="0.97"/><stop offset="1" stop-color="#050506"/></linearGradient>` +
+      // warm amber bloom that "lights" the shelf, centered on the poster row
+      `<radialGradient id="spbloom" cx="0.5" cy="${r2(bloomCy)}" r="0.5"><stop offset="0" stop-color="${AMBER}" stop-opacity="0.17"/><stop offset="1" stop-color="${AMBER}" stop-opacity="0"/></radialGradient>` +
+      // deep soft shadow so the mini posters float like jewels on the shelf
+      `<filter id="ds" x="-45%" y="-45%" width="190%" height="200%"><feDropShadow dx="0" dy="16" stdDeviation="30" flood-color="#000" flood-opacity="0.72"/></filter>` +
+      // crisp glow keeps type legible over any art
+      `<filter id="spGlow" x="-30%" y="-40%" width="160%" height="200%"><feDropShadow dx="0" dy="2" stdDeviation="9" flood-color="#000" flood-opacity="0.8"/></filter>` +
+      `</defs>`,
+  );
+  p.push(`<rect width="${W}" height="${H}" fill="url(#spbg)"/>`);
+
+  // ---- the source poster, full-bleed (cover) — the hero ----
+  const hero = d.posterUri ?? d.backdropUri ?? null;
+  if (hero) {
+    p.push(`<image href="${hero}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>`);
+  }
+  // vignette + scrims layered over the art
+  p.push(`<rect width="${W}" height="${H}" fill="url(#spvig)"/>`);
+  p.push(`<rect x="0" y="0" width="${W}" height="260" fill="url(#sptop)"/>`);
+  p.push(`<rect x="0" y="${bandTop}" width="${W}" height="${H - bandTop}" fill="url(#spbot)"/>`);
+  p.push(`<rect x="0" y="${bandTop}" width="${W}" height="${H - bandTop}" fill="url(#spbloom)"/>`);
+
+  // ---- brand top-left + match count top-right (both lifted off the art) ----
+  p.push(`<g filter="url(#spGlow)">`);
+  p.push(ogBrand(M, 98));
+  p.push(txtR(W - M, 98, `${d.totalCount} SIMILAR · RANKED`, { size: 24, w: "black", fill: "#efe9df", anchor: "end", ls: 1.5 }));
+  p.push(`</g>`);
+
+  // ---- the "SHOWS LIKE {name}" label: amber accent bar + kicker + name ----
+  p.push(`<g filter="url(#spGlow)">`);
+  const kick = d.kicker.toUpperCase();
+  const kickSize = 31;
+  const barW = 46;
+  p.push(`<rect x="${M}" y="${labelY - kickSize + 4}" width="${barW}" height="6" rx="3" fill="${AMBER}"/>`);
+  const kickX = M + barW + 22;
+  p.push(txtR(kickX, labelY, kick, { size: kickSize, w: "black", fill: AMBER, ls: 2 }));
+  const kickW = kick.length * kickSize * 0.7 + (kick.length - 1) * 2; // over-estimate → clear gap before the name
+  p.push(txtR(kickX + kickW + 22, labelY, trunc(d.sourceTitle.toUpperCase(), 15), { size: kickSize, w: "black", fill: TEXT }));
+  p.push(`</g>`);
+
+  // ---- the ranked pick posters (the payoff), floating on the shelf ----
   d.picks.slice(0, n).forEach((e, i) => {
     const px = x0 + i * (pw + gap);
-    p.push(posterHero(e.posterUri, e.name, px, py, pw, ph, `sim-${i}`, "ds"));
+    p.push(posterHero(e.posterUri, e.name, px, py, pw, ph, `smp-${i}`, "ds"));
     p.push(pinRankChip(px, py, i + 1));
     if (e.rating != null) p.push(pinRatingChip(px, py, ph, e.rating));
   });
 
-  // ---- left: editorial title block, vertically centered in the free column ----
-  const colRight = x0 - 56;
-  const colW = colRight - OG_M;
-  const CHARW = 0.66; // Archivo Black em-width per char (slightly over → safe clearance)
-  const cap = 92;
-  const nameLines = wrap(d.sourceTitle.toUpperCase(), 12, 2);
-  const longest = Math.max(1, ...nameLines.map((l) => l.length));
-  const nSize = Math.max(40, Math.min(cap, Math.floor(colW / (longest * CHARW))));
-  const lead = Math.round(nSize * 1.02);
-  const eyeSize = 24;
-  const blockH = eyeSize + 18 + nameLines.length * lead + (d.metaLine ? 42 : 0);
-  const regionTop = 150;
-  const regionBot = OG_H - 92;
-  let y = regionTop + Math.max(0, (regionBot - regionTop - blockH) / 2) + eyeSize;
-  p.push(txtR(OG_M, y, d.eyebrow.toUpperCase(), { size: eyeSize, w: "black", fill: AMBER, ls: 3 }));
-  y += 18;
-  for (const ln of nameLines) {
-    y += nSize;
-    p.push(txtR(OG_M, y, ln, { size: nSize, w: "black", fill: TEXT }));
-    y += lead - nSize;
-  }
-  if (d.metaLine) {
-    y += 40;
-    p.push(txtR(OG_M, y, trunc(d.metaLine, 42), { size: 26, w: "semi", fill: "#e7e3db" }));
-  }
-
-  // ---- footer: rule + wordmark left, the match-count CTA right ----
-  p.push(`<line x1="${OG_M}" y1="${OG_H - 74}" x2="${OG_W - OG_M}" y2="${OG_H - 74}" stroke="${LINE}"/>`);
-  p.push(txtR(OG_M, OG_H - 36, "tvnightly.com", { size: 25, w: "black", fill: AMBER, ls: 0.5 }));
-  if (d.footerRight) {
-    p.push(txtR(OG_W - OG_M, OG_H - 36, d.footerRight, { size: 22, w: "semi", fill: MUTED, anchor: "end" }));
-  }
   p.push(`</svg>`);
   return p.join("");
 }

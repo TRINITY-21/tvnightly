@@ -84,7 +84,7 @@ export async function getPromoMoments(c: AppContext): Promise<PromoMoment[]> {
         tag: "Trending",
         title: h.name,
         rating: h.rating,
-        note: "Everyone's watching this week",
+        note: "Everyone's binging it this week — see every episode rated",
         meta: h.year,
         kind: "tv",
         tmdbId: h.tmdbId,
@@ -100,7 +100,7 @@ export async function getPromoMoments(c: AppContext): Promise<PromoMoment[]> {
         tag: "Trending",
         title: h.name,
         rating: h.rating,
-        note: "The film everyone's talking about",
+        note: "The movie everyone's talking about — is the hype real?",
         meta: h.year,
         kind: "movie",
         tmdbId: h.tmdbId,
@@ -219,7 +219,10 @@ export async function getPromoMoments(c: AppContext): Promise<PromoMoment[]> {
       tag: "Instant classics",
       title: e.name,
       rating: e.ep_rating,
-      note: `S${pad2(e.season)}E${pad2(e.number)} just became must-watch`,
+      note:
+        e.ep_rating != null
+          ? `S${pad2(e.season)}E${pad2(e.number)} just hit ★${e.ep_rating.toFixed(1)} — an instant classic`
+          : `S${pad2(e.season)}E${pad2(e.number)} just became must-watch`,
       meta: parseGenres(e.genres).slice(0, 2).join(" · ") || null,
       kind: "tv",
       tmdbId: e.tmdb_id,
@@ -318,34 +321,49 @@ function composeCaptions(o: {
   };
 }
 
+const THEME_TAG: Record<PromoTheme, string> = {
+  trending: "Trending",
+  tonight: "OnTonight",
+  renewed: "Renewed",
+  premiere: "Premiere",
+  classic: "MustWatch",
+  streaming: "NowStreaming",
+  top: "TopTV",
+};
+const THEME_EMOJI: Record<PromoTheme, string> = {
+  trending: "🔥",
+  tonight: "📺",
+  renewed: "🎉",
+  premiere: "🗓️",
+  classic: "⭐",
+  streaming: "🍿",
+  top: "🏆",
+};
+
+// Comment-bait / poll hooks — the "engagement variant" of a moment. Comments are
+// the strongest short-form algo signal, so this variant asks for a reply instead
+// of stating a fact. Paired with promoCaptions as an A/B partner (see the studio
+// "This week" view); it carries its own `-poll` campaign so /insights can compare.
+const ENGAGEMENT_HOOK: Record<PromoTheme, string> = {
+  trending: "Overrated or worth every minute? Drop your verdict 👇",
+  tonight: "Watching tonight? Say who you're here for 👇",
+  renewed: "Deserved the renewal — or should it have ended? 👇",
+  premiere: "Counting down, or not fussed? Tell me below 👇",
+  classic: "Best episode of the whole series? Fight me in the comments 👇",
+  streaming: "Adding it to the list — or hard pass? 👇",
+  top: "Did I rank it wrong? Settle it below 👇",
+};
+
 export function promoCaptions(m: PromoMoment, base: string): CaptionSet {
   const path = m.path;
   const campaign = utmCampaignFromPath(path, m.theme);
   const titleTag = camel(m.title).slice(0, 28);
-  const themeTag: Record<PromoTheme, string> = {
-    trending: "Trending",
-    tonight: "OnTonight",
-    renewed: "Renewed",
-    premiere: "Premiere",
-    classic: "MustWatch",
-    streaming: "NowStreaming",
-    top: "TopTV",
-  };
-  const tags = [...HASH_BASE, themeTag[m.theme], titleTag, m.kind === "movie" ? "Movies" : "TVShow"]
+  const tags = [...HASH_BASE, THEME_TAG[m.theme], titleTag, m.kind === "movie" ? "Movies" : "TVShow"]
     .filter(Boolean)
     .map((t) => `#${t}`);
-  const emoji: Record<PromoTheme, string> = {
-    trending: "🔥",
-    tonight: "📺",
-    renewed: "🎉",
-    premiere: "🗓️",
-    classic: "⭐",
-    streaming: "🍿",
-    top: "🏆",
-  };
   const rating = m.rating != null ? ` (★ ${m.rating.toFixed(1)})` : "";
   return composeCaptions({
-    emoji: emoji[m.theme],
+    emoji: THEME_EMOJI[m.theme],
     title: `${m.title}${rating}`,
     hook: m.note ?? m.kicker,
     origin: base,
@@ -354,6 +372,73 @@ export function promoCaptions(m: PromoMoment, base: string): CaptionSet {
     tags,
     igTitle: `${m.kicker.toUpperCase()}: ${m.title}${rating}`,
     igLead: "Full episode ratings, renewals & where to stream at TV Nightly.",
+  });
+}
+
+/** The engagement/poll A/B variant of a moment's caption: a comment-bait hook +
+ *  a distinct `-poll` campaign so /admin/studio/insights can show which variant
+ *  actually converts. Same subject, link and card — only the hook differs. */
+export function promoEngagementCaptions(m: PromoMoment, base: string): CaptionSet {
+  const path = m.path;
+  const campaign = utmCampaignFromPath(path, `${m.theme}-poll`);
+  const titleTag = camel(m.title).slice(0, 28);
+  const tags = [...HASH_BASE, THEME_TAG[m.theme], titleTag, "HotTake", m.kind === "movie" ? "Movies" : "TVShow"]
+    .filter(Boolean)
+    .map((t) => `#${t}`);
+  const rating = m.rating != null ? ` (★ ${m.rating.toFixed(1)})` : "";
+  return composeCaptions({
+    emoji: THEME_EMOJI[m.theme],
+    title: `${m.title}${rating}`,
+    hook: ENGAGEMENT_HOOK[m.theme],
+    origin: base,
+    path,
+    campaign,
+    tags,
+    igTitle: `${m.title}${rating} — your verdict?`,
+    igLead: "Every episode rated, renewals & where to stream at TV Nightly.",
+  });
+}
+
+/** Captions for the episode-ratings card: a data-forward value hook, linking to
+ *  the show's best-episodes ranking (its own `ratings` campaign for /insights). */
+export function promoRatingsCaptions(m: PromoMoment, base: string): CaptionSet {
+  const slug = m.path.match(/^\/show\/([^/]+)/)?.[1] ?? null;
+  const path = slug ? `/show/${slug}/best-episodes` : m.path;
+  const campaign = utmCampaignFromPath(path, "ratings");
+  const titleTag = camel(m.title).slice(0, 28);
+  const tags = [...HASH_BASE, "EpisodeRatings", titleTag, m.kind === "movie" ? "Movies" : "TVShow"]
+    .filter(Boolean)
+    .map((t) => `#${t}`);
+  return composeCaptions({
+    emoji: "📊",
+    title: m.title,
+    hook: `Every episode of ${m.title}, rated — green = must-watch, red = skip`,
+    origin: base,
+    path,
+    campaign,
+    tags,
+    igTitle: `${m.title} — every episode, rated`,
+    igLead: "Which one's the best? The full ranking is on TV Nightly.",
+  });
+}
+
+/** Captions for the "Shows like X" pin — links to the show's similar page. */
+export function promoSimilarCaptions(m: PromoMoment, base: string): CaptionSet {
+  const slug = m.path.match(/^\/show\/([^/]+)/)?.[1] ?? null;
+  const path = slug ? `/show/${slug}/similar` : m.path;
+  const campaign = utmCampaignFromPath(path, "similar");
+  const titleTag = camel(m.title).slice(0, 28);
+  const tags = [...HASH_BASE, "ShowsLike", titleTag, "WhatToWatch"].filter(Boolean).map((t) => `#${t}`);
+  return composeCaptions({
+    emoji: "🍿",
+    title: `If you liked ${m.title}`,
+    hook: "here's what to watch next — ranked by how close the match is",
+    origin: base,
+    path,
+    campaign,
+    tags,
+    igTitle: `If you liked ${m.title}, watch these next`,
+    igLead: "The full taste-matched list is on TV Nightly.",
   });
 }
 

@@ -4,6 +4,7 @@ import { ExploreCard, MovieCard } from "../components/cards";
 import { HomeSidebarRail } from "../components/home-sidebar";
 import { IconStar } from "../components/icons";
 import { KeepExploring, movieKeepGoingBackdrop } from "../components/keep-going";
+import { ShareBar } from "../components/share";
 import { hubArt } from "../lib/explore-art";
 import { fmtMarathon, fmtRuntime, heroBg, posterImg, slugifyName } from "../lib/format";
 import { FRANCHISES, FRANCHISE_BY_SLUG, FranchiseEntry } from "../lib/franchises";
@@ -328,6 +329,7 @@ app.get("/watch-order/:slug", async (c) => {
       canonical={canonical(c)}
       ogImage={opener?.poster_url ?? undefined}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
+      scripts={["/js/share.js"]}
       ld={[
         {
           "@context": "https://schema.org",
@@ -357,6 +359,7 @@ app.get("/watch-order/:slug", async (c) => {
           <p class="section-eyebrow">Watch-order guide</p>
           <h1>How to watch {fr.name} in order</h1>
           <p class="wo-intro">{fr.intro}</p>
+          <ShareBar url={canonical(c)} title={`The correct order to watch ${fr.name} — the complete guide`} />
           <dl class="wo-stats">
             <div>
               <dt>Films</dt>

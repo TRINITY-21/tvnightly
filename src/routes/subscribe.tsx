@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import { getCookie } from "hono/cookie";
 import { Bindings, HonoEnv } from "../types";
 import { origin } from "../lib/seo";
 import { MessagePage } from "../components/Layout";
@@ -69,12 +70,15 @@ app.post("/subscribe", async (c) => {
 
   // Without a SECRET (fresh local dev) skip double opt-in so the flow still works.
   const confirmed = c.env.SECRET ? 0 : 1;
+  // Social attribution: the tvn_ref cookie (set by routes/go on a /r/ click) tells
+  // us which post referred this signup → surfaced in /admin/studio/insights.
+  const [refSource, refCampaign] = (getCookie(c, "tvn_ref") ?? "").split("|");
   await c.env.DB.prepare(
-    `INSERT INTO subscriptions (email, show_id, kind, confirmed, created_at)
-     VALUES (?,?,?,?,unixepoch())
+    `INSERT INTO subscriptions (email, show_id, kind, confirmed, created_at, ref_source, ref_campaign)
+     VALUES (?,?,?,?,unixepoch(),?,?)
      ON CONFLICT(email, show_id, kind) DO NOTHING`,
   )
-    .bind(email, realId, kind, confirmed)
+    .bind(email, realId, kind, confirmed, refSource || null, refCampaign || null)
     .run();
 
   // shared by the confirm email subject and the "check your inbox" page so the

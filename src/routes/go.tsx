@@ -6,6 +6,7 @@
 // <src> is fb|ig|tt|x|pin; ?c=<campaign> overrides the path-derived default when
 // the studio used a custom campaign (e.g. ratings, showcase, promo themes).
 import { Hono } from "hono";
+import { setCookie } from "hono/cookie";
 import { Bindings, HonoEnv } from "../types";
 import { SRC_FROM_CODE, UTM_MEDIUM, utmCampaignFromPath } from "../lib/utm";
 
@@ -35,6 +36,35 @@ app.get("/r/:src/:path{.+}", (c) => {
   const source = SRC_FROM_CODE[c.req.param("src")];
   if (!source) return c.redirect(path, 302); // unknown source → page, untagged
   const campaign = c.req.query("c") || utmCampaignFromPath(path);
+
+  // Fire-and-forget: record the click so /admin/studio/insights can show which
+  // platform / campaign / page actually drives traffic. Logging must never delay
+  // or fail the redirect — waitUntil lets the write finish after we've responded.
+  try {
+    const db = c.env.DB;
+    if (db) {
+      c.executionCtx.waitUntil(
+        db
+          .prepare("INSERT INTO link_clicks (source, campaign, path) VALUES (?1, ?2, ?3)")
+          .bind(source, campaign, path)
+          .run()
+          .catch(() => {}),
+      );
+    }
+  } catch {
+    /* no ExecutionContext (e.g. tests) — skip logging, still redirect */
+  }
+
+  // Remember the post that referred this visitor (30-day window) so a later
+  // signup can be credited to this campaign in /admin/studio/insights. Lax + no
+  // Secure so it also works on http://localhost during dev.
+  setCookie(c, "tvn_ref", `${source}|${campaign}`, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+    sameSite: "Lax",
+    httpOnly: true,
+  });
+
   const q = new URLSearchParams({
     utm_source: source,
     utm_medium: UTM_MEDIUM,

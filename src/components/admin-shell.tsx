@@ -1,10 +1,10 @@
 import { FC, PropsWithChildren } from "hono/jsx";
 
-export type AdminPage = "studio" | "shorts" | "feedback" | "subscribers";
+export type AdminPage = "social" | "insights" | "feedback" | "subscribers";
 
 const NAV: { id: AdminPage; href: string; label: string }[] = [
-  { id: "studio", href: "/admin/studio", label: "Social studio" },
-  { id: "shorts", href: "/admin/shorts", label: "Shorts generator" },
+  { id: "social", href: "/admin/social", label: "Social" },
+  { id: "insights", href: "/admin/studio/insights", label: "Insights" },
   { id: "feedback", href: "/admin/feedback", label: "Feedback" },
   { id: "subscribers", href: "/admin/subscribers", label: "Subscribers" },
 ];

@@ -11,6 +11,7 @@
 // =============================================================================
 import type { Context } from "hono";
 import type { AppContext, HonoEnv } from "../types";
+import { slugifyName } from "./format";
 import { buildCaptions, type CaptionSet } from "./promo";
 import { origin } from "./seo";
 import {
@@ -375,31 +376,57 @@ export async function runAngleQuery(c: Context<HonoEnv>, q: AngleQuery): Promise
 // ---------------------------------------------------------------------------
 // Captions — delegate to the shared buildCaptions (7 platforms + tags + UTM)
 // ---------------------------------------------------------------------------
+/** Map a chosen angle to the on-site page that best matches its promise, so the
+ *  caption link lands on the exact ranked page instead of a generic hub — e.g.
+ *  "Top 10 Episodes of Severance" → /show/severance/best-episodes, not /top/tv.
+ *  Returns null for angles without a clean 1:1 page (genre / year / network /
+ *  person / all-time): the caller keeps its sensible Top-TV / Movies default.
+ *  Uses the site's canonical slugifier (same as promo.ts link-outs) so the
+ *  /show/<slug>/… path resolves. */
+export function shortsLandingPath(o: {
+  angleType: AngleType;
+  kind: ShortKind;
+  subjectLabel: string | null | undefined;
+}): string | null {
+  const slug = o.subjectLabel ? slugifyName(o.subjectLabel) : "";
+  if (!slug) return null;
+  switch (o.angleType) {
+    case "title-episodes": // "Top 10 Episodes of X" → that show's ranked episodes
+      return `/show/${slug}/best-episodes`;
+    case "similar-to": // "Top 10 … Like X" → that title's similar page
+      return `/${o.kind === "movie" ? "movie" : "show"}/${slug}/similar`;
+    default:
+      return null;
+  }
+}
+
 export function shorts10Captions(p: {
   c: AppContext;
   title: string;
   query: string;
   kind: ShortKind;
   ctaUrl: string;
+  landingPath?: string | null;
 }): CaptionSet {
   const base = origin(p.c);
-  // p.ctaUrl is the brand line shown IN the video ("tvnightly.com") — a display
-  // string, not a path. Strip protocol + host to a real on-site path. A bare
-  // domain leaves nothing, and the /r/ redirect needs a non-root path, so land
-  // on the ranked page that matches the short: Top TV / the Movies hub.
-  const landingPath =
+  // Prefer the angle's real matching page (landingPath) so the caption link lands
+  // on the exact ranked page the video promised. p.ctaUrl is only the brand line
+  // shown IN the video ("tvnightly.com"), so when there's no precise page we strip
+  // it to a path and fall back to the Top TV / Movies hub.
+  const fallbackPath =
     (p.ctaUrl || "")
       .trim()
       .replace(/^https?:\/\//i, "") // protocol
       .replace(/^[^/]*\.[^/]*?(?=\/|$)/, "") // a leading host token ("x.y")
       .replace(/^\/+/, "") || // leading slashes
     (p.kind === "movie" ? "movies" : "top/tv");
+  const landingPath = (p.landingPath || "").replace(/^\/+/, "") || fallbackPath;
   const link = `${base}/${landingPath}`;
   return buildCaptions({
     emoji: "🏆",
     title: `Top 10 ${p.title}`,
     hook: "Ranked from 10 to 1 — which have you actually seen?",
-    sub: "#1 might surprise you.",
+    sub: "Did I get #1 wrong? Settle it in the comments 👇",
     link,
     tags: ["Top10", p.query.replace(/-/g, ""), "Ranked", p.kind === "movie" ? "Movies" : "TVShows"],
     campaign: `top10-${p.query}`,
@@ -412,11 +439,78 @@ export function shorts10Captions(p: {
 const sh = (s: string | null | undefined) => String(s ?? "").replace(/'/g, "'\\''");
 const tsvSafe = (s: string | null | undefined) => String(s ?? "").replace(/[\t\n\r]+/g, " ").replace(/\s+/g, " ").trim();
 
+// ---------------------------------------------------------------------------
+// Per-category theming — each category gets its own accent colour + mood-matched
+// music so a "Best Romance" short doesn't look or sound like a "Best Horror" one.
+// Accents are vivid mid-tones (the dark CTA text stays legible on them). Music is
+// a local mood track the founder curates once — see tools/countdown/music/SOURCES.md.
+// ---------------------------------------------------------------------------
+export type ShortMood = "epic" | "dark" | "romance" | "upbeat" | "scifi";
+
+const GENRE_THEME: Record<string, { accent: string; mood: ShortMood }> = {
+  action: { accent: "0xff5a3c", mood: "epic" },
+  adventure: { accent: "0xf2a413", mood: "epic" },
+  animation: { accent: "0x3cc8ff", mood: "upbeat" },
+  comedy: { accent: "0xffd23c", mood: "upbeat" },
+  crime: { accent: "0xe0503a", mood: "dark" },
+  documentary: { accent: "0x4db8a4", mood: "epic" },
+  drama: { accent: "0xb98cff", mood: "romance" },
+  family: { accent: "0x6ad06a", mood: "upbeat" },
+  fantasy: { accent: "0x9b7bff", mood: "epic" },
+  history: { accent: "0xc9a24b", mood: "epic" },
+  horror: { accent: "0xff2e2e", mood: "dark" },
+  mystery: { accent: "0x7c6cff", mood: "dark" },
+  reality: { accent: "0xff6ec7", mood: "upbeat" },
+  romance: { accent: "0xff5c8a", mood: "romance" },
+  "sci-fi": { accent: "0x2ee6d6", mood: "scifi" },
+  thriller: { accent: "0xff7a1a", mood: "dark" },
+  war: { accent: "0x8a8f57", mood: "epic" },
+  western: { accent: "0xd98a3a", mood: "epic" },
+};
+
+// Fallback theme by angle type when there's no genre to key off.
+const ANGLE_THEME: Partial<Record<AngleType, { accent: string; mood: ShortMood }>> = {
+  "trending-week": { accent: "0xff5c8a", mood: "upbeat" },
+  "alltime-best": { accent: "0xf2c14e", mood: "epic" },
+  "year-best": { accent: "0x4db8a4", mood: "epic" },
+  "genre-year": { accent: "0x4db8a4", mood: "epic" },
+  "upcoming-movies": { accent: "0x2ee6d6", mood: "scifi" },
+};
+
+const MOOD_FILE: Record<ShortMood, string> = {
+  epic: "epic.mp3",
+  dark: "dark.mp3",
+  romance: "romance.mp3",
+  upbeat: "upbeat.mp3",
+  scifi: "scifi.mp3",
+};
+
+const DEFAULT_THEME: { accent: string; mood: ShortMood } = { accent: BRAND_ACCENT, mood: "epic" };
+
+const genreThemeById = (id: number | undefined): { accent: string; mood: ShortMood } | null => {
+  if (id == null) return null;
+  const g = GENRES.find((x) => x.movie === id || x.tv === id);
+  return g ? GENRE_THEME[g.slug] ?? null : null;
+};
+
+/** The category's accent + music mood, from (in priority) the angle's genre, then
+ *  the subject's own genres, then an angle-type fallback, then the brand default. */
+export function resolveShortTheme(p: ShortProject): { accentHex: string; mood: ShortMood; musicFile: string } {
+  const fromSubject = (p.subject.genreIds ?? []).map(genreThemeById).find((t): t is { accent: string; mood: ShortMood } => Boolean(t));
+  const t = genreThemeById(p.angle.tmdbQuery.genreId) ?? fromSubject ?? ANGLE_THEME[p.angle.type] ?? DEFAULT_THEME;
+  return { accentHex: t.accent, mood: t.mood, musicFile: MOOD_FILE[t.mood] };
+}
+
 export function shorts10Spec(c: AppContext, p: ShortProject): ExportBundle {
   const entries = [...p.entries].slice(0, 10);
   // countdown order: rank 10 (worst) → rank 1 (best) reveals last
   const ordered = entries.slice().sort((a, b) => b.rank - a.rank);
-  const cardsRows = ordered.map((e) => `${e.rank}\t${tsvSafe(e.title)}\t${e.accentHex || p.accentHex}\t`);
+  // Category theming: use the per-category accent unless the user set a custom one
+  // (left at the brand default → auto-theme). Music resolves to the mood track.
+  const theme = resolveShortTheme(p);
+  const userAccent = (p.accentHex || "").trim().toLowerCase();
+  const accentHex = !userAccent || userAccent === BRAND_ACCENT ? theme.accentHex : p.accentHex;
+  const cardsRows = ordered.map((e) => `${e.rank}\t${tsvSafe(e.title)}\t${accentHex}\t`);
   const cardsTsv = `# rank\\ttitle\\taccent\\tposter(blank — fetched by rank below)\n${cardsRows.join("\n")}\n`;
 
   const fetches = ordered
@@ -427,9 +521,12 @@ export function shorts10Spec(c: AppContext, p: ShortProject): ExportBundle {
     .join("\n");
 
   const dir = "/Users/ghost/Documents/tvnightly/tools/countdown";
+  // Music: an explicit URL wins; otherwise use the category's local mood track
+  // (music/<mood>.mp3 — curated once per tools/countdown/music/SOURCES.md); fall
+  // back to any music.mp3 already sitting in the dir.
   const music = p.musicUrl
-    ? `curl -fsSL -o music.mp3 '${sh(p.musicUrl)}' && echo "  ✓ music.mp3"`
-    : `[ -f music.mp3 ] || { echo "⚠️  No music.mp3 in $PWD — drop a ~36s track there, then re-run."; exit 1; }`;
+    ? `curl -fsSL -o music.mp3 '${sh(p.musicUrl)}' && echo "  ✓ music.mp3 (custom)"`
+    : `if [ -f 'music/${theme.musicFile}' ]; then cp 'music/${theme.musicFile}' music.mp3 && echo "  ✓ ${theme.mood} track (music/${theme.musicFile})"; elif [ -f music.mp3 ]; then echo "  • using existing music.mp3"; else echo "⚠️  No music/${theme.musicFile} — add a ${theme.mood} track (see tools/countdown/music/SOURCES.md) or drop a music.mp3 here."; exit 1; fi`;
 
   const cfg = [
     `export INTRO_LINE1='${sh(p.intro.line1)}'`,
@@ -438,7 +535,7 @@ export function shorts10Spec(c: AppContext, p: ShortProject): ExportBundle {
     `export CTA_REASON='${sh(p.ctaReason)}'`,
     `export CTA_URL='${sh(p.ctaUrl)}'`,
     `export CTA_COMMENT='${sh(p.ctaComment)}'`,
-    `export ACCENT='${sh(p.accentHex)}'`,
+    `export ACCENT='${sh(accentHex)}'`,
     `export RAMP=${p.ramp}`,
     `export GRADE=${p.grade}`,
     `export DEPTH=${p.depth}`,
@@ -472,7 +569,18 @@ echo "✓ done → out/countdown_depth.mp4"
     filename: `render_short--${p.angle.query}.sh`,
     script,
     cardsTsv,
-    captions: shorts10Captions({ c, title: titleForCaptions(p), query: p.angle.query, kind: p.angle.tmdbQuery.kind, ctaUrl: p.ctaUrl }),
+    captions: shorts10Captions({
+      c,
+      title: titleForCaptions(p),
+      query: p.angle.query,
+      kind: p.angle.tmdbQuery.kind,
+      ctaUrl: p.ctaUrl,
+      landingPath: shortsLandingPath({
+        angleType: p.angle.type,
+        kind: p.angle.tmdbQuery.kind,
+        subjectLabel: p.subject?.label,
+      }),
+    }),
   };
 }
 

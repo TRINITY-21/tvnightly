@@ -21,7 +21,7 @@ CARD=3.20                        # seconds per card (reference cadence ~3.17s)
 CLIMAX_HOLD=1.35                 # last card (#1) held this x longer (the reveal)
 WHIP=0.20                        # whip/blur transition length, intro->first card
 ZOOM=0.0012; ZMAX=1.14           # Ken Burns push speed / max zoom
-ACCENT="0x39d98a"                # default title accent (TV Nightly green)
+ACCENT="${ACCENT:-0x39d98a}"     # title accent — overridden per-category by render_short.sh
 BRAND="TV NIGHTLY"               # persistent lower-third watermark
 INTRO=1                          # 1 = render an intro title card, 0 = skip
 INTRO_LINE1="TOP 10 MOVIES"

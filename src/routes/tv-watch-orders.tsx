@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { Layout } from "../components/Layout";
 import { IconStar } from "../components/icons";
 import { HomeSidebarRail } from "../components/home-sidebar";
+import { ShareBar } from "../components/share";
 import { fmtRuntime, heroBg, posterSrc } from "../lib/format";
 import { breadcrumbTrail, canonical, itemListLd, origin } from "../lib/seo";
 import { tmdbBackdrop } from "../lib/tmdb";
@@ -176,6 +177,7 @@ app.get("/tv-watch-order/:slug", async (c) => {
       canonical={canonical(c)}
       ogImage={rep?.poster_url ?? rep?.image_url ?? undefined}
       preloadImage={art?.x2 ? { x1: art.x1, x2: art.x2 } : undefined}
+      scripts={["/js/share.js"]}
       ld={[
         {
           "@context": "https://schema.org",
@@ -202,6 +204,7 @@ app.get("/tv-watch-order/:slug", async (c) => {
           <h1>{u.name} watch order</h1>
           {u.aka ? <p class="wo-aka muted">{u.aka}</p> : null}
           <p class="wo-intro">{u.intro}</p>
+          <ShareBar url={canonical(c)} title={`The correct order to watch ${u.name} — the complete guide`} />
         </div>
       </header>
 

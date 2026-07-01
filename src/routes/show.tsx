@@ -4,7 +4,7 @@ import { ExploreCard } from "../components/cards";
 import { VsCard } from "../components/compare";
 import { communityRingScore, DetailHero, heroWatchProvider, tmdbRingScore } from "../components/detail-hero";
 import { DossierRow } from "../components/dossier";
-import { FilterSelect, SubscribeForm } from "../components/forms";
+import { FilterSelect, SubscribeCompact, SubscribeForm } from "../components/forms";
 import { HomeSidebarRail } from "../components/home-sidebar";
 import { IconPlay, IconStar } from "../components/icons";
 import { KeepGoing, loadShowKeepGoingArts } from "../components/keep-going";
@@ -258,7 +258,7 @@ app.get("/show/:slug", async (c) => {
       ogImage={`${canonical(c)}/og.png`}
       ogImageLarge
       preloadImage={backdrop?.x2 ? { x1: backdrop.x1, x2: backdrop.x2 } : undefined}
-      scripts={["/js/share.js"]}
+      scripts={["/js/share.js", "/js/exit-capture.js"]}
     >
       <article class="show-hub">
         <DetailHero
@@ -322,6 +322,35 @@ app.get("/show/:slug", async (c) => {
           fallbackBackdrop={backdrop}
         />
         <ShowTabs slug={show.slug} current="overview" />
+        <div class="show-alert-inline">
+          <SubscribeCompact
+            showId={show.id}
+            showName={show.name}
+            kicker={
+              show.status === "Running"
+                ? `Get an email the moment ${show.name} is renewed`
+                : show.status === "Ended"
+                  ? `Email me if ${show.name} returns or gets revived`
+                  : `Email me when ${show.name} premieres`
+            }
+          />
+        </div>
+        <div id="exit-capture" class="exit-capture" hidden>
+          <div class="exit-capture-card" role="dialog" aria-modal="true" aria-labelledby="exit-capture-title">
+            <button type="button" class="exit-capture-x" data-exit-close aria-label="Close">
+              ×
+            </button>
+            <p class="exit-capture-kicker">Before you go</p>
+            <p id="exit-capture-title" class="exit-capture-title">
+              Never miss {show.name}
+            </p>
+            <p class="exit-capture-sub muted">
+              We'll email you the moment {show.name} is renewed, cancelled or gets a premiere date. No account,
+              one-click unsubscribe.
+            </p>
+            <SubscribeCompact showId={show.id} showName={show.name} kicker={`Email me about ${show.name}`} />
+          </div>
+        </div>
         <div class="home-main-grid">
           <div class="home-col">
         {(() => {

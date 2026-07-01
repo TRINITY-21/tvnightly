@@ -1,0 +1,90 @@
+/* Contextual per-show alert capture below the hero tabs + the exit-intent modal
+   (revealed once per session by /js/exit-capture.js). Both reuse .sub-compact. */
+
+.show-alert-inline {
+  margin: 0.9rem 0 0.3rem;
+}
+
+.exit-capture {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+  background: rgba(8, 8, 10, 0.72);
+  animation: exit-fade 0.18s ease-out;
+}
+.exit-capture[hidden] {
+  display: none;
+}
+.exit-capture-card {
+  position: relative;
+  width: min(30rem, 100%);
+  background: var(--surface, #1a1a1e);
+  border: 1px solid var(--line, #2b2b32);
+  border-radius: 16px;
+  padding: 1.5rem 1.4rem 1.4rem;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  animation: exit-rise 0.22s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.exit-capture-x {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.65rem;
+  border: none;
+  background: none;
+  color: var(--muted, #b6b1a9);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+}
+.exit-capture-x:hover {
+  color: var(--text, #f8f6f2);
+}
+.exit-capture-kicker {
+  margin: 0 0 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent, #ffa94d);
+}
+.exit-capture-title {
+  margin: 0 0 0.4rem;
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text, #f8f6f2);
+}
+.exit-capture-sub {
+  margin: 0 0 1rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+@keyframes exit-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes exit-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .exit-capture,
+  .exit-capture-card {
+    animation: none;
+  }
+}

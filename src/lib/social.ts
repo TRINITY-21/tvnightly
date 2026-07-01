@@ -55,6 +55,36 @@ function wrap(s: string, max: number, maxLines: number): string[] {
   return lines;
 }
 
+// Fit a title to a column by shrinking the FONT until the whole thing wraps into
+// <= maxLines — long titles never truncate, they just get smaller. Returns the
+// wrapped lines plus the fitted font size. `charw` = em-advance of the face used.
+function fitLines(text: string, colW: number, capSize: number, maxLines: number, charw = 0.62) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const longestWord = Math.max(1, ...words.map((w) => w.length));
+  const lineCount = (budget: number) => {
+    let lines = 1;
+    let cur = 0;
+    for (const w of words) {
+      const add = cur ? cur + 1 + w.length : w.length;
+      if (cur && add > budget) {
+        lines++;
+        cur = w.length;
+      } else cur = add;
+    }
+    return lines;
+  };
+  const floor = Math.max(20, Math.round(capSize * 0.32));
+  let size = capSize;
+  for (let i = 0; i < 48 && size > floor; i++) {
+    const budget = Math.max(4, Math.floor(colW / (size * charw)));
+    if (budget >= longestWord && lineCount(budget) <= maxLines) break;
+    size = Math.round(size * 0.94);
+  }
+  size = Math.max(floor, size);
+  const budget = Math.max(4, Math.floor(colW / (size * charw)));
+  return { lines: wrap(text, budget, maxLines), size };
+}
+
 interface TextOpts {
   size: number;
   wght?: number;
@@ -1505,6 +1535,7 @@ function kickerBlock(text: string, x: number, y: number, h: number, size: number
  *  moment. Resvg-safe dialect, so it rasterizes server-side. */
 export function buildPromoCard(d: PromoCardData, W: number, H: number): string {
   const landscape = W / H > 1.3;
+  const isReel = H / W > 1.6; // true 9:16 → dodge TikTok's right rail + caption strip
   const MIN = Math.min(W, H);
   const M = Math.round(MIN * 0.075);
   const ambient = d.backdropUri ?? d.posterUri ?? null;
@@ -1513,113 +1544,605 @@ export function buildPromoCard(d: PromoCardData, W: number, H: number): string {
   p.push(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`,
   );
-  const over = Math.round(MIN * 0.08); // grow the blurred layer past the frame so the blur doesn't feather the edges
   p.push(
     `<defs>` +
-      `<linearGradient id="pbg" x1="0" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#1c1c23"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
-      `<filter id="pblur" x="-12%" y="-12%" width="124%" height="124%"><feGaussianBlur stdDeviation="${Math.round(MIN * 0.035)}"/></filter>` +
-      `<filter id="pshadow" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="${Math.round(MIN * 0.012)}" stdDeviation="${Math.round(MIN * 0.028)}" flood-color="#000" flood-opacity="0.72"/></filter>` +
-      `<linearGradient id="pveil" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.32"/><stop offset="0.45" stop-color="${PLATE}" stop-opacity="0.12"/><stop offset="0.78" stop-color="${PLATE}" stop-opacity="0.78"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.97"/></linearGradient>` +
-      // a crisp drop shadow so the editorial kicker stays legible over art
-      `<filter id="ksh" x="-20%" y="-60%" width="140%" height="220%"><feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="#000" flood-opacity="0.6"/></filter>` +
+      `<linearGradient id="pbg" x1="0" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#141419"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+      `<filter id="pblur" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur stdDeviation="${Math.round(MIN * 0.05)}"/></filter>` +
+      // deep poster/pill shadow — the "lift off the art" pop
+      `<filter id="pcard" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="${Math.round(MIN * 0.018)}" stdDeviation="${Math.round(MIN * 0.05)}" flood-color="#000" flood-opacity="0.88"/></filter>` +
+      // amber spotlight behind the hero
+      `<radialGradient id="pspot" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="${AMBER}" stop-opacity="0.5"/><stop offset="0.5" stop-color="${AMBER}" stop-opacity="0.13"/><stop offset="1" stop-color="${AMBER}" stop-opacity="0"/></radialGradient>` +
+      `<linearGradient id="pvs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.2"/><stop offset="0.4" stop-color="${PLATE}" stop-opacity="0.04"/><stop offset="0.7" stop-color="${PLATE}" stop-opacity="0.72"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.99"/></linearGradient>` +
+      `<linearGradient id="phs" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.08"/><stop offset="0.42" stop-color="${PLATE}" stop-opacity="0.5"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.98"/></linearGradient>` +
+      `<filter id="ptsh" x="-25%" y="-45%" width="150%" height="190%"><feDropShadow dx="0" dy="2" stdDeviation="7" flood-color="#000" flood-opacity="0.75"/></filter>` +
       `</defs>`,
   );
+
+  // 1) base plate + full-bleed cinematic art
   p.push(`<rect width="${W}" height="${H}" fill="url(#pbg)"/>`);
   if (ambient) {
+    const over = Math.round(MIN * 0.1);
     p.push(
-      `<image href="${ambient}" x="${-over}" y="${-over}" width="${W + over * 2}" height="${H + over * 2}" preserveAspectRatio="xMidYMid slice" filter="url(#pblur)" opacity="0.6"/>`,
+      `<image href="${ambient}" x="${-over}" y="${-over}" width="${W + over * 2}" height="${H + over * 2}" preserveAspectRatio="xMidYMid slice" filter="url(#pblur)" opacity="0.7"/>`,
     );
-    p.push(`<rect width="${W}" height="${H}" fill="${PLATE}" opacity="0.4"/>`);
-    p.push(`<rect width="${W}" height="${H}" fill="url(#pveil)"/>`);
+    p.push(`<rect width="${W}" height="${H}" fill="${PLATE}" opacity="0.34"/>`);
   }
+  // 2) amber spotlight behind the poster
+  const spotCx = landscape ? W * 0.29 : W * 0.5;
+  const spotCy = landscape ? H * 0.5 : H * (isReel ? 0.34 : 0.4);
+  const spotR = Math.round(MIN * 0.66);
+  p.push(`<ellipse cx="${r2(spotCx)}" cy="${r2(spotCy)}" rx="${spotR}" ry="${spotR}" fill="url(#pspot)"/>`);
+  // 3) legibility scrim + 4) amber signature spine
+  p.push(`<rect width="${W}" height="${H}" fill="url(#${landscape ? "phs" : "pvs"})"/>`);
+  p.push(`<rect x="0" y="0" width="${r2(MIN * 0.013)}" height="${H}" fill="${AMBER}"/>`);
+  p.push(ogBrand(M, M + 26));
 
-  // an amber spine on the far left edge — the magazine signature
-  p.push(`<rect x="0" y="0" width="${r2(MIN * 0.018)}" height="${H}" fill="${AMBER}"/>`);
-  p.push(ogBrand(M, M + 30));
-
-  const draw = (
-    tx: number,
-    titleW: number,
-    anchor: "start" | "middle",
-    blockTopY: number,
-    cap: number,
-  ) => {
-    // size the title to actually FIT the column: wrap, measure the longest line,
-    // then scale type down until that line fits titleW (Archivo Black ≈ 0.56 em/char)
-    const CHARW = 0.56;
-    const maxCh = Math.max(7, Math.floor(titleW / (cap * CHARW)));
-    const titleLines = wrap(d.title.toUpperCase(), maxCh, 3);
-    const longest = Math.max(1, ...titleLines.map((l) => l.length));
-    const tSize = Math.min(cap, Math.floor(titleW / (longest * CHARW)));
-    const lead = tSize + Math.round(tSize * 0.04);
-    const kH = Math.round(tSize * 0.42);
-    const kSize = Math.round(kH * 0.5);
-    let cy = blockTopY;
-    p.push(kickerBlock(d.kicker, anchor === "middle" ? tx - kickerBlockW(d.kicker, kH, kSize) / 2 : tx, cy, kH, kSize));
-    cy += kH + Math.round(tSize * 0.34);
-    for (const ln of titleLines) {
-      cy += tSize;
-      p.push(txtR(tx, cy, ln, { size: tSize, w: "black", fill: TEXT, anchor }));
-      cy += lead - tSize;
-    }
-    cy += Math.round(tSize * 0.1);
-    if (d.rating != null) {
-      cy += 50;
-      p.push(ratingMark(anchor === "middle" ? tx - 60 : tx + 2, cy, 50, d.rating, GOLD, anchor === "middle" ? "middle" : "start"));
-    }
-    if (d.note) {
-      cy += 56;
-      // wrap the hook to fit the column (up to 2 lines) at a readable size. Flush
-      // to the same left edge as the title + meta — no bullet (the kicker already
-      // carries the amber dot), so the stack reads as one clean column.
-      const NW = 0.53; // semibold em/char
-      const ns = landscape ? 40 : anchor === "middle" ? 36 : 28;
-      const maxCh = Math.max(10, Math.floor(titleW / (ns * NW)));
-      const noteLines = wrap(d.note, maxCh, 2);
-      noteLines.forEach((ln, i) => {
-        p.push(txtR(tx, cy + i * (ns + 8), ln, { size: ns, w: "semi", fill: "#efe9df", anchor }));
-      });
-      cy += (noteLines.length - 1) * (ns + 8);
-    }
-    if (d.meta) {
-      cy += 44;
-      const ms = Math.max(20, Math.min(27, Math.floor(titleW / (Math.max(1, String(d.meta).length) * 0.5))));
-      p.push(txtR(tx, cy, trunc(d.meta, Math.floor(titleW / (ms * 0.5))), { size: ms, w: "semi", fill: MUTED, anchor }));
-    }
-    return cy;
+  // a filled amber kicker pill (dark text) — the catchy badge
+  const kPad = (s: number) => Math.round(s * 0.55);
+  const pillH = (s: number) => s + kPad(s) * 2;
+  const kickerPill = (cx: number, topY: number, text: string, s: number, anchor: "middle" | "start"): string => {
+    const label = text.toUpperCase();
+    const ls = s * 0.1;
+    const tw = label.length * s * 0.64 + Math.max(0, label.length - 1) * ls;
+    const w = tw + s * 1.4;
+    const h = pillH(s);
+    const x = anchor === "middle" ? cx - w / 2 : cx;
+    return (
+      `<rect x="${r2(x)}" y="${r2(topY)}" width="${r2(w)}" height="${r2(h)}" rx="${r2(h / 2)}" fill="${AMBER}"/>` +
+      txtR(x + w / 2, topY + h / 2 + s * 0.34, label, { size: s, w: "black", fill: "#1c1305", anchor: "middle", ls })
+    );
   };
 
-  // tall frames (9:16) get the magazine "cover": poster up top, big title below.
-  // square + wide don't have the vertical room for that, so they go side-by-side.
-  const tall = H / W > 1.25;
-  if (tall) {
-    // 9:16 platform-safe canvas: keep all readable content left of the right
-    // action-rail (~16%) and above the bottom caption strip (~15%), and center
-    // the composition WITHIN that canvas (not the full frame) so nothing tucks
-    // under the like/share buttons or the caption.
-    const safeR = W - Math.round(W * 0.16); // right edge of the safe column
-    const safeB = H - Math.round(H * 0.15); // top of the caption strip
-    const cx = Math.round((M + safeR) / 2); // center of the safe column
-    const ph = Math.round(H * 0.42);
+  // a gold rating pill that sits on a poster corner (right edge = rightX)
+  const ratingBadge = (rightX: number, topY: number, s: number, value: number): string => {
+    const t = value.toFixed(1);
+    const groupW = s * 0.92 + s * 0.3 + t.length * s * 0.58;
+    const w = groupW + s * 1.0;
+    const h = s + Math.round(s * 0.8);
+    const x = rightX - w;
+    return (
+      `<g filter="url(#pcard)"><rect x="${r2(x)}" y="${r2(topY)}" width="${r2(w)}" height="${r2(h)}" rx="${r2(h / 2)}" fill="${GOLD}"/></g>` +
+      ratingMark(x + w / 2, topY + h / 2 + s * 0.34, s, value, "#1c1305", "middle")
+    );
+  };
+
+  // the text stack, laid out bottom-up so nothing ever collides with the domain
+  const textStack = (cx: number, colW: number, anchor: "middle" | "start", minTopY: number, domainY: number, capPx: number) => {
+    const CHARW = 0.62; // Archivo Black caps advance — conservative so titles never clip
+    const cap = capPx;
+    const maxCh = Math.max(7, Math.floor(colW / (cap * CHARW)));
+    const titleLines = wrap(d.title.toUpperCase(), maxCh, 3);
+    const longest = Math.max(1, ...titleLines.map((l) => l.length));
+    const tSize = Math.max(30, Math.min(cap, Math.floor(colW / (longest * CHARW))));
+    const lead = Math.round(tSize * 1.0);
+    const kSize = Math.max(19, Math.round(tSize * 0.28));
+    const ns = d.note ? Math.round(W * (landscape ? 0.028 : 0.032)) : 0;
+    const noteLines = d.note ? wrap(d.note, Math.max(10, Math.floor(colW / (ns * 0.53))), 2) : [];
+    const ms = Math.round(W * 0.019);
+
+    const kH = pillH(kSize);
+    const gapK = Math.round(tSize * 0.4);
+    const gapT = Math.round(tSize * 0.44);
+    const gapN = Math.round(ns * 0.9);
+    const titleH = titleLines.length * lead;
+    const noteH = noteLines.length * Math.round(ns * 1.28);
+    const metaH = d.meta ? Math.round(ms * 1.6) : 0;
+    const total = kH + gapK + titleH + (noteLines.length ? gapT + noteH : 0) + (metaH ? gapN + metaH : 0);
+
+    let y = Math.max(minTopY, domainY - Math.round(MIN * 0.055) - total);
+    p.push(kickerPill(cx, y, d.kicker || "TV Nightly", kSize, anchor));
+    y += kH + gapK;
+    for (const ln of titleLines) {
+      y += tSize;
+      p.push(`<g filter="url(#ptsh)">` + txtR(cx, y, ln, { size: tSize, w: "black", fill: TEXT, anchor }) + `</g>`);
+      y += lead - tSize;
+    }
+    if (noteLines.length) {
+      y += gapT - (lead - tSize);
+      for (const ln of noteLines) {
+        y += ns;
+        p.push(txtR(cx, y, ln, { size: ns, w: "semi", fill: "#e9e3d8", anchor }));
+        y += Math.round(ns * 1.28) - ns;
+      }
+    }
+    if (d.meta) {
+      y += noteLines.length ? gapN : gapT;
+      y += ms;
+      p.push(
+        txtR(cx, y, trunc(String(d.meta).toUpperCase(), Math.floor(colW / (ms * 0.62))), {
+          size: ms,
+          w: "bold",
+          fill: MUTED,
+          anchor,
+          ls: ms * 0.14,
+        }),
+      );
+    }
+  };
+
+  if (!landscape) {
+    // portrait — a centered, poster-forward "cover"
+    const rail = isReel ? 0.14 : 0;
+    const capStrip = isReel ? 0.12 : 0.055;
+    const safeR = W - Math.round(W * rail);
+    const safeB = H - Math.round(H * capStrip);
+    const cx = Math.round((M + safeR) / 2);
+    const colW = safeR - M - Math.round(MIN * 0.02);
+    const tall = H / W >= 1.35; // 2:3 pin & 9:16 have room for a big poster; 1:1 doesn't
+    const ph = Math.round(H * (isReel ? 0.4 : tall ? 0.47 : 0.38));
     const pw = Math.round(ph * 0.667);
     const px = cx - Math.round(pw / 2);
-    const py = Math.round(H * 0.1);
-    p.push(posterHero(heroPoster, d.title, px, py, pw, ph, "ph-promo"));
-    draw(cx, safeR - M, "middle", py + ph + Math.round(H * 0.045), 120);
-    // brand anchored at the bottom of the safe canvas (clear of the caption strip)
-    p.push(txtR(cx, safeB - 10, "tvnightly.com", { size: 30, w: "black", fill: AMBER, ls: 0.5, anchor: "middle" }));
+    const py = Math.round(H * (isReel ? 0.085 : tall ? 0.075 : 0.07));
+    p.push(posterHero(heroPoster, d.title, px, py, pw, ph, "ph-promo", "pcard"));
+    if (d.rating != null) {
+      p.push(ratingBadge(px + pw + Math.round(pw * 0.05), py - Math.round(ph * 0.028), Math.round(pw * 0.13), d.rating));
+    }
+    const domainY = safeB - Math.round(MIN * 0.008);
+    p.push(txtR(cx, domainY, "tvnightly.com", { size: Math.round(W * 0.03), w: "black", fill: AMBER, ls: 1, anchor: "middle" }));
+    const capPx = Math.round(W * (isReel ? 0.112 : tall ? 0.1 : 0.078));
+    textStack(cx, colW, "middle", py + ph + Math.round(MIN * 0.035), domainY - Math.round(W * 0.05), capPx);
   } else {
-    // poster hero left, text column right (square = IG feed, wide = X — no 9:16 rail)
-    const ph = Math.round(H * (landscape ? 0.72 : 0.64));
+    // landscape — poster left, text right
+    const ph = Math.round(H * 0.78);
     const pw = Math.round(ph * 0.667);
-    const px = M + Math.round(MIN * 0.02);
+    const px = M + Math.round(MIN * 0.03);
     const py = Math.round((H - ph) / 2);
-    p.push(posterHero(heroPoster, d.title, px, py, pw, ph, "ph-promo"));
-    const tx = px + pw + Math.round(M * 1.1);
-    draw(tx, W - tx - M, "start", Math.round(H * (landscape ? 0.24 : 0.14)), landscape ? 132 : 88);
-    const footerY = H - Math.round(M * 0.8);
-    p.push(txtR(M, footerY, "tvnightly.com", { size: 28, w: "black", fill: AMBER, ls: 0.5 }));
+    p.push(posterHero(heroPoster, d.title, px, py, pw, ph, "ph-promo", "pcard"));
+    if (d.rating != null) {
+      p.push(ratingBadge(px + pw + Math.round(pw * 0.05), py - Math.round(ph * 0.02), Math.round(pw * 0.12), d.rating));
+    }
+    const tx = px + pw + Math.round(M * 1.4);
+    const colW = W - tx - M;
+    const domainY = H - Math.round(M * 0.9);
+    p.push(txtR(tx, domainY, "tvnightly.com", { size: Math.round(H * 0.048), w: "black", fill: AMBER, ls: 1 }));
+    textStack(tx, colW, "start", Math.round(H * 0.16), domainY - Math.round(H * 0.06), Math.round(H * 0.11));
   }
+
+  p.push(`</svg>`);
+  return p.join("");
+}
+
+/** A season's episode ratings as a shareable card: color-coded score chips over a
+ *  cinematic full-bleed hero, the show title + season, and a season-average/peak
+ *  line. Green ≥8 · yellow ≥7 · orange ≥6 · red <6 · grey "?" for unaired. Renders
+ *  at any aspect ratio (chip column beside the hero for wide/square; a chip grid
+ *  under the title for 9:16 / 2:3). resvg-safe. */
+export function buildSeasonRatingsCard(
+  d: {
+    name: string;
+    season: number;
+    episodes: { number: number; rating: number | null }[];
+    backdropUri: string | null;
+    posterUri: string | null;
+  },
+  W: number,
+  H: number,
+): string {
+  const landscape = W / H > 1.3;
+  const isReel = H / W > 1.6;
+  const tall = !landscape && H / W >= 1.05; // 9:16 & 2:3 stack; 1:1 uses the column
+  const MIN = Math.min(W, H);
+  const M = Math.round(MIN * 0.075);
+  const hero = d.backdropUri ?? d.posterUri ?? null;
+  const eps = d.episodes.slice(0, 24);
+  const rated = eps.filter((e): e is { number: number; rating: number } => e.rating != null);
+  const avg = rated.length ? rated.reduce((s, e) => s + e.rating, 0) / rated.length : null;
+  let peak: { number: number; rating: number } | null = null;
+  for (const e of rated) if (!peak || e.rating > peak.rating) peak = e;
+  const scoreColor = (r: number | null) =>
+    r == null ? "#34343d" : r >= 8 ? "#46c46a" : r >= 7 ? "#e6c144" : r >= 6 ? "#e2913c" : "#e0574a";
+
+  const p: string[] = [];
+  p.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`);
+  p.push(
+    `<defs>` +
+      `<linearGradient id="rbg" x1="0" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#141419"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+      `<linearGradient id="rleft" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.97"/><stop offset="0.46" stop-color="${PLATE}" stop-opacity="0.66"/><stop offset="0.8" stop-color="${PLATE}" stop-opacity="0.16"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.03"/></linearGradient>` +
+      `<linearGradient id="rbot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.06"/><stop offset="0.4" stop-color="${PLATE}" stop-opacity="0.12"/><stop offset="0.72" stop-color="${PLATE}" stop-opacity="0.84"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.99"/></linearGradient>` +
+      `<filter id="rtsh" x="-25%" y="-45%" width="150%" height="190%"><feDropShadow dx="0" dy="2" stdDeviation="7" flood-color="#000" flood-opacity="0.82"/></filter>` +
+      `<filter id="rchip" x="-45%" y="-45%" width="190%" height="190%"><feDropShadow dx="0" dy="3" stdDeviation="9" flood-color="#000" flood-opacity="0.5"/></filter>` +
+      `</defs>`,
+  );
+  p.push(`<rect width="${W}" height="${H}" fill="url(#rbg)"/>`);
+  if (hero) p.push(`<image href="${hero}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice" opacity="0.96"/>`);
+  p.push(`<rect width="${W}" height="${H}" fill="url(#${tall ? "rbot" : "rleft"})"/>`);
+  p.push(`<rect x="0" y="0" width="${r2(MIN * 0.013)}" height="${H}" fill="${AMBER}"/>`);
+  p.push(ogBrand(M, M + 26));
+
+  const scorePill = (x: number, y: number, w: number, h: number, r: number | null): string => {
+    const s = Math.round(h * 0.52);
+    return (
+      `<g filter="url(#rchip)"><rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" rx="${r2(Math.min(h * 0.3, 16))}" fill="${scoreColor(r)}"/></g>` +
+      txtR(x + w / 2, y + h / 2 + s * 0.34, r == null ? "?" : r.toFixed(1), {
+        size: s,
+        w: "black",
+        fill: r == null ? "#c9c9d2" : "#141100",
+        anchor: "middle",
+      })
+    );
+  };
+  const eyebrow = `SEASON ${d.season} · EPISODE RATINGS`;
+  const titleUp = d.name.toUpperCase();
+  const summary =
+    avg != null ? `SEASON AVG ${avg.toFixed(1)}${peak ? `   ·   PEAK E${peak.number} · ${peak.rating.toFixed(1)}` : ""}` : null;
+
+  if (!tall) {
+    // ---- wide + square: chip column on the left, title along the bottom ----
+    const colX = M;
+    const labelW = Math.round(MIN * 0.085);
+    const pillW = Math.round(MIN * 0.15);
+    const eyeY = M + Math.round(MIN * 0.14);
+    // domain up in the header (right of the brand) so it never collides with the title
+    p.push(txtR(W - M, M + 26, "tvnightly.com", { size: Math.round(MIN * 0.03), w: "black", fill: AMBER, anchor: "end", ls: 1 }));
+
+    // title stack, sized to fit and anchored to the bottom-left
+    const capT = Math.round(W * (landscape ? 0.078 : 0.092));
+    const titleColW = W - colX - M;
+    const { lines: titleLines, size: tSize } = fitLines(titleUp, titleColW, capT, 2, 0.7);
+    const lead = Math.round(tSize * 1.02);
+    const titleBaseY = H - M - Math.round(MIN * 0.015);
+    let by = titleBaseY - (titleLines.length - 1) * lead;
+    const firstLineTop = by - tSize;
+    if (summary) p.push(txtR(colX, firstLineTop - Math.round(MIN * 0.02), summary, { size: Math.round(MIN * 0.026), w: "bold", fill: "#e9e3d8", ls: MIN * 0.002 }));
+    for (const ln of titleLines) {
+      p.push(`<g filter="url(#rtsh)">` + txtR(colX, by, ln, { size: tSize, w: "black", fill: TEXT }) + `</g>`);
+      by += lead;
+    }
+
+    // the chip column occupies the band between the eyebrow and the title
+    const contentTop = eyeY + Math.round(MIN * 0.03);
+    const contentBottom = firstLineTop - (summary ? Math.round(MIN * 0.05) : Math.round(MIN * 0.02));
+    const availH = Math.max(1, contentBottom - contentTop);
+
+    p.push(txtR(colX, eyeY, eyebrow, { size: Math.round(MIN * 0.026), w: "black", fill: AMBER, ls: MIN * 0.003 }));
+    const n = Math.max(1, eps.length);
+    const rowH = Math.min(Math.round(MIN * 0.11), availH / n);
+    const gap = Math.max(2, Math.round(rowH * 0.16));
+    const pillH = rowH - gap;
+    eps.forEach((e, i) => {
+      const y = contentTop + i * rowH;
+      p.push(txtR(colX, y + pillH / 2 + pillH * 0.19, `E${e.number}`, { size: Math.round(pillH * 0.5), w: "bold", fill: "#cfcbc2" }));
+      p.push(scorePill(colX + labelW, y, pillW, pillH, e.rating));
+    });
+  } else {
+    // ---- tall (9:16 / 2:3): poster up top, then eyebrow + title + a chip grid ----
+    const capStrip = isReel ? 0.12 : 0.05;
+    const safeB = H - Math.round(H * capStrip);
+    const cx = M;
+    const colW = W - 2 * M - (isReel ? Math.round(W * 0.14) : 0);
+    const n = Math.max(1, eps.length);
+    const gcols = n <= 5 ? n : n <= 12 ? Math.ceil(n / 2) : Math.ceil(n / 3);
+    const grows = Math.ceil(n / gcols);
+    const cellGap = Math.round(MIN * 0.022);
+    const cellW = (colW - (gcols - 1) * cellGap) / gcols;
+    const pillH = Math.round(cellW * 0.6);
+    const lblH = Math.round(MIN * 0.03);
+    const cellH = lblH + Math.round(MIN * 0.012) + pillH + cellGap;
+    const gridH = grows * cellH - cellGap;
+    const domainY = safeB - Math.round(MIN * 0.006);
+    p.push(txtR(cx, domainY, "tvnightly.com", { size: Math.round(W * 0.03), w: "black", fill: AMBER, ls: 1 }));
+    const gridTop = domainY - Math.round(MIN * 0.06) - gridH;
+    const capT = Math.round(W * (isReel ? 0.088 : 0.082));
+    const { lines: titleLines, size: tSize } = fitLines(titleUp, colW, capT, 2, 0.7);
+    let ty = gridTop - Math.round(MIN * (summary ? 0.09 : 0.055)) - titleLines.length * Math.round(tSize * 1.02);
+    const eyebrowY = ty - Math.round(MIN * 0.032);
+    p.push(txtR(cx, eyebrowY, eyebrow, { size: Math.round(MIN * 0.028), w: "black", fill: AMBER, ls: MIN * 0.003 }));
+    for (const ln of titleLines) {
+      ty += tSize;
+      p.push(`<g filter="url(#rtsh)">` + txtR(cx, ty, ln, { size: tSize, w: "black", fill: TEXT }) + `</g>`);
+      ty += Math.round(tSize * 1.02) - tSize;
+    }
+    if (summary) p.push(txtR(cx, gridTop - Math.round(MIN * 0.03), summary, { size: Math.round(MIN * 0.026), w: "bold", fill: "#e9e3d8", ls: MIN * 0.002 }));
+    eps.forEach((e, i) => {
+      const r = Math.floor(i / gcols);
+      const c = i % gcols;
+      const x = cx + c * (cellW + cellGap);
+      const y = gridTop + r * cellH;
+      p.push(txtR(x + cellW / 2, y + lblH * 0.78, `E${e.number}`, { size: Math.round(lblH * 0.86), w: "bold", fill: "#cfcbc2", anchor: "middle" }));
+      p.push(scorePill(x, y + lblH + Math.round(MIN * 0.012), cellW, pillH, e.rating));
+    });
+  }
+
+  p.push(`</svg>`);
+  return p.join("");
+}
+
+// shared rating→colour ramp for the new resvg-safe cards (chips + heatmap)
+const ratingColor = (r: number | null) =>
+  r == null ? "#34343d" : r >= 8 ? "#46c46a" : r >= 7 ? "#e6c144" : r >= 6 ? "#e2913c" : r >= 5 ? "#e0754a" : "#e0574a";
+
+/** "Shows like {X}": the source backdrop as a cinematic ground, then a grid of the
+ *  closest matches as posters with a rating chip + name. Great Pinterest / group-chat
+ *  fuel. resvg-safe, renders at any aspect ratio. */
+export function buildSimilarCard(
+  d: {
+    sourceTitle: string;
+    backdropUri: string | null;
+    sourcePosterUri?: string | null;
+    items: { name: string; rating: number | null; posterUri: string | null }[];
+  },
+  W: number,
+  H: number,
+): string {
+  const landscape = W / H > 1.3;
+  const isReel = H / W > 1.6;
+  const square = !landscape && H / W < 1.15;
+  const MIN = Math.min(W, H);
+  const M = Math.round(MIN * 0.075);
+  const cols = landscape ? Math.min(Math.max(1, d.items.length), 4) : 3;
+  const items = d.items.slice(0, landscape ? 4 : square ? 3 : 6);
+  const rows = Math.max(1, Math.ceil(items.length / cols));
+
+  const p: string[] = [];
+  p.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`);
+  p.push(
+    `<defs>` +
+      `<linearGradient id="qbg" x1="0" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#141419"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+      `<filter id="qblur" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur stdDeviation="${Math.round(MIN * 0.055)}"/></filter>` +
+      `<filter id="qph" x="-45%" y="-45%" width="190%" height="190%"><feDropShadow dx="0" dy="${Math.round(MIN * 0.014)}" stdDeviation="${Math.round(MIN * 0.04)}" flood-color="#000" flood-opacity="0.82"/></filter>` +
+      `<linearGradient id="qv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.35"/><stop offset="0.5" stop-color="${PLATE}" stop-opacity="0.5"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.88"/></linearGradient>` +
+      `<filter id="qtsh" x="-25%" y="-45%" width="150%" height="190%"><feDropShadow dx="0" dy="2" stdDeviation="7" flood-color="#000" flood-opacity="0.8"/></filter>` +
+      `</defs>`,
+  );
+  p.push(`<rect width="${W}" height="${H}" fill="url(#qbg)"/>`);
+  if (d.backdropUri) {
+    const over = Math.round(MIN * 0.1);
+    p.push(`<image href="${d.backdropUri}" x="${-over}" y="${-over}" width="${W + over * 2}" height="${H + over * 2}" preserveAspectRatio="xMidYMid slice" filter="url(#qblur)" opacity="0.5"/>`);
+  }
+  p.push(`<rect width="${W}" height="${H}" fill="url(#qv)"/>`);
+  p.push(`<rect x="0" y="0" width="${r2(MIN * 0.013)}" height="${H}" fill="${AMBER}"/>`);
+  p.push(ogBrand(M, M + 26));
+  p.push(txtR(W - M, M + 26, "tvnightly.com", { size: Math.round(MIN * 0.03), w: "black", fill: AMBER, anchor: "end", ls: 1 }));
+
+  // ---- header lockup: the source show's poster on the left, "IF YOU LIKED {title}"
+  //      to its right (left-anchored editorial), then "WATCH THESE NEXT" ----
+  const headTop = M + Math.round(MIN * 0.13);
+  const eyeSize = Math.round(MIN * 0.03);
+  let tx = M;
+  let ph = 0;
+  if (d.sourcePosterUri) {
+    ph = Math.round(MIN * (landscape ? 0.22 : isReel ? 0.3 : square ? 0.2 : 0.26));
+    const pw = Math.round(ph / 1.5);
+    p.push(posterHero(d.sourcePosterUri, d.sourceTitle, M, headTop, pw, ph, "sim-src", "qph"));
+    tx = M + pw + Math.round(MIN * 0.045);
+  }
+  // shrink-to-fit title against the room right of the poster — long names shrink, never clip
+  const titleColW = W - M - tx;
+  const capT = Math.round(W * (landscape ? 0.055 : isReel ? 0.082 : 0.066));
+  const { lines: tLines, size: tSize } = fitLines(d.sourceTitle.toUpperCase(), titleColW, capT, 2, 0.7);
+  const lead = Math.round(tSize * 1.02);
+  const eyeGap = Math.round(MIN * 0.02);
+  const textBlockH = eyeSize + eyeGap + tLines.length * lead;
+  const blockTop = ph > textBlockH ? headTop + Math.round((ph - textBlockH) / 2) : headTop;
+  p.push(txtR(tx, blockTop + eyeSize, "IF YOU LIKED", { size: eyeSize, w: "black", fill: AMBER, ls: MIN * 0.004, anchor: "start" }));
+  let ty = blockTop + eyeSize + eyeGap;
+  for (const ln of tLines) {
+    ty += tSize;
+    p.push(`<g filter="url(#qtsh)">` + txtR(tx, ty, ln, { size: tSize, w: "black", fill: TEXT, anchor: "start" }) + `</g>`);
+    ty += lead - tSize;
+  }
+  const lockupBottom = Math.max(ty, headTop + ph);
+  p.push(txtR(M, lockupBottom + Math.round(MIN * 0.055), "WATCH THESE NEXT", { size: Math.round(MIN * 0.026), w: "bold", fill: "#e9e3d8", ls: MIN * 0.003, anchor: "start" }));
+
+  // ---- poster grid (fits both width and height) ----
+  const gridTop = lockupBottom + Math.round(MIN * (isReel ? 0.12 : landscape ? 0.1 : square ? 0.06 : 0.1));
+  const gRight = W - M;
+  const gLeft = M;
+  const gBottom = H - Math.round(MIN * (isReel ? 0.11 : 0.045));
+  const gap = Math.round(MIN * 0.028);
+  const nameH = Math.round(MIN * 0.05);
+  const availW = gRight - gLeft;
+  const availH = gBottom - gridTop;
+  const posterH = Math.max(
+    40,
+    Math.min(((availW - (cols - 1) * gap) / cols) * 1.5, (availH - (rows - 1) * gap) / rows - nameH),
+  );
+  const cellW = posterH / 1.5;
+  const cellH = posterH + nameH + gap;
+  const gridW = cols * cellW + (cols - 1) * gap;
+  const ox = gLeft + (availW - gridW) / 2;
+  items.forEach((it, i) => {
+    const r = Math.floor(i / cols);
+    const c = i % cols;
+    const x = ox + c * (cellW + gap);
+    const y = gridTop + r * cellH;
+    p.push(posterHero(it.posterUri ?? null, it.name, x, y, cellW, posterH, `qp${i}`, "qph"));
+    if (it.rating != null) p.push(pinRatingChip(x, y, posterH, it.rating));
+    const ns = Math.round(nameH * 0.46);
+    p.push(txtR(x + cellW / 2, y + posterH + nameH * 0.62, trunc(it.name, Math.floor(cellW / (ns * 0.56))), { size: ns, w: "bold", fill: "#efe9df", anchor: "middle" }));
+  });
+
+  p.push(`</svg>`);
+  return p.join("");
+}
+
+/** Full-series episode heatmap: every episode of every season as a colour cell
+ *  (green→red), with numbers when the cells are big enough. "Whole series in one
+ *  image" — strong screenshot bait. resvg-safe, any aspect ratio. */
+export function buildHeatmapCard(
+  d: { name: string; backdropUri: string | null; episodes: { season: number; number: number; rating: number | null }[] },
+  W: number,
+  H: number,
+): string {
+  const MIN = Math.min(W, H);
+  const landscape = W / H > 1.3;
+  const isReel = H / W > 1.6;
+  const M = Math.round(MIN * 0.075);
+  const seasons = [...new Set(d.episodes.map((e) => e.season))].filter((s) => s > 0).sort((a, b) => a - b);
+  const cols = seasons.map((s) =>
+    d.episodes.filter((e) => e.season === s && e.number != null).sort((a, b) => a.number - b.number),
+  );
+  const nCols = Math.max(1, cols.length);
+  const nRows = Math.max(1, ...cols.map((c) => c.length));
+  const ratedArr = d.episodes.filter((e) => e.rating != null).map((e) => e.rating as number);
+  const avg = ratedArr.length ? ratedArr.reduce((s, r) => s + r, 0) / ratedArr.length : null;
+
+  const p: string[] = [];
+  p.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`);
+  p.push(
+    `<defs>` +
+      `<linearGradient id="hbg" x1="0" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#15151b"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+      `<filter id="hblur" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur stdDeviation="${Math.round(MIN * 0.06)}"/></filter>` +
+      `<filter id="htsh" x="-25%" y="-45%" width="150%" height="190%"><feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000" flood-opacity="0.75"/></filter>` +
+      `</defs>`,
+  );
+  p.push(`<rect width="${W}" height="${H}" fill="url(#hbg)"/>`);
+  if (d.backdropUri) {
+    p.push(`<image href="${d.backdropUri}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice" filter="url(#hblur)" opacity="0.2"/>`);
+    p.push(`<rect width="${W}" height="${H}" fill="${PLATE}" opacity="0.42"/>`);
+  }
+  p.push(`<rect x="0" y="0" width="${r2(MIN * 0.013)}" height="${H}" fill="${AMBER}"/>`);
+  p.push(ogBrand(M, M + 26));
+  p.push(txtR(W - M, M + 26, "tvnightly.com", { size: Math.round(MIN * 0.03), w: "black", fill: AMBER, anchor: "end", ls: 1 }));
+
+  const headTop = M + Math.round(MIN * 0.14);
+  p.push(txtR(M, headTop, "EVERY EPISODE · RATED", { size: Math.round(MIN * 0.028), w: "black", fill: AMBER, ls: MIN * 0.004 }));
+  const tSize = Math.round(W * (landscape ? 0.055 : isReel ? 0.082 : 0.066));
+  const tLines = wrap(d.name.toUpperCase(), Math.max(8, Math.floor((W - 2 * M) / (tSize * 0.62))), 2);
+  let ty = headTop + Math.round(MIN * 0.015);
+  for (const ln of tLines) {
+    ty += tSize;
+    p.push(`<g filter="url(#htsh)">` + txtR(M, ty, ln, { size: tSize, w: "black", fill: TEXT }) + `</g>`);
+    ty += Math.round(tSize * 1.02) - tSize;
+  }
+  if (avg != null)
+    p.push(
+      txtR(M, ty + Math.round(MIN * 0.05), `${seasons.length} SEASON${seasons.length === 1 ? "" : "S"} · ${ratedArr.length} EPISODES · AVG ${avg.toFixed(1)}`, {
+        size: Math.round(MIN * 0.026),
+        w: "bold",
+        fill: "#e9e3d8",
+        ls: MIN * 0.002,
+      }),
+    );
+
+  const gridTop = ty + Math.round(MIN * 0.11);
+  const boxLeft = M;
+  const boxBottom = H - Math.round(MIN * (isReel ? 0.14 : 0.06));
+  const lg = Math.round(MIN * 0.05);
+  const tg = Math.round(MIN * 0.038);
+  const boxW = W - M - boxLeft;
+  const boxH = boxBottom - gridTop;
+  // wide → episodes run ACROSS, seasons DOWN (fills the width); tall keeps it upright
+  const transpose = landscape;
+  const gCols = transpose ? nRows : nCols;
+  const gRows = transpose ? nCols : nRows;
+  const gap = gCols > 10 || gRows > 16 ? Math.round(MIN * 0.004) : Math.round(MIN * 0.008);
+  const cell = Math.min((boxW - lg - (gCols - 1) * gap) / gCols, (boxH - tg - (gRows - 1) * gap) / gRows, Math.round(MIN * 0.085));
+  const gridW = gCols * cell + (gCols - 1) * gap;
+  const gridH = gRows * cell + (gRows - 1) * gap;
+  const ox = boxLeft + lg + Math.max(0, (boxW - lg - gridW) / 2);
+  const oy = gridTop + tg + Math.max(0, (boxH - tg - gridH) / 2);
+  const rx = Math.min(6, cell * 0.18);
+  const showNum = cell >= Math.round(MIN * 0.048);
+  const numSize = Math.round(cell * 0.42);
+  const hSize = Math.round(MIN * 0.02);
+  const colEvery = transpose && gCols > 12 ? 5 : 1;
+  for (let gc = 0; gc < gCols; gc++) {
+    if (gc % colEvery !== 0 && gc !== gCols - 1) continue;
+    p.push(txtR(ox + gc * (cell + gap) + cell / 2, oy - Math.round(tg * 0.32), transpose ? `E${gc + 1}` : `S${seasons[gc]}`, { size: hSize, w: "black", fill: MUTED, anchor: "middle" }));
+  }
+  const rowEvery = !transpose && gRows > 14 ? 5 : 1;
+  for (let gr = 0; gr < gRows; gr++) {
+    if (gr % rowEvery !== 0 && gr !== gRows - 1) continue;
+    p.push(txtR(ox - Math.round(lg * 0.28), oy + gr * (cell + gap) + cell / 2 + Math.round(hSize * 0.34), transpose ? `S${seasons[gr]}` : `E${gr + 1}`, { size: hSize, w: "bold", fill: MUTED, anchor: "end" }));
+  }
+  for (let gc = 0; gc < gCols; gc++)
+    for (let gr = 0; gr < gRows; gr++) {
+      const ep = transpose ? cols[gr][gc] : cols[gc][gr];
+      const x = ox + gc * (cell + gap);
+      const y = oy + gr * (cell + gap);
+      p.push(`<rect x="${r2(x)}" y="${r2(y)}" width="${r2(cell)}" height="${r2(cell)}" rx="${r2(rx)}" fill="${ep ? ratingColor(ep.rating) : "#1b1b20"}"/>`);
+      if (ep && showNum)
+        p.push(
+          txtR(x + cell / 2, y + cell / 2 + numSize * 0.34, ep.rating != null ? ep.rating.toFixed(1) : "·", {
+            size: numSize,
+            w: "bold",
+            fill: ep.rating != null ? "#141100" : "#6a6a72",
+            anchor: "middle",
+          }),
+        );
+    }
+  p.push(`</svg>`);
+  return p.join("");
+}
+
+/** Head-to-head: two shows split-screen with poster, name, rating, and a WINNER
+ *  pill on whichever scores higher, with a VS medallion at the seam. Debate bait.
+ *  resvg-safe; splits left/right for wide+square, top/bottom for 9:16 / 2:3. */
+export function buildVersusCard(
+  a: { name: string; rating: number | null; posterUri: string | null; backdropUri: string | null },
+  b: { name: string; rating: number | null; posterUri: string | null; backdropUri: string | null },
+  W: number,
+  H: number,
+): string {
+  const MIN = Math.min(W, H);
+  const landscape = W / H > 1.3;
+  const vert = !landscape && H / W >= 1.15; // tall → top/bottom
+  const winA = (a.rating ?? -1) > (b.rating ?? -1);
+  const winB = (b.rating ?? -1) > (a.rating ?? -1);
+  const halfW = vert ? W : Math.round(W / 2);
+  const halfH = vert ? Math.round(H / 2) : H;
+  const ph = Math.round(Math.min(halfH * (vert ? 0.4 : 0.5), halfW * 0.6));
+  const pw = Math.round(ph * 0.667);
+  const pyRel = Math.round(halfH * (vert ? 0.11 : 0.14));
+
+  const p: string[] = [];
+  p.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`);
+  p.push(
+    `<defs>` +
+      `<filter id="vblur" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur stdDeviation="${Math.round(MIN * 0.045)}"/></filter>` +
+      `<filter id="vph" x="-45%" y="-45%" width="190%" height="190%"><feDropShadow dx="0" dy="${Math.round(MIN * 0.014)}" stdDeviation="${Math.round(MIN * 0.04)}" flood-color="#000" flood-opacity="0.85"/></filter>` +
+      `<radialGradient id="vsh" cx="0.5" cy="0.4" r="0.7"><stop offset="0" stop-color="${PLATE}" stop-opacity="0.12"/><stop offset="0.68" stop-color="${PLATE}" stop-opacity="0.55"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.94"/></radialGradient>` +
+      `<clipPath id="cA"><rect x="0" y="0" width="${halfW}" height="${halfH}"/></clipPath>` +
+      `<clipPath id="cB"><rect x="${vert ? 0 : halfW}" y="${vert ? halfH : 0}" width="${halfW}" height="${halfH}"/></clipPath>` +
+      `</defs>`,
+  );
+  p.push(`<rect width="${W}" height="${H}" fill="${PLATE}"/>`);
+
+  const panel = (s: typeof a, X: number, Y: number, clip: string, win: boolean) => {
+    const parts: string[] = [];
+    const art = s.backdropUri ?? s.posterUri;
+    if (art)
+      parts.push(
+        `<g clip-path="url(#${clip})"><image href="${art}" x="${X}" y="${Y}" width="${halfW}" height="${halfH}" preserveAspectRatio="xMidYMid slice" filter="url(#vblur)" opacity="0.78"/><rect x="${X}" y="${Y}" width="${halfW}" height="${halfH}" fill="url(#vsh)"/></g>`,
+      );
+    if (win)
+      parts.push(
+        `<g clip-path="url(#${clip})"><rect x="${X}" y="${Y}" width="${halfW}" height="${halfH}" fill="none" stroke="${GOLD}" stroke-width="${Math.round(MIN * 0.014)}"/></g>`,
+      );
+    const pcx = X + halfW / 2;
+    const py = Y + pyRel;
+    parts.push(posterHero(s.posterUri ?? s.backdropUri ?? null, s.name, pcx - pw / 2, py, pw, ph, `vp-${clip}`, "vph"));
+    const nSize = Math.round(MIN * (vert ? 0.05 : 0.044));
+    const nLines = wrap(s.name.toUpperCase(), Math.max(6, Math.floor((halfW - MIN * 0.16) / (nSize * 0.62))), 2);
+    let ny = py + ph + Math.round(MIN * 0.04);
+    for (const ln of nLines) {
+      ny += nSize;
+      parts.push(`<g filter="url(#vph)">` + txtR(pcx, ny, ln, { size: nSize, w: "black", fill: TEXT, anchor: "middle" }) + `</g>`);
+      ny += Math.round(nSize * 1.02) - nSize;
+    }
+    if (s.rating != null) parts.push(ratingMark(pcx, ny + Math.round(MIN * 0.055), Math.round(MIN * 0.07), s.rating, win ? GOLD : "#e9e3d8", "middle"));
+    // WINNER pill at the panel foot — clear of the brand + the medallion
+    if (win) {
+      const label = "WINNER";
+      const ws = Math.round(MIN * 0.025);
+      const wpw = label.length * ws * 0.64 + ws * 1.4;
+      const wph = ws * 2;
+      const wy = ny + Math.round(MIN * (s.rating != null ? 0.11 : 0.04));
+      parts.push(`<g filter="url(#vph)"><rect x="${r2(pcx - wpw / 2)}" y="${r2(wy)}" width="${r2(wpw)}" height="${r2(wph)}" rx="${r2(wph / 2)}" fill="${GOLD}"/></g>`);
+      parts.push(txtR(pcx, wy + wph / 2 + ws * 0.34, label, { size: ws, w: "black", fill: "#1c1305", anchor: "middle", ls: ws * 0.12 }));
+    }
+    return parts.join("");
+  };
+  p.push(panel(a, 0, 0, "cA", winA));
+  p.push(panel(b, vert ? 0 : halfW, vert ? halfH : 0, "cB", winB));
+
+  p.push(ogBrand(Math.round(MIN * 0.055), Math.round(MIN * 0.055) + 24));
+  const cx = W / 2;
+  const cy = vert ? Math.round(H / 2) : Math.round(pyRel + ph / 2);
+  const rMed = Math.round(MIN * 0.095);
+  p.push(`<circle cx="${r2(cx)}" cy="${r2(cy)}" r="${r2(rMed)}" fill="${PLATE}" stroke="${AMBER}" stroke-width="${Math.round(MIN * 0.007)}"/>`);
+  p.push(txtR(cx, cy + rMed * 0.36, "VS", { size: Math.round(rMed * 0.95), w: "black", fill: AMBER, anchor: "middle" }));
   p.push(`</svg>`);
   return p.join("");
 }

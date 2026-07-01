@@ -184,7 +184,7 @@
     try {
       const { captions } = await api("/admin/shorts/captions", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: a.title.replace(/^top 10 /i, ""), query: a.query, kind: a.tmdbQuery.kind, ctaUrl: $("#sf-url").value.trim() }),
+        body: JSON.stringify({ title: a.title.replace(/^top 10 /i, ""), query: a.query, kind: a.tmdbQuery.kind, ctaUrl: $("#sf-url").value.trim(), angleType: a.type, subjectLabel: state.subject && state.subject.label }),
       });
       state.captions = captions;
       fillCaptions(captions);

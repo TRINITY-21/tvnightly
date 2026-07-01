@@ -262,7 +262,7 @@ async function renderComparePage(c: AppContext, showA: ShowRow, showB: ShowRow) 
           <h2 class="vsx-h2">By the numbers</h2>
           <ShareBar
             url={`${origin(c)}${comparePathFor(showA.slug, showB.slug)}`}
-            title={`${showA.name} vs ${showB.name} — episode ratings compared`}
+            title={`${showA.name} vs ${showB.name} — which is actually better? The episode ratings settle it.`}
           />
         </div>
         <table class="tape">

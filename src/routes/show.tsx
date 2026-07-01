@@ -1049,7 +1049,7 @@ app.get("/show/:slug/similar", async (c) => {
         .map((s) => s.name)
         .join(", ")} and more, ranked by match strength with ratings and where to stream.`}
       canonical={`${site}${base}`}
-      ogImage={show.poster_url ?? show.image_url ?? undefined}
+      ogImage={`${site}${base}/og.png`}
       ld={ld}
       scripts={["/js/share.js"]}
     >

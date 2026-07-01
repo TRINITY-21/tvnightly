@@ -1312,6 +1312,104 @@ export function buildSimilarPin(d: SimilarPinData): string {
   return p.join("");
 }
 
+export interface SimilarOgEntry {
+  name: string;
+  posterUri: string | null; // inlined data-URI; null falls back to an initial tile
+  rating: number | null;
+}
+export interface SimilarOgData {
+  eyebrow: string; // "SHOWS LIKE" | "MOVIES LIKE"
+  sourceTitle: string; // the show/movie the page is "more like"
+  metaLine?: string | null; // "18 ranked · Thriller · Drama"
+  totalCount: number;
+  footerRight?: string | null; // CTA count, e.g. "Full list & where to stream"
+  backdropUri: string | null; // ambient source art (backdrop preferred)
+  posterUri: string | null; // source poster — ambient fallback when no backdrop
+  picks: SimilarOgEntry[]; // top 3 matches, shown as ranked posters
+}
+
+/** "Shows/Movies like X" LANDSCAPE share card (1200×630): editorial title on the
+ *  left, the three closest ranked matches as posters on the right. The posters
+ *  ARE the hook — a link unfurl that shows the payoff (what you'll get) instead
+ *  of a bare source poster, pulling the click through to the full ranked list. */
+export function buildSimilarOgCard(d: SimilarOgData): string {
+  const p: string[] = [];
+  p.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_W}" height="${OG_H}" viewBox="0 0 ${OG_W} ${OG_H}" font-family="Archivo, ${SYS}">`,
+  );
+  p.push(ogDefs());
+  p.push(`<rect width="${OG_W}" height="${OG_H}" fill="url(#bg)"/>`);
+
+  // ambient: the source's backdrop (or poster), dimmed under a left→right + bottom
+  // scrim so the left title column and the brand lockup stay legible.
+  const ambient = d.backdropUri ?? d.posterUri;
+  if (ambient) {
+    p.push(
+      `<image href="${ambient}" x="0" y="0" width="${OG_W}" height="${OG_H}" preserveAspectRatio="xMidYMid slice" opacity="0.5"/>`,
+    );
+    p.push(`<rect width="${OG_W}" height="${OG_H}" fill="url(#vscrim)"/>`);
+    p.push(`<rect width="${OG_W}" height="${OG_H}" fill="url(#hscrim)"/>`);
+  }
+  p.push(ogBrand());
+
+  // ---- right: the three ranked pick posters (the payoff) ----
+  const n = Math.min(3, d.picks.length) || 1;
+  const gap = 26;
+  const regionRight = OG_W - OG_M; // 1136
+  const regionLeft = 556;
+  let pw = Math.floor((regionRight - regionLeft - gap * (n - 1)) / n);
+  let ph = Math.round(pw * 1.5);
+  const maxPh = 300;
+  if (ph > maxPh) {
+    ph = maxPh;
+    pw = Math.round(ph / 1.5);
+  }
+  const rowW = n * pw + (n - 1) * gap;
+  const x0 = regionRight - rowW; // right-align the poster row
+  const py = Math.round((OG_H - ph) / 2) - 4;
+  d.picks.slice(0, n).forEach((e, i) => {
+    const px = x0 + i * (pw + gap);
+    p.push(posterHero(e.posterUri, e.name, px, py, pw, ph, `sim-${i}`, "ds"));
+    p.push(pinRankChip(px, py, i + 1));
+    if (e.rating != null) p.push(pinRatingChip(px, py, ph, e.rating));
+  });
+
+  // ---- left: editorial title block, vertically centered in the free column ----
+  const colRight = x0 - 56;
+  const colW = colRight - OG_M;
+  const CHARW = 0.66; // Archivo Black em-width per char (slightly over → safe clearance)
+  const cap = 92;
+  const nameLines = wrap(d.sourceTitle.toUpperCase(), 12, 2);
+  const longest = Math.max(1, ...nameLines.map((l) => l.length));
+  const nSize = Math.max(40, Math.min(cap, Math.floor(colW / (longest * CHARW))));
+  const lead = Math.round(nSize * 1.02);
+  const eyeSize = 24;
+  const blockH = eyeSize + 18 + nameLines.length * lead + (d.metaLine ? 42 : 0);
+  const regionTop = 150;
+  const regionBot = OG_H - 92;
+  let y = regionTop + Math.max(0, (regionBot - regionTop - blockH) / 2) + eyeSize;
+  p.push(txtR(OG_M, y, d.eyebrow.toUpperCase(), { size: eyeSize, w: "black", fill: AMBER, ls: 3 }));
+  y += 18;
+  for (const ln of nameLines) {
+    y += nSize;
+    p.push(txtR(OG_M, y, ln, { size: nSize, w: "black", fill: TEXT }));
+    y += lead - nSize;
+  }
+  if (d.metaLine) {
+    y += 40;
+    p.push(txtR(OG_M, y, trunc(d.metaLine, 42), { size: 26, w: "semi", fill: "#e7e3db" }));
+  }
+
+  // ---- footer: rule + wordmark left, the match-count CTA right ----
+  p.push(`<line x1="${OG_M}" y1="${OG_H - 74}" x2="${OG_W - OG_M}" y2="${OG_H - 74}" stroke="${LINE}"/>`);
+  p.push(txtR(OG_M, OG_H - 36, "tvnightly.com", { size: 25, w: "black", fill: AMBER, ls: 0.5 }));
+  if (d.footerRight) {
+    p.push(txtR(OG_W - OG_M, OG_H - 36, d.footerRight, { size: 22, w: "semi", fill: MUTED, anchor: "end" }));
+  }
+  p.push(`</svg>`);
+  return p.join("");
+}
+
 /** The default share card used as a sitewide og:image fallback for pages with
  *  no subject image of their own (home, listings, hubs). Brand lockup + the
  *  house tagline on the plate gradient — no poster. */

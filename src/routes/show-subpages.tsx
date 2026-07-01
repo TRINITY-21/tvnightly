@@ -20,8 +20,9 @@ import { similarShows } from "../lib/queries";
 import { servePng } from "../lib/render";
 import { breadcrumbLd, canonical, eventLd, faqLd, origin } from "../lib/seo";
 import { archivoFontCss, buildSignalSvg, posterDataUri } from "../lib/signal";
-import { buildOgCard, buildRatingsOgCard, type OgCardData, type RatingsEp } from "../lib/social";
-import { tmdbBackdrop } from "../lib/tmdb";
+import { buildOgCard, buildRatingsOgCard, buildSimilarOgCard, type OgCardData, type RatingsEp } from "../lib/social";
+import { tmdbBackdrop, tmdbRecommendations } from "../lib/tmdb";
+import { toShowRow } from "../lib/tmdb-rows";
 import { buildTmdbShow, resolveShow } from "../lib/tmdb-show";
 import { EpisodeRow, EventRow, HonoEnv, ShowRow } from "../types";
 
@@ -449,6 +450,42 @@ app.get("/show/:slug/ratings/og.png", async (c) => {
       show.tmdb_id && c.env.TMDB_API_KEY ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id) : null;
     const backdropUri = await posterDataUri(bd?.x1 ?? posterSrc(show)?.src ?? null);
     return buildRatingsOgCard({ name: show.name, kicker: "Episode ratings", episodes: eps, backdropUri });
+  });
+});
+
+// 1200×630 "shows like X" card — source backdrop + the three closest ranked
+// matches as posters (the payoff), driving the click to the full list (social.ts).
+app.get("/show/:slug/similar/og.png", async (c) => {
+  const slug = c.req.param("slug");
+  return servePng(c, `similar/${slug}`, async () => {
+    const r = await resolveShow(c, slug);
+    if (!r) return null;
+    const show = r.show;
+    let similar = await similarShows(c.env.DB, show, 18);
+    if (!similar.length && show.tmdb_id && c.env.TMDB_API_KEY) {
+      similar = (await tmdbRecommendations(c.env.TMDB_API_KEY, "tv", show.tmdb_id)).slice(0, 18).map(toShowRow);
+    }
+    if (!similar.length) return null;
+    const bd =
+      show.tmdb_id && c.env.TMDB_API_KEY ? await tmdbBackdrop(c.env.TMDB_API_KEY, show.tmdb_id) : null;
+    const top = similar.slice(0, 3);
+    const [backdropUri, posterUri, ...pickUris] = await Promise.all([
+      posterDataUri(bd?.x1 ?? null),
+      posterDataUri(posterSrc(show)?.src ?? null),
+      ...top.map((s) => posterDataUri((s.poster_url ?? s.image_url)?.replace("/w342/", "/w500/") ?? null)),
+    ]);
+    const genres: string[] = show.genres ? JSON.parse(show.genres) : [];
+    const metaBits = [`${similar.length} ranked`, genres.slice(0, 3).join(" · ")].filter(Boolean);
+    return buildSimilarOgCard({
+      eyebrow: "Shows like",
+      sourceTitle: show.name,
+      metaLine: metaBits.join(" · "),
+      totalCount: similar.length,
+      footerRight: "Full list & where to stream",
+      backdropUri,
+      posterUri,
+      picks: top.map((s, i) => ({ name: s.name, posterUri: pickUris[i] ?? null, rating: s.rating })),
+    });
   });
 });
 

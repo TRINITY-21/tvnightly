@@ -50,7 +50,7 @@ import { servePng } from "../lib/render";
 import { foldSql, foldText } from "../lib/search";
 import { breadcrumbTrail, canonical, faqLd, origin } from "../lib/seo";
 import { posterDataUri } from "../lib/signal";
-import { buildCompareOgCard, buildOgCard, type OgSide } from "../lib/social";
+import { buildCompareOgCard, buildOgCard, buildSimilarOgCard, type OgSide } from "../lib/social";
 import {
     movieSpotlightTrailer,
     tmdbMovieBackdrop,
@@ -542,6 +542,44 @@ app.get("/movie/:slug/og.png", async (c) => {
       note: names.length ? `Streaming on ${names[0].trim()}` : null,
       posterUri,
       backdropUri,
+    });
+  });
+});
+
+// 1200×630 "movies like X" card — source backdrop + the three closest ranked
+// matches as posters (the payoff), driving the click to the full list (social.ts).
+app.get("/movie/:slug/similar/og.png", async (c) => {
+  const slug = c.req.param("slug");
+  return servePng(c, `similar-movie/${slug}`, async () => {
+    const r = await resolveMovie(c, slug);
+    if (!r) return null;
+    const movie = r.movie;
+    let simMovies = await similarMovies(c.env.DB, movie, 18);
+    if (!simMovies.length && movie.tmdb_id && c.env.TMDB_API_KEY) {
+      simMovies = (await tmdbRecommendations(c.env.TMDB_API_KEY, "movie", movie.tmdb_id))
+        .slice(0, 18)
+        .map(toMovieRow);
+    }
+    if (!simMovies.length) return null;
+    const bd =
+      c.env.TMDB_API_KEY && movie.imdb_id ? await tmdbMovieBackdrop(c.env.TMDB_API_KEY, movie.imdb_id) : null;
+    const top = simMovies.slice(0, 3);
+    const [backdropUri, posterUri, ...pickUris] = await Promise.all([
+      posterDataUri(bd?.x1 ?? null),
+      posterDataUri(movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? null),
+      ...top.map((m) => posterDataUri(m.poster_url?.replace("/t/p/w342/", "/t/p/w500/") ?? null)),
+    ]);
+    const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
+    const metaBits = [`${simMovies.length} ranked`, genres.slice(0, 3).join(" · ")].filter(Boolean);
+    return buildSimilarOgCard({
+      eyebrow: "Movies like",
+      sourceTitle: movie.title,
+      metaLine: metaBits.join(" · "),
+      totalCount: simMovies.length,
+      footerRight: "Full list & where to stream",
+      backdropUri,
+      posterUri,
+      picks: top.map((m, i) => ({ name: m.title, posterUri: pickUris[i] ?? null, rating: m.rating })),
     });
   });
 });
@@ -1071,7 +1109,7 @@ app.get("/movie/:slug/similar", async (c) => {
         .map((m) => m.title)
         .join(", ")} and more, ranked by match strength with ratings and where to stream.`}
       canonical={`${site}${base}`}
-      ogImage={movie.poster_url?.replace("/t/p/w342/", "/t/p/w780/") ?? undefined}
+      ogImage={`${site}${base}/og.png`}
       ld={ld}
       scripts={["/js/share.js"]}
     >

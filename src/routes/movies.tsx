@@ -547,13 +547,14 @@ app.get("/movie/:slug/og.png", async (c) => {
 });
 
 // 1080×1350 "movies like X" card — the source poster full-bleed as the hero, with
-// the four closest ranked matches overlaid as smaller posters at the foot. Serves
-// both the link unfurl (og:image) and the ShareBar Pin button (social.ts).
-app.get("/movie/:slug/similar/og.png", async (c) => {
+// the four closest ranked matches overlaid as smaller posters at the foot. JPEG
+// (photographic → stays under WhatsApp's og:image limit). Serves both the link
+// unfurl (og:image) and the ShareBar Pin button (social.ts).
+app.get("/movie/:slug/similar/og.jpg", async (c) => {
   const slug = c.req.param("slug");
   return servePng(
     c,
-    `similar-movie3/${slug}`,
+    `similar-movie4/${slug}`,
     async () => {
       const r = await resolveMovie(c, slug);
       if (!r) return null;
@@ -583,6 +584,7 @@ app.get("/movie/:slug/similar/og.png", async (c) => {
       });
     },
     1080,
+    true, // JPEG
   );
 });
 
@@ -1111,7 +1113,7 @@ app.get("/movie/:slug/similar", async (c) => {
         .map((m) => m.title)
         .join(", ")} and more, ranked by match strength with ratings and where to stream.`}
       canonical={`${site}${base}`}
-      ogImage={`${site}${base}/og.png`}
+      ogImage={`${site}${base}/og.jpg`}
       ld={ld}
       scripts={["/js/share.js"]}
     >
@@ -1129,7 +1131,7 @@ app.get("/movie/:slug/similar", async (c) => {
                 <ShareBar
                   url={`${site}${base}`}
                   title={`Movies like ${movie.title}`}
-                  pinMedia={`${site}${base}/og.png`}
+                  pinMedia={`${site}${base}/og.jpg`}
                   pinDescription={`Movies like ${movie.title} — ${simMovies.length} similar movies ranked by match strength, with ratings & where to stream.`}
                 />
               </div>

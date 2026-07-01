@@ -45,6 +45,7 @@
     "type:load:remote": "wrangler d1 execute tvnightly --remote --file=seed/show-type.sql"
   },
   "dependencies": {
+    "@cf-wasm/photon": "^0.3.6",
     "@cf-wasm/resvg": "^0.3.4",
     "hono": "^4",
     "worker-mailer": "^1.2.1"

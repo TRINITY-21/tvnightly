@@ -454,13 +454,14 @@ app.get("/show/:slug/ratings/og.png", async (c) => {
 });
 
 // 1080×1350 "shows like X" card — the source poster full-bleed as the hero, with
-// the four closest ranked matches overlaid as smaller posters at the foot. Serves
-// both the link unfurl (og:image) and the ShareBar Pin button (social.ts).
-app.get("/show/:slug/similar/og.png", async (c) => {
+// the four closest ranked matches overlaid as smaller posters at the foot. JPEG
+// (photographic → stays under WhatsApp's og:image limit). Serves both the link
+// unfurl (og:image) and the ShareBar Pin button (social.ts).
+app.get("/show/:slug/similar/og.jpg", async (c) => {
   const slug = c.req.param("slug");
   return servePng(
     c,
-    `similar3/${slug}`,
+    `similar4/${slug}`,
     async () => {
       const r = await resolveShow(c, slug);
       if (!r) return null;
@@ -488,6 +489,7 @@ app.get("/show/:slug/similar/og.png", async (c) => {
       });
     },
     1080,
+    true, // JPEG
   );
 });
 

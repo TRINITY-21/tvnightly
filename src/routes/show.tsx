@@ -1049,7 +1049,7 @@ app.get("/show/:slug/similar", async (c) => {
         .map((s) => s.name)
         .join(", ")} and more, ranked by match strength with ratings and where to stream.`}
       canonical={`${site}${base}`}
-      ogImage={`${site}${base}/og.png`}
+      ogImage={`${site}${base}/og.jpg`}
       ld={ld}
       scripts={["/js/share.js"]}
     >
@@ -1067,7 +1067,7 @@ app.get("/show/:slug/similar", async (c) => {
                 <ShareBar
                   url={`${site}${base}`}
                   title={`Shows like ${show.name}`}
-                  pinMedia={`${site}${base}/og.png`}
+                  pinMedia={`${site}${base}/og.jpg`}
                   pinDescription={`Shows like ${show.name} — ${similar.length} similar shows ranked by match strength, with ratings & where to stream.`}
                 />
               </div>

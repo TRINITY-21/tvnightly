@@ -10,6 +10,7 @@
 //   Archivo (400) · Archivo SemiBold (600) · Archivo Bold (700) · Archivo Black (900)
 // The OG card builders (src/lib/social.ts) speak that dialect via txtR().
 import { Resvg } from "@cf-wasm/resvg";
+import { PhotonImage } from "@cf-wasm/photon";
 import type { AppContext } from "../types";
 
 // family-name → file, in the order resvg should see them
@@ -60,17 +61,32 @@ export async function svgToPng(svg: string, fonts: Uint8Array[], width = 1200): 
   return png;
 }
 
-/** Edge-cached OG PNG endpoint. Returns the cached bytes on a hit (the
+/** Re-encode PNG bytes as JPEG (photon). Flat branded cards compress fine as PNG,
+ *  but a full-bleed PHOTOGRAPHIC card (e.g. the poster-hero "similar" card) is
+ *  multi-MB as PNG — past WhatsApp's ~300KB og:image ceiling, so WhatsApp drops it
+ *  and falls back to the site icon. JPEG brings it to ~200KB and shares everywhere. */
+function pngToJpeg(png: Uint8Array, quality: number): Uint8Array {
+  const img = PhotonImage.new_from_byteslice(png);
+  try {
+    return img.get_bytes_jpeg(quality);
+  } finally {
+    img.free();
+  }
+}
+
+/** Edge-cached OG image endpoint. Returns the cached bytes on a hit (the
  *  crawler-fast path, no rasterize); on a miss it builds the SVG, rasterizes,
  *  caches, and returns. Mirrors the caches.default idiom in src/lib/tmdb.ts.
  *  `key` must fully determine the image — bump the version prefix below to
  *  invalidate on a design change. `buildSvg` returns null when the subject
- *  doesn't exist (404). */
+ *  doesn't exist (404). Pass jpeg=true for photographic cards that must stay
+ *  under WhatsApp's og:image size limit. */
 export async function servePng(
   c: AppContext,
   key: string,
   buildSvg: () => Promise<string | null>,
   width = 1200,
+  jpeg = false,
 ): Promise<Response> {
   const cacheKey = new Request(`https://og-cache.tvnightly.com/v5/${key}`);
   const cache = caches.default;
@@ -81,9 +97,10 @@ export async function servePng(
   if (svg == null) return c.notFound();
   const fonts = await loadOgFonts(c.env.ASSETS);
   const png = await svgToPng(svg, fonts, width);
-  const res = new Response(png, {
+  const body = jpeg ? pngToJpeg(png, 80) : png;
+  const res = new Response(body, {
     headers: {
-      "Content-Type": "image/png",
+      "Content-Type": jpeg ? "image/jpeg" : "image/png",
       // long edge cache; short browser cache so a design bump propagates fast
       "Cache-Control": "public, max-age=3600, s-maxage=604800",
     },

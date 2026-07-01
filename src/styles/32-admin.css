@@ -162,6 +162,14 @@ main:has(.admin--wide) {
 .admin-stat.is-accent .admin-stat-n {
   color: var(--accent);
 }
+/* de-emphasised tiles: bot hits + secondary time windows */
+.admin-stat.is-muted {
+  opacity: 0.62;
+  box-shadow: none;
+}
+.admin-stat.is-muted .admin-stat-n {
+  color: var(--muted);
+}
 
 /* lists */
 .admin-feed {

@@ -9,6 +9,7 @@ import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
 import { Bindings, HonoEnv } from "../types";
 import { SRC_FROM_CODE, UTM_MEDIUM, utmCampaignFromPath } from "../lib/utm";
+import { classifyClient, edgeSignals } from "../lib/bots";
 
 const app = new Hono<HonoEnv>();
 
@@ -38,17 +39,28 @@ app.get("/r/:src/:path{.+}", (c) => {
   const campaign = c.req.query("c") || utmCampaignFromPath(path);
 
   // Fire-and-forget: record the click so /admin/studio/insights can show which
-  // platform / campaign / page actually drives traffic. Logging must never delay
-  // or fail the redirect — waitUntil lets the write finish after we've responded.
+  // platform / campaign / page actually drives traffic — and, critically, split
+  // real humans from the scanners/proxies a fresh link attracts. Logging must
+  // never delay or fail the redirect — waitUntil lets the write finish after we
+  // respond. (Self-identifying OG crawlers are already intercepted in index.tsx.)
   try {
     const db = c.env.DB;
     if (db) {
+      const ua = c.req.header("user-agent") ?? null;
+      const referer = c.req.header("referer") ?? null;
+      const { country, asOrg } = edgeSignals(c.req.raw);
+      const isBot = classifyClient(ua, asOrg).isBot ? 1 : 0;
       c.executionCtx.waitUntil(
         db
-          .prepare("INSERT INTO link_clicks (source, campaign, path) VALUES (?1, ?2, ?3)")
-          .bind(source, campaign, path)
+          .prepare(
+            "INSERT INTO link_clicks (source, campaign, path, user_agent, referer, country, as_org, is_bot) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+          )
+          .bind(source, campaign, path, ua?.slice(0, 400) ?? null, referer?.slice(0, 300) ?? null, country, asOrg, isBot)
           .run()
-          .catch(() => {}),
+          .catch(() =>
+            // pre-0027 schema (no new columns yet) → fall back to the base insert
+            db.prepare("INSERT INTO link_clicks (source, campaign, path) VALUES (?1, ?2, ?3)").bind(source, campaign, path).run().catch(() => {}),
+          ),
       );
     }
   } catch {

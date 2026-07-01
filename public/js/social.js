@@ -369,5 +369,215 @@
     vsResults.hidden = false;
   }
 
+  // ---- card → short video (beat-synced) for TikTok / YouTube -----------------
+  // Draws the current card onto a canvas with a Ken-Burns push-in, an intro fade,
+  // a light sheen sweep, a vignette, and a scale "pop" driven by the live audio
+  // (real AnalyserNode) — then records the canvas + /audio2.mp3 via MediaRecorder.
+  // MP4 when the browser can (TikTok-ready), else WebM (fine for YouTube).
+  (function initVideo() {
+    var btn = document.getElementById("soc-mp4");
+    if (!btn) return;
+    var vidEl = document.getElementById("soc-vid");
+    var vidDl = document.getElementById("soc-vid-dl");
+    var status = document.getElementById("soc-vid-status");
+    // absolute origin (never the credentialed page URL) so fetch() can't be blocked
+    var AUDIO_URL = location.origin + "/audio2.mp3";
+    var busy = false;
+    var audioBuf = null; // decoded once, reused
+    var lastUrl = null;
+    var idle = status ? status.textContent : "";
+
+    var canRecord =
+      typeof window.MediaRecorder !== "undefined" &&
+      !!document.createElement("canvas").captureStream &&
+      !!(window.AudioContext || window.webkitAudioContext);
+    if (!canRecord) {
+      btn.disabled = true;
+      btn.title = "This browser can't record canvas video — use Chrome.";
+      return;
+    }
+
+    function pickMime() {
+      var cands = [
+        "video/mp4;codecs=avc1.640028,mp4a.40.2",
+        "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+        "video/mp4",
+        "video/webm;codecs=vp9,opus",
+        "video/webm;codecs=vp8,opus",
+        "video/webm",
+      ];
+      for (var i = 0; i < cands.length; i++) if (MediaRecorder.isTypeSupported(cands[i])) return cands[i];
+      return "";
+    }
+    function loadImage(src) {
+      return new Promise(function (res, rej) {
+        var im = new Image();
+        im.onload = function () { res(im); };
+        im.onerror = rej;
+        im.src = src;
+      });
+    }
+    function ease(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+    function band(arr, a, b) { var s = 0; for (var i = a; i < b; i++) s += arr[i]; return s / (b - a); }
+    function say(msg) { if (status) status.textContent = msg; }
+
+    function fail(msg) {
+      busy = false;
+      btn.disabled = false;
+      btn.textContent = "🎬 Make a video";
+      say(msg || idle);
+    }
+
+    btn.addEventListener("click", function () {
+      if (busy) return;
+      var p = post();
+      if (!p) return;
+      busy = true;
+      btn.disabled = true;
+      btn.textContent = "⏳ Rendering… 0%";
+      say("Rendering — keep this tab open…");
+
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      var ctx = new Ctx();
+      var audioP = audioBuf
+        ? Promise.resolve(audioBuf)
+        : fetch(AUDIO_URL)
+            .then(function (r) { return r.arrayBuffer(); })
+            .then(function (b) { return new Promise(function (res, rej) { ctx.decodeAudioData(b, res, rej); }); })
+            .then(function (buf) { audioBuf = buf; return buf; });
+
+      Promise.all([loadImage(img.src), audioP])
+        .then(function (a) { record(ctx, a[0], a[1], p); })
+        .catch(function () { try { ctx.close(); } catch (e) {} fail("Couldn't build the video — try again."); });
+    });
+
+    function record(ctx, imEl, buf, p) {
+      var CW = imEl.naturalWidth || 1080;
+      var CH = imEl.naturalHeight || 1920;
+      var cv = document.createElement("canvas");
+      cv.width = CW;
+      cv.height = CH;
+      var g = cv.getContext("2d");
+      g.fillStyle = "#0e0e11";
+      g.fillRect(0, 0, CW, CH);
+      var DUR = Math.min(buf.duration, 12);
+
+      // audio graph: source → gain → (analyser tap, recorder dest, speakers)
+      var src = ctx.createBufferSource();
+      src.buffer = buf;
+      var gain = ctx.createGain();
+      var analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      var freq = new Uint8Array(analyser.frequencyBinCount);
+      var dest = ctx.createMediaStreamDestination();
+      src.connect(gain);
+      gain.connect(analyser);
+      gain.connect(dest);
+      gain.connect(ctx.destination);
+      var t0 = ctx.currentTime + 0.06;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.linearRampToValueAtTime(1, t0 + 0.15);
+      gain.gain.setValueAtTime(1, t0 + DUR - 0.5);
+      gain.gain.linearRampToValueAtTime(0.0001, t0 + DUR);
+
+      var mixed = new MediaStream();
+      cv.captureStream(30).getVideoTracks().forEach(function (t) { mixed.addTrack(t); });
+      dest.stream.getAudioTracks().forEach(function (t) { mixed.addTrack(t); });
+
+      var mime = pickMime();
+      var ext = mime.indexOf("mp4") >= 0 ? "mp4" : "webm";
+      var rec;
+      try {
+        rec = new MediaRecorder(mixed, mime ? { mimeType: mime, videoBitsPerSecond: 9000000 } : { videoBitsPerSecond: 9000000 });
+      } catch (e) { try { ctx.close(); } catch (e2) {} return fail("Recorder unavailable in this browser."); }
+      var chunks = [];
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop = function () {
+        try { ctx.close(); } catch (e) {}
+        finish(new Blob(chunks, { type: mime || "video/webm" }), ext, p);
+      };
+
+      var energy = 0;
+      var startMs = performance.now();
+      function frame(now) {
+        var t = (now - startMs) / 1000;
+        var prog = Math.min(1, t / DUR);
+        analyser.getByteFrequencyData(freq);
+        energy += (band(freq, 1, 10) / 255 - energy) * 0.4; // low band ~ kick/beat
+
+        var s = 1.05 + 0.07 * ease(prog) + (t < 0.5 ? (1 - t / 0.5) * 0.1 : 0) + 0.035 * energy;
+        var dw = CW * s, dh = CH * s;
+        g.drawImage(imEl, (CW - dw) / 2, (CH - dh) / 2, dw, dh);
+
+        if (t > 0.45 && t < 1.75) { // one diagonal sheen sweep
+          var sp = (t - 0.45) / 1.3;
+          var x = -CW * 0.4 + sp * (CW * 1.6);
+          var lg = g.createLinearGradient(x, 0, x + CW * 0.45, CH);
+          lg.addColorStop(0, "rgba(255,255,255,0)");
+          lg.addColorStop(0.5, "rgba(255,246,230," + 0.14 * Math.sin(sp * Math.PI) + ")");
+          lg.addColorStop(1, "rgba(255,255,255,0)");
+          g.fillStyle = lg;
+          g.fillRect(0, 0, CW, CH);
+        }
+        var vg = g.createRadialGradient(CW / 2, CH / 2, CH * 0.32, CW / 2, CH / 2, CH * 0.72);
+        vg.addColorStop(0, "rgba(0,0,0,0)");
+        vg.addColorStop(1, "rgba(0,0,0,0.26)");
+        g.fillStyle = vg;
+        g.fillRect(0, 0, CW, CH);
+        if (t < 0.5) { g.fillStyle = "rgba(14,14,17," + (1 - t / 0.5) + ")"; g.fillRect(0, 0, CW, CH); }
+        if (prog > 0.93) { g.fillStyle = "rgba(14,14,17," + (prog - 0.93) / 0.07 + ")"; g.fillRect(0, 0, CW, CH); }
+
+        btn.textContent = "⏳ Rendering… " + Math.round(prog * 100) + "%";
+        if (t < DUR) requestAnimationFrame(frame);
+      }
+
+      if (ctx.state === "suspended" && ctx.resume) ctx.resume();
+      rec.start();
+      src.start();
+      requestAnimationFrame(frame);
+      setTimeout(function () {
+        try { if (rec.state !== "inactive") rec.stop(); } catch (e) {}
+        try { src.stop(); } catch (e) {}
+      }, DUR * 1000 + 150);
+    }
+
+    function finish(blob, ext, p) {
+      if (lastUrl) URL.revokeObjectURL(lastUrl);
+      lastUrl = URL.createObjectURL(blob);
+      var name = "tvnightly-" + slug(p.title) + "-" + state.style + "-" + state.fmt + "." + ext;
+      if (vidEl) {
+        vidEl.src = lastUrl;
+        vidEl.hidden = false;
+        vidEl.muted = true;
+        vidEl.play().catch(function () {});
+        img.style.display = "none";
+      }
+      if (vidDl) {
+        vidDl.href = lastUrl;
+        vidDl.setAttribute("download", name);
+        vidDl.hidden = false;
+      }
+      var a = document.createElement("a"); // also auto-save
+      a.href = lastUrl;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      busy = false;
+      btn.disabled = false;
+      btn.textContent = "🎬 Make another";
+      say("Saved " + name + (ext === "mp4" ? " — ready to upload." : " (WebM: great on YouTube; convert to MP4 for TikTok)."));
+    }
+
+    // switching card/format/style resets the preview back to the still image
+    img.addEventListener("load", function () {
+      if (vidEl && !vidEl.hidden) { vidEl.hidden = true; vidEl.pause(); }
+      img.style.display = "";
+      if (vidDl) vidDl.hidden = true;
+      if (!busy) say(idle);
+    });
+  })();
+
   render();
 })();

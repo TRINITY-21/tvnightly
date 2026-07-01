@@ -12,3 +12,5 @@ seed/
 /video.mp4
 /video_audio.mp3
 tools/countdown/cards.tsv
+# working-copy audio source (the served asset lives at public/audio2.mp3)
+/audio2.mp3

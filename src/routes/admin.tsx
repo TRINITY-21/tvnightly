@@ -756,18 +756,29 @@ app.get("/admin/social", async (c) => {
             </div>
             <div class="soc-canvas" data-fmt="story">
               <img id="soc-img" class="soc-img" src={firstImg} alt="Post preview" />
+              <video id="soc-vid" class="soc-vid" playsinline loop controls hidden></video>
             </div>
             <div class="soc-stage-foot">
               <a id="soc-dl" class="admin-btn" href={firstImg} download="tvnightly-post.png">
                 ↓ Download PNG
               </a>
-              <a id="soc-video" class="admin-btn soc-ghost" href="/admin/shorts">
-                🎬 Make a Top-10 video
+              <button type="button" id="soc-mp4" class="admin-btn soc-mp4">
+                🎬 Make a video
+              </button>
+              <a id="soc-vid-dl" class="admin-btn soc-ghost" hidden download="tvnightly-post.mp4">
+                ↓ Save video
               </a>
               <a id="soc-open" class="soc-open" href={first?.path ?? "/"} target="_blank" rel="noopener">
                 Open page ↗
               </a>
             </div>
+            <p class="soc-vid-note muted">
+              <span id="soc-vid-status">
+                Turns the card above into a ~10s beat-synced clip (audio + motion) — the video TikTok &amp; YouTube
+                Shorts need.
+              </span>{" "}
+              <a href="/admin/shorts">Top-10 countdown video ↗</a>
+            </p>
           </section>
 
           <section class="soc-caps">
@@ -842,28 +853,67 @@ app.get("/admin/studio/insights", async (c) => {
     }
   };
 
-  const totals =
-    (
-      await rows<{ d30: number; d7: number; d1: number }>(
-        `SELECT
-           COALESCE(SUM(CASE WHEN created_at > unixepoch()-2592000 THEN 1 ELSE 0 END),0) AS d30,
-           COALESCE(SUM(CASE WHEN created_at > unixepoch()-604800  THEN 1 ELSE 0 END),0) AS d7,
-           COALESCE(SUM(CASE WHEN created_at > unixepoch()-86400   THEN 1 ELSE 0 END),0) AS d1
-         FROM link_clicks`,
-      )
-    )[0] ?? { d30: 0, d7: 0, d1: 0 };
+  const one = async <T,>(sql: string, fb: T): Promise<T> => (await rows<T>(sql))[0] ?? fb;
+
+  // base totals work on any schema; the human/bot split needs migration 0027.
+  const base = await one<{ d30: number; d7: number; d1: number }>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN created_at > unixepoch()-2592000 THEN 1 ELSE 0 END),0) AS d30,
+       COALESCE(SUM(CASE WHEN created_at > unixepoch()-604800  THEN 1 ELSE 0 END),0) AS d7,
+       COALESCE(SUM(CASE WHEN created_at > unixepoch()-86400   THEN 1 ELSE 0 END),0) AS d1
+     FROM link_clicks`,
+    { d30: 0, d7: 0, d1: 0 },
+  );
+  const split = await one<{ h30: number; h7: number; h1: number; b30: number }>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN created_at > unixepoch()-2592000 AND is_bot=0 THEN 1 ELSE 0 END),0) AS h30,
+       COALESCE(SUM(CASE WHEN created_at > unixepoch()-604800  AND is_bot=0 THEN 1 ELSE 0 END),0) AS h7,
+       COALESCE(SUM(CASE WHEN created_at > unixepoch()-86400   AND is_bot=0 THEN 1 ELSE 0 END),0) AS h1,
+       COALESCE(SUM(CASE WHEN created_at > unixepoch()-2592000 AND is_bot=1 THEN 1 ELSE 0 END),0) AS b30
+     FROM link_clicks`,
+    { h30: 0, h7: 0, h1: 0, b30: 0 },
+  );
+  // "graded" = migration 0027 is live and accounts for every logged click.
+  const graded = base.d30 > 0 && split.h30 + split.b30 === base.d30;
+  const totals = graded ? { d30: split.h30, d7: split.h7, d1: split.h1 } : base;
+  const botHits = split.b30;
+  const humanFilter = graded ? "is_bot=0 AND " : "";
+
+  // browser-confirmed renders (migration 0027) — the real-human funnel step.
+  const renders = await one<{ r30: number; r7: number; r1: number }>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN created_at > unixepoch()-2592000 THEN 1 ELSE 0 END),0) AS r30,
+       COALESCE(SUM(CASE WHEN created_at > unixepoch()-604800  THEN 1 ELSE 0 END),0) AS r7,
+       COALESCE(SUM(CASE WHEN created_at > unixepoch()-86400   THEN 1 ELSE 0 END),0) AS r1
+     FROM render_events WHERE is_bot=0`,
+    { r30: 0, r7: 0, r1: 0 },
+  );
+  const rendersBySource = await rows<{ source: string; n: number }>(
+    `SELECT source, COUNT(*) AS n FROM render_events
+     WHERE is_bot=0 AND created_at > unixepoch()-2592000 GROUP BY source ORDER BY n DESC`,
+  );
 
   const bySource = await rows<{ source: string; n: number }>(
     `SELECT source, COUNT(*) AS n FROM link_clicks
-     WHERE created_at > unixepoch()-2592000 GROUP BY source ORDER BY n DESC`,
+     WHERE ${humanFilter}created_at > unixepoch()-2592000 GROUP BY source ORDER BY n DESC`,
   );
   const byCampaign = await rows<{ campaign: string; n: number }>(
     `SELECT campaign, COUNT(*) AS n FROM link_clicks
-     WHERE created_at > unixepoch()-2592000 GROUP BY campaign ORDER BY n DESC LIMIT 25`,
+     WHERE ${humanFilter}created_at > unixepoch()-2592000 GROUP BY campaign ORDER BY n DESC LIMIT 25`,
   );
   const byPath = await rows<{ path: string; n: number }>(
     `SELECT path, COUNT(*) AS n FROM link_clicks
-     WHERE created_at > unixepoch()-2592000 GROUP BY path ORDER BY n DESC LIMIT 25`,
+     WHERE ${humanFilter}created_at > unixepoch()-2592000 GROUP BY path ORDER BY n DESC LIMIT 25`,
+  );
+  const byCountry = await rows<{ country: string; n: number }>(
+    `SELECT country, COUNT(*) AS n FROM link_clicks
+     WHERE is_bot=0 AND country IS NOT NULL AND country != '' AND created_at > unixepoch()-2592000
+     GROUP BY country ORDER BY n DESC LIMIT 12`,
+  );
+  const byReferer = await rows<{ referer: string; n: number }>(
+    `SELECT referer, COUNT(*) AS n FROM link_clicks
+     WHERE is_bot=0 AND referer IS NOT NULL AND referer != '' AND created_at > unixepoch()-2592000
+     GROUP BY referer ORDER BY n DESC LIMIT 12`,
   );
 
   // Attributed sign-ups — the money metric: the tvn_ref cookie set on a /r/ click
@@ -887,60 +937,162 @@ app.get("/admin/studio/insights", async (c) => {
   );
 
   const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+  const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) + "%" : "—");
+  const host = (r: string) => {
+    try {
+      return new URL(r).hostname.replace(/^www\./, "");
+    } catch {
+      return r;
+    }
+  };
 
   return c.html(
     <Layout c={c} title="Insights — admin" noindex>
-      <AdminShell page="insights" lead="Which posts actually drive clicks.">
+      <AdminShell page="insights" lead="Real humans vs bots — which posts actually drive people.">
         <header class="admin-page-head">
           <h1 class="admin-page-title">
-            Link clicks <span class="admin-count">{totals.d30}</span>
+            Real clicks <span class="admin-count">{totals.d30}</span>
           </h1>
           <p class="admin-page-lead muted">
-            Human clicks on your <code>/r/</code> short links, last 30 days — your impression → click →
-            subscribe loop. Double down on whatever ranks highest here.
+            {graded ? (
+              <>
+                Clicks on your <code>/r/</code> short links with the automated traffic (URL-safety scanners,
+                proxies, headless agents) filtered out — last 30 days. <strong>{botHits}</strong> bot{" "}
+                {botHits === 1 ? "hit was" : "hits were"} excluded. A <em>render</em> means a real browser
+                actually painted the page ~1s after landing — the strongest human signal there is.
+              </>
+            ) : (
+              <>
+                Clicks on your <code>/r/</code> short links, last 30 days. Apply migration 0027
+                (<code>npm run db:migrate:remote</code>) to split real humans from bots and confirm renders.
+              </>
+            )}
           </p>
         </header>
 
         <div class="admin-stats">
           <div class="admin-stat">
             <span class="admin-stat-n">{totals.d30}</span>
-            <span class="admin-stat-l">Clicks · 30d</span>
+            <span class="admin-stat-l">{graded ? "Real clicks · 30d" : "Clicks · 30d"}</span>
           </div>
           <div class="admin-stat">
-            <span class="admin-stat-n">{totals.d7}</span>
-            <span class="admin-stat-l">Clicks · 7d</span>
-          </div>
-          <div class="admin-stat">
-            <span class="admin-stat-n">{totals.d1}</span>
-            <span class="admin-stat-l">Clicks · 24h</span>
+            <span class="admin-stat-n">{renders.r30}</span>
+            <span class="admin-stat-l">Rendered · 30d</span>
           </div>
           <div class="admin-stat is-accent">
             <span class="admin-stat-n">{subsTotal}</span>
             <span class="admin-stat-l">Sign-ups · 30d</span>
           </div>
+          <div class="admin-stat is-muted">
+            <span class="admin-stat-n">{graded ? botHits : "—"}</span>
+            <span class="admin-stat-l">Bot hits · 30d</span>
+          </div>
         </div>
 
-        {totals.d30 === 0 && subsTotal === 0 ? (
+        {totals.d30 === 0 && subsTotal === 0 && renders.r30 === 0 ? (
           <div class="admin-empty">
             <p class="admin-empty-title">No clicks logged yet</p>
             <p class="admin-empty-lead muted">
-              Apply the migration (<code>npm run db:migrate:remote</code>) if you haven't, then post a
+              Apply the migrations (<code>npm run db:migrate:remote</code>) if you haven't, then post a
               short link. Clicks on <code>/r/&lt;platform&gt;/…</code> show up here within seconds.
             </p>
           </div>
         ) : (
           <>
             <header class="admin-page-head">
-              <h2 class="admin-page-title">By platform</h2>
+              <h2 class="admin-page-title">The funnel</h2>
+              <p class="admin-page-lead muted">
+                Click → render → sign-up. Renders and sign-ups are near-impossible to fake, so the drop-off
+                from clicks tells you how many "clicks" were actually people.
+              </p>
             </header>
             <div class="admin-stats">
-              {bySource.map((s) => (
-                <div class="admin-stat">
-                  <span class="admin-stat-n">{s.n}</span>
-                  <span class="admin-stat-l">{cap(s.source)}</span>
-                </div>
-              ))}
+              <div class="admin-stat">
+                <span class="admin-stat-n">{totals.d30}</span>
+                <span class="admin-stat-l">{graded ? "Real clicks" : "Clicks"} · 30d</span>
+              </div>
+              <div class="admin-stat">
+                <span class="admin-stat-n">{renders.r30}</span>
+                <span class="admin-stat-l">Rendered · {pct(renders.r30, totals.d30)} of clicks</span>
+              </div>
+              <div class="admin-stat is-accent">
+                <span class="admin-stat-n">{subsTotal}</span>
+                <span class="admin-stat-l">
+                  Signed up · {pct(subsTotal, renders.r30 || totals.d30)} of {renders.r30 ? "renders" : "clicks"}
+                </span>
+              </div>
             </div>
+            <div class="admin-stats">
+              <div class="admin-stat is-muted">
+                <span class="admin-stat-n">{totals.d7}</span>
+                <span class="admin-stat-l">{graded ? "Real clicks" : "Clicks"} · 7d</span>
+              </div>
+              <div class="admin-stat is-muted">
+                <span class="admin-stat-n">{totals.d1}</span>
+                <span class="admin-stat-l">{graded ? "Real clicks" : "Clicks"} · 24h</span>
+              </div>
+              <div class="admin-stat is-muted">
+                <span class="admin-stat-n">{renders.r1}</span>
+                <span class="admin-stat-l">Rendered · 24h</span>
+              </div>
+            </div>
+
+            <header class="admin-page-head">
+              <h2 class="admin-page-title">By platform</h2>
+              <p class="admin-page-lead muted">{graded ? "Real clicks" : "Clicks"} per platform, and the renders each confirmed.</p>
+            </header>
+            <div class="admin-stats">
+              {bySource.map((s) => {
+                const rr = rendersBySource.find((r) => r.source === s.source);
+                return (
+                  <div class="admin-stat">
+                    <span class="admin-stat-n">{s.n}</span>
+                    <span class="admin-stat-l">
+                      {cap(s.source)}
+                      {rr ? ` · ${rr.n} rendered` : ""}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {byCountry.length ? (
+              <>
+                <header class="admin-page-head">
+                  <h2 class="admin-page-title">By country</h2>
+                  <p class="admin-page-lead muted">Where your real visitors are — a spread of countries is a good human signal.</p>
+                </header>
+                <div class="admin-stats">
+                  {byCountry.map((r) => (
+                    <div class="admin-stat">
+                      <span class="admin-stat-n">{r.n}</span>
+                      <span class="admin-stat-l">{r.country.toUpperCase()}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            {byReferer.length ? (
+              <>
+                <header class="admin-page-head">
+                  <h2 class="admin-page-title">Top referrers</h2>
+                  <p class="admin-page-lead muted">The site each real click came from — proof the platform actually forwarded a person.</p>
+                </header>
+                <ul class="admin-feed">
+                  {byReferer.map((r) => (
+                    <li class="admin-card">
+                      <div class="admin-card-body">
+                        <div class="admin-card-meta">
+                          <span class="admin-card-path">{host(r.referer)}</span>
+                          <span class="admin-count">{r.n}</span>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
 
             {subsTotal > 0 ? (
               <>

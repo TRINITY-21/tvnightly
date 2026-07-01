@@ -672,7 +672,7 @@ export const Layout: FC<
           </div>
         </div>
       )}
-      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", "/js/localtime.js", "/js/media-video.js", "/js/hero-trailer-fallback.js", "/js/hero-pip.js", "/js/photo-gallery.js", "/js/back-to-top.js", ...(props.scripts ?? [])].map((s) => (
+      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", "/js/localtime.js", "/js/media-video.js", "/js/hero-trailer-fallback.js", "/js/hero-pip.js", "/js/photo-gallery.js", "/js/back-to-top.js", "/js/beacon.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>
       ))}
     </body>

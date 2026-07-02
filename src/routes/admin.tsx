@@ -856,12 +856,15 @@ app.get("/admin/studio/insights", async (c) => {
   const one = async <T,>(sql: string, fb: T): Promise<T> => (await rows<T>(sql))[0] ?? fb;
 
   // base totals work on any schema; the human/bot split needs migration 0027.
+  // The WHERE is a no-op on the result (every window is <=30d) but lets the
+  // idx_link_clicks_created index bound the scan to the last 30 days instead of
+  // full-scanning link_clicks, so Insights stays cheap as the table grows.
   const base = await one<{ d30: number; d7: number; d1: number }>(
     `SELECT
        COALESCE(SUM(CASE WHEN created_at > unixepoch()-2592000 THEN 1 ELSE 0 END),0) AS d30,
        COALESCE(SUM(CASE WHEN created_at > unixepoch()-604800  THEN 1 ELSE 0 END),0) AS d7,
        COALESCE(SUM(CASE WHEN created_at > unixepoch()-86400   THEN 1 ELSE 0 END),0) AS d1
-     FROM link_clicks`,
+     FROM link_clicks WHERE created_at > unixepoch()-2592000`,
     { d30: 0, d7: 0, d1: 0 },
   );
   const split = await one<{ h30: number; h7: number; h1: number; b30: number }>(
@@ -870,7 +873,7 @@ app.get("/admin/studio/insights", async (c) => {
        COALESCE(SUM(CASE WHEN created_at > unixepoch()-604800  AND is_bot=0 THEN 1 ELSE 0 END),0) AS h7,
        COALESCE(SUM(CASE WHEN created_at > unixepoch()-86400   AND is_bot=0 THEN 1 ELSE 0 END),0) AS h1,
        COALESCE(SUM(CASE WHEN created_at > unixepoch()-2592000 AND is_bot=1 THEN 1 ELSE 0 END),0) AS b30
-     FROM link_clicks`,
+     FROM link_clicks WHERE created_at > unixepoch()-2592000`,
     { h30: 0, h7: 0, h1: 0, b30: 0 },
   );
   // "graded" = migration 0027 is live and accounts for every logged click.
@@ -885,7 +888,7 @@ app.get("/admin/studio/insights", async (c) => {
        COALESCE(SUM(CASE WHEN created_at > unixepoch()-2592000 THEN 1 ELSE 0 END),0) AS r30,
        COALESCE(SUM(CASE WHEN created_at > unixepoch()-604800  THEN 1 ELSE 0 END),0) AS r7,
        COALESCE(SUM(CASE WHEN created_at > unixepoch()-86400   THEN 1 ELSE 0 END),0) AS r1
-     FROM render_events WHERE is_bot=0`,
+     FROM render_events WHERE is_bot=0 AND created_at > unixepoch()-2592000`,
     { r30: 0, r7: 0, r1: 0 },
   );
   const rendersBySource = await rows<{ source: string; n: number }>(

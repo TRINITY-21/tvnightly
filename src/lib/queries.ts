@@ -9,6 +9,14 @@ export const PICKER_MIN_WEIGHT = 75;
 export const getShow = (db: D1Database, slug: string) =>
   db.prepare("SELECT * FROM shows WHERE slug = ?").bind(slug).first<ShowRow>();
 
+// Precompute cache for the genre-overlap "similar" scan (migration 0029). The
+// scan is deterministic per source and changes only with the catalog, so we run
+// it once, persist the top-N, and serve every later read (incl. bot crawls) as a
+// cheap indexed lookup instead of a ~7k-row scan. Self-populating on first visit,
+// self-healing after SIMILAR_TTL. Transparent to all callers.
+const SIMILAR_TTL = 60 * 60 * 24 * 30; // 30d — catalog genres rarely change
+const SIMILAR_N = 25; // persist enough to serve the largest caller limit (18/24)
+
 /**
  * Popular shows ranked by genre overlap (2+ shared genres when possible) —
  * internal links to their money pages, full rows for card rendering.
@@ -21,6 +29,25 @@ export async function similarShows(
   const genres: string[] = show.genres ? JSON.parse(show.genres) : [];
   const gs = genres.slice(0, 3);
   if (gs.length === 0) return [];
+  // 1) fresh precomputed rows → indexed lookup (PK source_id,seq) + shows PK join
+  const cached = await db
+    .prepare(
+      `SELECT s.* FROM similar_shows st JOIN shows s ON s.id = st.target_id
+       WHERE st.source_id = ? AND st.seq >= 0 AND st.computed_at > unixepoch() - ?
+       ORDER BY st.seq LIMIT ?`,
+    )
+    .bind(show.id, SIMILAR_TTL, limit)
+    .all<ShowRow>();
+  if (cached.results.length) return cached.results;
+  // no matches returned — distinguish a fresh "genuinely empty" cache (a sentinel
+  // row exists) from "never computed", so an empty source re-scans once per TTL
+  // instead of on every request.
+  const fresh = await db
+    .prepare("SELECT 1 FROM similar_shows WHERE source_id = ? AND computed_at > unixepoch() - ? LIMIT 1")
+    .bind(show.id, SIMILAR_TTL)
+    .first();
+  if (fresh) return [];
+  // 2) miss → run the scan once (always top-N so the cache serves any limit)
   const overlapExpr = gs.map(() => "(CASE WHEN genres LIKE ? THEN 1 ELSE 0 END)").join(" + ");
   const { results } = await db
     .prepare(
@@ -29,9 +56,25 @@ export async function similarShows(
          FROM shows WHERE id != ? AND weight >= ?
        ) WHERE ov >= ? ORDER BY ov DESC, weight DESC LIMIT ?`,
     )
-    .bind(...gs.map((g) => `%"${g}"%`), show.id, PICKER_MIN_WEIGHT, Math.min(2, gs.length), limit)
+    .bind(...gs.map((g) => `%"${g}"%`), show.id, PICKER_MIN_WEIGHT, Math.min(2, gs.length), SIMILAR_N)
     .all<ShowRow>();
-  return results;
+  // persist the top-N — or a sentinel (seq -1) when empty so the TTL applies here too
+  const stmts: D1PreparedStatement[] = [db.prepare("DELETE FROM similar_shows WHERE source_id = ?").bind(show.id)];
+  if (results.length) {
+    results.forEach((r, i) =>
+      stmts.push(
+        db
+          .prepare("INSERT OR REPLACE INTO similar_shows (source_id, target_id, seq, computed_at) VALUES (?, ?, ?, unixepoch())")
+          .bind(show.id, r.id, i),
+      ),
+    );
+  } else {
+    stmts.push(
+      db.prepare("INSERT OR REPLACE INTO similar_shows (source_id, target_id, seq, computed_at) VALUES (?, 0, -1, unixepoch())").bind(show.id),
+    );
+  }
+  await db.batch(stmts).catch((err) => console.error("similar_shows cache write failed", show.id, err));
+  return results.slice(0, limit);
 }
 
 /**
@@ -69,7 +112,8 @@ export async function showsLikeSlate(
   return results;
 }
 
-/** Movie counterpart: genre-overlap similarity over the curated movies table. */
+/** Movie counterpart: genre-overlap similarity over the curated movies table.
+ *  Same precompute cache as similarShows (migration 0029). */
 export async function similarMovies(
   db: D1Database,
   movie: MovieRow,
@@ -78,6 +122,20 @@ export async function similarMovies(
   const genres: string[] = movie.genres ? JSON.parse(movie.genres) : [];
   const gs = genres.slice(0, 3);
   if (gs.length === 0) return [];
+  const cached = await db
+    .prepare(
+      `SELECT m.* FROM similar_movies st JOIN movies m ON m.imdb_id = st.target_id
+       WHERE st.source_id = ? AND st.seq >= 0 AND st.computed_at > unixepoch() - ?
+       ORDER BY st.seq LIMIT ?`,
+    )
+    .bind(movie.imdb_id, SIMILAR_TTL, limit)
+    .all<MovieRow>();
+  if (cached.results.length) return cached.results;
+  const fresh = await db
+    .prepare("SELECT 1 FROM similar_movies WHERE source_id = ? AND computed_at > unixepoch() - ? LIMIT 1")
+    .bind(movie.imdb_id, SIMILAR_TTL)
+    .first();
+  if (fresh) return [];
   const overlapExpr = gs.map(() => "(CASE WHEN genres LIKE ? THEN 1 ELSE 0 END)").join(" + ");
   const { results } = await db
     .prepare(
@@ -85,9 +143,24 @@ export async function similarMovies(
          SELECT *, (${overlapExpr}) AS ov FROM movies WHERE imdb_id != ?
        ) WHERE ov >= ? ORDER BY ov DESC, rating DESC, popularity DESC LIMIT ?`,
     )
-    .bind(...gs.map((g) => `%"${g}"%`), movie.imdb_id, Math.min(2, gs.length), limit)
+    .bind(...gs.map((g) => `%"${g}"%`), movie.imdb_id, Math.min(2, gs.length), SIMILAR_N)
     .all<MovieRow>();
-  return results;
+  const stmts: D1PreparedStatement[] = [db.prepare("DELETE FROM similar_movies WHERE source_id = ?").bind(movie.imdb_id)];
+  if (results.length) {
+    results.forEach((r, i) =>
+      stmts.push(
+        db
+          .prepare("INSERT OR REPLACE INTO similar_movies (source_id, target_id, seq, computed_at) VALUES (?, ?, ?, unixepoch())")
+          .bind(movie.imdb_id, r.imdb_id, i),
+      ),
+    );
+  } else {
+    stmts.push(
+      db.prepare("INSERT OR REPLACE INTO similar_movies (source_id, target_id, seq, computed_at) VALUES (?, '', -1, unixepoch())").bind(movie.imdb_id),
+    );
+  }
+  await db.batch(stmts).catch((err) => console.error("similar_movies cache write failed", movie.imdb_id, err));
+  return results.slice(0, limit);
 }
 
 /**

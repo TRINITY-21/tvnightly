@@ -20,11 +20,15 @@
     { "pattern": "tvnightly.com", "custom_domain": true },
     { "pattern": "www.tvnightly.com", "custom_domain": true }
   ],
-  // Three crons, each with its own 50-subrequest budget:
-  //   :00 hourly — TVmaze sync (shows/episodes/events/alerts + outbox drain)
-  //   :30 hourly — provider patrol (availability diffing -> /whats-new)
-  //   22:00 UTC daily — the TV Nightly digest (queued via outbox)
-  "triggers": { "crons": ["0 * * * *", "30 * * * *", "0 22 * * *"] },
+  // Four crons, each with its own subrequest budget. The heavy catalog sync +
+  // IndexNow ping + provider patrol run ONCE DAILY (they don't change often and
+  // hourly IndexNow just invites crawlers); only the cheap email drain stays
+  // hourly so the digest/alerts still go out within the hour:
+  //   :00 hourly     — drain the outbox (send ≤15 queued emails) — email delivery
+  //   21:00 UTC daily — TVmaze catalog sync (shows/episodes/events/alerts) + IndexNow
+  //   21:30 UTC daily — provider patrol (availability diffing -> /whats-new)
+  //   22:00 UTC daily — the TV Nightly digest (queued via outbox, drained hourly)
+  "triggers": { "crons": ["0 * * * *", "0 21 * * *", "30 21 * * *", "0 22 * * *"] },
   "vars": {
     "SITE_ORIGIN": "https://tvnightly.com",
     // 'console' | 'gmail' | 'smtp' | 'resend' — see src/email.ts. 'resend' sends

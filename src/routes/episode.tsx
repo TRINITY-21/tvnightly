@@ -207,9 +207,13 @@ app.get("/show/:slug/:code{[sS][0-9]{1,3}[eE][0-9]{1,3}}", async (c) => {
   const ids = [...guests, ...crew].map((x) => x.person.id).filter((n) => Number.isInteger(n));
   if (ids.length) {
     const names = crew.map((x) => x.person.name.toLowerCase());
+    // UNION (not OR) so the id branch uses the people PK and the name branch uses
+    // idx_people_name_lower — the old `id IN OR lower(name) IN` scanned all ~34k people.
     const { results } = await c.env.DB.prepare(
       `SELECT id, name FROM people WHERE id IN (${ids.join(",")})` +
-        (names.length ? ` OR lower(name) IN (${names.map(() => "?").join(",")})` : ""),
+        (names.length
+          ? ` UNION SELECT id, name FROM people WHERE lower(name) IN (${names.map(() => "?").join(",")})`
+          : ""),
     )
       .bind(...names)
       .all<{ id: number; name: string }>();

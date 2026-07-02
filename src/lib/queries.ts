@@ -103,10 +103,15 @@ export async function crewLinkMap(
   const offsets = crew.map((p) => 10_000_000 + p.id);
   const names = crew.map((p) => p.name.toLowerCase());
   const marks = (n: number) => Array(n).fill("?").join(",");
+  // Split the OR into a UNION: `id IN (...)` uses the people PK and
+  // `lower(name) IN (...)` uses idx_people_name_lower — an `id IN OR lower(name) IN`
+  // is non-sargable and scanned all ~34k people on every show/movie/person page.
+  // UNION returns the same row set (the consumer keys by id + lower(name)).
   const { results } = await db
     .prepare(
-      `SELECT id, name FROM people
-       WHERE id IN (${marks(offsets.length)}) OR lower(name) IN (${marks(names.length)})`,
+      `SELECT id, name FROM people WHERE id IN (${marks(offsets.length)})
+       UNION
+       SELECT id, name FROM people WHERE lower(name) IN (${marks(names.length)})`,
     )
     .bind(...offsets, ...names)
     .all<{ id: number; name: string }>();

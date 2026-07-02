@@ -5,7 +5,7 @@ import { setBeaconToken, setGaId, setSiteAnalytics } from "./components/Layout";
 import { ErrorPage, NotFoundPage } from "./components/notfound";
 import { setAffiliate } from "./lib/affiliate";
 import { submitIndexNow } from "./lib/indexnow";
-import { notifyOwnerSignups, providerPatrol, runSync, sendDailyDigest } from "./sync";
+import { drainOutbox, notifyOwnerSignups, providerPatrol, runSync, sendDailyDigest } from "./sync";
 import { fetchSiteSidebar, shouldFetchSiteSidebar } from "./lib/site-sidebar";
 import type { Bindings, HonoEnv } from "./types";
 
@@ -242,14 +242,17 @@ async function cachedFetch(req: Request, env: Bindings, ctx: ExecutionContext): 
 export default {
   fetch: cachedFetch,
   scheduled(event: ScheduledController, env: Bindings, ctx: ExecutionContext) {
-    // :30 = provider patrol; 22:00 = daily digest; :00 (and manual) = sync, then
-    // ping IndexNow with whatever changed so Bing/Yandex index it within minutes.
+    // Hourly :00 = drain the outbox (send queued emails — cheap, keeps delivery
+    // within the hour). Daily 21:00 = heavy catalog sync + IndexNow ping. Daily
+    // 21:30 = provider patrol. Daily 22:00 = digest. Manual triggers → full sync.
     ctx.waitUntil(
-      event.cron === "30 * * * *"
-        ? providerPatrol(env)
-        : event.cron === "0 22 * * *"
-          ? Promise.all([sendDailyDigest(env), notifyOwnerSignups(env)])
-          : runSync(env).then(() => submitIndexNow(env)),
+      event.cron === "0 * * * *"
+        ? drainOutbox(env)
+        : event.cron === "30 21 * * *"
+          ? providerPatrol(env)
+          : event.cron === "0 22 * * *"
+            ? Promise.all([sendDailyDigest(env), notifyOwnerSignups(env)])
+            : runSync(env).then(() => submitIndexNow(env)),
     );
   },
 };

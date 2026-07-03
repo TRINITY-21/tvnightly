@@ -135,6 +135,26 @@ body:has(.trailer-shorts) {
   background: #000;
 }
 
+.ts-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ts-stage {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Mobile: full-height 9:16 portrait stage */
 .ts-video-wrap {
   position: relative;
@@ -206,14 +226,71 @@ body:has(.trailer-shorts) {
 }
 
 .ts-rail {
-  position: absolute;
-  right: max(0.55rem, env(safe-area-inset-right));
-  bottom: calc(7.5rem + env(safe-area-inset-bottom));
   z-index: 5;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.85rem;
+  flex-shrink: 0;
+}
+
+/* Mobile: rail sits beside the video, meta below — nothing overlays the frame */
+@media (max-width: 767px) {
+  .ts-card {
+    height: auto;
+    min-height: 100%;
+    justify-content: center;
+    gap: 0;
+    padding: max(3.25rem, env(safe-area-inset-top)) 0 max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .ts-stage {
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0 0.35rem;
+  }
+
+  .ts-video-wrap {
+    width: min(calc(100vw - 4.5rem), calc((100dvh - 13rem) * 9 / 16));
+    max-height: calc(100dvh - 13rem);
+    flex: none;
+  }
+
+  .ts-rail {
+    position: static;
+    gap: 0.55rem;
+  }
+
+  .ts-rail-label {
+    font-size: 0.58rem;
+  }
+
+  .ts-rail-icon {
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
+  .ts-rail-poster img,
+  .ts-rail-poster .ts-rail-glyph {
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
+  .ts-progress {
+    display: none;
+  }
+
+  .ts-meta {
+    position: static;
+    width: min(100%, calc(100vw - 1.7rem));
+    margin: 0 auto;
+    padding: 0.65rem 0.85rem 0;
+    pointer-events: auto;
+  }
 }
 
 .ts-rail-btn {
@@ -261,15 +338,7 @@ body:has(.trailer-shorts) {
 }
 
 .ts-progress {
-  position: absolute;
-  right: 0.2rem;
-  top: 12%;
-  bottom: 12%;
-  width: 3px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  z-index: 4;
-  overflow: hidden;
+  display: none;
 }
 
 .ts-progress-fill {
@@ -282,17 +351,20 @@ body:has(.trailer-shorts) {
 }
 
 .ts-meta {
-  position: absolute;
-  left: max(0.85rem, env(safe-area-inset-left));
-  right: 4.5rem;
-  bottom: calc(0.85rem + env(safe-area-inset-bottom));
-  z-index: 5;
   display: grid;
   gap: 0.35rem;
-  padding: 0.75rem 0.85rem;
-  border-radius: 0.85rem;
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.35) 100%);
   pointer-events: none;
+}
+
+/* Desktop/tablet: meta sits in card flow below the video */
+@media (min-width: 768px) {
+  .ts-meta {
+    position: static;
+    width: 100%;
+    padding: 0;
+    pointer-events: auto;
+    gap: 0.45rem;
+  }
 }
 
 .ts-meta a,
@@ -388,43 +460,65 @@ body:has(.trailer-shorts) {
 
 @media (min-width: 768px) {
   .trailer-shorts {
-    --ts-stage: min(480px, 72vh, calc(100vw - 12rem));
+    /* 4:5 portrait stage — wider and taller than the old 1:1 square */
+    --ts-stage-w: min(560px, 52vw, calc((100dvh - 11rem) * 4 / 5));
+  }
+
+  .ts-slide {
+    align-items: center;
+    padding: max(3.5rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .ts-card {
+    width: var(--ts-stage-w);
+    max-width: 100%;
+    height: auto;
+    flex: none;
+    gap: 1rem;
+    justify-content: flex-start;
+  }
+
+  .ts-stage {
+    flex: none;
+    width: 100%;
   }
 
   .ts-nav-btn[data-ts-prev] {
-    left: calc(50% - var(--ts-stage) / 2 - 3.25rem);
+    left: calc(50% - var(--ts-stage-w) / 2 - 3.5rem);
   }
 
   .ts-nav-btn[data-ts-next] {
-    right: calc(50% - var(--ts-stage) / 2 - 3.25rem);
+    right: calc(50% - var(--ts-stage-w) / 2 - 3.5rem);
   }
 
-  /* Tablet / desktop: centered 1:1 square stage */
+  /* Tablet / desktop: large 4:5 video stage */
   .ts-video-wrap {
-    width: var(--ts-stage);
-    height: var(--ts-stage);
-    max-height: var(--ts-stage);
-    aspect-ratio: 1 / 1;
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    height: auto;
+    max-height: min(78vh, 700px);
     border-radius: 0.85rem;
-    margin-block: auto;
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
   }
 
   .ts-rail {
-    right: calc(50% - var(--ts-stage) / 2 - 3.6rem);
-    bottom: calc(50% - var(--ts-stage) / 2 + 1rem);
+    right: -3.75rem;
+    bottom: auto;
+    top: 50%;
+    transform: translateY(-50%);
   }
 
-  .ts-progress {
-    right: calc(50% - var(--ts-stage) / 2 - 0.35rem);
-    top: calc(50% - var(--ts-stage) / 2 + 1.5rem);
-    bottom: calc(50% - var(--ts-stage) / 2 + 1.5rem);
+  .ts-heading {
+    font-size: 1.35rem;
   }
 
-  .ts-meta {
-    left: calc(50% - var(--ts-stage) / 2 + 0.65rem);
-    right: auto;
-    width: calc(var(--ts-stage) - 1.3rem);
-    bottom: calc(50% - var(--ts-stage) / 2 + 0.85rem);
+  .ts-dek {
+    -webkit-line-clamp: 3;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  .ts-cta-row {
+    margin-top: 0.5rem;
   }
 }

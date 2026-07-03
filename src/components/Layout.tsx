@@ -566,6 +566,22 @@ export const Layout: FC<
                 </a>
               ) : null}
             </div>
+            {/* Fazier launch badge — required for the free directory listing +
+                dofollow backlink (their bot verifies it's live on the homepage) */}
+            <a
+              class="footer-badge"
+              href="https://fazier.com/launches/tvnightly.com"
+              target="_blank"
+              rel="noopener"
+            >
+              <img
+                src="https://fazier.com/api/v1//public/badges/launch_badges.svg?badge_type=launched&theme=dark"
+                width="120"
+                height="32"
+                alt="Launched on Fazier"
+                loading="lazy"
+              />
+            </a>
           </div>
           <div>
             <h3>Explore</h3>

@@ -1,4 +1,4 @@
-/* Trailer Shorts — unified layout: landscape player + side rail, details below. */
+/* Trailer Shorts — YouTube-style: wide video + right rail, details underneath. */
 
 html:has(.trailer-shorts) {
   overflow: hidden;
@@ -13,7 +13,7 @@ body:has(.trailer-shorts) {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: #0a0a0b;
+  background: #000;
   color: #f4f6fa;
   display: flex;
   flex-direction: column;
@@ -49,10 +49,6 @@ body:has(.trailer-shorts) {
   text-decoration: none;
 }
 
-.ts-top-titles {
-  min-width: 0;
-}
-
 .ts-top-kicker {
   margin: 0;
   font-size: 0.68rem;
@@ -85,7 +81,7 @@ body:has(.trailer-shorts) {
 
 .ts-nav-btn {
   position: absolute;
-  top: 42%;
+  top: 38%;
   transform: translateY(-50%);
   display: grid;
   place-items: center;
@@ -93,21 +89,14 @@ body:has(.trailer-shorts) {
   height: 2.65rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
-  background: rgba(18, 18, 20, 0.52);
+  background: rgba(18, 18, 20, 0.72);
   color: #fff;
   cursor: pointer;
   pointer-events: auto;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition:
-    background var(--speed) var(--ease),
-    transform var(--speed) var(--ease),
-    opacity var(--speed) var(--ease);
 }
 
 .ts-nav-btn:hover:not(:disabled) {
-  background: rgba(28, 28, 34, 0.78);
-  transform: translateY(-50%) scale(1.05);
+  background: rgba(28, 28, 34, 0.88);
 }
 
 .ts-nav-btn:disabled {
@@ -116,50 +105,45 @@ body:has(.trailer-shorts) {
 }
 
 .ts-nav-btn[data-ts-prev] {
-  left: max(0.55rem, env(safe-area-inset-left));
+  left: max(0.5rem, env(safe-area-inset-left));
 }
 
 .ts-nav-btn[data-ts-next] {
-  right: max(0.55rem, env(safe-area-inset-right));
+  right: max(0.5rem, env(safe-area-inset-right));
 }
 
 .ts-slide {
-  position: relative;
-  min-height: 100dvh;
-  height: 100dvh;
   scroll-snap-align: start;
   scroll-snap-stop: always;
+  min-height: 100dvh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding:
     max(3.25rem, env(safe-area-inset-top))
-    max(0.65rem, env(safe-area-inset-right))
-    max(0.75rem, env(safe-area-inset-bottom))
-    max(0.65rem, env(safe-area-inset-left));
-  background: #000;
+    max(0.75rem, env(safe-area-inset-right))
+    max(1.25rem, env(safe-area-inset-bottom))
+    max(0.75rem, env(safe-area-inset-left));
   box-sizing: border-box;
+  background: #000;
 }
 
+/* Grid: [ video ][ rail ]
+          [ meta  ]          */
 .ts-card {
   width: min(100%, 56rem);
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-/* Video + action rail in one row — rail never sits on top of the frame */
-.ts-player {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3.25rem;
+  grid-template-rows: auto auto;
+  column-gap: 0.65rem;
+  row-gap: 0;
+  align-content: start;
 }
 
 .ts-video-wrap {
+  grid-column: 1;
+  grid-row: 1;
   position: relative;
-  flex: 1;
-  min-width: 0;
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #111;
@@ -177,7 +161,6 @@ body:has(.trailer-shorts) {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: brightness(0.55);
 }
 
 .ts-slide.is-loaded .ts-video-poster {
@@ -204,42 +187,22 @@ body:has(.trailer-shorts) {
   cursor: pointer;
 }
 
-.ts-slide:not(.is-playing) .ts-tap::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 4.2rem;
-  height: 4.2rem;
-  margin: -2.1rem 0 0 -2.1rem;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
-  border: 2px solid rgba(255, 255, 255, 0.85);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-}
-
-.ts-slide:not(.is-playing):hover .ts-tap::after,
-.ts-slide:not(.is-playing):focus-within .ts-tap::after {
-  opacity: 1;
-}
-
 .ts-rail {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.7rem;
-  flex: 0 0 3.1rem;
-  width: 3.1rem;
+  gap: 0.65rem;
 }
 
 .ts-rail-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.15rem;
   width: 100%;
   border: 0;
   background: transparent;
@@ -252,17 +215,17 @@ body:has(.trailer-shorts) {
 .ts-rail-icon {
   display: grid;
   place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.45rem;
+  height: 2.45rem;
   border-radius: 999px;
-  background: rgba(18, 18, 20, 0.72);
+  background: rgba(18, 18, 20, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .ts-rail-poster img,
 .ts-rail-poster .ts-rail-glyph {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.45rem;
+  height: 2.45rem;
   border-radius: 999px;
   object-fit: cover;
   border: 2px solid rgba(255, 255, 255, 0.9);
@@ -272,24 +235,19 @@ body:has(.trailer-shorts) {
 }
 
 .ts-rail-label {
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   font-weight: 600;
   line-height: 1.1;
   text-align: center;
-  color: rgba(255, 255, 255, 0.88);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .ts-meta {
+  grid-column: 1;
+  grid-row: 2;
   display: grid;
   gap: 0.4rem;
   padding: 0.85rem 0 0;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.ts-meta a,
-.ts-meta .ts-watch {
-  pointer-events: auto;
 }
 
 .ts-tag {
@@ -306,7 +264,7 @@ body:has(.trailer-shorts) {
 
 .ts-heading {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 800;
   line-height: 1.2;
 }
@@ -335,7 +293,7 @@ body:has(.trailer-shorts) {
   margin: 0;
   font-size: 0.84rem;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.78);
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -343,26 +301,24 @@ body:has(.trailer-shorts) {
 }
 
 .ts-cta-row {
-  margin-top: 0.35rem;
+  margin-top: 0.25rem;
 }
 
 .ts-watch {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.55rem 0.95rem;
+  padding: 0.55rem 1rem;
   border-radius: 999px;
   background: #e10600;
   color: #fff;
   font-size: 0.82rem;
   font-weight: 800;
   text-decoration: none;
-  box-shadow: 0 8px 24px rgba(225, 6, 0, 0.35);
 }
 
 .ts-watch-alt {
-  background: rgba(255, 255, 255, 0.16);
-  box-shadow: none;
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .ts-empty {
@@ -380,70 +336,63 @@ body:has(.trailer-shorts) {
 
 @media (min-width: 768px) {
   .ts-slide {
-    padding:
-      max(3.5rem, env(safe-area-inset-top))
-      max(1.25rem, env(safe-area-inset-right))
-      max(1.25rem, env(safe-area-inset-bottom))
-      max(1.25rem, env(safe-area-inset-left));
+    align-items: center;
+    padding-top: max(3.75rem, env(safe-area-inset-top));
   }
 
   .ts-card {
     width: min(100%, 52rem);
-  }
-
-  .ts-player {
-    gap: 0.85rem;
+    grid-template-columns: minmax(0, 1fr) 4rem;
+    column-gap: 1rem;
   }
 
   .ts-video-wrap {
     border-radius: 0.85rem;
-    box-shadow: 0 20px 64px rgba(0, 0, 0, 0.55);
-    max-height: min(58vh, 540px);
+    box-shadow: 0 18px 56px rgba(0, 0, 0, 0.55);
+    width: min(100%, calc(min(62vh, 580px) * 16 / 9));
+    max-height: min(62vh, 580px);
     aspect-ratio: 16 / 9;
-    height: auto;
   }
 
   .ts-rail {
-    flex: 0 0 3.75rem;
-    width: 3.75rem;
-    gap: 0.9rem;
+    gap: 0.85rem;
   }
 
   .ts-rail-icon {
-    width: 2.85rem;
-    height: 2.85rem;
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .ts-rail-poster img,
   .ts-rail-poster .ts-rail-glyph {
-    width: 2.85rem;
-    height: 2.85rem;
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .ts-rail-label {
-    font-size: 0.65rem;
+    font-size: 0.64rem;
   }
 
   .ts-meta {
     padding: 1rem 0 0;
-    gap: 0.45rem;
+    gap: 0.5rem;
   }
 
   .ts-heading {
-    font-size: 1.4rem;
+    font-size: 1.45rem;
   }
 
   .ts-dek {
     font-size: 0.92rem;
-    color: var(--muted);
     -webkit-line-clamp: 4;
+    color: var(--muted);
   }
 
   .ts-nav-btn[data-ts-prev] {
-    left: max(1rem, calc(50% - 26rem - 2.5rem));
+    left: max(1rem, calc(50% - 26rem - 2.75rem));
   }
 
   .ts-nav-btn[data-ts-next] {
-    right: max(1rem, calc(50% - 26rem - 2.5rem));
+    right: max(1rem, calc(50% - 26rem - 2.75rem));
   }
 }

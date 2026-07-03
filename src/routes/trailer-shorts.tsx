@@ -68,22 +68,21 @@ app.get("/shorts", async (c) => {
                   tabindex={-1}
                 >
                   <div class="ts-card">
-                    <div class="ts-player">
-                      <div class="ts-video-wrap">
-                        <div class="ts-video-poster" aria-hidden="true">
-                          {item.poster ? <img src={item.poster} alt="" loading="lazy" decoding="async" /> : null}
-                        </div>
-                        <iframe
-                          class="ts-video"
-                          title={`${item.title} — ${item.trailerName}`}
-                          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                          referrerpolicy="strict-origin-when-cross-origin"
-                          allowfullscreen
-                        ></iframe>
-                        <button type="button" class="ts-tap" aria-label="Play or pause trailer" data-ts-tap></button>
+                    <div class="ts-video-wrap">
+                      <div class="ts-video-poster" aria-hidden="true">
+                        {item.poster ? <img src={item.poster} alt="" loading="lazy" decoding="async" /> : null}
                       </div>
+                      <iframe
+                        class="ts-video"
+                        title={`${item.title} — ${item.trailerName}`}
+                        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                        referrerpolicy="strict-origin-when-cross-origin"
+                        allowfullscreen
+                      ></iframe>
+                      <button type="button" class="ts-tap" aria-label="Play or pause trailer" data-ts-tap></button>
+                    </div>
 
-                      <div class="ts-rail" aria-label="Trailer actions">
+                    <div class="ts-rail" aria-label="Trailer actions">
                         <button type="button" class="ts-rail-btn" data-ts-mute aria-pressed="true">
                           <span class="ts-rail-icon ts-icon-mute" aria-hidden="true">
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -128,9 +127,8 @@ app.get("/shorts", async (c) => {
                               <path d="M12 7h.01" />
                             </svg>
                           </span>
-                          <span class="ts-rail-label">Info</span>
-                        </a>
-                      </div>
+                      <span class="ts-rail-label">Info</span>
+                    </a>
                     </div>
 
                     <div class="ts-meta">

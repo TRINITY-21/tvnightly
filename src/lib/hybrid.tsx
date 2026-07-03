@@ -9,6 +9,7 @@ import { origin } from "./seo";
 import { visitorRegion } from "./providers";
 import { aggregateRatingLd, titleStat } from "./ratings";
 import { tmdbRef } from "./materialize";
+import { byngeHandoffHrefAsync } from "./bynge";
 import { TmdbTitlePage } from "../components/TmdbDetail";
 
 /** Live-TMDB detail fallback for a `/show/:slug` or `/movie/:slug` D1 miss.
@@ -35,10 +36,11 @@ export async function tmdbFallback(
 
   const region = visitorRegion(c);
   const ref = tmdbRef(tmdbId);
-  const [providers, stat, ratingLd] = await Promise.all([
+  const [providers, stat, ratingLd, byngeWatchHref] = await Promise.all([
     tmdbWatchProviders(key, kind, tmdbId, region),
     titleStat(c.env.DB, kind, ref),
     aggregateRatingLd(c.env.DB, kind, ref),
+    byngeHandoffHrefAsync(kind, { imdbId: t.imdbId }, { title: t.name, poster: t.poster?.x1 ?? null }),
   ]);
   const path = kind === "tv" ? "show" : "movie";
   const canonical = `${origin(c)}/${path}/${slugifyName(t.name)}`;
@@ -53,6 +55,7 @@ export async function tmdbFallback(
       stat={stat}
       ratingLd={ratingLd}
       canonical={canonical}
+      byngeWatchHref={byngeWatchHref}
     />,
   );
 }

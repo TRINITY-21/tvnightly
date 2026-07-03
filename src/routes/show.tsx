@@ -174,7 +174,7 @@ app.get("/show/:slug", async (c) => {
   const prov = providersFor(show, region);
   const watchProv = heroWatchProvider(prov.names, show.name, prov.region, "tv");
   const byngeWatchHref = byngeHandoffHref("tv", {
-    tmdbId: show.tmdb_id,
+    tvmazeId: show.id,
     imdbId: show.imdb_id,
   }, {
     title: show.name,

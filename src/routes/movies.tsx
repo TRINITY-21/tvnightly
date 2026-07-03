@@ -651,7 +651,6 @@ app.get("/movie/:slug", async (c) => {
   const prov = providersFor(movie, region);
   const watchProv = heroWatchProvider(prov.names, movie.title, prov.region, "movie");
   const byngeWatchHref = byngeHandoffHref("movie", {
-    tmdbId: movie.tmdb_id,
     imdbId: movie.imdb_id,
   }, {
     title: movie.title,

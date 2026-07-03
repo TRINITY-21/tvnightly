@@ -347,6 +347,9 @@ export const Layout: FC<
             <a href="/whats-new" class={navClass(["/whats-new", "/renewals"])}>
               What&apos;s new
             </a>
+            <a href="/shorts" class={navClass(["/shorts"])}>
+              Shorts
+            </a>
             <div class={`nav-mega${browseActive ? " active" : ""}`}>
               <button
                 type="button"
@@ -660,6 +663,9 @@ export const Layout: FC<
             </a>
             <a class={`mm-link ${navClass(["/whats-new", "/renewals"])}`} href="/whats-new">
               What&apos;s new
+            </a>
+            <a class={`mm-link ${navClass(["/shorts"])}`} href="/shorts">
+              Shorts
             </a>
             {discordUrl ? (
               <a class="mm-link mm-discord" href={discordUrl} target="_blank" rel="noopener noreferrer">

@@ -5,7 +5,7 @@ import { watchUrl } from "../lib/affiliate";
 import { networkChartBasePath, type ChartKind } from "../lib/chart-filters";
 import { PROVIDER_LOGOS, providerBrand, providerNetworkSlug } from "../lib/providers";
 import { RateInline } from "./forms";
-import { IconPlayDisc } from "./icons";
+import { IconPlay, IconPlayDisc } from "./icons";
 import { ShareBar } from "./share";
 import { HeroTrailerEmbed } from "./hero-trailer";
 
@@ -215,14 +215,12 @@ export const DetailHero: FC<{
             <div class="hub-hero-credits-foot">
               {byngeWatchHref ? (
                 <a class="hub-hero-bynge" href={byngeWatchHref}>
-                  <span class="hub-hero-bynge-kicker">Stream with friends</span>
-                  <span class="hub-hero-bynge-main">
-                    <span class="hub-hero-bynge-play" aria-hidden="true">
-                      ▶
-                    </span>
-                    <span>
-                      Watch now on <strong>Bynge</strong>
-                    </span>
+                  <span class="hub-hero-bynge-play" aria-hidden="true">
+                    <IconPlay size={20} />
+                  </span>
+                  <span class="hub-hero-bynge-body">
+                    <span class="hub-hero-bynge-kicker">Stream with friends</span>
+                    <span class="hub-hero-bynge-label">Watch now</span>
                   </span>
                 </a>
               ) : watchProvider ? (

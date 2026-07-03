@@ -3,6 +3,7 @@ import { posterImg } from "../lib/format";
 import type { TrailerItem } from "../lib/latest-trailers";
 import type { SideRankItem } from "../lib/sidebar-tops";
 import type { AppContext } from "../types";
+import { DiscordSidebarCard } from "./discord";
 import { Honeypot } from "./Layout";
 import { IconFacebook, IconInstagram, IconMail, IconPlayDisc, IconTikTok, IconX, IconYouTube } from "./icons";
 
@@ -156,6 +157,7 @@ export const HomeSidebarRail: FC<{
   topMovies: SideRankItem[];
 }> = ({ trailers, topSeries, topMovies }) => (
   <aside class="home-rail" aria-label="More from TV Nightly">
+    <DiscordSidebarCard />
     <FollowGrid />
     <SidebarNewsletter />
     <LatestTrailers items={trailers} />

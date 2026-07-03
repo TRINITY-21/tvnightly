@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { setBeaconToken, setGaId, setSiteAnalytics } from "./components/Layout";
 import { ErrorPage, NotFoundPage } from "./components/notfound";
 import { setAffiliate } from "./lib/affiliate";
+import { setDiscordInvite } from "./lib/discord";
 import { submitIndexNow } from "./lib/indexnow";
 import { drainOutbox, notifyOwnerSignups, providerPatrol, runSync, sendDailyDigest } from "./sync";
 import { fetchSiteSidebar, shouldFetchSiteSidebar } from "./lib/site-sidebar";
@@ -69,6 +70,7 @@ app.use("*", async (c, next) => {
   setGaId(prod ? c.env.GA_ID : undefined);
   setSiteAnalytics(!admin);
   setAffiliate(c.env);
+  setDiscordInvite(c.env.DISCORD_INVITE_URL);
   c.header("X-Content-Type-Options", "nosniff");
   c.header("X-Frame-Options", "SAMEORIGIN");
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");

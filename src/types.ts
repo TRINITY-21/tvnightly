@@ -15,6 +15,8 @@ export type Bindings = SyncEnv & {
   GA_ID?: string; // Google Analytics 4 measurement id (public, gtag.js); when set, Layout injects GA
   AMAZON_ASSOC_TAG?: string;
   APPLE_AFFILIATE_TOKEN?: string;
+  // Public Discord invite URL — navbar, sidebar card, first-visit modal.
+  DISCORD_INVITE_URL?: string;
   // where /feedback submissions are emailed; falls back to EMAIL_FROM. Unset = D1 only.
   FEEDBACK_TO?: string;
   // Reply-To on outbound mail — a monitored inbox so replies reach a human, not the

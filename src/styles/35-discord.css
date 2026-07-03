@@ -1,0 +1,152 @@
+/* Discord community — navbar link, sidebar card, first-visit modal */
+
+:root {
+  --discord: #5865f2;
+  --discord-hover: #4752c4;
+}
+
+.discord-join-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.82rem 1.1rem;
+  border-radius: 999px;
+  background: var(--discord);
+  color: #fff;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: background var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+.discord-join-btn:hover {
+  text-decoration: none;
+  background: var(--discord-hover);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* ---- header nav link ---- */
+.site-header nav a.nav-discord {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  opacity: 0.88;
+  color: #c9ceff;
+}
+.site-header nav a.nav-discord:hover {
+  color: #e3e5ff;
+}
+.mm-link.mm-discord {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #c9ceff;
+  font-weight: 700;
+}
+
+/* ---- sidebar card ---- */
+.side-discord {
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid rgba(88, 101, 242, 0.28);
+  background: var(--surface);
+}
+.discord-card-hero,
+.discord-modal-hero {
+  height: 7.5rem;
+  background:
+    linear-gradient(180deg, rgba(88, 101, 242, 0.72) 0%, rgba(18, 18, 22, 0.15) 55%, rgba(18, 18, 22, 0.92) 100%),
+    radial-gradient(ellipse 90% 80% at 18% 20%, rgba(255, 169, 77, 0.35), transparent 55%),
+    radial-gradient(ellipse 70% 90% at 82% 10%, rgba(255, 92, 138, 0.22), transparent 50%),
+    linear-gradient(135deg, #2a2048 0%, #121218 48%, #1a1428 100%);
+}
+.discord-card-body,
+.discord-modal-body {
+  padding: 1rem 1rem 1.1rem;
+  text-align: center;
+}
+.discord-card-title,
+.discord-modal-title {
+  margin: 0 0 0.45rem;
+  font-family: var(--display);
+  font-size: 1.12rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text);
+}
+.discord-card-dek,
+.discord-modal-dek {
+  margin: 0 0 0.95rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* ---- first-visit modal ---- */
+.discord-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 125;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+  background: rgba(8, 8, 10, 0.78);
+  animation: discord-fade 0.2s ease-out;
+}
+.discord-modal[hidden] {
+  display: none;
+}
+.discord-modal-card {
+  position: relative;
+  width: min(22rem, 100%);
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid rgba(88, 101, 242, 0.35);
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.58);
+  animation: discord-rise 0.24s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.discord-modal-hero {
+  height: 9.5rem;
+}
+.discord-modal-x {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(8, 8, 10, 0.55);
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--speed) var(--ease);
+}
+.discord-modal-x:hover {
+  background: rgba(8, 8, 10, 0.82);
+}
+.discord-modal-body {
+  padding: 1.15rem 1.15rem 1.25rem;
+}
+
+@keyframes discord-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes discord-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .discord-modal,
+  .discord-modal-card {
+    animation: none;
+  }
+}

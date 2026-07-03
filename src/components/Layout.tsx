@@ -7,8 +7,10 @@ import { jsonLd } from "../lib/seo";
 import type { SiteSidebarData } from "../lib/site-sidebar";
 import { VERTICALS } from "../lib/verticals";
 import type { AppContext } from "../types";
+import { DiscordWelcomeModal } from "./discord";
+import { getDiscordInvite } from "../lib/discord";
 import { HomeSidebarRail } from "./home-sidebar";
-import { IconFacebook, IconInstagram, IconTikTok, IconX, IconYouTube } from "./icons";
+import { IconDiscord, IconFacebook, IconInstagram, IconTikTok, IconX, IconYouTube } from "./icons";
 
 // Social handles — one place to update. Same @handle across platforms keeps the
 // brand findable and matches the tvnightly.com domain.
@@ -21,6 +23,7 @@ const SOCIALS: { label: string; url: string; Icon: FC<{ size?: number }> }[] = [
   // Facebook page uses a numeric profile id, not the @handle, so it's set explicitly
   { label: "Facebook", url: "https://www.facebook.com/profile.php?id=61591022677323", Icon: IconFacebook },
 ];
+// Discord invite is env-driven — appended in Layout when DISCORD_INVITE_URL is set.
 
 // Cloudflare Web Analytics beacon token. Request-invariant config: the token is
 // the same for every request, so a middleware setting it once per request (see
@@ -230,6 +233,7 @@ export const Layout: FC<
   const navClass = (prefixes: string[]) =>
     prefixes.some((p) => path === p || path.startsWith(p + "/")) ? "active" : "";
   const browseActive = BROWSE_PATHS.some((p) => path === p || path.startsWith(p + "/"));
+  const discordUrl = getDiscordInvite();
   const BROWSE_SECTIONS = browseSections(new Date().getFullYear());
   const sidebarData: SiteSidebarData | undefined =
     !props.bare && !props.sidebarInline && !props.noSidebar
@@ -343,6 +347,17 @@ export const Layout: FC<
             <a href="/whats-new" class={navClass(["/whats-new", "/renewals"])}>
               What&apos;s new
             </a>
+            {discordUrl ? (
+              <a
+                class="nav-discord"
+                href={discordUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <IconDiscord size={16} />
+                Discord
+              </a>
+            ) : null}
             <div class={`nav-mega${browseActive ? " active" : ""}`}>
               <button
                 type="button"
@@ -535,6 +550,17 @@ export const Layout: FC<
                   <Icon size={18} />
                 </a>
               ))}
+              {discordUrl ? (
+                <a
+                  class="footer-social"
+                  href={discordUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="TV Nightly on Discord"
+                >
+                  <IconDiscord size={18} />
+                </a>
+              ) : null}
             </div>
           </div>
           <div>
@@ -634,6 +660,12 @@ export const Layout: FC<
             <a class={`mm-link ${navClass(["/whats-new", "/renewals"])}`} href="/whats-new">
               What&apos;s new
             </a>
+            {discordUrl ? (
+              <a class="mm-link mm-discord" href={discordUrl} target="_blank" rel="noopener noreferrer">
+                <IconDiscord size={18} />
+                Discord
+              </a>
+            ) : null}
             {BROWSE_SECTIONS.map((sec) => (
               <div class="mm-sec">
                 <p class="mm-kicker">{sec.kicker}</p>
@@ -672,7 +704,8 @@ export const Layout: FC<
           </div>
         </div>
       )}
-      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", "/js/localtime.js", "/js/media-video.js", "/js/hero-trailer-fallback.js", "/js/hero-pip.js", "/js/photo-gallery.js", "/js/back-to-top.js", "/js/beacon.js", ...(props.scripts ?? [])].map((s) => (
+      {props.bare ? null : <DiscordWelcomeModal />}
+      {["/js/loading.js", "/js/typeahead.js", "/js/nav-mega.js", "/js/mobile-nav.js", "/js/shelf-scroll.js", "/js/rate.js", "/js/localtime.js", "/js/media-video.js", "/js/hero-trailer-fallback.js", "/js/hero-pip.js", "/js/photo-gallery.js", "/js/back-to-top.js", "/js/beacon.js", "/js/discord-modal.js", ...(props.scripts ?? [])].map((s) => (
         <script src={s} defer></script>
       ))}
     </body>

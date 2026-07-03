@@ -47,7 +47,9 @@
     // beacon (src/components/Layout.tsx) only when set.
     "CF_BEACON_TOKEN": "d2cc01d40f2e459eb7979de5211d1c38",
     // Google Analytics 4 measurement id (public, gtag.js); injects GA site-wide when set.
-    "GA_ID": "G-HGBSW22LYB"
+    "GA_ID": "G-HGBSW22LYB",
+    // Discord community invite (public) — navbar, sidebar, welcome modal.
+    "DISCORD_INVITE_URL": "https://discord.gg/zg8TZPBFx"
     // TURNSTILE_SITE_KEY — paste the Turnstile widget sitekey (public) after
     // creating the widget; /feedback renders the anti-spam widget only when set.
   },

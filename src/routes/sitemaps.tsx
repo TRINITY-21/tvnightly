@@ -3,6 +3,7 @@ import { TV_DECADES } from "../lib/decades";
 import { EPISODE_GUIDES } from "../lib/episode-guides";
 import { slugifyName } from "../lib/format";
 import { FRANCHISES } from "../lib/franchises";
+import { chartGenresWithContent } from "../lib/chart-results";
 import { genreDirectory, networkDirectory } from "../lib/queries";
 import { epochDay, origin, sitemapUrl, xmlRes } from "../lib/seo";
 import { TV_UNIVERSES } from "../lib/tv-universes";
@@ -24,7 +25,10 @@ const SHOWS_PER_SITEMAP = 1000;
 // domain earns authority.
 const SHOW_LIMIT = 5000; // top shows by weight
 const MOVIE_LIMIT = 1500; // top movies by popularity
-const SHOW_SUFFIXES = ["", "/where-to-watch", "/best-episodes", "/ratings"];
+// /best-episodes and /ratings are rating-driven: with zero rated episodes they
+// render noindex/thin, so shards advertise them only for shows with ratings
+const SHOW_SUFFIXES = ["", "/where-to-watch"];
+const SHOW_RATED_SUFFIXES = ["/best-episodes", "/ratings"];
 const MOVIE_SUFFIXES = ["", "/where-to-watch"];
 
 // lastmod for the static shard. Charts, schedules and directories are rebuilt
@@ -60,15 +64,16 @@ app.get("/sitemaps/:file", async (c) => {
   const file = c.req.param("file");
 
   if (file === "static.xml") {
-    const [networks, genres] = await Promise.all([
+    // the guide pages (src/routes/guides.tsx) are evergreen on the current year
+    const year = new Date().getFullYear();
+    const [networks, genres, filled] = await Promise.all([
       networkDirectory(c.env.DB),
       genreDirectory(c.env.DB),
+      chartGenresWithContent(c.env.DB, year),
     ]);
     const genreSlugs = [...new Set([...genres.tv, ...genres.movie].map((g) => slugifyName(g)))];
     const tvGenreSlugs = [...new Set(genres.tv.map((g) => slugifyName(g)))];
     const movieGenreSlugs = [...new Set(genres.movie.map((g) => slugifyName(g)))];
-    // the guide pages (src/routes/guides.tsx) are evergreen on the current year
-    const year = new Date().getFullYear();
     const urls = [
       "/",
       "/about",
@@ -104,7 +109,9 @@ app.get("/sitemaps/:file", async (c) => {
       "/lists",
       "/top/tv",
       ...movieGenreSlugs.map((g) => `/movies/${g}`),
-      ...tvGenreSlugs.map((g) => `/top/tv/${g}`),
+      // conditional chart/guide pages render noindex when their genre combo is
+      // empty — advertise only combos with content (see chartGenresWithContent)
+      ...tvGenreSlugs.filter((g) => filled.tv.chart.has(g)).map((g) => `/top/tv/${g}`),
       "/top/seasons",
       "/top/networks",
       "/compare",
@@ -119,13 +126,13 @@ app.get("/sitemaps/:file", async (c) => {
       // broadcast networks would index thin
       ...networks.map((n) => `/network/${n.slug}/shows`),
       ...genreSlugs.map((g) => `/genre/${g}`),
-      ...tvGenreSlugs.map((g) => `/genre/${g}/shows`),
-      ...movieGenreSlugs.map((g) => `/genre/${g}/movies`),
+      ...tvGenreSlugs.filter((g) => filled.tv.chart.has(g)).map((g) => `/genre/${g}/shows`),
+      ...movieGenreSlugs.filter((g) => filled.movie.chart.has(g)).map((g) => `/genre/${g}/movies`),
       // guide pages, cut by genre
-      ...movieGenreSlugs.map((g) => `/movies/best/${year}/${g}`),
-      ...movieGenreSlugs.map((g) => `/movies/underrated/${g}`),
-      ...tvGenreSlugs.map((g) => `/tv/best/${year}/${g}`),
-      ...tvGenreSlugs.map((g) => `/tv/underrated/${g}`),
+      ...movieGenreSlugs.filter((g) => filled.movie.yr.has(g)).map((g) => `/movies/best/${year}/${g}`),
+      ...movieGenreSlugs.filter((g) => filled.movie.under.has(g)).map((g) => `/movies/underrated/${g}`),
+      ...tvGenreSlugs.filter((g) => filled.tv.yr.has(g)).map((g) => `/tv/best/${year}/${g}`),
+      ...tvGenreSlugs.filter((g) => filled.tv.under.has(g)).map((g) => `/tv/underrated/${g}`),
     ]
       .map((p) => sitemapUrl(`${site}${p}`, EVERGREEN.has(p) ? BUILD_DATE : TODAY))
       .join("");
@@ -161,16 +168,19 @@ app.get("/sitemaps/:file", async (c) => {
   const offset = Number(m[1]) * SHOWS_PER_SITEMAP;
   if (offset >= SHOW_LIMIT) return c.notFound();
   const { results } = await c.env.DB.prepare(
-    "SELECT slug, updated_at FROM shows ORDER BY weight DESC, id LIMIT ? OFFSET ?",
+    `SELECT slug, updated_at,
+       EXISTS(SELECT 1 FROM episodes e WHERE e.show_id = shows.id AND e.rating IS NOT NULL) AS has_rated
+     FROM shows ORDER BY weight DESC, id LIMIT ? OFFSET ?`,
   )
     .bind(Math.min(SHOWS_PER_SITEMAP, SHOW_LIMIT - offset), offset)
-    .all<{ slug: string; updated_at: number }>();
+    .all<{ slug: string; updated_at: number; has_rated: number }>();
   if (results.length === 0) return c.notFound();
 
   const urls = results
     .map((r) => {
       const lm = epochDay(r.updated_at);
-      return SHOW_SUFFIXES.map((suffix) => sitemapUrl(`${site}/show/${r.slug}${suffix}`, lm)).join("");
+      const suffixes = r.has_rated ? [...SHOW_SUFFIXES, ...SHOW_RATED_SUFFIXES] : SHOW_SUFFIXES;
+      return suffixes.map((suffix) => sitemapUrl(`${site}/show/${r.slug}${suffix}`, lm)).join("");
     })
     .join("");
   return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);

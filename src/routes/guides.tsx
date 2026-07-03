@@ -579,7 +579,9 @@ app.get("/movies/featuring/:slug", async (c) => {
 
   const region = visitorRegion(c);
   const site = origin(c);
-  const best = films.find((m) => m.rating != null) ?? films[0] ?? null;
+  // rated films only — falling back to an unrated films[0] crashed every
+  // "★ best.rating.toFixed" below for crew-only people (bots crawl these hard)
+  const best = films.find((m) => m.rating != null) ?? null;
   const rated = films.filter((m) => m.rating != null);
   const avg = rated.length
     ? (rated.reduce((s, m) => s + m.rating!, 0) / rated.length).toFixed(1)
@@ -596,13 +598,17 @@ app.get("/movies/featuring/:slug", async (c) => {
     topShow ? showKeepGoingBackdrop(apiKey, topShow) : Promise.resolve(null),
   ]);
   const featuringDoors = fillKeepGoingBackdrops([
-    {
-      icon: "Highest rated",
-      title: best.title,
-      desc: `${first}'s best-reviewed film — rating, runtime and where to watch.`,
-      href: `/movie/${best.slug}`,
-      backdrop: bestArt,
-    },
+    ...(best
+      ? [
+          {
+            icon: "Highest rated",
+            title: best.title,
+            desc: `${first}'s best-reviewed film — rating, runtime and where to watch.`,
+            href: `/movie/${best.slug}`,
+            backdrop: bestArt,
+          },
+        ]
+      : []),
     {
       icon: "Profile",
       title: `${person.name}: shows, age & roles`,
@@ -728,7 +734,7 @@ app.get("/movies/featuring/:slug", async (c) => {
               desc={card.desc}
               href={card.href}
               backdrop={card.backdrop ?? undefined}
-              {...(card.href === `/movie/${best.slug}` && best.rating != null
+              {...(best && card.href === `/movie/${best.slug}` && best.rating != null
                 ? { rating: best.rating }
                 : {})}
             />

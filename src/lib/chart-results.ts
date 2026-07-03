@@ -300,6 +300,55 @@ export async function fetchMovieUnderratedResults(
   });
 }
 
+/** Genre slugs that have ≥1 qualifying title per conditional chart family.
+ *  The sitemap must never advertise a genre combo that renders empty — those
+ *  pages go noindex, and a sitemapped-but-noindex URL is a contradiction GSC
+ *  reports. Each flag mirrors its page's own emptiness rule above (yr = best-of
+ *  ${year} charts, under = the underrated band, chart = the evergreen top
+ *  charts). One aggregate pass per table, keyed by slugified genre. */
+export async function chartGenresWithContent(
+  db: D1Database,
+  year: number,
+): Promise<{
+  tv: { yr: Set<string>; under: Set<string>; chart: Set<string> };
+  movie: { yr: Set<string>; under: Set<string>; chart: Set<string> };
+}> {
+  const [tv, movie] = await Promise.all([
+    db
+      .prepare(
+        `SELECT value AS g,
+           MAX(CASE WHEN rating IS NOT NULL AND premiered LIKE ? THEN 1 ELSE 0 END) AS yr,
+           MAX(CASE WHEN rating >= ? AND weight BETWEEN ? AND ? THEN 1 ELSE 0 END) AS under,
+           MAX(CASE WHEN rating IS NOT NULL AND weight >= 75 THEN 1 ELSE 0 END) AS chart
+         FROM shows, json_each(shows.genres) GROUP BY value`,
+      )
+      .bind(`${year}%`, TV_UNDERRATED_MIN_RATING, TV_UNDERRATED_MIN_WEIGHT, TV_UNDERRATED_MAX_WEIGHT)
+      .all<{ g: string; yr: number; under: number; chart: number }>(),
+    db
+      .prepare(
+        `SELECT value AS g,
+           MAX(CASE WHEN rating IS NOT NULL AND votes >= 1000 AND year = ? THEN 1 ELSE 0 END) AS yr,
+           MAX(CASE WHEN rating >= ? AND votes BETWEEN ? AND ? AND year <= ? THEN 1 ELSE 0 END) AS under,
+           MAX(CASE WHEN rating IS NOT NULL AND votes >= 1000 THEN 1 ELSE 0 END) AS chart
+         FROM movies, json_each(movies.genres) GROUP BY value`,
+      )
+      .bind(
+        year,
+        MOVIE_UNDERRATED_MIN_RATING,
+        MOVIE_UNDERRATED_MIN_VOTES,
+        MOVIE_UNDERRATED_MAX_VOTES,
+        year - MOVIE_UNDERRATED_MIN_AGE,
+      )
+      .all<{ g: string; yr: number; under: number; chart: number }>(),
+  ]);
+  const pick = (rows: { g: string; yr: number; under: number; chart: number }[]) => ({
+    yr: new Set(rows.filter((r) => r.yr).map((r) => slugifyName(r.g))),
+    under: new Set(rows.filter((r) => r.under).map((r) => slugifyName(r.g))),
+    chart: new Set(rows.filter((r) => r.chart).map((r) => slugifyName(r.g))),
+  });
+  return { tv: pick(tv.results), movie: pick(movie.results) };
+}
+
 export function parseChartPageOffset(c: Context<HonoEnv>): number {
   const n = Number((c.req.query("offset") ?? "0").trim());
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;

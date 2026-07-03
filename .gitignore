@@ -14,3 +14,4 @@ seed/
 tools/countdown/cards.tsv
 # working-copy audio source (the served asset lives at public/audio2.mp3)
 /audio2.mp3
+/DISTRIBUTION-PLAN.md

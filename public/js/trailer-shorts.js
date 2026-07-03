@@ -14,7 +14,8 @@
 
   var muted = true;
   var active = null;
-  var globalMutedBtn = null;
+  var prevBtn = root.querySelector("[data-ts-prev]");
+  var nextBtn = root.querySelector("[data-ts-next]");
 
   function buildUrl(key, autoplay, mute) {
     var origin = "";
@@ -86,7 +87,23 @@
       syncMuteUi();
       updateProgress();
       updateUrl(active);
+      updateNavState();
     }
+  }
+
+  function activeIndex() {
+    return active ? slides.indexOf(active) : 0;
+  }
+
+  function goToIndex(i) {
+    if (i < 0 || i >= slides.length) return;
+    slides[i].scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+
+  function updateNavState() {
+    var idx = activeIndex();
+    if (prevBtn) prevBtn.disabled = idx <= 0;
+    if (nextBtn) nextBtn.disabled = idx >= slides.length - 1;
   }
 
   function syncMuteUi() {
@@ -231,8 +248,35 @@
     }
   });
 
-  // Keyboard: space toggles play on active slide
+  root.addEventListener("click", function (e) {
+    var prev = e.target.closest("[data-ts-prev]");
+    if (prev && !prev.disabled) {
+      e.preventDefault();
+      goToIndex(activeIndex() - 1);
+      return;
+    }
+    var next = e.target.closest("[data-ts-next]");
+    if (next && !next.disabled) {
+      e.preventDefault();
+      goToIndex(activeIndex() + 1);
+      return;
+    }
+  });
+
+  // Keyboard: arrows browse, space toggles play
   document.addEventListener("keydown", function (e) {
+    if (e.code === "ArrowLeft") {
+      if (!prevBtn || prevBtn.disabled) return;
+      e.preventDefault();
+      goToIndex(activeIndex() - 1);
+      return;
+    }
+    if (e.code === "ArrowRight") {
+      if (!nextBtn || nextBtn.disabled) return;
+      e.preventDefault();
+      goToIndex(activeIndex() + 1);
+      return;
+    }
     if (e.code !== "Space" || !active) return;
     var tag = (e.target && e.target.tagName) || "";
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "A") return;
@@ -241,4 +285,5 @@
   });
 
   syncMuteUi();
+  updateNavState();
 })();

@@ -314,6 +314,32 @@ export const ChevDown: FC<{ size?: number }> = ({ size = 13 }) => (
   </svg>
 );
 
+export const ChevLeft: FC<{ size?: number }> = ({ size = 22 }) => (
+  <svg class="icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M15 6l-6 6 6 6"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+);
+
+export const ChevRight: FC<{ size?: number }> = ({ size = 22 }) => (
+  <svg class="icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M9 6l6 6-6 6"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+);
+
 /* ---- social / external brand marks (used on person pages) ---- */
 /* IMDb keeps its own identity — the yellow wordmark badge */
 export const IconIMDb: FC<{ size?: number }> = ({ size = 22 }) => (

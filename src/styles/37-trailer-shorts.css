@@ -76,6 +76,53 @@ body:has(.trailer-shorts) {
   -webkit-overflow-scrolling: touch;
 }
 
+.ts-nav {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.ts-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 2.65rem;
+  height: 2.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(18, 18, 20, 0.52);
+  color: #fff;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition:
+    background var(--speed) var(--ease),
+    transform var(--speed) var(--ease),
+    opacity var(--speed) var(--ease);
+}
+
+.ts-nav-btn:hover:not(:disabled) {
+  background: rgba(28, 28, 34, 0.78);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.ts-nav-btn:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.ts-nav-btn[data-ts-prev] {
+  left: max(0.55rem, env(safe-area-inset-left));
+}
+
+.ts-nav-btn[data-ts-next] {
+  right: max(0.55rem, env(safe-area-inset-right));
+}
+
 .ts-slide {
   position: relative;
   min-height: 100dvh;
@@ -83,15 +130,18 @@ body:has(.trailer-shorts) {
   scroll-snap-align: start;
   scroll-snap-stop: always;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
   background: #000;
 }
 
+/* Mobile: full-height 9:16 portrait stage */
 .ts-video-wrap {
   position: relative;
-  width: min(100%, 520px);
-  height: 100%;
+  width: min(100%, calc(100dvh * 9 / 16));
+  aspect-ratio: 9 / 16;
+  height: auto;
+  max-height: 100dvh;
   margin: 0 auto;
   background: #111;
   overflow: hidden;
@@ -337,28 +387,44 @@ body:has(.trailer-shorts) {
 }
 
 @media (min-width: 768px) {
+  .trailer-shorts {
+    --ts-stage: min(480px, 72vh, calc(100vw - 12rem));
+  }
+
+  .ts-nav-btn[data-ts-prev] {
+    left: calc(50% - var(--ts-stage) / 2 - 3.25rem);
+  }
+
+  .ts-nav-btn[data-ts-next] {
+    right: calc(50% - var(--ts-stage) / 2 - 3.25rem);
+  }
+
+  /* Tablet / desktop: centered 1:1 square stage */
   .ts-video-wrap {
-    width: min(420px, 100%);
+    width: var(--ts-stage);
+    height: var(--ts-stage);
+    max-height: var(--ts-stage);
+    aspect-ratio: 1 / 1;
     border-radius: 0.85rem;
-    margin-block: 0.5rem;
-    height: calc(100% - 1rem);
+    margin-block: auto;
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
   }
 
-  .ts-slide {
-    align-items: center;
-  }
-
   .ts-rail {
-    right: calc(50% - 210px - 3.6rem);
+    right: calc(50% - var(--ts-stage) / 2 - 3.6rem);
+    bottom: calc(50% - var(--ts-stage) / 2 + 1rem);
   }
 
   .ts-progress {
-    right: calc(50% - 210px - 0.35rem);
+    right: calc(50% - var(--ts-stage) / 2 - 0.35rem);
+    top: calc(50% - var(--ts-stage) / 2 + 1.5rem);
+    bottom: calc(50% - var(--ts-stage) / 2 + 1.5rem);
   }
 
   .ts-meta {
-    left: calc(50% - 210px + 0.65rem);
-    right: calc(50% - 210px + 0.65rem);
+    left: calc(50% - var(--ts-stage) / 2 + 0.65rem);
+    right: auto;
+    width: calc(var(--ts-stage) - 1.3rem);
+    bottom: calc(50% - var(--ts-stage) / 2 + 0.85rem);
   }
 }

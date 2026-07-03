@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { Layout } from "../components/Layout";
-import { IconPlay, IconStar } from "../components/icons";
+import { IconPlay, IconStar, ChevLeft, ChevRight } from "../components/icons";
 import { fetchTrailerShortsFeed } from "../lib/trailer-shorts-feed";
 import { origin } from "../lib/seo";
 import { HonoEnv } from "../types";
@@ -38,7 +38,18 @@ app.get("/shorts", async (c) => {
         </header>
 
         {items.length ? (
-          <div class="ts-feed" role="feed" aria-label="Trailer shorts">
+          <>
+            {items.length > 1 ? (
+              <div class="ts-nav" aria-label="Browse shorts">
+                <button type="button" class="ts-nav-btn" data-ts-prev aria-label="Previous short" disabled>
+                  <ChevLeft size={24} />
+                </button>
+                <button type="button" class="ts-nav-btn" data-ts-next aria-label="Next short">
+                  <ChevRight size={24} />
+                </button>
+              </div>
+            ) : null}
+            <div class="ts-feed" role="feed" aria-label="Trailer shorts">
             {items.map((item, i) => {
               const shareUrl = `${site}/shorts?v=${encodeURIComponent(item.id)}`;
               const shareTitle = `${item.title}${item.year ? ` (${item.year})` : ""} — trailer on TV Nightly`;
@@ -152,7 +163,8 @@ app.get("/shorts", async (c) => {
                 </article>
               );
             })}
-          </div>
+            </div>
+          </>
         ) : (
           <div class="ts-empty">
             <p>No trailers are available right now. Check back soon.</p>

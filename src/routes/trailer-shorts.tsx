@@ -68,7 +68,7 @@ app.get("/shorts", async (c) => {
                   tabindex={-1}
                 >
                   <div class="ts-card">
-                    <div class="ts-stage">
+                    <div class="ts-player">
                       <div class="ts-video-wrap">
                         <div class="ts-video-poster" aria-hidden="true">
                           {item.poster ? <img src={item.poster} alt="" loading="lazy" decoding="async" /> : null}
@@ -84,85 +84,81 @@ app.get("/shorts", async (c) => {
                       </div>
 
                       <div class="ts-rail" aria-label="Trailer actions">
-                    <button type="button" class="ts-rail-btn" data-ts-mute aria-pressed="true">
-                      <span class="ts-rail-icon ts-icon-mute" aria-hidden="true">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M11 5L6 9H3v6h3l5 4V5z" />
-                          <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-                          <path d="M17.8 6.2a8.5 8.5 0 0 1 0 11.6" />
-                        </svg>
-                      </span>
-                      <span class="ts-rail-icon ts-icon-unmute" hidden aria-hidden="true">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M11 5L6 9H3v6h3l5 4V5z" />
-                          <line x1="23" y1="9" x2="17" y2="15" />
-                          <line x1="17" y1="9" x2="23" y2="15" />
-                        </svg>
-                      </span>
-                      <span class="ts-rail-label" data-ts-mute-label>Unmute</span>
-                    </button>
-                    <a class="ts-rail-btn ts-rail-poster" href={item.detailHref} title={item.title}>
-                      {item.poster ? (
-                        <img src={item.poster} alt="" width="44" height="44" loading="lazy" decoding="async" />
-                      ) : (
-                        <span class="ts-rail-glyph" aria-hidden="true">
-                          {item.kind === "movie" ? "🎬" : "📺"}
-                        </span>
-                      )}
-                    </a>
-                    <button type="button" class="ts-rail-btn" data-ts-share>
-                      <span class="ts-rail-icon" aria-hidden="true">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M12 3.5v11" />
-                          <path d="M8.4 7 12 3.4 15.6 7" />
-                          <path d="M6 11H5.2A1.7 1.7 0 0 0 3.5 12.7v6.1A1.7 1.7 0 0 0 5.2 20.5h13.6a1.7 1.7 0 0 0 1.7-1.7v-6.1A1.7 1.7 0 0 0 18.8 11H18" />
-                        </svg>
-                      </span>
-                      <span class="ts-rail-label">Share</span>
-                    </button>
-                    <a class="ts-rail-btn" href={item.detailHref}>
-                      <span class="ts-rail-icon" aria-hidden="true">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                          <circle cx="12" cy="12" r="9" />
-                          <path d="M12 10v6" />
-                          <path d="M12 7h.01" />
-                        </svg>
-                      </span>
-                      <span class="ts-rail-label">Info</span>
-                    </a>
-                      </div>
-
-                      <div class="ts-progress" aria-hidden="true">
-                        <span class="ts-progress-fill"></span>
+                        <button type="button" class="ts-rail-btn" data-ts-mute aria-pressed="true">
+                          <span class="ts-rail-icon ts-icon-mute" aria-hidden="true">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M11 5L6 9H3v6h3l5 4V5z" />
+                              <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                              <path d="M17.8 6.2a8.5 8.5 0 0 1 0 11.6" />
+                            </svg>
+                          </span>
+                          <span class="ts-rail-icon ts-icon-unmute" hidden aria-hidden="true">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M11 5L6 9H3v6h3l5 4V5z" />
+                              <line x1="23" y1="9" x2="17" y2="15" />
+                              <line x1="17" y1="9" x2="23" y2="15" />
+                            </svg>
+                          </span>
+                          <span class="ts-rail-label" data-ts-mute-label>Unmute</span>
+                        </button>
+                        <a class="ts-rail-btn ts-rail-poster" href={item.detailHref} title={item.title}>
+                          {item.poster ? (
+                            <img src={item.poster} alt="" width="44" height="44" loading="lazy" decoding="async" />
+                          ) : (
+                            <span class="ts-rail-glyph" aria-hidden="true">
+                              {item.kind === "movie" ? "🎬" : "📺"}
+                            </span>
+                          )}
+                        </a>
+                        <button type="button" class="ts-rail-btn" data-ts-share>
+                          <span class="ts-rail-icon" aria-hidden="true">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M12 3.5v11" />
+                              <path d="M8.4 7 12 3.4 15.6 7" />
+                              <path d="M6 11H5.2A1.7 1.7 0 0 0 3.5 12.7v6.1A1.7 1.7 0 0 0 5.2 20.5h13.6a1.7 1.7 0 0 0 1.7-1.7v-6.1A1.7 1.7 0 0 0 18.8 11H18" />
+                            </svg>
+                          </span>
+                          <span class="ts-rail-label">Share</span>
+                        </button>
+                        <a class="ts-rail-btn" href={item.detailHref}>
+                          <span class="ts-rail-icon" aria-hidden="true">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M12 10v6" />
+                              <path d="M12 7h.01" />
+                            </svg>
+                          </span>
+                          <span class="ts-rail-label">Info</span>
+                        </a>
                       </div>
                     </div>
 
                     <div class="ts-meta">
-                    <span class="ts-tag">{item.genreLabel}</span>
-                    <h2 class="ts-heading">
-                      <a href={item.detailHref}>{titleLine}</a>
-                    </h2>
-                    {item.rating != null ? (
-                      <p class="ts-rating">
-                        <IconStar class="ts-star" />
-                        <span>{item.rating.toFixed(1)}</span>
-                      </p>
-                    ) : null}
-                    {item.overview ? <p class="ts-dek">{item.overview}</p> : null}
-                    <div class="ts-cta-row">
-                      {item.watchHref ? (
-                        <a class="ts-watch" href={item.watchHref}>
-                          <IconPlay size={16} />
-                          Watch now
-                        </a>
-                      ) : (
-                        <a class="ts-watch ts-watch-alt" href={item.detailHref}>
-                          <IconPlay size={16} />
-                          View title
-                        </a>
-                      )}
+                      <span class="ts-tag">{item.genreLabel}</span>
+                      <h2 class="ts-heading">
+                        <a href={item.detailHref}>{titleLine}</a>
+                      </h2>
+                      {item.rating != null ? (
+                        <p class="ts-rating">
+                          <IconStar class="ts-star" />
+                          <span>{item.rating.toFixed(1)}</span>
+                        </p>
+                      ) : null}
+                      {item.overview ? <p class="ts-dek">{item.overview}</p> : null}
+                      <div class="ts-cta-row">
+                        {item.watchHref ? (
+                          <a class="ts-watch" href={item.watchHref}>
+                            <IconPlay size={16} />
+                            Watch now
+                          </a>
+                        ) : (
+                          <a class="ts-watch ts-watch-alt" href={item.detailHref}>
+                            <IconPlay size={16} />
+                            View title
+                          </a>
+                        )}
+                      </div>
                     </div>
-                  </div>
                   </div>
                 </article>
               );

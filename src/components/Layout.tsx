@@ -347,17 +347,6 @@ export const Layout: FC<
             <a href="/whats-new" class={navClass(["/whats-new", "/renewals"])}>
               What&apos;s new
             </a>
-            {discordUrl ? (
-              <a
-                class="nav-discord"
-                href={discordUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <IconDiscord size={16} />
-                Discord
-              </a>
-            ) : null}
             <div class={`nav-mega${browseActive ? " active" : ""}`}>
               <button
                 type="button"
@@ -369,6 +358,18 @@ export const Layout: FC<
                 <span class="nav-mega-chev" aria-hidden="true"></span>
               </button>
             </div>
+            {discordUrl ? (
+              <a
+                class="nav-discord"
+                href={discordUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Join our Discord"
+                title="Join our Discord"
+              >
+                <IconDiscord size={20} />
+              </a>
+            ) : null}
           </nav>
           <form action="/search" method="get" class="search" role="search">
             <input

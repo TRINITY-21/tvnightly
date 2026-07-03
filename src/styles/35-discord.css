@@ -29,15 +29,22 @@
   transform: translateY(-1px);
 }
 
-/* ---- header nav link ---- */
+/* ---- header nav link (icon-only, after Browse) ---- */
 .site-header nav a.nav-discord {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: center;
+  align-self: center;
+  width: 2rem;
+  height: 2rem;
+  margin-left: -0.15rem;
+  padding: 0;
   opacity: 0.88;
   color: #c9ceff;
+  transition: opacity var(--speed) var(--ease), color var(--speed) var(--ease);
 }
 .site-header nav a.nav-discord:hover {
+  opacity: 1;
   color: #e3e5ff;
 }
 .mm-link.mm-discord {

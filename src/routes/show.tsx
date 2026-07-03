@@ -3,6 +3,7 @@ import { raw } from "hono/html";
 import { ExploreCard } from "../components/cards";
 import { VsCard } from "../components/compare";
 import { communityRingScore, DetailHero, heroWatchProvider, tmdbRingScore } from "../components/detail-hero";
+import { byngeHandoffHref } from "../lib/bynge";
 import { DossierRow } from "../components/dossier";
 import { FilterSelect, SubscribeCompact, SubscribeForm } from "../components/forms";
 import { HomeSidebarRail } from "../components/home-sidebar";
@@ -172,6 +173,13 @@ app.get("/show/:slug", async (c) => {
   const writerLinks = writers.length ? await crewLinkMap(c.env.DB, writers) : new Map<number, number>();
   const prov = providersFor(show, region);
   const watchProv = heroWatchProvider(prov.names, show.name, prov.region, "tv");
+  const byngeWatchHref = byngeHandoffHref("tv", {
+    tmdbId: show.tmdb_id,
+    imdbId: show.imdb_id,
+  }, {
+    title: show.name,
+    poster: show.poster_url ?? show.image_url,
+  });
 
   // TVSeries node built here (after creators resolve) so it can carry the creator
   // credits, plus genre and episode count from the data already in scope.
@@ -302,6 +310,7 @@ app.get("/show/:slug", async (c) => {
               ? { ...watchProv, href: watchProv.href ?? `/show/${show.slug}/where-to-watch` }
               : null
           }
+          byngeWatchHref={byngeWatchHref}
           metaBadge={show.status === "Running" ? "On air" : show.status === "Ended" ? "Ended" : null}
           genres={showGenres.slice(0, 4).map((g) => ({
             name: g,

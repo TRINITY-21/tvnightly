@@ -62,6 +62,8 @@ export const DetailHero: FC<{
   directors: CreditPerson[];
   writers: CreditPerson[];
   watchProvider?: { name: string; logo?: string; href?: string | null; chartHref?: string | null } | null;
+  /** Branded handoff → Bynge player (replaces the footer watch CTA when set). */
+  byngeWatchHref?: string | null;
   metaBadge?: string | null;
   genres: { name: string; href: string }[];
   metaExtra?: string | null;
@@ -95,6 +97,7 @@ export const DetailHero: FC<{
   directors,
   writers,
   watchProvider,
+  byngeWatchHref,
   metaBadge,
   genres,
   metaExtra,
@@ -210,7 +213,19 @@ export const DetailHero: FC<{
               <CreditBlock title="Writers" people={writers} />
             </div>
             <div class="hub-hero-credits-foot">
-              {watchProvider ? (
+              {byngeWatchHref ? (
+                <a class="hub-hero-bynge" href={byngeWatchHref}>
+                  <span class="hub-hero-bynge-kicker">Stream with friends</span>
+                  <span class="hub-hero-bynge-main">
+                    <span class="hub-hero-bynge-play" aria-hidden="true">
+                      ▶
+                    </span>
+                    <span>
+                      Watch now on <strong>Bynge</strong>
+                    </span>
+                  </span>
+                </a>
+              ) : watchProvider ? (
                 <a
                   class="hub-hero-watch"
                   href={watchProvider.href ?? "#"}

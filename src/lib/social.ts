@@ -1960,7 +1960,12 @@ export function buildSimilarCard(
  *  (green→red), with numbers when the cells are big enough. "Whole series in one
  *  image" — strong screenshot bait. resvg-safe, any aspect ratio. */
 export function buildHeatmapCard(
-  d: { name: string; backdropUri: string | null; episodes: { season: number; number: number; rating: number | null }[] },
+  d: {
+    name: string;
+    backdropUri: string | null;
+    posterUri?: string | null;
+    episodes: { season: number; number: number; rating: number | null }[];
+  },
   W: number,
   H: number,
 ): string {
@@ -1998,7 +2003,9 @@ export function buildHeatmapCard(
   const headTop = M + Math.round(MIN * 0.14);
   p.push(txtR(M, headTop, "EVERY EPISODE · RATED", { size: Math.round(MIN * 0.028), w: "black", fill: AMBER, ls: MIN * 0.004 }));
   const tSize = Math.round(W * (landscape ? 0.055 : isReel ? 0.082 : 0.066));
-  const tLines = wrap(d.name.toUpperCase(), Math.max(8, Math.floor((W - 2 * M) / (tSize * 0.62))), 2);
+  // the poster sits top-right in the header band — keep the title clear of it
+  const tReserve = d.posterUri ? Math.round(MIN * 0.24) : 0;
+  const tLines = wrap(d.name.toUpperCase(), Math.max(8, Math.floor((W - 2 * M - tReserve) / (tSize * 0.62))), 2);
   let ty = headTop + Math.round(MIN * 0.015);
   for (const ln of tLines) {
     ty += tSize;
@@ -2014,6 +2021,24 @@ export function buildHeatmapCard(
         ls: MIN * 0.002,
       }),
     );
+
+  // show poster, top-right in the header band (skipped when the band is too
+  // shallow to render it legibly — e.g. compact landscape headers)
+  if (d.posterUri) {
+    const pTop = M + Math.round(MIN * 0.075);
+    const pBot = ty + Math.round(MIN * 0.11) - Math.round(MIN * 0.025);
+    const ph = Math.min(pBot - pTop, Math.round(MIN * 0.3));
+    if (ph >= MIN * 0.14) {
+      const pw = Math.round(ph * (2 / 3));
+      const px = W - M - pw;
+      const prx = r2(Math.min(14, ph * 0.06));
+      p.push(
+        `<clipPath id="hposter"><rect x="${px}" y="${pTop}" width="${pw}" height="${r2(ph)}" rx="${prx}"/></clipPath>` +
+          `<g filter="url(#htsh)"><image href="${d.posterUri}" x="${px}" y="${pTop}" width="${pw}" height="${r2(ph)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#hposter)"/></g>` +
+          `<rect x="${px + 0.5}" y="${pTop + 0.5}" width="${pw - 1}" height="${r2(ph - 1)}" rx="${prx}" fill="none" stroke="rgba(255,255,255,0.18)"/>`,
+      );
+    }
+  }
 
   const gridTop = ty + Math.round(MIN * 0.11);
   const boxLeft = M;

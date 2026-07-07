@@ -609,8 +609,11 @@ app.get("/admin/social/heatmap.png", async (c) => {
   if (!eps.length) return c.text(`No episodes for ${show.name}.`, 404);
   const key = c.env.TMDB_API_KEY;
   const bd = key && show.tmdbId ? await tmdbBackdrop(key, show.tmdbId) : null;
-  const backdropUri = await posterDataUri(hiRes(bd?.x2 ?? bd?.x1 ?? show.imageUrl ?? null));
-  const svg = buildHeatmapCard({ name: show.name, backdropUri, episodes: eps }, W, H);
+  const [backdropUri, posterUri] = await Promise.all([
+    posterDataUri(hiRes(bd?.x2 ?? bd?.x1 ?? show.imageUrl ?? null)),
+    posterDataUri(hiRes(show.posterUrl ?? show.imageUrl ?? null, "w780")),
+  ]);
+  const svg = buildHeatmapCard({ name: show.name, backdropUri, posterUri, episodes: eps }, W, H);
   const fonts = await loadOgFonts(c.env.ASSETS);
   const png = await svgToPng(svg, fonts, W);
   return new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store" } });

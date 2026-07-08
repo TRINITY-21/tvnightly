@@ -3,7 +3,7 @@ import { getCookie } from "hono/cookie";
 import { Bindings, HonoEnv } from "../types";
 import { origin } from "../lib/seo";
 import { MessagePage } from "../components/Layout";
-import { SubscribePending } from "../components/subscribe-pending";
+import { SubscribeWelcome } from "../components/subscribe-welcome";
 import { signToken, verifyToken } from "../tokens";
 import { materializeShow } from "../lib/tmdb-show";
 import { sendEmails } from "../email";
@@ -31,10 +31,7 @@ app.post("/subscribe", async (c) => {
   // input. Pretend success so the bot doesn't learn it was caught — subscribe nobody.
   if (String(body.website ?? "").trim()) {
     return c.html(
-      <MessagePage
-        title="Almost there"
-        body="Check your inbox and click the confirmation link to activate your alerts."
-      />,
+      <MessagePage title="You're in" body="Subscribed — your first email is on its way." />,
     );
   }
 
@@ -68,21 +65,19 @@ app.post("/subscribe", async (c) => {
   }
   if (showId && !show) return c.notFound();
 
-  // Without a SECRET (fresh local dev) skip double opt-in so the flow still works.
-  const confirmed = c.env.SECRET ? 0 : 1;
+  // Single opt-in: the subscription is live immediately. (The /confirm endpoint
+  // below stays only so confirmation links from already-sent emails keep working.)
   // Social attribution: the tvn_ref cookie (set by routes/go on a /r/ click) tells
   // us which post referred this signup → surfaced in /admin/studio/insights.
   const [refSource, refCampaign] = (getCookie(c, "tvn_ref") ?? "").split("|");
   await c.env.DB.prepare(
     `INSERT INTO subscriptions (email, show_id, kind, confirmed, created_at, ref_source, ref_campaign)
-     VALUES (?,?,?,?,unixepoch(),?,?)
-     ON CONFLICT(email, show_id, kind) DO NOTHING`,
+     VALUES (?,?,?,1,unixepoch(),?,?)
+     ON CONFLICT(email, show_id, kind) DO UPDATE SET confirmed = 1`,
   )
-    .bind(email, realId, kind, confirmed, refSource || null, refCampaign || null)
+    .bind(email, realId, kind, refSource || null, refCampaign || null)
     .run();
 
-  // shared by the confirm email subject and the "check your inbox" page so the
-  // visitor sees the exact subject line to look for
   const what =
     kind === "daily" ? "the TV Nightly daily email" : `${show!.name} renewal & schedule alerts`;
   const getsLine =
@@ -90,46 +85,34 @@ app.post("/subscribe", async (c) => {
       ? "what's on tonight, ranked — fresh every evening."
       : `we'll email the moment ${show!.name} has renewal or schedule news.`;
 
+  // Welcome email — best-effort (the subscription is already live either way).
+  // Carries the one-tap unsubscribe link, which is what makes single opt-in OK:
+  // a mistyped/unwanted address can bail out of the very first email.
   if (c.env.SECRET) {
-    const token = await signToken({ email, showId: realId, kind, action: "confirm" }, c.env.SECRET);
-    const confirmUrl = `${origin(c)}/confirm?token=${token}`;
-    const [sent] = await sendEmails(c.env, [
+    const unsubToken = await signToken({ email, showId: realId, kind, action: "unsub" }, c.env.SECRET);
+    const target = kind === "daily" ? `${origin(c)}/tonight` : origin(c);
+    await sendEmails(c.env, [
       {
         to: email,
-        subject: `Confirm: ${what}`,
+        subject: `You're in: ${what}`,
         html: emailShell({
-          title: "Confirm your subscription",
-          kicker: "One more step",
-          heading: "Confirm your subscription",
-          preheader: `One click to start ${what}.`,
+          title: "Welcome to TV Nightly",
+          kicker: "You're in",
+          heading: "Welcome to TV Nightly",
+          preheader: `You're subscribed to ${what}.`,
           contentHtml:
             emailHighlight(
-              `You're one tap away from <strong style="color:${EMAIL.text}">${what}</strong>. Confirm below and you're in.`,
-            ) +
-            emailButton("Confirm subscription", confirmUrl) +
-            emailLinkFallback(confirmUrl),
+              `You're subscribed to <strong style="color:${EMAIL.text}">${what}</strong> — ${getsLine}`,
+            ) + emailButton("Open TV Nightly", target),
           footerNote:
-            "You got this because someone entered this address on tvnightly.com. If that wasn't you, just ignore it — nothing is subscribed until you confirm.",
+            "You're getting this because this address was subscribed on tvnightly.com. Not you? One tap below and you're out.",
+          unsubscribeHref: `${origin(c)}/unsubscribe?token=${unsubToken}`,
         }),
       },
-    ]);
-    // The row is already pending; if the confirm email didn't go out, don't tell
-    // the visitor to "check their inbox" for a mail that never sent. A retry POST
-    // re-sends (the row stays via ON CONFLICT DO NOTHING).
-    if (!sent) {
-      return c.html(
-        <MessagePage
-          title="Couldn't send that email"
-          body="We couldn't send your confirmation email just now. Please try again in a moment."
-        />,
-        502,
-      );
-    }
+    ]).catch((err) => console.error("welcome email failed", email, err));
   }
 
-  return c.env.SECRET
-    ? c.html(<SubscribePending email={email} what={what} getsLine={getsLine} />)
-    : c.html(<MessagePage title="You're in" body="Subscribed (dev mode: auto-confirmed)." />);
+  return c.html(<SubscribeWelcome email={email} what={what} getsLine={getsLine} />);
 });
 
 app.get("/confirm", async (c) => {

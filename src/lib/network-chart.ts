@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import type { HonoEnv, MovieRow, ShowRow } from "../types";
 import { enrichMoviesFromD1, enrichShowsFromD1 } from "./chart-enrich";
 import { sortMovies, sortShows, type ChartFilters } from "./chart-filters";
+import { edgeMemoJson } from "./edge-memo";
 import { slugifyName } from "./format";
 import { providerBrand, tmdbNetworkId } from "./providers";
 import { networkDirectory } from "./queries";
@@ -57,7 +58,14 @@ export function sortBrowseNetworks(networks: NetEntry[]): NetEntry[] {
  *  for, then streaming brands the catalogs know but TVmaze doesn't call a
  *  network ("Paramount+", "fuboTV") — the dossier logos link here, so
  *  every brand we print must resolve. */
+// Memoized: the provider fallback below json_tree-scans every movies+shows row
+// (~320K rows per run) for slugs outside the network directory — bots probe
+// these constantly. The mapping only changes with the nightly sync.
 export async function resolveNetwork(db: D1Database, slug: string): Promise<NetEntry | null> {
+  return edgeMemoJson(`resolve-network/${slug}`, 86400, () => resolveNetworkLive(db, slug));
+}
+
+async function resolveNetworkLive(db: D1Database, slug: string): Promise<NetEntry | null> {
   const dir = await networkDirectory(db);
   const top = dir.find((n) => n.slug === slug);
   if (top) return top;

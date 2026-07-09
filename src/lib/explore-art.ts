@@ -1,9 +1,15 @@
+import { edgeMemoJson } from "./edge-memo";
 import { FRANCHISE_BY_SLUG } from "./franchises";
 import { hiRes, slugifyName } from "./format";
 import { tmdbBackdrop, tmdbDiscoverGenre, tmdbGenreId, tmdbMovieBackdrop } from "./tmdb";
 import { genreBinds, genreOr, VERTICALS } from "./verticals";
 
 export type ExploreArt = { x1: string; x2?: string } | null;
+
+// Door art is deterministic per key and backed by `genres LIKE` scans that no
+// index can serve — the #1 D1 rows-read family (≈1.6B rows/wk). Memoized at the
+// edge for a day; a stale door backdrop is invisible, a re-scan is billed.
+const ART_TTL = 86400;
 
 const showArt = (key: string, tmdbId: number | null | undefined) =>
   tmdbId ? tmdbBackdrop(key, tmdbId) : Promise.resolve(null);
@@ -73,7 +79,11 @@ async function tmdbShowGenreArt(key: string, genre: string): Promise<ExploreArt>
 
 /** Top-rated show in a genre — the genre door wears its reigning #1 backdrop. */
 export async function genreShowArt(db: D1Database, key: string, genre: string): Promise<ExploreArt> {
-  return (await d1ShowGenreArt(db, key, genre)) ?? (await tmdbShowGenreArt(key, genre));
+  return edgeMemoJson(
+    `genre-show-art/${slugifyName(genre)}`,
+    ART_TTL,
+    async () => (await d1ShowGenreArt(db, key, genre)) ?? (await tmdbShowGenreArt(key, genre)),
+  );
 }
 
 async function d1MovieGenreArt(db: D1Database, key: string, genre: string): Promise<ExploreArt> {
@@ -112,11 +122,19 @@ async function tmdbMovieGenreArt(key: string, genre: string): Promise<ExploreArt
 
 /** Top-rated film in a genre. */
 export async function genreMovieArt(db: D1Database, key: string, genre: string): Promise<ExploreArt> {
-  return (await d1MovieGenreArt(db, key, genre)) ?? (await tmdbMovieGenreArt(key, genre));
+  return edgeMemoJson(
+    `genre-movie-art/${slugifyName(genre)}`,
+    ART_TTL,
+    async () => (await d1MovieGenreArt(db, key, genre)) ?? (await tmdbMovieGenreArt(key, genre)),
+  );
 }
 
 /** The network's highest-rated series backdrop. */
 export async function networkShowArt(db: D1Database, key: string, netName: string): Promise<ExploreArt> {
+  return edgeMemoJson(`network-show-art/${slugifyName(netName)}`, ART_TTL, () => networkShowArtLive(db, key, netName));
+}
+
+async function networkShowArtLive(db: D1Database, key: string, netName: string): Promise<ExploreArt> {
   const row = await db
     .prepare(
       `SELECT tmdb_id, image_url FROM shows
@@ -132,6 +150,10 @@ export async function networkShowArt(db: D1Database, key: string, netName: strin
 
 /** A vertical hub's reigning #1 title — TV first, then film. */
 export async function hubArt(db: D1Database, key: string, hubSlug: string): Promise<ExploreArt> {
+  return edgeMemoJson(`hub-art/${hubSlug}`, ART_TTL, () => hubArtLive(db, key, hubSlug));
+}
+
+async function hubArtLive(db: D1Database, key: string, hubSlug: string): Promise<ExploreArt> {
   const v = VERTICALS.find((h) => h.slug === hubSlug);
   if (!v) return null;
 
@@ -180,6 +202,10 @@ export async function hubArt(db: D1Database, key: string, hubSlug: string): Prom
 
 /** Opening film of a franchise watch-order guide. */
 export async function franchiseArt(db: D1Database, key: string, slug: string): Promise<ExploreArt> {
+  return edgeMemoJson(`franchise-art/${slug}`, ART_TTL, () => franchiseArtLive(db, key, slug));
+}
+
+async function franchiseArtLive(db: D1Database, key: string, slug: string): Promise<ExploreArt> {
   const fr = FRANCHISE_BY_SLUG.get(slug);
   const first = fr?.entries[0];
   if (!first) return null;
@@ -194,6 +220,10 @@ export async function franchiseArt(db: D1Database, key: string, slug: string): P
 
 /** Top-rated film on a streaming service. */
 export async function providerMovieArt(db: D1Database, key: string, provider: string): Promise<ExploreArt> {
+  return edgeMemoJson(`provider-movie-art/${slugifyName(provider)}`, ART_TTL, () => providerMovieArtLive(db, key, provider));
+}
+
+async function providerMovieArtLive(db: D1Database, key: string, provider: string): Promise<ExploreArt> {
   const row = await db
     .prepare(
       `SELECT imdb_id, poster_url FROM movies

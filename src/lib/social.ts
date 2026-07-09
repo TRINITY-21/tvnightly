@@ -1529,11 +1529,134 @@ function kickerBlock(text: string, x: number, y: number, h: number, size: number
 }
 
 /** A marketing card for a "post-worthy moment", rendered at ANY aspect ratio:
- *  1080² (IG feed), 1080×1920 (IG story / TikTok), 1920×1080 (X). POSTER-MAGAZINE
- *  treatment: the title art blurs full-bleed as an ambient ground, the crisp poster
- *  stands as the hero, and big Archivo-Black type + an amber kicker block carry the
- *  moment. Resvg-safe dialect, so it rasterizes server-side. */
+ *  1080² (IG feed), 1080×1920 (IG story / TikTok), 1920×1080 (X). EDITORIAL
+ *  treatment (the entertainment-news card format): the still fills the entire
+ *  canvas SHARP, a scrim rises from the base, and a centered stack carries the
+ *  moment — brand lockup, mixed-case headline, note, meta, and an amber category
+ *  pill as the anchor. Resvg-safe dialect, so it rasterizes server-side. */
 export function buildPromoCard(d: PromoCardData, W: number, H: number): string {
+  const isReel = H / W > 1.6; // dodge TikTok's caption strip at the base
+  const MIN = Math.min(W, H);
+  const art = d.backdropUri ?? d.posterUri ?? null;
+  const p: string[] = [];
+  p.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`,
+  );
+  p.push(
+    `<defs>` +
+      `<linearGradient id="pbg" x1="0" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#141419"/><stop offset="1" stop-color="${PLATE}"/></linearGradient>` +
+      // the base scrim: invisible up top, near-solid at the pill so type always reads
+      `<linearGradient id="pvs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0"/><stop offset="0.36" stop-color="${PLATE}" stop-opacity="0.02"/><stop offset="0.68" stop-color="${PLATE}" stop-opacity="0.72"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.97"/></linearGradient>` +
+      `<filter id="ptsh" x="-25%" y="-45%" width="150%" height="190%"><feDropShadow dx="0" dy="2" stdDeviation="7" flood-color="#000" flood-opacity="0.8"/></filter>` +
+      `<filter id="pcard" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="${Math.round(MIN * 0.012)}" stdDeviation="${Math.round(MIN * 0.03)}" flood-color="#000" flood-opacity="0.7"/></filter>` +
+      `</defs>`,
+  );
+
+  // 1) the still IS the card — full-bleed, sharp, center-cropped
+  p.push(`<rect width="${W}" height="${H}" fill="url(#pbg)"/>`);
+  if (art) {
+    p.push(`<image href="${art}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>`);
+  }
+  // 2) legibility scrim + the amber signature spine
+  p.push(`<rect width="${W}" height="${H}" fill="url(#pvs)"/>`);
+  p.push(`<rect x="0" y="0" width="${r2(MIN * 0.013)}" height="${H}" fill="${AMBER}"/>`);
+
+  // ---- the centered editorial stack, laid out bottom-up ----
+  const cx = W / 2;
+  const colW = W - Math.round(MIN * 0.16);
+  const safeB = H - Math.round(H * (isReel ? 0.1 : 0.055));
+
+  // measure everything first
+  const title = d.title.trim();
+  const tCap = Math.round(MIN * (isReel ? 0.066 : 0.062));
+  const CHARW = 0.55; // mixed-case Archivo 900 average advance
+  const maxCh = Math.max(10, Math.floor(colW / (tCap * CHARW)));
+  const tLines = wrap(title, maxCh, 3);
+  const longest = Math.max(1, ...tLines.map((l) => l.length));
+  const tSize = Math.max(34, Math.min(tCap, Math.floor(colW / (longest * CHARW))));
+  const tLead = Math.round(tSize * 1.12);
+  const nSize = Math.round(MIN * 0.034);
+  const nLines = d.note ? wrap(d.note, Math.max(12, Math.floor(colW / (nSize * 0.5))), 2) : [];
+  const nLead = Math.round(nSize * 1.3);
+  const mSize = Math.round(MIN * 0.021);
+  const bSize = Math.round(MIN * 0.028); // brand wordmark size
+  const pillS = Math.round(MIN * 0.026);
+  const pillPad = Math.round(pillS * 0.62);
+  const pillH = pillS + pillPad * 2;
+  const domS = Math.round(MIN * 0.02);
+
+  const gap = Math.round(MIN * 0.028);
+  const total =
+    bSize + gap + tLines.length * tLead + (nLines.length ? Math.round(gap * 0.5) + nLines.length * nLead : 0) +
+    (d.meta ? gap + mSize : 0) + gap + pillH + Math.round(gap * 0.9) + domS;
+
+  let y = safeB - total;
+
+  // brand lockup, centered (scaled from the measured 29px wordmark ≈ 220px advance)
+  const wordAdv = (220 / 29) * bSize;
+  const markH = bSize * 1.05;
+  const markW = markH * 1.5;
+  const brandW = markW + bSize * 0.52 + wordAdv + bSize * 0.62;
+  const bx = cx - brandW / 2;
+  y += bSize;
+  p.push(
+    `<g filter="url(#ptsh)">` +
+      ogMark(bx, y - bSize * 0.86, markH) +
+      txtR(bx + markW + bSize * 0.52, y, "TV NIGHTLY", { size: bSize, w: "black", fill: TEXT, ls: bSize * 0.04 }) +
+      `<circle cx="${r2(bx + markW + bSize * 0.52 + wordAdv + bSize * 0.28)}" cy="${r2(y - bSize * 0.28)}" r="${r2(bSize * 0.2)}" fill="${AMBER}"/>` +
+      `</g>`,
+  );
+
+  // headline — mixed case, white, heavy; the sentence carries the moment
+  y += gap;
+  for (const ln of tLines) {
+    y += tSize;
+    p.push(`<g filter="url(#ptsh)">` + txtR(cx, y, ln, { size: tSize, w: "black", fill: TEXT, anchor: "middle" }) + `</g>`);
+    y += tLead - tSize;
+  }
+  if (nLines.length) {
+    y += Math.round(gap * 0.5);
+    for (const ln of nLines) {
+      y += nSize;
+      p.push(`<g filter="url(#ptsh)">` + txtR(cx, y, ln, { size: nSize, w: "semi", fill: "#f0ece3", anchor: "middle" }) + `</g>`);
+      y += nLead - nSize;
+    }
+  }
+  if (d.meta) {
+    y += gap + mSize;
+    p.push(
+      txtR(cx, y, trunc(String(d.meta).toUpperCase(), Math.floor(colW / (mSize * 0.66))), {
+        size: mSize,
+        w: "bold",
+        fill: "#cfc9bf",
+        anchor: "middle",
+        ls: mSize * 0.28,
+      }),
+    );
+  }
+
+  // the amber category pill — the card's anchor, like a section tag
+  y += gap;
+  const label = (d.kicker || "TV NIGHTLY").toUpperCase();
+  const pls = pillS * 0.12;
+  const ptw = label.length * pillS * 0.64 + Math.max(0, label.length - 1) * pls;
+  const pw = ptw + pillS * 1.8;
+  p.push(
+    `<g filter="url(#pcard)"><rect x="${r2(cx - pw / 2)}" y="${r2(y)}" width="${r2(pw)}" height="${pillH}" rx="${Math.round(MIN * 0.008)}" fill="${AMBER}"/></g>` +
+      txtR(cx, y + pillH / 2 + pillS * 0.34, label, { size: pillS, w: "black", fill: "#1c1305", anchor: "middle", ls: pls }),
+  );
+  y += pillH;
+
+  // quiet domain sign-off
+  y += Math.round(gap * 0.9) + domS;
+  p.push(txtR(cx, y, "tvnightly.com", { size: domS, w: "black", fill: AMBER, anchor: "middle", ls: domS * 0.06 }));
+
+  p.push(`</svg>`);
+  return p.join("");
+}
+
+/** The previous poster-magazine promo treatment, kept for reference/rollback. */
+function buildPromoCardMagazine(d: PromoCardData, W: number, H: number): string {
   const landscape = W / H > 1.3;
   const isReel = H / W > 1.6; // true 9:16 → dodge TikTok's right rail + caption strip
   const MIN = Math.min(W, H);

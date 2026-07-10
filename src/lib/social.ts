@@ -2105,6 +2105,11 @@ export function buildHeatmapCard(
   const ratedArr = d.episodes.filter((e) => e.rating != null).map((e) => e.rating as number);
   const avg = ratedArr.length ? ratedArr.reduce((s, r) => s + r, 0) / ratedArr.length : null;
 
+  // 1:1 and 16:9 use the split "scorecard" layout: tier legend up top, the fat
+  // color grid + per-season AVG row on the left, the key art + title filling the
+  // right. Tall formats (9:16 / 2:3) keep the vertical header-over-grid layout.
+  if (H / W < 1.35) return heatmapScorecard(d, W, H, seasons, cols, avg);
+
   const p: string[] = [];
   p.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`);
   p.push(
@@ -2210,6 +2215,161 @@ export function buildHeatmapCard(
           }),
         );
     }
+  p.push(`</svg>`);
+  return p.join("");
+}
+
+// The scorecard's five-tier ramp (richer than the shared ratingColor): tier
+// color + whether the cell wants dark ink, and the legend label.
+const SCORE_TIERS = [
+  { min: 9.5, c: "#3b9cf5", darkInk: false, label: "Iconic" },
+  { min: 9.0, c: "#1d7a38", darkInk: false, label: "Awesome" },
+  { min: 8.0, c: "#2fbe57", darkInk: true, label: "Great" },
+  { min: 7.0, c: "#e8c53f", darkInk: true, label: "Good" },
+  { min: -Infinity, c: "#e88a25", darkInk: true, label: "Meh" },
+] as const;
+const scoreTier = (r: number) => SCORE_TIERS.find((t) => r >= t.min) ?? SCORE_TIERS[SCORE_TIERS.length - 1];
+
+/** The 1:1 / 16:9 heatmap treatment: legend of tiers across the top, brand
+ *  top-right, the fat color grid (seasons × episodes) with a per-season AVG row
+ *  on the left, and the key art + title owning the right side. resvg-safe. */
+function heatmapScorecard(
+  d: { name: string; backdropUri: string | null; posterUri?: string | null; episodes: { season: number; number: number; rating: number | null }[] },
+  W: number,
+  H: number,
+  seasons: number[],
+  cols: { season: number; number: number; rating: number | null }[][],
+  avg: number | null,
+): string {
+  const MIN = Math.min(W, H);
+  const M = Math.round(MIN * 0.06);
+  const art = d.posterUri ?? d.backdropUri ?? null;
+  const nCols = Math.max(1, cols.length);
+  const nRows = Math.max(1, ...cols.map((c) => c.length));
+
+  // size the grid first so the art panel can absorb any leftover width (few
+  // seasons on a 16:9 canvas would otherwise leave a dead zone at the seam)
+  const lgS = Math.round(MIN * 0.0195);
+  const lgY = M + lgS;
+  const rowLabelW = Math.round(MIN * 0.05);
+  const headH = Math.round(MIN * 0.042);
+  const avgH = Math.round(MIN * 0.085);
+  const ox = M + rowLabelW;
+  const top = lgY + Math.round(MIN * 0.045);
+  const artMax = Math.round(W * (W / H > 1.3 ? 0.63 : 0.56));
+  const gridW = artMax - Math.round(MIN * 0.04) - ox;
+  const gridH = H - M - avgH - (top + headH);
+  const gap = Math.round(MIN * 0.011);
+  const cellH = Math.min((gridH - (nRows - 1) * gap) / nRows, MIN * 0.088);
+  const cellW = Math.min((gridW - (nCols - 1) * gap) / nCols, cellH * 2.35);
+  const artX = Math.min(artMax, ox + Math.round(nCols * cellW + (nCols - 1) * gap) + Math.round(MIN * 0.05));
+
+  const p: string[] = [];
+  p.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Archivo, ${SYS}">`);
+  p.push(
+    `<defs>` +
+      `<linearGradient id="scFade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${PLATE}" stop-opacity="1"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0"/></linearGradient>` +
+      `<linearGradient id="scTitle" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${PLATE}" stop-opacity="0"/><stop offset="1" stop-color="${PLATE}" stop-opacity="0.92"/></linearGradient>` +
+      `<filter id="scSh" x="-25%" y="-45%" width="150%" height="190%"><feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000" flood-opacity="0.8"/></filter>` +
+      `</defs>`,
+  );
+  p.push(`<rect width="${W}" height="${H}" fill="${PLATE}"/>`);
+
+  // right panel: the key art, fading into the plate on its left edge
+  if (art) {
+    p.push(`<image href="${art}" x="${artX}" y="0" width="${W - artX}" height="${H}" preserveAspectRatio="xMidYMid slice"/>`);
+    p.push(`<rect x="${artX}" y="0" width="${Math.round(MIN * 0.16)}" height="${H}" fill="url(#scFade)"/>`);
+    p.push(`<rect x="${artX}" y="${Math.round(H * 0.55)}" width="${W - artX}" height="${H - Math.round(H * 0.55)}" fill="url(#scTitle)"/>`);
+  }
+  p.push(`<rect x="0" y="0" width="${r2(MIN * 0.013)}" height="${H}" fill="${AMBER}"/>`);
+
+  // legend row (left) + brand lockup (right)
+  let lx = M + Math.round(MIN * 0.01);
+  for (const t of SCORE_TIERS) {
+    const rr = MIN * 0.0115;
+    p.push(`<circle cx="${r2(lx + rr)}" cy="${r2(lgY - lgS * 0.32)}" r="${r2(rr)}" fill="${t.c}"/>`);
+    const label = t.label;
+    p.push(txtR(lx + rr * 2 + MIN * 0.011, lgY, label, { size: lgS, w: "bold", fill: "#ded8cd" }));
+    lx += rr * 2 + MIN * 0.011 + label.length * lgS * 0.56 + Math.round(MIN * 0.028);
+  }
+  const bS = Math.round(MIN * 0.022);
+  const bMarkH = bS * 1.05;
+  const bMarkW = bMarkH * 1.5;
+  const bWordAdv = (220 / 29) * bS;
+  const bW = bMarkW + bS * 0.5 + bWordAdv + bS * 0.6;
+  const bx = W - M - bW;
+  p.push(
+    `<g filter="url(#scSh)">` +
+      ogMark(bx, lgY - bS * 0.84, bMarkH) +
+      txtR(bx + bMarkW + bS * 0.5, lgY, "TV NIGHTLY", { size: bS, w: "black", fill: TEXT, ls: bS * 0.04 }) +
+      `<circle cx="${r2(bx + bMarkW + bS * 0.5 + bWordAdv + bS * 0.26)}" cy="${r2(lgY - bS * 0.28)}" r="${r2(bS * 0.2)}" fill="${AMBER}"/>` +
+      `</g>`,
+  );
+
+  // the grid: seasons across, episodes down, wide rounded cells with big scores
+  const oy = top + headH;
+  const rx = Math.min(10, cellH * 0.22);
+  const numS = Math.round(Math.min(cellH * 0.52, cellW * 0.34));
+  const showNum = cellH >= MIN * 0.032 && cellW >= numS * 2.4;
+  const hS = Math.round(MIN * 0.023);
+  for (let gc = 0; gc < nCols; gc++)
+    p.push(txtR(ox + gc * (cellW + gap) + cellW / 2, top + hS, `S${seasons[gc]}`, { size: hS, w: "black", fill: "#cfc9bf", anchor: "middle" }));
+  const rowEvery = nRows > 16 ? 5 : 1;
+  for (let gr = 0; gr < nRows; gr++) {
+    if (gr % rowEvery === 0 || gr === nRows - 1)
+      p.push(
+        txtR(ox - Math.round(MIN * 0.016), oy + gr * (cellH + gap) + cellH / 2 + hS * 0.3, `E${gr + 1}`, { size: Math.round(hS * 0.82), w: "bold", fill: MUTED, anchor: "end" }),
+      );
+    for (let gc = 0; gc < nCols; gc++) {
+      const ep = cols[gc][gr];
+      if (!ep) continue; // reference style: absent episodes leave empty space
+      const x = ox + gc * (cellW + gap);
+      const y = oy + gr * (cellH + gap);
+      const tier = ep.rating != null ? scoreTier(ep.rating) : null;
+      p.push(`<rect x="${r2(x)}" y="${r2(y)}" width="${r2(cellW)}" height="${r2(cellH)}" rx="${r2(rx)}" fill="${tier ? tier.c : "#26262e"}"/>`);
+      if (showNum)
+        p.push(
+          txtR(x + cellW / 2, y + cellH / 2 + numS * 0.34, ep.rating != null ? ep.rating.toFixed(1) : "·", {
+            size: numS,
+            w: "black",
+            fill: tier ? (tier.darkInk ? "#141100" : "#ffffff") : "#6a6a72",
+            anchor: "middle",
+          }),
+        );
+    }
+  }
+
+  // per-season AVG row: white score + a tier-colored underline per column
+  const usedRows = Math.max(...cols.map((c) => c.length));
+  const avgY = oy + usedRows * (cellH + gap) - gap + Math.round(MIN * 0.052);
+  const aS = Math.round(Math.min(cellH * 0.62, MIN * 0.034));
+  p.push(txtR(ox - Math.round(MIN * 0.016), avgY, "AVG.", { size: Math.round(hS * 0.9), w: "bold", fill: MUTED, anchor: "end" }));
+  for (let gc = 0; gc < nCols; gc++) {
+    const rated = cols[gc].filter((e) => e.rating != null);
+    if (!rated.length) continue;
+    const a = rated.reduce((s, e) => s + (e.rating as number), 0) / rated.length;
+    const cx = ox + gc * (cellW + gap) + cellW / 2;
+    p.push(txtR(cx, avgY, a.toFixed(1), { size: aS, w: "black", fill: TEXT, anchor: "middle" }));
+    const uw = cellW * 0.62;
+    p.push(`<rect x="${r2(cx - uw / 2)}" y="${r2(avgY + MIN * 0.012)}" width="${r2(uw)}" height="${r2(MIN * 0.006)}" rx="${r2(MIN * 0.003)}" fill="${scoreTier(a).c}"/>`);
+  }
+
+  // title block, anchored bottom-right over the art
+  const stats = `${seasons.length} SEASON${seasons.length === 1 ? "" : "S"} · ${d.episodes.filter((e) => e.rating != null).length} EPISODES${avg != null ? ` · AVG ${avg.toFixed(1)}` : ""}`;
+  const tS = Math.round(MIN * 0.052);
+  const tCol = W - artX + Math.round(MIN * 0.12);
+  const tLines = wrap(d.name.toUpperCase(), Math.max(8, Math.floor(tCol / (tS * 0.62))), 2);
+  const domS = Math.round(MIN * 0.02);
+  let ty = H - M * 0.8;
+  p.push(txtR(W - M, ty, "tvnightly.com", { size: domS, w: "black", fill: AMBER, anchor: "end", ls: domS * 0.06 }));
+  ty -= domS + Math.round(MIN * 0.022);
+  p.push(`<g filter="url(#scSh)">` + txtR(W - M, ty, stats, { size: Math.round(MIN * 0.019), w: "bold", fill: "#ded8cd", anchor: "end", ls: MIN * 0.0015 }) + `</g>`);
+  ty -= Math.round(MIN * 0.019) + Math.round(MIN * 0.02);
+  for (let i = tLines.length - 1; i >= 0; i--) {
+    p.push(`<g filter="url(#scSh)">` + txtR(W - M, ty, tLines[i], { size: tS, w: "black", fill: TEXT, anchor: "end" }) + `</g>`);
+    ty -= Math.round(tS * 1.08);
+  }
+
   p.push(`</svg>`);
   return p.join("");
 }

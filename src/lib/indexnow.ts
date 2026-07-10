@@ -27,12 +27,13 @@ async function ping(origin: string, urls: string[]): Promise<void> {
 
 /** Submit the URLs that changed in the last sync window — show renewals /
  *  premieres + streaming-availability changes — plus the hub pages they feed.
- *  Called after the hourly sync; a no-op when nothing changed. */
+ *  Called after the daily 21:00 sync; a no-op when nothing changed. */
 export async function submitIndexNow(env: Bindings): Promise<void> {
   const origin = env.SITE_ORIGIN ?? "https://tvnightly.com";
-  // ~65 min lookback (a touch over the hourly cadence) so a slightly-late run
-  // never leaves a gap; re-submitting a URL is harmless (engines dedupe).
-  const WINDOW = 3900;
+  // ~25h lookback (a touch over the DAILY cadence): provider events land at
+  // 21:30, after this 21:00 run, so anything shorter than a day silently drops
+  // them until the next cycle. Re-submitting a URL is harmless (engines dedupe).
+  const WINDOW = 90_000;
   const [tv, prov] = await Promise.all([
     env.DB.prepare(
       `SELECT DISTINCT s.slug FROM show_events e JOIN shows s ON s.id = e.show_id

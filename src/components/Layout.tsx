@@ -41,11 +41,11 @@ export const setGaId = (id?: string) => {
   gaId = id;
 };
 
-// When false, skip GA + Cloudflare Web Analytics (e.g. /admin/* tooling pages).
-let siteAnalytics = true;
-export const setSiteAnalytics = (enabled: boolean) => {
-  siteAnalytics = enabled;
-};
+// NOTE: no per-request analytics flag lives here. gaId/cfBeaconToken are safe as
+// module state only because every request sets the same env-derived value; the
+// admin on/off decision varies per request and MUST come from the request itself
+// (Layout reads props.c) — a module flag raced with concurrent public renders
+// and leaked GA page_views from /admin pages.
 
 // Off-screen decoy field for the subscribe forms. Real visitors never see or fill
 // it; bots auto-fill every input, so a non-empty value on POST /subscribe is a
@@ -224,6 +224,9 @@ export const Layout: FC<
     }
   })();
   const path = canonicalUrl?.pathname ?? "";
+  // /admin pages never emit analytics — decided from THIS request's URL (admin
+  // pages all pass c; pages without c are public utility pages).
+  const adminPage = !!props.c && props.c.req.path.startsWith("/admin");
   // Pages without a subject image of their own fall back to the branded default
   // card (large), so every share/Discover unfurl carries an on-brand preview.
   const ogImage =
@@ -258,8 +261,8 @@ export const Layout: FC<
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      {/* Google Analytics 4 (gtag.js) — skipped on /admin/* (see setSiteAnalytics). */}
-      {gaId && siteAnalytics
+      {/* Google Analytics 4 (gtag.js) — skipped on /admin/* (see adminPage). */}
+      {gaId && !adminPage
         ? raw(
             `<script async src="https://www.googletagmanager.com/gtag/js?id=${gaId}"></script>` +
               `<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${gaId}');</script>`,
@@ -319,7 +322,7 @@ export const Layout: FC<
       <link rel="stylesheet" href="/styles.css" />
       {(props.ld ?? []).map((d) => jsonLd(d))}
       {/* Cloudflare Web Analytics — skipped on /admin/* alongside GA. */}
-      {cfBeaconToken && siteAnalytics
+      {cfBeaconToken && !adminPage
         ? raw(
             `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"${cfBeaconToken}"}'></script>`,
           )

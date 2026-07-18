@@ -1,7 +1,7 @@
 // TV Nightly — app assembly. Routes live in src/routes/, one file per
 // page family; shared pieces in src/lib/ and src/components/.
 import { Hono } from "hono";
-import { setBeaconToken, setGaId, setSiteAnalytics } from "./components/Layout";
+import { setBeaconToken, setGaId } from "./components/Layout";
 import { ErrorPage, NotFoundPage } from "./components/notfound";
 import { setAffiliate } from "./lib/affiliate";
 import { setDiscordInvite } from "./lib/discord";
@@ -60,17 +60,17 @@ const app = new Hono<HonoEnv>();
 // This also threads the public Web Analytics beacon token into the Layout module.
 app.use("*", async (c, next) => {
   const url = new URL(c.req.url);
-  const admin = url.pathname.startsWith("/admin");
   // Analytics only on the real production origin. CF_BEACON_TOKEN and GA_ID are
   // plain vars (so they're present in `wrangler dev` too) — without this guard,
   // local pageviews report into the production Cloudflare Web Analytics + GA
   // properties and inflate the real numbers. Gate on SITE_ORIGIN (set to the
   // localhost origin in .dev.vars, the apex in wrangler.jsonc) rather than the
-  // request host: it's a direct env read, not subject to URL parsing.
+  // request host: it's a direct env read, not subject to URL parsing. These
+  // setters are env-derived (identical every request), so the module state is
+  // race-free; the per-request /admin opt-out lives in Layout (adminPage).
   const prod = c.env.SITE_ORIGIN === "https://tvnightly.com";
   setBeaconToken(prod ? c.env.CF_BEACON_TOKEN : undefined);
   setGaId(prod ? c.env.GA_ID : undefined);
-  setSiteAnalytics(!admin);
   setAffiliate(c.env);
   setDiscordInvite(c.env.DISCORD_INVITE_URL);
   c.header("X-Content-Type-Options", "nosniff");

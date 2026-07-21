@@ -51,7 +51,7 @@
     // Discord community invite (public) — navbar, sidebar, welcome modal.
     // discord.com/invite, NOT discord.gg: the short domain is blocked/misrouted
     // by some mobile carriers and DNS filters (users hit ERR_TIMED_OUT).
-    "DISCORD_INVITE_URL": "https://discord.com/invite/zg8TZPBFx"
+    "DISCORD_INVITE_URL": "https://discord.com/invite/zw2fGBeE6g"
     // TURNSTILE_SITE_KEY — paste the Turnstile widget sitekey (public) after
     // creating the widget; /feedback renders the anti-spam widget only when set.
   },

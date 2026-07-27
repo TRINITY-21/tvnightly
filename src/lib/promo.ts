@@ -5,7 +5,6 @@
 import type { AppContext } from "../types";
 import { pad2, slugifyName } from "./format";
 import { liveTonight } from "./schedule-live";
-import { origin } from "./seo";
 import { tmdbTrendingList } from "./tmdb";
 import { shortLink, utmCampaignFromPath, type UtmSource } from "./utm";
 
@@ -479,4 +478,6 @@ export function buildCaptions(o: {
   });
 }
 
-export const promoBase = (c: AppContext) => origin(c);
+/** Production origin for admin studio UTM links — always tvnightly.com, even in local dev. */
+export const PROMO_ORIGIN = "https://tvnightly.com";
+export const promoBase = (_c: AppContext) => PROMO_ORIGIN;

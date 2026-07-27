@@ -5,7 +5,7 @@ import { watchUrl } from "../lib/affiliate";
 import { networkChartBasePath, type ChartKind } from "../lib/chart-filters";
 import { PROVIDER_LOGOS, providerBrand, providerNetworkSlug } from "../lib/providers";
 import { RateInline } from "./forms";
-import { IconPlay, IconPlayDisc } from "./icons";
+import { IconPlayDisc } from "./icons";
 import { ShareBar } from "./share";
 import { HeroTrailerEmbed } from "./hero-trailer";
 
@@ -62,8 +62,6 @@ export const DetailHero: FC<{
   directors: CreditPerson[];
   writers: CreditPerson[];
   watchProvider?: { name: string; logo?: string; href?: string | null; chartHref?: string | null } | null;
-  /** Branded handoff → Bynge player (replaces the footer watch CTA when set). */
-  byngeWatchHref?: string | null;
   metaBadge?: string | null;
   genres: { name: string; href: string }[];
   metaExtra?: string | null;
@@ -97,7 +95,6 @@ export const DetailHero: FC<{
   directors,
   writers,
   watchProvider,
-  byngeWatchHref,
   metaBadge,
   genres,
   metaExtra,
@@ -213,17 +210,7 @@ export const DetailHero: FC<{
               <CreditBlock title="Writers" people={writers} />
             </div>
             <div class="hub-hero-credits-foot">
-              {byngeWatchHref ? (
-                <a class="hub-hero-bynge" href={byngeWatchHref}>
-                  <span class="hub-hero-bynge-play" aria-hidden="true">
-                    <IconPlay size={20} />
-                  </span>
-                  <span class="hub-hero-bynge-body">
-                    <span class="hub-hero-bynge-kicker">Stream with friends</span>
-                    <span class="hub-hero-bynge-label">Watch now</span>
-                  </span>
-                </a>
-              ) : watchProvider ? (
+              {watchProvider ? (
                 <a
                   class="hub-hero-watch"
                   href={watchProvider.href ?? "#"}

@@ -1,7 +1,6 @@
 // Vertical trailer Shorts feed — trending/popular titles with YouTube trailers.
 // Raw TMDB trailer lists are edge-cached; playable ordering is per-viewer.
 import type { AppContext } from "../types";
-import { byngeHandoffHrefAsync, tmdbImdbId } from "./bynge";
 import { slugifyName } from "./format";
 import {
   tmdbGenreLabelsFromIds,
@@ -122,12 +121,6 @@ export async function fetchTrailerShortsFeed(c: AppContext): Promise<TrailerShor
     const genreLabel = labels[0] ?? (hit.kind === "movie" ? "Movie" : "TV");
     const yearNum = hit.year ? Number(hit.year) : null;
     const poster = hit.posterPath ? `https://image.tmdb.org/t/p/w342${hit.posterPath}` : null;
-    const imdbId = await tmdbImdbId(key, hit.kind, hit.tmdbId);
-    const watchHref = await byngeHandoffHrefAsync(
-      hit.kind,
-      { imdbId },
-      { title: hit.name, poster },
-    );
 
     items.push({
       id: `${hit.kind}-${hit.tmdbId}`,
@@ -141,7 +134,7 @@ export async function fetchTrailerShortsFeed(c: AppContext): Promise<TrailerShor
       trailerKeys: keys,
       trailerName: ordered[0].name,
       detailHref,
-      watchHref,
+      watchHref: null,
     });
   }
 

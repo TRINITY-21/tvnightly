@@ -12,19 +12,18 @@
 import type { Context } from "hono";
 import type { AppContext, HonoEnv } from "../types";
 import { slugifyName } from "./format";
-import { buildCaptions, type CaptionSet } from "./promo";
-import { origin } from "./seo";
+import { buildCaptions, promoBase, type CaptionSet } from "./promo";
 import {
-  tmdbDiscoverChart,
-  tmdbDiscoverNetwork,
-  tmdbRecommendations,
-  tmdbSearch,
-  tmdbSearchPeople,
-  tmdbShowNetworks,
-  tmdbTopRated,
-  tmdbTrendingList,
-  tmdbUpcomingMovies,
-  type TmdbSearchHit,
+    tmdbDiscoverChart,
+    tmdbDiscoverNetwork,
+    tmdbRecommendations,
+    tmdbSearch,
+    tmdbSearchPeople,
+    tmdbShowNetworks,
+    tmdbTopRated,
+    tmdbTrendingList,
+    tmdbUpcomingMovies,
+    type TmdbSearchHit,
 } from "./tmdb";
 import { buildTmdbShow, tmdbPersonData } from "./tmdb-show";
 
@@ -408,7 +407,7 @@ export function shorts10Captions(p: {
   ctaUrl: string;
   landingPath?: string | null;
 }): CaptionSet {
-  const base = origin(p.c);
+  const base = promoBase(p.c);
   // Prefer the angle's real matching page (landingPath) so the caption link lands
   // on the exact ranked page the video promised. p.ctaUrl is only the brand line
   // shown IN the video ("tvnightly.com"), so when there's no precise page we strip

@@ -11,7 +11,6 @@ import {
 } from "../components/chart-rank-card";
 import { VsCard, VsSide } from "../components/compare";
 import { DetailHero, communityRingScore, heroWatchProvider, tmdbRingScore } from "../components/detail-hero";
-import { byngeHandoffHref } from "../lib/bynge";
 import { DossierRow } from "../components/dossier";
 import { FilterSelect } from "../components/forms";
 import { HomeSidebarRail } from "../components/home-sidebar";
@@ -650,12 +649,6 @@ app.get("/movie/:slug", async (c) => {
   const writerLinks = writers.length ? await crewLinkMap(c.env.DB, writers) : new Map<number, number>();
   const prov = providersFor(movie, region);
   const watchProv = heroWatchProvider(prov.names, movie.title, prov.region, "movie");
-  const byngeWatchHref = byngeHandoffHref("movie", {
-    imdbId: movie.imdb_id,
-  }, {
-    title: movie.title,
-    poster: movie.poster_url,
-  });
   let trailerVids = await playableVideoList(c, media?.videos ?? []);
   if (!trailerVids.length && bundleId) {
     // no bundle trailers played — fall back to the movie spotlight list (carries
@@ -856,7 +849,6 @@ app.get("/movie/:slug", async (c) => {
                 }
               : null
           }
-          byngeWatchHref={byngeWatchHref}
           metaBadge={isNewYear(movie.year) ? "New" : null}
           genres={genres.slice(0, 4).map((g) => ({
             name: g,

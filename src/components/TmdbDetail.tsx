@@ -4,7 +4,7 @@
 import { FC } from "hono/jsx";
 import type { AppContext } from "../types";
 import { Layout } from "./Layout";
-import { IconPlay, IconStar } from "./icons";
+import { IconStar } from "./icons";
 import { heroBg, stripHtml } from "../lib/format";
 import { PROVIDER_LOGOS } from "../lib/providers";
 import { RateInline } from "./forms";
@@ -21,8 +21,7 @@ export const TmdbTitlePage: FC<{
   stat: string | null;
   ratingLd: Record<string, unknown> | null;
   canonical: string;
-  byngeWatchHref?: string | null;
-}> = ({ c, t, providers, region, stat, ratingLd, canonical, byngeWatchHref = null }) => {
+}> = ({ c, t, providers, region, stat, ratingLd, canonical }) => {
   const isTv = t.kind === "tv";
   const dek = t.overview ? stripHtml(t.overview) : "";
   const metaType = isTv ? "TV" : "Movie";
@@ -132,17 +131,6 @@ export const TmdbTitlePage: FC<{
               ) : null}
 
               <p class="spot-actions">
-                {byngeWatchHref ? (
-                  <a class="hub-hero-bynge tmdb-bynge-cta" href={byngeWatchHref}>
-                    <span class="hub-hero-bynge-play" aria-hidden="true">
-                      <IconPlay size={20} />
-                    </span>
-                    <span class="hub-hero-bynge-body">
-                      <span class="hub-hero-bynge-kicker">Stream with friends</span>
-                      <span class="hub-hero-bynge-label">Watch now</span>
-                    </span>
-                  </a>
-                ) : null}
                 {t.trailerKey ? (
                   <a
                     class="btn-ghost chev-after"

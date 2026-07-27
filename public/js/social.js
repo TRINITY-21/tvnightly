@@ -14,6 +14,7 @@
   var state = { id: root.getAttribute("data-first") || null, fmt: "story", plat: "tiktok", style: "poster", vs: null, season: null };
   var TV_STYLES = ["ratings", "heatmap", "pin", "vs"];
   var PLAT_CODE = { tiktok: "tt", instagram: "ig", x: "x", youtube: "yt", pinterest: "pin", whatsapp: "wa", facebook: "fb" };
+  var PROMO_ORIGIN = "https://tvnightly.com";
   var socVs = document.getElementById("soc-vs");
   var vsQ = document.getElementById("soc-vs-q");
   var vsResults = document.getElementById("soc-vs-results");
@@ -85,7 +86,7 @@
   }
   function vsCaption(p, plat, variant) {
     if (!state.vs) return "";
-    var link = location.origin + "/r/" + (PLAT_CODE[plat] || "x") + "/compare/" + p.slug + "-vs-" + state.vs.slug;
+    var link = PROMO_ORIGIN + "/r/" + (PLAT_CODE[plat] || "x") + "/compare/" + p.slug + "-vs-" + state.vs.slug;
     var tags = "#TVNightly #WhatToWatch #" + camelTag(p.title) + " #" + camelTag(state.vs.name);
     return variant === "b"
       ? "⚔️ " + p.title + " vs " + state.vs.name + "\n\nVote below — which one actually wins? 👇\n\n" + link + "\n\n" + tags

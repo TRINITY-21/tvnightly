@@ -102,7 +102,7 @@ export async function fetchSiteSidebar(
   return data;
 }
 
-const EXCLUDED_PREFIXES = ["/admin", "/go", "/r/", "/play", "/shorts"];
+const EXCLUDED_PREFIXES = ["/admin", "/go", "/r/", "/shorts"];
 
 const EXCLUDED_EXACT = new Set([
   "/terms",

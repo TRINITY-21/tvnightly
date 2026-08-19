@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { TV_DECADES } from "../lib/decades";
 import { EPISODE_GUIDES } from "../lib/episode-guides";
-import { slugifyName } from "../lib/format";
+import { pad2, slugifyName } from "../lib/format";
 import { FRANCHISES } from "../lib/franchises";
 import { chartGenresWithContent } from "../lib/chart-results";
 import { genreDirectory, networkDirectory } from "../lib/queries";
@@ -25,6 +25,15 @@ const SHOWS_PER_SITEMAP = 1000;
 // domain earns authority.
 const SHOW_LIMIT = 5000; // top shows by weight
 const MOVIE_LIMIT = 1500; // top movies by popularity
+// Episode long-tail, wave 1 (Aug 2026): GSC Performance shows episode pages are
+// the site's top click-earners, and the demand concentrates on episodes airing
+// NOW — so advertise a rolling "hot window" (aired ≤60d ago or airing ≤30d out,
+// quality shows only). Bounded (~2.5k URLs) so the crawl surface stays sane;
+// widen in waves as authority grows.
+const RECENT_EP_LIMIT = 3000;
+const RECENT_EP_WINDOW = { past: "-60 days", future: "+30 days" } as const;
+const RECENT_EP_COND = `s.weight >= 60 AND e.season > 0 AND e.airstamp IS NOT NULL
+       AND e.airstamp > datetime('now', ?) AND e.airstamp < datetime('now', ?)`;
 // /best-episodes and /ratings are rating-driven: with zero rated episodes they
 // render noindex/thin, so shards advertise them only for shows with ratings
 const SHOW_SUFFIXES = ["", "/where-to-watch"];
@@ -41,16 +50,23 @@ const EVERGREEN = new Set(["/about", "/how-we-pick", "/editorial-policy"]);
 
 app.get("/sitemap.xml", async (c) => {
   const site = origin(c);
-  const [showRow, movieRow] = await Promise.all([
+  const [showRow, movieRow, epRow] = await Promise.all([
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM shows").first<{ n: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM movies").first<{ n: number }>(),
+    c.env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM episodes e JOIN shows s ON s.id = e.show_id WHERE ${RECENT_EP_COND}`,
+    )
+      .bind(RECENT_EP_WINDOW.past, RECENT_EP_WINDOW.future)
+      .first<{ n: number }>(),
   ]);
   const showShards = Math.max(1, Math.ceil(Math.min(showRow?.n ?? 0, SHOW_LIMIT) / SHOWS_PER_SITEMAP));
   const movieShards = Math.ceil(Math.min(movieRow?.n ?? 0, MOVIE_LIMIT) / SHOWS_PER_SITEMAP);
+  const epShards = Math.ceil(Math.min(epRow?.n ?? 0, RECENT_EP_LIMIT) / SHOWS_PER_SITEMAP);
   const entries = [
     "static.xml",
     ...Array.from({ length: showShards }, (_, i) => `shows-${i}.xml`),
     ...Array.from({ length: movieShards }, (_, i) => `movies-${i}.xml`),
+    ...Array.from({ length: epShards }, (_, i) => `episodes-recent-${i}.xml`),
   ]
     // every shard is regenerated from continuously-synced data, so the freshness
     // signal on the index is "today" — engines re-read children on this hint
@@ -158,10 +174,32 @@ app.get("/sitemaps/:file", async (c) => {
     return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
   }
 
-  // NOTE: episode (~200k) and people (~150k) shards are intentionally NOT served
-  // — they were the bulk of the crawl surface. They 404 here and are excluded
-  // from the index above. Re-introduce in waves once on a paid plan / more
-  // authority. Those pages remain reachable via internal links.
+  // NOTE: the FULL episode (~200k) and people (~150k) long tail is intentionally
+  // NOT served — it was the bulk of the crawl surface. Wave 1 below advertises
+  // only the rolling hot window of recent/upcoming episodes; widen as the domain
+  // earns authority. Everything else stays reachable via internal links.
+
+  const ep = /^episodes-recent-(\d+)\.xml$/.exec(file);
+  if (ep) {
+    const offset = Number(ep[1]) * SHOWS_PER_SITEMAP;
+    if (offset >= RECENT_EP_LIMIT) return c.notFound();
+    const { results } = await c.env.DB.prepare(
+      `SELECT s.slug, e.season, e.number, e.airstamp
+       FROM episodes e JOIN shows s ON s.id = e.show_id WHERE ${RECENT_EP_COND}
+       ORDER BY e.airstamp DESC, e.id LIMIT ? OFFSET ?`,
+    )
+      .bind(RECENT_EP_WINDOW.past, RECENT_EP_WINDOW.future, Math.min(SHOWS_PER_SITEMAP, RECENT_EP_LIMIT - offset), offset)
+      .all<{ slug: string; season: number; number: number; airstamp: string }>();
+    if (results.length === 0) return c.notFound();
+    const urls = results
+      .map((r) => {
+        // aired → the air date is the honest lastmod; upcoming → clamp to today
+        const aired = r.airstamp.slice(0, 10);
+        return sitemapUrl(`${site}/show/${r.slug}/s${pad2(r.season)}e${pad2(r.number)}`, aired <= TODAY ? aired : TODAY);
+      })
+      .join("");
+    return xmlRes(c, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
+  }
 
   const m = /^shows-(\d+)\.xml$/.exec(file);
   if (!m) return c.notFound();

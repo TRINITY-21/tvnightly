@@ -16,3 +16,6 @@ tools/countdown/cards.tsv
 /audio2.mp3
 /DISTRIBUTION-PLAN.md
 /launch-shots/
+
+# D1 export taken before archiving (2026-09-07); too large for git
+/backups/

@@ -1,88 +1,25 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "tvnightly",
-  "main": "src/index.tsx",
   "compatibility_date": "2026-04-01",
-  // nodejs_compat enables TCP sockets for SMTP (worker-mailer / Gmail sending)
-  "compatibility_flags": ["nodejs_compat"],
-  // Workers Logs + Traces. Sample everything at launch; lower head_sampling_rate
-  // once traffic grows. Makes the console.* logging in index.tsx/sync.ts queryable.
-  "observability": { "enabled": true, "head_sampling_rate": 1 },
-  // `binding: ASSETS` exposes the static dir to the Worker as a Fetcher (not just
-  // public serving) so the card renderers can inline the brand fonts (src/lib/render.ts,
-  // signal.ts). Without it c.env.ASSETS is undefined and resvg renders no text.
-  "assets": { "directory": "./public", "binding": "ASSETS" },
-  // Custom domains: on deploy, wrangler attaches these to the Worker and creates
-  // the proxied DNS records + TLS certs automatically (the zone is already on
-  // Cloudflare). Apex is canonical (SITE_ORIGIN); www is served too and 301s to
-  // apex in the Worker (see the host-canonicalize middleware in src/index.tsx).
+  // ── ARCHIVED (2026-09-07) ─────────────────────────────────────────────────
+  // TV Nightly is parked. This is now an assets-only Worker: no `main`, so no
+  // script runs and no CPU is billed; no crons; no D1 / rate-limit bindings.
+  // The site is the single static page in ./parked (index.html + 404.html).
+  // The full app (src/, migrations/, the old wrangler config) stays in git
+  // history — see commit "Archive TV Nightly" for the pre-archive config.
+  "assets": {
+    "directory": "./parked",
+    // Every former URL (/tv/…, /movies/…, /sitemap.xml, …) returns the parked
+    // page with a real 404 status so search engines drop the old catalog.
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  },
   "routes": [
     { "pattern": "tvnightly.com", "custom_domain": true },
     { "pattern": "www.tvnightly.com", "custom_domain": true }
   ],
-  // Four crons, each with its own subrequest budget. The heavy catalog sync +
-  // IndexNow ping + provider patrol run ONCE DAILY (they don't change often and
-  // hourly IndexNow just invites crawlers); only the cheap email drain stays
-  // hourly so the digest/alerts still go out within the hour:
-  //   :00 hourly     — drain the outbox (send ≤15 queued emails) — email delivery
-  //   21:00 UTC daily — TVmaze catalog sync (shows/episodes/events/alerts) + IndexNow
-  //   21:30 UTC daily — provider patrol (availability diffing -> /whats-new)
-  //   22:00 UTC daily — the TV Nightly digest (queued via outbox, drained hourly)
-  "triggers": { "crons": ["0 * * * *", "0 21 * * *", "30 21 * * *", "0 22 * * *"] },
-  "vars": {
-    "SITE_ORIGIN": "https://tvnightly.com",
-    // 'console' | 'gmail' | 'smtp' | 'resend' — see src/email.ts. 'resend' sends
-    // from EMAIL_FROM (your domain, DKIM-aligned) — needs the RESEND_API_KEY secret
-    // and tvnightly.com verified in Resend. Until both are set, sends fail (logged)
-    // but nothing else breaks. ('gmail' rewrote From to the Gmail account + capped
-    // ~500/day — that's why we moved off it.)
-    "EMAIL_PROVIDER": "resend",
-    "EMAIL_FROM": "TV Nightly <alerts@tvnightly.com>",
-    // Reply-To on outbound mail → the monitored public inbox (Email Routing forwards
-    // it to the team), so subscriber replies reach a human, not the alerts sender.
-    "EMAIL_REPLY_TO": "contact@tvnightly.com",
-    // /feedback notifications land here (contact@ forwards to the team inbox)
-    "FEEDBACK_TO": "contact@tvnightly.com",
-    // Public Cloudflare Web Analytics beacon token (not a secret); renders the
-    // beacon (src/components/Layout.tsx) only when set.
-    "CF_BEACON_TOKEN": "d2cc01d40f2e459eb7979de5211d1c38",
-    // Google Analytics 4 measurement id (public, gtag.js); injects GA site-wide when set.
-    "GA_ID": "G-HGBSW22LYB",
-    // Discord community invite (public) — navbar, sidebar, welcome modal.
-    // discord.com/invite, NOT discord.gg: the short domain is blocked/misrouted
-    // by some mobile carriers and DNS filters (users hit ERR_TIMED_OUT).
-    "DISCORD_INVITE_URL": "https://discord.com/invite/zw2fGBeE6g"
-    // TURNSTILE_SITE_KEY — paste the Turnstile widget sitekey (public) after
-    // creating the widget; /feedback renders the anti-spam widget only when set.
-  },
-  // Secrets (set with `wrangler secret put NAME`, or .dev.vars locally):
-  //   SECRET         — HMAC key for confirm/unsubscribe links (required in prod)
-  //   SMTP_USER      — SMTP / Gmail address              (EMAIL_PROVIDER=gmail|smtp)
-  //   SMTP_PASS      — SMTP password / Gmail app password (EMAIL_PROVIDER=gmail|smtp)
-  //   SMTP_HOST/SMTP_PORT — optional; default smtp.gmail.com:465
-  //   RESEND_API_KEY — Resend key                        (EMAIL_PROVIDER=resend)
-  //   TMDB_API_KEY   — provider patrol (streaming availability diffing)
-  //   TURNSTILE_SECRET_KEY — Turnstile secret (siteverify for /feedback anti-spam)
-  //   ADMIN_KEY      — basic-auth password for /admin/* (unset = admin disabled)
-  //   FEEDBACK_TO    — where /feedback emails go (optional; falls back to EMAIL_FROM)
-  // Migrations are tracked natively: `npm run db:migrate:remote` (and :local).
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "tvnightly",
-      // migrations live in ./migrations, applied in order with run-once tracking.
-      "migrations_dir": "migrations",
-      "database_id": "7fb8c3fa-99f4-4df1-9ccb-ab10ea0df88e"
-    }
-  ],
-  // Workers Rate Limiting (account-local, best-effort, per-colo). Throttles the
-  // unauthenticated /feedback write+email (5/min/IP) and failed /admin auth
-  // (10/min/IP), so neither can flood the inbox/mailbox or brute-force ADMIN_KEY.
-  // period must be 10 or 60; namespace_id is any unique-per-worker integer.
-  "unsafe": {
-    "bindings": [
-      { "name": "FEEDBACK_LIMIT", "type": "ratelimit", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
-      { "name": "ADMIN_LIMIT", "type": "ratelimit", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
-    ]
-  }
+  // Explicit empty list so `wrangler deploy` clears the four old cron triggers
+  // (hourly outbox drain, daily TVmaze sync, provider patrol, digest).
+  "triggers": { "crons": [] }
 }

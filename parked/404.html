@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TV Nightly — That's a wrap</title>
+  <meta name="description" content="TV Nightly is archived. Thanks for watching along.">
+  <meta name="robots" content="index,follow">
+  <meta name="theme-color" content="#121214">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="canonical" href="https://tvnightly.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="TV Nightly — That's a wrap">
+  <meta property="og:description" content="TV Nightly is archived. Thanks for watching along.">
+  <meta property="og:image" content="https://tvnightly.com/banner.jpg">
+  <meta property="og:url" content="https://tvnightly.com/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@tvnightly">
+  <link rel="preload" href="/fonts/archivo-var.woff2" as="font" type="font/woff2" crossorigin>
+  <style>
+    @font-face {
+      font-family: "Archivo";
+      src: url("/fonts/archivo-var.woff2") format("woff2");
+      font-weight: 100 900;
+      font-display: swap;
+    }
+    :root {
+      --bg: #121214;
+      --bg-2: #18181b;
+      --fg: #f2f5fa;
+      --muted: #a4a9b3;
+      --accent: #ffa94d;
+      --line: rgba(255, 255, 255, 0.08);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 20px 40px;
+      gap: 32px;
+    }
+    .banner {
+      width: min(100%, 1200px);
+      aspect-ratio: 16 / 9;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      box-shadow:
+        0 0 0 1px rgba(255, 169, 77, 0.06),
+        0 30px 90px -30px rgba(255, 169, 77, 0.25),
+        0 40px 120px -40px rgba(0, 0, 0, 0.9);
+      background: var(--bg-2);
+    }
+    .banner img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+    }
+    @media (max-width: 640px) {
+      .banner { aspect-ratio: 4 / 3; border-radius: 14px; }
+    }
+    .copy { text-align: center; max-width: 560px; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 14px;
+    }
+    .status::before {
+      content: "";
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(255, 169, 77, 0.18);
+    }
+    h1 {
+      font-size: clamp(28px, 4.5vw, 44px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      margin: 0 0 14px;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(15px, 1.6vw, 17px);
+      line-height: 1.55;
+    }
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 26px;
+    }
+    .links a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--bg-2);
+      color: var(--fg);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: border-color .15s ease, color .15s ease, transform .15s ease;
+    }
+    .links a:hover, .links a:focus-visible {
+      border-color: var(--accent);
+      color: var(--accent);
+      transform: translateY(-1px);
+      outline: none;
+    }
+    .links svg { width: 16px; height: 16px; fill: currentColor; }
+    footer {
+      text-align: center;
+      padding: 0 20px 28px;
+      color: var(--muted);
+      font-size: 12px;
+      opacity: .7;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <figure class="banner" style="margin:0">
+      <img src="/banner.jpg" width="1920" height="1080" alt="TV Nightly — Tonight, decided. Episode rankings, release dates, where to stream." fetchpriority="high">
+    </figure>
+
+    <section class="copy">
+      <div class="status">Project archived</div>
+      <h1>That&rsquo;s a wrap.</h1>
+      <p>TV Nightly has ended its run. The site is no longer updated, and the nightly
+      digest, alerts, and rankings have signed off. Thanks for watching along.</p>
+      <nav class="links" aria-label="TV Nightly elsewhere">
+        <a href="https://www.youtube.com/@tvnightly" rel="me noopener" target="_blank">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4l6.2 3.6-6.2 3.6Z"/></svg>
+          @tvnightly on YouTube
+        </a>
+        <a href="https://x.com/tvnightly" rel="me noopener" target="_blank">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 1.2h3.7l-8 9.2L24 22.8h-7.4l-5.8-7.6-6.6 7.6H.5l8.6-9.8L0 1.2h7.6l5.2 6.9 6.1-6.9Zm-1.3 19.4h2L6.5 3.3H4.3l13.3 17.3Z"/></svg>
+          @tvnightly on X
+        </a>
+      </nav>
+    </section>
+  </main>
+  <footer>&copy; 2026 TV Nightly &middot; tvnightly.com</footer>
+</body>
+</html>

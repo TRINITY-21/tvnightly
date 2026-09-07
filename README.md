@@ -1,5 +1,12 @@
 # TV Nightly — tvnightly.com
 
+> **Archived (2026-09-07).** TV Nightly has ended its run. tvnightly.com now
+> serves a single static parked page from [`parked/`](parked/) via an
+> assets-only Worker: no script, no cron triggers, no D1 binding, so nothing
+> is billed beyond the domain. The full application below (Hono SSR Worker,
+> D1 schema, sync crons, seed tooling) is kept in the repo for reference and is
+> no longer deployed. The pre-archive `wrangler.jsonc` is in git history.
+
 Fast, no-login TV site answering the questions people search every day:
 best episodes, release dates, renewal status, what's on tonight.
 See [PLAN.md](PLAN.md) for the full founding plan.

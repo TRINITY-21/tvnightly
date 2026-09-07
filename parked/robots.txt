@@ -1,0 +1,4 @@
+# TV Nightly is archived. The site is a single static page; every former URL
+# now returns 404 so search engines drop the old catalog pages.
+User-agent: *
+Allow: /
